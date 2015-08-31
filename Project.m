@@ -1,4 +1,4 @@
-classdef Project
+classdef Project < handle
     properties (Hidden, Constant)
         colors            = [ [0 0 0];circshift( hsv(8), [3 0] );[.4 .4 .4];[.8 .8 .8]];
         line              = {'-' '-' '-' '-' '-' '-' '-' '-' '-' '.' '.'};
