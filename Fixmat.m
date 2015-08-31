@@ -155,10 +155,16 @@ classdef Fixmat < Project
             end
         end
         function cov(obj)
-            imagesc(cov(obj.vectorize_maps))
+            set(gcf,'position',[1104         152         337         299]);
+            imagesc(cov(obj.vectorize_maps));
+            axis image;
+            colorbar
         end
         function corr(obj)
-            imagesc(corr(obj.vectorize_maps))
+            set(gcf,'position',[1104         152         337         299])
+            imagesc(corr(obj.vectorize_maps));
+            axis image;
+            colorbar
         end
         function [x] = current_x(obj)
             %returns the current x y coordinates            
