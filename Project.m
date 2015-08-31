@@ -19,15 +19,15 @@ classdef Project < handle
     
     methods
         
-        function ls = get.plot_style(self)
+        function ls = get.plot_style()
             %produce a cell array of string for each condition that specifies plotting
             %attributes.
             for ncond = [1:11];
-                ls(self.condition_indices{ncond}).line        = {{'line',  self.line{ncond}}};
-                ls(self.condition_indices{ncond}).color       = {{'color', self.colors(ncond,:)}};
-                ls(self.condition_indices{ncond}).symbol      = {{'marker',self.symbol{ncond}}};
-                ls(self.condition_indices{ncond}).marker_size = {{'markersize',self.marker_size{ncond}}};
-                ls(self.condition_indices{ncond}).line_width = {{'linewidth',self.line_width{ncond}}};
+                ls(Project.condition_indices{ncond}).line        = {{'line',  Project.line{ncond}}};
+                ls(Project.condition_indices{ncond}).color       = {{'color', Project.colors(ncond,:)}};
+                ls(Project.condition_indices{ncond}).symbol      = {{'marker',Project.symbol{ncond}}};
+                ls(Project.condition_indices{ncond}).marker_size = {{'markersize',Project.marker_size{ncond}}};
+                ls(Project.condition_indices{ncond}).line_width = {{'linewidth',Project.line_width{ncond}}};
             end
         end
         
@@ -61,7 +61,7 @@ classdef Project < handle
             
             %will return the path to phase/data_type/
             path2data = self.pathfinder(subject , run);
-            if length(varargin) == 1
+            if length(varargin) >= 1 
                 path2data = sprintf('%s%s/data.mat',path2data,varargin{1});
             end
             if length(varargin) == 2
