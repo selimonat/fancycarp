@@ -11,6 +11,8 @@ classdef Fixmat < Project
     end
     properties (Hidden,SetAccess = private)
         maps
+        query
+        map_titles
         selection
     end
     
@@ -85,6 +87,7 @@ classdef Fixmat < Project
             end                        
             fprintf('Selection vector updated...\n');
             obj.selection = logical(obj.selection);
+            obj.query     = varargin;
         end
         
         function ApplySelection(obj)
@@ -96,24 +99,32 @@ classdef Fixmat < Project
                     obj.(p{1})(~obj.selection) = [];
                 end
             end
+            obj.query = [];
             fprintf('Selection removed from the object...\n');
         end
         function plot(obj)
             [d u] = GetColorMapLimits(obj.maps,9);
             if ~obj.baseline_correction
                 d = 0;
-            end
-            [y x] = GetSubplotNumber(size(obj.maps,3));
-            figure(1)
+            end            
+            tmaps = size(obj.maps,3);
+            hhfigure(1);
             for nc = 1:size(obj.maps,3)
-                subplot(y,x,nc)
-                h = imagesc(obj.maps(:,:,nc),[d u]);
-                colorbar;
+                h = subplot(tmaps/4,4,nc);
+                subplotChangeSize(h,0.05,0.05);
+                h = imagesc(obj.maps(:,:,nc),[d u]);                
                 if ~obj.baseline_correction
                     set(h,'alphaData',Scale(obj.maps(:,:,nc)));
+                else
+                    set(h,'alphaData',Scale(abs(obj.maps(:,:,nc))));
                 end
                 axis image;
                 box off;
+                grid on;
+                SetTickNumber(gca,[4 4]);
+                set(gca,'xticklabel',[],'yticklabel',[]);
+                t = sprintf('%s%d/',obj.map_titles{nc}{:});
+                title(t,'interpreter','none');
             end
         end
         function getmaps(obj,varargin)
@@ -123,19 +134,20 @@ classdef Fixmat < Project
             
             c  = 0;
             for v = varargin
-                c               = c+1;
+                c                 = c+1;
                 obj.UpdateSelection(v{1}{:});
-                FixMap          = accumarray([obj.current_y' obj.current_x'],1,[obj.rect(2) obj.rect(4)]);
-                FixMap          = FixMap./sum(FixMap(:));
-                FixMap          = conv2(sum(obj.kernel),sum(obj.kernel,2),FixMap,'same');
-                obj.maps(:,:,c) = FixMap(obj.rect(2)/2-250 : obj.rect(2)/2+250, obj.rect(4)/2-250 : obj.rect(4)/2+250);
+                FixMap            = accumarray([obj.current_y' obj.current_x'],1,[obj.rect(2) obj.rect(4)]);
+                FixMap            = FixMap./sum(FixMap(:));
+                FixMap            = conv2(sum(obj.kernel),sum(obj.kernel,2),FixMap,'same');
+                obj.maps(:,:,c)   = FixMap(obj.rect(2)/2-250 : obj.rect(2)/2+250, obj.rect(4)/2-250 : obj.rect(4)/2+250);
+                obj.map_titles{c} = obj.query;
             end
             
             if obj.baseline_correction
                 obj.maps = obj.maps - repmat(mean(obj.maps,3),[1 1 size(obj.maps,3)]);
             end            
         end
-        function maps = vectorize_maps(obj)
+        function maps   = vectorize_maps(obj)
             if ~isempty(obj.maps)
                 maps = reshape(obj.maps,size(obj.maps,1)*size(obj.maps,2),size(obj.maps,3));
             else
@@ -148,11 +160,11 @@ classdef Fixmat < Project
         function corr(obj)
             imagesc(corr(obj.vectorize_maps))
         end
-        function [x]=current_x(obj)
+        function [x] = current_x(obj)
             %returns the current x y coordinates            
             x = obj.x(obj.selection);
         end
-        function [y]=current_y(obj)
+        function [y] = current_y(obj)
             %returns the current x y coordinates
             y = obj.y(obj.selection);            
         end
