@@ -1,4 +1,4 @@
-classdef SCR
+classdef SCR < handle
     
     properties (Constant = true, Hidden)
         default_run = 4;%at which run the scr data is located.
@@ -7,6 +7,11 @@ classdef SCR
         hdr
         markers
         block2phase
+        p = 0.001;
+        nfreq = 20;
+    end
+    properties
+        data
     end
     % The following properties can be set only by class methods
     properties (SetAccess = private)
@@ -19,13 +24,9 @@ classdef SCR
         BlockBorders_time
         event           = [];
         event_name      = {};
-        event_plotting  = {};
-        y_smooth        = [];
-        y_tonic         = [];
-        y_phasic        = [];
-        y_diff          = [];
-        y_diff2         = [];
-        y_tonic_spline  = [];
+        event_plotting  = {};    
+        tonic
+        phasic
     end
     
     methods
@@ -34,7 +35,7 @@ classdef SCR
         %add a method to compute FIR analysis and plot the results based on
         %the corrected phasic responses.
         function scr = SCR(s)
-            path_acqfile  = s.path2data(SCR.default_run,'scr','acq');
+            path_acqfile  = s.path2data(s.id,SCR.default_run,'scr','acq');
             if exist(path_acqfile);
                 dummy         = load_acq(path_acqfile);
                 scr.hdr       = dummy.hdr;
@@ -164,66 +165,62 @@ classdef SCR
             box off;
             legend boxoff
         end        
-        function plot2(self)    
-            %plots tonic, phasic etc etc.
-            self.plot
-            hold on
-%             plot(self.time,self.y_smooth,'r');
-            plot(self.time,self.y_phasic,'k');            
-            plot(self.time,self.y_diff,'color',[.4 .4 .4]);
-            plot(self.time,self.y_diff2,'color','r');
+        function plot_decomposition(self)                
+            hhfigure;
+            plot(self.time./1000,self.y,'r');
+            hold on;
+            plot(self.time./1000,self.phasic,'k');                        
+            plot(self.time./1000,self.tonic,'color',[.4 .4 .4]);            
             % mark stimulus onsets
-            for n = 1:length(self.event_name)                
-                i  = self.event(:,n);                 
-                plot(self.time(i),0, self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} );
+            for n = 1:length(self.event_name)
+                i  = self.event(:,n);
+                if sum(i) ~= 0%do nothing if there is no event in the section
+                plot(self.time(i)./1000,0, self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} );
+                end
             end            
             grid on;    
             axis tight;            
         end
-        function o = get.y_tonic_spline(self)
-            keyboard    
-            Y     = self.y(self.BlockBorders_index(1,1):self.BlockBorders_index(1,2));
-            X     = self.time(self.BlockBorders_index(1,1):self.BlockBorders_index(1,2));
-            [~,m] = DetectPeaks(Y);
-            s     = std(m);
-            i     = find(s > mean(std(rand(3000)+1)));
-            peaks = find(diff(i) > 20);
+%         function o       = get.y_tonic_spline(self)               
+%             Y     = self.y(self.BlockBorders_index(1,1):self.BlockBorders_index(1,2));
+%             X     = self.time(self.BlockBorders_index(1,1):self.BlockBorders_index(1,2));
+%             [~,m] = DetectPeaks(Y);
+%             s     = std(m);
+%             i     = find(s > mean(std(rand(3000)+1)));
+%             peaks = find(diff(i) > 20);
+%             
+%         end        
+        function self = smooth(self,method)
+            %            
+            if isempty(self.data);self.data=self.y;end
             
+            if strcmp(method,'ma');%moving average
+                self.data  = smooth(self.data,750);
+            elseif strcmp(method,'sgolay');%moving average
+                self.data  = sgolayfilt(self.data,5,751);
+            end              
+        end                
+        function self    = diff(self)
+            if isempty(self.data);self.data=self.y;end            
+            self.data         = diff(self.data);
+            self.data(end+1)  = self.data(end);            
         end
-        function ys = get.y_smooth(self)
-            %smoothing has to be done with splines.
-            ys      = smooth(self.y,750,'lowess');
-            self.y_smooth = ys;
+        
+        function self    = zscore(self)
+            if isempty(self.data);self.data=self.y;end            
+            self.data         = zscore(self.data);            
         end
-        function ytonic = get.y_tonic(self)
-            d       = fdesign.lowpass('Fp',0.00001);
-            Hd      = design(d, 'ellip');
-            ytonic = filtfilt(Hd.sosMatrix,Hd.ScaleValues,self.y_smooth);
-            self.y_tonic = ytonic;
+        function self = tonic_lowpass(self)
+            if isempty(self.data);self.data=self.y;end
+            d            = fdesign.lowpass('Fp',0.00001);
+            Hd           = design(d, 'ellip');
+            self.tonic   = filtfilt(Hd.sosMatrix,Hd.ScaleValues,self.data);
+            self.phasic  = self.data - self.tonic;
         end
-        function yphasic = get.y_phasic(self)
-            yphasic        = self.y_smooth - self.y_tonic;
-            yphasic        = diff(yphasic);
-            yphasic(end+1) = yphasic(end);
-            yphasic        = zscore(yphasic);
-            self.y_phasic  = yphasic;
+        function self = tonic_tfals(self)
+            [self.phasic,self.tonic] = TFALS(self.data,self.nfreq,self.p);
         end        
-        function ydiff = get.y_diff(self)            
-            ydiff        = diff(self.y_phasic);
-            ydiff(end+1) = ydiff(end);
-            ydiff        = zscore(ydiff);            
-            self.y_diff = ydiff;
-        end
-        function ydiff = get.y_diff2(self)            
-            ydiff              = diff(diff(self.y_phasic));
-            ydiff(end+1:end+2) = ydiff(end);
-            %
-            m = mean(ydiff);
-            s = median(abs(ydiff - m));
-            ydiff = (ydiff-m)*100000;
-            self.y_diff2        = ydiff;
-            ylim([-10 50]);
-        end
+        
         function xcorr(self,block)                 
             %%
             figure(2);clf;
@@ -248,8 +245,7 @@ classdef SCR
                 box off;
             end
             hold off
-        end
-        
+        end        
         function linespecs = LineSpecs(condition)
             %produce a string for each condition that specifies plotting
             %attributes.
