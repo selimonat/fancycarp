@@ -13,6 +13,12 @@ classdef Group < Project
                 group.subject{c} = dummy;
             end
         end
+        function csps = getcsp(self)
+            csps = [];
+            for s = 1:length(self.subject)
+                csps = [csps self.subject{s}.csp];
+            end
+        end
         %%
         function ModelRatings(self,run)            
             T = Tuning(self.Ratings(run));
