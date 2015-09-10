@@ -10,11 +10,12 @@ classdef Project < handle
         PixelPerDegree    = 20;
     end
     properties (Hidden,Constant)
-        path_project      = '/Users/onat/Google Drive_ninhamburg/EthnoMaster/data/';
+        path_project      = '/Users/onat/Google Drive_ninhamburg/EthnoMaster/BDNF/';
         condition_labels  = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
         plot_style
         subjects_600      = [27,37:65];
-        subjects_1500     = [6:26,28:36];
+        subjects_1500     = [6:26,28:36];        
+        BDNF              = [2 1 1 1 2 1 2 1 2 2 1 1 1 2 1 1 2 2 2 2 1 1 1 2 1 1 1 1 1 1 1];
     end
     
     methods

@@ -218,7 +218,7 @@ classdef SCR < handle
             self.phasic  = self.data - self.tonic;
         end
         function self = tonic_tfals(self)
-            [self.phasic,self.tonic] = TFALS(self.data,self.nfreq,self.p);
+            [self.phasic,self.tonic] = TFALS(self.data,self.nfreq,self.p);            
         end        
         
         function xcorr(self,block)                 
