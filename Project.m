@@ -10,7 +10,9 @@ classdef Project < handle
         PixelPerDegree    = 20;
     end
     properties (Hidden,Constant)
-        path_project      = '/Users/onat/Google Drive_ninhamburg/EthnoMaster/data/';
+        path_project      = 'C:\Users\onat\Google Drive\EthnoMaster\data\';
+        path_stimuli      = 'C:\Users\onat\Dropbox\feargen_lea\Stimuli\';
+        
         condition_labels  = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
         plot_style
         subjects_600      = [27,37:65];
@@ -36,8 +38,7 @@ classdef Project < handle
             %Example: s.pathfinder(s.id,[]) => will return the path to
             %subject
             % empty [] above can be replaced with any phase number.
-            % 
-            
+            %             
             data_path = self.path_project;
             for no = [subject run]
                 file_list        = dir(data_path);
@@ -45,13 +46,13 @@ classdef Project < handle
                 i                = find(cellfun(@(bla) ~isempty(bla), i  ));
                 if ~isempty(i)
                     folder       = getfield(file_list(i),'name');
-                    data_path    = sprintf('%s/%s',data_path,folder);
+                    data_path    = sprintf('%s%s%s',data_path,filesep,folder);
                 else
                     data_path    = [];
                     return
                 end
             end
-            data_path(end+1)         = '/';
+            data_path(end+1)         = filesep;
         end
         
         function path2data = path2data(self,subject,run,varargin)
