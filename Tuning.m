@@ -45,10 +45,7 @@ classdef Tuning < handle
                 fprintf('Fitting subject %03d\n',ns)                
                 self.subjectfit_data{ns}  = self.Fit(self.x(ns,:),self.y(ns,:),funtype);
                 self.singlesubject(ns,:)  = self.subjectfit_data{ns}.Est;
-            end
-            
-            
-            
+            end            
         end
         
         function GroupFit(self,funtype)            
