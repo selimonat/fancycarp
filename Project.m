@@ -10,9 +10,8 @@ classdef Project < handle
         PixelPerDegree    = 20;
     end
     properties (Hidden,Constant)
-
-        path_project      = 'C:\Users\onat\Google Drive\EthnoMaster\data\';
-        path_stimuli      = 'C:\Users\onat\Dropbox\feargen_lea\Stimuli\';
+        path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sdata%s',homedir,filesep,filesep,filesep,filesep)
+        path_stimuli      = sprintf('%sstimuli%s',Project.path_project,filesep);
         condition_labels  = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
         plot_style
         subjects_600      = [27,37:65];
@@ -21,7 +20,13 @@ classdef Project < handle
     end
     
     methods
-        
+        function stim = find_stim(self,n)
+            %will return the path to the Nth stimulus.
+            stim = '';
+            if n < 11                
+                stim = sprintf('%s%02d.bmp',Project.path_stimuli,n);            
+            end
+        end
         function ls = get.plot_style()
             %produce a cell array of string for each condition that specifies plotting
             %attributes.
