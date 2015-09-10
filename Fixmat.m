@@ -7,7 +7,7 @@ classdef Fixmat < Project
     end
     
     properties (Hidden,SetAccess = public)
-         baseline_correction = 1;
+         baseline_correction = 0;
     end
     properties (Hidden,SetAccess = private)
         maps
@@ -36,12 +36,12 @@ classdef Fixmat < Project
     end
     
     methods
-        function obj = Fixmat(subjects,runs)
+        function obj = Fixmat(subjects,runs)%constructor
             %%
             %initialize
             for subject = subjects
                 for run = runs
-                    %%
+                    %%                    
                     dummy = load(obj.path2data(subject,run,'eye'));
                     %this is necessary to expand the PTB message to
                     %something that is understandable by the fixations
@@ -108,10 +108,10 @@ classdef Fixmat < Project
                 d = 0;
             end            
             tmaps = size(obj.maps,3);
-            hhfigure(1);
+            hhfigure;
             for nc = 1:size(obj.maps,3)
-                h = subplot(tmaps/4,4,nc);
-                subplotChangeSize(h,0.05,0.05);
+                h = subplot(2,4,nc);
+%                 subplotChangeSize(h,0.05,0.05);
                 h = imagesc(obj.maps(:,:,nc),[d u]);                
                 if ~obj.baseline_correction
                     set(h,'alphaData',Scale(obj.maps(:,:,nc)));
@@ -137,7 +137,7 @@ classdef Fixmat < Project
                 c                 = c+1;
                 obj.UpdateSelection(v{1}{:});
                 FixMap            = accumarray([obj.current_y' obj.current_x'],1,[obj.rect(2) obj.rect(4)]);
-                FixMap            = FixMap./sum(FixMap(:));
+%                 FixMap            = FixMap./sum(FixMap(:));
                 FixMap            = conv2(sum(obj.kernel),sum(obj.kernel,2),FixMap,'same');
                 obj.maps(:,:,c)   = FixMap(obj.rect(2)/2-250 : obj.rect(2)/2+250, obj.rect(4)/2-250 : obj.rect(4)/2+250);
                 obj.map_titles{c} = obj.query;
@@ -147,6 +147,7 @@ classdef Fixmat < Project
                 obj.maps = obj.maps - repmat(mean(obj.maps,3),[1 1 size(obj.maps,3)]);
             end            
         end
+      
         function maps   = vectorize_maps(obj)
             if ~isempty(obj.maps)
                 maps = reshape(obj.maps,size(obj.maps,1)*size(obj.maps,2),size(obj.maps,3));
