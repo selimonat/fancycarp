@@ -20,11 +20,13 @@ classdef Project < handle
     end
     
     methods
-        function stim = find_stim(self,n)
-            %will return the path to the Nth stimulus.
-            stim = '';
-            if n < 11                
+        function stim = find_stim(self,varargin)
+            %will return the path to the Nth (varargin) stimulus. If not
+            %specified the average stim will be returned.                       
+            if ~isempty(varargin)
                 stim = sprintf('%s%02d.bmp',Project.path_stimuli,n);            
+            else
+                stim = sprintf('%save.bmp',Project.path_stimuli);
             end
         end
         function ls = get.plot_style()
