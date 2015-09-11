@@ -11,7 +11,7 @@ classdef Fixmat < Project
          unitize             = 0;
          mapsize             = 250;
          maptype             = 'bin';%conv or bin
-         binfactor           = 10;
+         binfactor           = 25;
     end
     properties (Hidden,SetAccess = private)
         maps
@@ -106,28 +106,32 @@ classdef Fixmat < Project
             obj.query = [];
             fprintf('Selection removed from the object...\n');
         end
-        function plot(obj)
-            [d u] = GetColorMapLimits(obj.maps,9);
+        function plot(obj)            
+            [d u] = GetColorMapLimits(obj.maps,9);            
             if ~obj.baseline_correction
                 d = 0;
-            end            
+            end                                
+            %
             tmaps = size(obj.maps,3);
             hhfigure;
             for nc = 1:size(obj.maps,3)
-                h = subplot(2,4,nc);
-%                 subplotChangeSize(h,0.05,0.05);
-                h = imagesc(obj.maps(:,:,nc),[d u]);                
+                h     = subplot(2,4,nc);
+                %plot the image;
+                bild  = repmat(obj.cropimage(imread(obj.find_stim)),[1 1 3]);
+                x     = [1:size(obj.maps,1)]';
+                y     = [1:size(obj.maps,2)]';
+                h     = imagesc(x,y,bild);
+                hold on;
+                %                 subplotChangeSize(h,0.05,0.05);
+                h     = imagesc(x,y,obj.maps(:,:,nc),[d u]);
                 if ~obj.baseline_correction
                     set(h,'alphaData',Scale(obj.maps(:,:,nc)));
                 else
                     set(h,'alphaData',Scale(abs(obj.maps(:,:,nc))));
                 end
                 axis image;
-                box off;
-                grid on;
-                SetTickNumber(gca,[4 4]);
-                set(gca,'xticklabel',[],'yticklabel',[]);
-                t = sprintf('%s%d/',obj.map_titles{nc}{:});
+                axis off;                
+                t     = sprintf('%s%d/',obj.map_titles{nc}{:});
                 title(t,'interpreter','none');
             end
         end
@@ -168,6 +172,10 @@ classdef Fixmat < Project
             end            
         end
       
+        function out = cropimage(obj,im)            
+            out      = im(obj.rect(2)/2-obj.mapsize : obj.rect(2)/2+obj.mapsize, obj.rect(4)/2-obj.mapsize: obj.rect(4)/2+obj.mapsize);
+        end
+        
         function out = cropmaps(obj,map)
             if strcmp(obj.maptype,'conv')
                 out      = map(obj.rect(2)/2-obj.mapsize : obj.rect(2)/2+obj.mapsize, obj.rect(4)/2-obj.mapsize: obj.rect(4)/2+obj.mapsize);
