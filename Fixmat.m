@@ -136,9 +136,9 @@ classdef Fixmat < Project
             for v = varargin
                 c                 = c+1;
                 obj.UpdateSelection(v{1}{:});
-                FixMap            = accumarray([obj.current_y' obj.current_x'],1,[obj.rect(2) obj.rect(4)]);
-%                 FixMap            = FixMap./sum(FixMap(:));
+                FixMap            = accumarray([obj.current_y' obj.current_x'],1,[obj.rect(2) obj.rect(4)]);                
                 FixMap            = conv2(sum(obj.kernel),sum(obj.kernel,2),FixMap,'same');
+                FixMap            = FixMap./sum(FixMap(:));
                 obj.maps(:,:,c)   = FixMap(obj.rect(2)/2-250 : obj.rect(2)/2+250, obj.rect(4)/2-250 : obj.rect(4)/2+250);
                 obj.map_titles{c} = obj.query;
             end
