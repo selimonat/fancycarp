@@ -15,6 +15,7 @@ classdef Tuning < handle
         likelihoodfun
         groupfit
         singlesubject
+        SI
         
 %         Est
 %         Likelihood
