@@ -1,6 +1,7 @@
 classdef Group < Project
     properties
         subject
+        tunings
     end
     
     methods
@@ -19,10 +20,16 @@ classdef Group < Project
                 csps = [csps self.subject{s}.csp];
             end
         end
+        
         %%
-        function ModelRatings(self,run)            
-            T = Tuning(self.Ratings(run));
-            keyboard
+        function ModelRatings(self,run)
+            self.tunings{run} = Tuning(self.RatingsDemeaned(run));
+            self.tunings{run}.SingleSubjectFit(3);
+        end
+        function getSI(self)
+            self.ModelRatings(3)
+            self.ModelRatings(4)
+            self.tunings{4}.SI = self.tunings{3}.singlesubject(:,2) - self.tunings{4}.singlesubject(:,2);
         end
         %%
         function [rating] = PlotRatingsDemeaned(self,runs,varargin)
