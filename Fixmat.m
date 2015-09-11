@@ -8,9 +8,9 @@ classdef Fixmat < Project
     
     properties (Hidden,SetAccess = public)
          baseline_correction = 0;
-         unitize             = 0;
+         unitize             = 1;
          mapsize             = 250;
-         maptype             = 'bin';%conv or bin
+         maptype             = 'conv';%conv or bin
          binfactor           = 10;
     end
     properties (Hidden,SetAccess = private)
