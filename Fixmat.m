@@ -8,6 +8,10 @@ classdef Fixmat < Project
     
     properties (Hidden,SetAccess = public)
          baseline_correction = 0;
+         unitize             = 0;
+         mapsize             = 250;
+         maptype             = 'bin';%conv or bin
+         binfactor           = 10;
     end
     properties (Hidden,SetAccess = private)
         maps
@@ -132,14 +136,29 @@ classdef Fixmat < Project
             %VARARGIN, example:
             %fs.getmaps({'phase',4,'deltacsp',-135});
             
+            obj.maps = [];%clear whatever is there
             c  = 0;
             for v = varargin
                 c                 = c+1;
-                obj.UpdateSelection(v{1}{:});
-                FixMap            = accumarray([obj.current_y' obj.current_x'],1,[obj.rect(2) obj.rect(4)]);
-%                 FixMap            = FixMap./sum(FixMap(:));
-                FixMap            = conv2(sum(obj.kernel),sum(obj.kernel,2),FixMap,'same');
-                obj.maps(:,:,c)   = FixMap(obj.rect(2)/2-250 : obj.rect(2)/2+250, obj.rect(4)/2-250 : obj.rect(4)/2+250);
+                obj.UpdateSelection(v{1}{:});                
+                
+                if strcmp(obj.maptype,'conv')
+                    %accum and conv
+                    FixMap            = accumarray([obj.current_y' obj.current_x'],1,[obj.rect(2) obj.rect(4)]);
+                    FixMap            = conv2(sum(obj.kernel),sum(obj.kernel,2),FixMap,'same');
+                elseif strcmp(obj.maptype,'bin')
+                    %divide by a factor (i.e. binning) and accum, but no conv
+                    y                 = ceil(double(obj.current_y')./obj.binfactor);
+                    x                 = ceil(double(obj.current_x')./obj.binfactor);
+                    FixMap            = accumarray([y x],1,[obj.rect(2)./obj.binfactor obj.rect(4)./obj.binfactor]);
+                end
+                %
+                FixMap                = obj.cropmaps(FixMap);
+                if obj.unitize
+                    FixMap            = FixMap./sum(FixMap(:));
+                end
+                obj.maps(:,:,c)       = FixMap;
+                %
                 obj.map_titles{c} = obj.query;
             end
             
@@ -148,6 +167,15 @@ classdef Fixmat < Project
             end            
         end
       
+        function out = cropmaps(obj,map)
+            if strcmp(obj.maptype,'conv')
+                out      = map(obj.rect(2)/2-obj.mapsize : obj.rect(2)/2+obj.mapsize, obj.rect(4)/2-obj.mapsize: obj.rect(4)/2+obj.mapsize);
+            elseif strcmp(obj.maptype,'bin')
+                new_size = obj.mapsize./obj.binfactor;
+                out      = map(obj.rect(2)/obj.binfactor/2-new_size : obj.rect(2)/obj.binfactor/2+new_size, obj.rect(4)/obj.binfactor/2-new_size: obj.rect(4)/obj.binfactor/2+new_size);
+            end
+        end
+        
         function maps   = vectorize_maps(obj)
             if ~isempty(obj.maps)
                 maps = reshape(obj.maps,size(obj.maps,1)*size(obj.maps,2),size(obj.maps,3));
