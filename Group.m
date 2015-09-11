@@ -58,6 +58,7 @@ classdef Group < Project
             end
         end
         %%
+       
         function [rating] = PlotRatings(self,runs,varargin)
             hvfigure;
             trun = length(runs);
@@ -117,5 +118,15 @@ classdef Group < Project
                 end
             end
         end
+        
+        function [data] = PMFparams(self,run,cond)
+            data.alpha = NaN(65,2,2);%subject,cs+,time
+            data.beta  = NaN(65,2,2);
+            
+            data.alpha(
+            
+        
+        end
+            
     end
 end
