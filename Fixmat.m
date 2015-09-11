@@ -140,6 +140,7 @@ classdef Fixmat < Project
             c  = 0;
             for v = varargin
                 c                 = c+1;
+
                 obj.UpdateSelection(v{1}{:});                
                 
                 if strcmp(obj.maptype,'conv')
