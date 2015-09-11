@@ -11,7 +11,7 @@ classdef Subject < Project
     end
     methods
         function s = Subject(id)%constructor
-            s.id              = id
+            s.id              = id;
             s.path            = s.pathfinder(s.id,[]);
             if exist(s.path)
                 for nrun = 1:5
