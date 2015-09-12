@@ -1,23 +1,22 @@
 classdef Fixmat < Project
-    properties (Hidden,Constant)
-        kernel_fwhm = Fixmat.PixelPerDegree*1.75;
-        dummy       = make_gaussian2D(Fixmat.kernel_fwhm*2.65,Fixmat.kernel_fwhm*2.65,Fixmat.kernel_fwhm,Fixmat.kernel_fwhm,Fixmat.kernel_fwhm*2.65/2,Fixmat.kernel_fwhm*2.65/2);
-        kernel      = Fixmat.dummy./sum(Fixmat.dummy(:));       
-        %         kernel = Fixmat.dummy;
-        window              = 250;%half size of the fixation maps
+    properties (Hidden,Constant)                
+        window       = 250;%half size of the fixation maps        
     end
     
-    properties (SetObservable = true,Hidden,SetAccess = public)
+    properties (Hidden,SetAccess = public)
         %related to map computation
-         baseline_correction = 0;%cocktail blank correction
-         unitize             = 0;%sums to 1 or not         
-         maptype             = 'bin';%conv or bin
-         binfactor           = 60;%bin size  
+         bc                  = 1;%cocktail blank correction
+         unitize             = 1;%sums to 1 or not         
+         maptype             = 'conv';%conv or bin
+         binfactor           = 60;%bin size           
+         kernel_fwhm         = Fixmat.PixelPerDegree*.8;
     end
+   
     properties (Hidden,SetAccess = private)
         %internal
         maps
         query
+        all_queries
         map_titles
         selection    
     end
@@ -48,9 +47,11 @@ classdef Fixmat < Project
         fix     = [];        
     end
     
+    events
+      UpdateGraph 
+    end
     
-    
-    methods
+    methods        
         function obj = Fixmat(subjects,runs)%constructor
             %%
             %initialize
@@ -89,9 +90,17 @@ classdef Fixmat < Project
             obj.UpdateSelection('phase',runs);
             obj.ApplySelection;
             %% remove fixations outside of the image border
-            obj.selection = ~(obj.x < obj.rect(2) | obj.x > (obj.rect(2)+obj.rect(4)) | obj.y < obj.rect(1) | obj.y > (obj.rect(1)+obj.rect(3)) );
+            obj.selection = ~(obj.x < obj.rect(2) | obj.x > (obj.rect(2)+obj.rect(4)-1) | obj.y < obj.rect(1) | obj.y > (obj.rect(1)+obj.rect(3)-1) );
             obj.ApplySelection;
             
+        end
+        function set.binfactor(obj,value)
+            obj.binfactor = value;
+%             obj.getmaps(obj.all_queries);
+%             obj.plot
+        end
+        function out = get.binfactor(obj)
+            out = obj.binfactor;
         end
         function UpdateSelection(obj,varargin)
             %takes VARARGIN pairs to update the selection vektor            
@@ -108,7 +117,7 @@ classdef Fixmat < Project
             %the constructor.            
             %removes fixations which are FALSE in selection                        
             for p = properties(obj)'
-                if ~strcmp(p{1},'rect') && ~strcmp(p{1},'maps') && ~strcmp(p{1},'selection') ;%all the properties unrelated to fixation data.
+                if ~strcmp(p{1},'rect') && ~strcmp(p{1},'maps') && ~strcmp(p{1},'selection');%all the properties unrelated to fixation data.
                     obj.(p{1})(~obj.selection) = [];
                 end
             end
@@ -117,24 +126,24 @@ classdef Fixmat < Project
         end
         function plot(obj)    
             
-            [d u] = GetColorMapLimits(obj.maps,5)
-            if ~obj.baseline_correction
+            [d u] = GetColorMapLimits(obj.maps,7);
+            if ~obj.bc
                 d = 0;
-            end                                
+            end                                            
             %
             tmaps = size(obj.maps,3);
-%             hhfigure(1);
+            ffigure(1);clf
             for nc = 1:size(obj.maps,3)
-                h     = subplot(2,4,nc);          
+                h     = subplot(floor(size(obj.maps,3)/4),4,nc);          
                 %plot the image;                                       
                 imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.stimulus);
                 hold on;
                 %                 subplotChangeSize(h,0.05,0.05);
-                h     = imagesc(obj.bincenters_x,obj.bincenters_y,obj.maps(:,:,nc),[d u]);
-                if ~obj.baseline_correction
-                    set(h,'alphaData',Scale(obj.maps(:,:,nc)));
+                h     = imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.maps(:,:,nc),[d u]);
+                if ~obj.bc
+                    set(h,'alphaData',Scale(obj.maps(:,:,nc))*.5+.2);
                 else
-                    set(h,'alphaData',Scale(abs(obj.maps(:,:,nc))));
+                    set(h,'alphaData',Scale(abs(obj.maps(:,:,nc)))*.5+.2);
                 end
                 axis image;
                 axis off;                
@@ -149,13 +158,14 @@ classdef Fixmat < Project
             
             obj.maps = [];%clear whatever is there
             c  = 0;
+            obj.all_queries = varargin;
             for v = varargin
                 c                 = c+1;
                 obj.UpdateSelection(v{1}{:});                                
                 
                 if strcmp(obj.maptype,'conv')
                     %accum and conv
-                    FixMap            = accumarray([obj.current_y-obj.rect(1) obj.current_x-obj.rect(2)],1,[obj.rect(3) obj.rect(4)]);
+                    FixMap            = accumarray([obj.current_y-obj.rect(1)+1 obj.current_x-obj.rect(2)+1],1,[obj.rect(3) obj.rect(4)]);
                     FixMap            = conv2(sum(obj.kernel),sum(obj.kernel,2),FixMap,'same');
                 elseif strcmp(obj.maptype,'bin')
                     %divide by a factor (i.e. binning) and accum, but no conv                                        
@@ -170,18 +180,16 @@ classdef Fixmat < Project
                 obj.map_titles{c} = obj.query;
             end
             %correct for baseline if wanted.
-            if obj.baseline_correction
+            if obj.bc
                 obj.maps = obj.maps - repmat(mean(obj.maps,3),[1 1 size(obj.maps,3)]);
             end            
-        end              
-        
+        end                      
         function bild = get.stimulus(obj)
             
             bild    = imread(obj.find_stim);            
             bild    = bild( obj.rect(1):obj.rect(1)+obj.rect(3)-1,  obj.rect(2):obj.rect(2)+obj.rect(4)-1);
             bild    = repmat(bild,[1 1 3]);
-        end
-        
+        end        
         function out = cropmaps(obj,map)
             if strcmp(obj.maptype,'conv')
                 out      = map(obj.rect(2)/2-obj.mapsize : obj.rect(2)/2+obj.mapsize, obj.rect(4)/2-obj.mapsize: obj.rect(4)/2+obj.mapsize);
@@ -190,8 +198,11 @@ classdef Fixmat < Project
                 
                 out      = map(obj.rect(2)/obj.binfactor/2-new_size : obj.rect(2)/obj.binfactor/2+new_size, obj.rect(4)/obj.binfactor/2-new_size: obj.rect(4)/obj.binfactor/2+new_size);
             end
+        end        
+        function out = kernel(obj)            
+            dummy       = make_gaussian2D(obj.kernel_fwhm*2.65,obj.kernel_fwhm*2.65,obj.kernel_fwhm,obj.kernel_fwhm,obj.kernel_fwhm*2.65/2,obj.kernel_fwhm*2.65/2);
+            out         = dummy./sum(dummy(:));       
         end
-        
         function maps   = vectorize_maps(obj)
             if ~isempty(obj.maps)
                 maps = reshape(obj.maps,size(obj.maps,1)*size(obj.maps,2),size(obj.maps,3));
@@ -200,17 +211,19 @@ classdef Fixmat < Project
             end
         end
         function cov(obj)
+            figure(3);clf
             set(gcf,'position',[1104         152         337         299]);
             imagesc(cov(obj.vectorize_maps));
             axis image;
             colorbar
         end
         function corr(obj)
+            figure(2);clf
             set(gcf,'position',[1104         152         337         299])
             imagesc(corr(obj.vectorize_maps));
             axis image;
             colorbar
-        end
+        end        
         function [x] = current_x(obj)
             %returns the current x y coordinates            
             x = obj.x(obj.selection)';
@@ -238,7 +251,6 @@ classdef Fixmat < Project
             out = out + mean(unique(diff(out)))/2;
             out(end) =[];
         end
-        %
         function [out] = bincenters_x(obj,varargin)
             if nargin < 2
                 resolution = length(obj.binedges{2});
@@ -404,8 +416,6 @@ classdef Fixmat < Project
                 fixmat.(exp_fields{f}) = ones(1, length(fixmat.start), 'int32') * str2double(edfmeta.(exp_fields{f}));
             end
             
-        end
-        
-        
-    end
+        end                
+    end    
 end
