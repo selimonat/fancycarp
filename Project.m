@@ -7,7 +7,7 @@ classdef Project < handle
         line_width        = {2  2  2  2  2  2  2  2  2  1  1};
         condition_indices = {1000 45 90 135 180 225 270 315 360 1001 1002};
         screen_resolution = [1200 1600];
-        PixelPerDegree    = 20;
+        PixelPerDegree    = 37;
     end
     properties (Hidden,Constant)
         path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sdata%s',homedir,filesep,filesep,filesep,filesep)
