@@ -111,7 +111,13 @@ classdef Tuning < handle
                 L           = [ -range(y)*2  1  -range(y)*2    .01    ];
                 U           = [  range(y)*2  4   range(y)*2 std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
-                result.funname= 'cosine';                
+                result.funname= 'cosine';
+            elseif funtype == 8
+                result.fitfun = @(x,p) VonMises(x,p(1),p(2),p(3),p(4));%amp,kappa,centerX,offset
+                L             = [ eps                   0.1   eps     -pi   eps ];
+                U             = [ min(10,range(y)*1.1)  20   2*pi   pi   10];
+                result.dof    = 3;
+                result.funname= 'vonmisses_mobile';
             end
             %% set the objective function                        
             result.likelihoodfun  = @(params) sum(-log( normpdf( y - result.fitfun( x,params(1:end-1)) , 0,params(end)) ));

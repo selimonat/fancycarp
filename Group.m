@@ -30,14 +30,14 @@ classdef Group < Project
         end
         
         %%
-        function ModelRatings(self,run)
+        function ModelRatings(self,run,funtype)
             self.tunings{run} = Tuning(self.RatingsDemeaned(run));%create a tuning object for the RUN for ratings.
-            self.tunings{run}.SingleSubjectFit(3);%call fit method from the tuning object
+            self.tunings{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
         end
 
-        function getSI(self)
-            self.ModelRatings(3);
-            self.ModelRatings(4);
+        function getSI(self,funtype)
+            self.ModelRatings(3,funtype);
+            self.ModelRatings(4,funtype);
             self.sigma_cond = [];
             self.sigma_test = [];
             for s = 1:length(self.subject)
