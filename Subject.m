@@ -7,7 +7,8 @@ classdef Subject < Project
         path
         csp
         csn
-        scr        
+        scr    
+        pmf
     end
     methods
         function s = Subject(id)%constructor
@@ -16,18 +17,39 @@ classdef Subject < Project
             if exist(s.path)
                 for nrun = 1:5
                     s.paradigm{nrun} = s.load_paradigm(nrun);
-                end                
+                end
                 s.csp = s.paradigm{2}.stim.cs_plus;
-                s.csn = s.paradigm{2}.stim.cs_neg;                                             
-%                 s.scr = SCR(s);                
-            else                
+                s.csn = s.paradigm{2}.stim.cs_neg;
+                %                 s.scr = SCR(s);
+                s.pmf = s.getPMF;
+            else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path)
             end
         end
     end
     
     methods
+        function out = getPMF(self)
+            load(sprintf('%sweibull%sdata.mat',Project.path_project,filesep));
+            out = fits_all_RE(self.id);
+            %lines in the output are 
+            %1/ CS+ before
+            %2/ CS- before
+            %3/ CS+ after
+            %4/ CS- after
+            out.subject_alpha = mean(out.params1(1:2,1),1);
+            out.subject_beta  = mean(out.params1(1:2,2),1);
+        end
         
+        function pmfplot(self)
+            plotpath = sprintf('%s%sp05%sfigures%sfearcloud_FitPMFs_RE.fig',self.path,filesep,filesep,filesep);
+            if exist(plotpath)
+            openfig(plotpath);
+            else
+                fprintf('no figure found!')
+            end
+        end
+                   
         function p         = load_paradigm(self,nrun)
             %HAST TO GO TO THE PROJECT ACTUALLY TOGETHER WITH
             %CONDTION_>COLOR DESCRIPTION
