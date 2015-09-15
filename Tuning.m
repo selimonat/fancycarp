@@ -119,8 +119,8 @@ classdef Tuning < handle
                 result.funname= 'cosine';
             elseif funtype == 8
                 result.fitfun = @(x,p) VonMises(x,p(1),p(2),p(3),p(4));%amp,kappa,centerX,offset
-                L             = [ eps                   0.1   eps     -180   eps ];
-                U             = [ min(10,range(y)*1.1)  180   360   180   std(y(:)+rand(length(y),1).*eps)*2 ];
+                L             = [ min(y(:))-std(y)    0.1         min(x)   min(y(:))-std(y)   eps ];
+                U             = [ max(y(:))+std(y)  max(abs(x))   max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
                 result.funname= 'vonmisses_mobile';
             end
