@@ -114,8 +114,8 @@ classdef Tuning < handle
                 result.funname= 'cosine';
             elseif funtype == 8
                 result.fitfun = @(x,p) VonMises(x,p(1),p(2),p(3),p(4));%amp,kappa,centerX,offset
-                L             = [ eps                   0.1   eps     -pi   eps ];
-                U             = [ min(10,range(y)*1.1)  20   2*pi   pi   10];
+                L             = [ eps                   0.1   eps     -180   eps ];
+                U             = [ min(10,range(y)*1.1)  180   360   180   std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
                 result.funname= 'vonmisses_mobile';
             end
@@ -129,6 +129,7 @@ classdef Tuning < handle
             else %null model
                 Init = mean(y);
             end
+           
             %% estimate initial values for sigma_noise
             %based on the likelihood of sigma given the data points assuming a Gaussian normal distribution.
             tsample      = 1000;
@@ -136,13 +137,15 @@ classdef Tuning < handle
             PsigmaGiveny = sigmas.^-length(y) .* exp( - (1./(2.*sigmas.^2) ) .* sum((y - result.fitfun(x,Init)).^2) );
             [m i]        = max(PsigmaGiveny);
             Init         = [Init sigmas(i)];%            
-            %% Optimize!                        
-            L = repmat(-Inf,1,4);
-            U = repmat(Inf,1,4);
-            [result.Est, result.Likelihood, result.ExitFlag]  = fmincon(result.likelihoodfun, Init, [],[],[],[],L,U,[],self.options);
-            if result.ExitFlag < 0
-                keyboard
-            end              
+            %% Optimize!
+            try
+                [result.Est, result.Likelihood, result.ExitFlag]  = fmincon(result.likelihoodfun, Init, [],[],[],[],L,U,[],self.options); 
+                result.Likelihood = result.likelihoodfun(result.Est);
+            catch
+                result.Est         = Init;
+                result.Likelihood = result.likelihoodfun(result.Est);
+                result.ExitFlag   = 1;
+            end
             %% get the null fit
             null.fitfun     = @(x,p) repmat(p(1),length(x),1);
             null.L          = [ min(y)  0];%mean sigma
