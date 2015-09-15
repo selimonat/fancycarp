@@ -1,7 +1,12 @@
 classdef Group < Project
     properties
         subject
+        ids
+        pmf
         tunings
+        SI        
+        sigma_cond
+        sigma_test
     end
     
     methods
@@ -9,9 +14,12 @@ classdef Group < Project
         function group = Group(subjects)
             c = 0;
             for s = subjects
+                fprintf('subject: %03d\n',s)
                 c = c+1;
                 dummy            = Subject(s);
                 group.subject{c} = dummy;
+                group.ids = subjects;
+                group.getPMF;
             end
         end
         function csps = getcsp(self)
@@ -23,15 +31,103 @@ classdef Group < Project
         
         %%
         function ModelRatings(self,run)
-            self.tunings{run} = Tuning(self.RatingsDemeaned(run));
-            self.tunings{run}.SingleSubjectFit(3);
+            self.tunings{run} = Tuning(self.RatingsDemeaned(run));%create a tuning object for the RUN for ratings.
+            self.tunings{run}.SingleSubjectFit(3);%call fit method from the tuning object
         end
+
         function getSI(self)
-            self.ModelRatings(3)
-            self.ModelRatings(4)
-            self.tunings{4}.SI = self.tunings{3}.singlesubject(:,2) - self.tunings{4}.singlesubject(:,2);
+            self.ModelRatings(3);
+            self.ModelRatings(4);
+            self.sigma_cond = [];
+            self.sigma_test = [];
+            for s = 1:length(self.subject)
+                self.SI = [self.SI; self.tunings{3}.singlesubject{s}.Est(:,2) - self.tunings{4}.singlesubject{s}.Est(:,2)];%take the diff of sigma parameters.
+                self.sigma_cond = [self.sigma_cond; self.tunings{3}.singlesubject{s}.Est(:,2)];
+                self.sigma_test = [self.sigma_test; self.tunings{4}.singlesubject{s}.Est(:,2)];
+            end
         end
         %%
+        function getPMF(self)
+            self.pmf.params1   = [];
+            self.pmf.subject_alpha = [];
+            self.pmf.subject_beta  = [];
+            for s = 1:length(self.subject)
+                self.pmf.params1 = cat(3,self.pmf.params1,self.subject{s}.pmf.params1);%concatenate all subjects (third dim)
+                self.pmf.subject_alpha =  [self.pmf.subject_alpha; self.subject{s}.pmf.subject_alpha];%mean alpha for CS+/CS- before exp
+                self.pmf.subject_beta  =  [self.pmf.subject_beta; self.subject{s}.pmf.subject_beta];%mean beta for CS+/CS- before exp
+            end
+        end
+        
+        function out = parameterMat(self)
+            %1/subject alpha
+            %subject beta
+            %
+            %3/CS+ alpha pre
+            %CS- alpha pre
+            %CS+ alpha post
+            %CS- alpha post
+            %
+            %7/CS+ beta pre
+            %CS- beta pre
+            %CS+ beta post
+            %CS- beta post
+            %
+            %11/CS+ alpha improvement
+            %CS+ beta improvement
+            %CS- alpha improvement
+            %CS- beta improvement
+            %
+            %15/sigma cond
+            %sigma test
+            %17/SI
+            %SInorm
+            
+            out = [self.pmf.subject_alpha,...
+                self.pmf.subject_beta,...
+                squeeze(self.pmf.params1(1,1,:)),...
+                squeeze(self.pmf.params1(2,1,:)),...
+                squeeze(self.pmf.params1(3,1,:)),...
+                squeeze(self.pmf.params1(4,1,:)),...
+                squeeze(self.pmf.params1(1,2,:)),...
+                squeeze(self.pmf.params1(2,2,:)),...
+                squeeze(self.pmf.params1(3,2,:)),...
+                squeeze(self.pmf.params1(4,2,:)),...
+                (squeeze(self.pmf.params1(1,1,:))-squeeze(self.pmf.params1(3,1,:))),...
+                (squeeze(self.pmf.params1(3,2,:))-squeeze(self.pmf.params1(1,2,:))),...
+                (squeeze(self.pmf.params1(2,1,:))-squeeze(self.pmf.params1(4,1,:))),...
+                (squeeze(self.pmf.params1(4,2,:))-squeeze(self.pmf.params1(2,2,:))),...
+                self.sigma_cond,...
+                self.sigma_test,...
+                self.SI];
+        end
+        
+        function PlotRatingFit(self,subject)
+            i =  find(self.ids == subject);
+            xsup = linspace(min(self.tunings{3}.x(1,:)),max(self.tunings{3}.x(1,:)),100);
+            h = figure;
+            subplot(1,2,1)
+            title('cond')
+            hold on;
+            plot(self.tunings{3}.x(i,:),self.tunings{3}.y(i,:),'k.-','MarkerSize',20)
+           
+            %plot(self.tunings{3}.x(i,:),self.tunings{3}.singlesubject{i}.fit,'b','LineWidth',4')
+            plot(xsup,self.tunings{3}.singlesubject{i}.fitfun(xsup,self.tunings{3}.singlesubject{i}.Est),'LineWidth',4')
+        
+            subplot(1,2,2)
+            title('test')
+             hold on;
+            plot(self.tunings{4}.x(i,:),self.tunings{4}.y(i,:),'k.-','MarkerSize',20)
+           
+            %plot(self.tunings{4}.x(i,:),self.tunings{4}.singlesubject{i}.fit,'b','LineWidth',4')
+            plot(xsup,self.tunings{4}.singlesubject{i}.fitfun(xsup,self.tunings{4}.singlesubject{i}.Est),'LineWidth',4')
+    
+            EqualizeSubPlotYlim(h);
+            s = supertitle(sprintf('Rating Fits Subject %03d',subject),1);
+            set(s,'FontSize',14);
+            
+        end
+                
+        
         function [rating] = PlotRatingsDemeaned(self,runs,varargin)
             hvfigure;
             trun = length(runs);
@@ -118,15 +214,5 @@ classdef Group < Project
                 end
             end
         end
-        
-        function [data] = PMFparams(self,run,cond)
-            data.alpha = NaN(65,2,2);%subject,cs+,time
-            data.beta  = NaN(65,2,2);
-            
-            data.alpha(
-            
-        
-        end
-            
     end
 end
