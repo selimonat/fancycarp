@@ -2,25 +2,20 @@ classdef Tuning < handle
     properties (Hidden)
         visualization =0;
         options = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
-        subjectfit_data = {};
+        
     end
     %tuning object, can contain any kind of fear-tuning SCR, rating etc.
     properties
         x =[];
         y =[];
         y_mean = [];
-        y_std  = [];
-        funname
-        fitfun 
-        likelihoodfun
+        y_std  = []; 
         groupfit
         singlesubject
-        SI
         
 %         Est
 %         Likelihood
 %         ExitFlag
-        null_Likelihood
 %         pval = NaN;
 %         dof
 %         
@@ -42,11 +37,10 @@ classdef Tuning < handle
                 
         function SingleSubjectFit(self,funtype)
             %fit FUNTYPE to each individual subject
-            for ns = 1:size(self.x,1)                
-                fprintf('Fitting subject %03d\n',ns)                
-                self.subjectfit_data{ns}  = self.Fit(self.x(ns,:),self.y(ns,:),funtype);
-                self.singlesubject(ns,:)  = self.subjectfit_data{ns}.Est;
-            end            
+            for ns = 1:size(self.x,1)
+                fprintf('Fitting subject %03d\n',ns)
+                self.singlesubject{ns} = self.Fit(self.x(ns,:),self.y(ns,:),funtype); 
+            end
         end
         
         function GroupFit(self,funtype)            
@@ -79,11 +73,11 @@ classdef Tuning < handle
             y        = y + rand(length(y),1)*eps;
             CONSTANT = 0;%will be added to all the data points                       
             if funtype == 1
-                self.fitfun = @(x,p) repmat(p(1),length(x),1);
+                result.fitfun = @(x,p) repmat(p(1),length(x),1);
                 L           = [ min(y)  0];%mean sigma
                 U           = [ max(y)  2*std(y)];
-                self.dof    = 1;
-                self.funname= 'null';
+                result.dof    = 1;
+                result.funname= 'null';
             elseif funtype == 2                
                 result.fitfun = @(x,p) make_gaussian_fmri(x,p(1),p(2),p(3));%2 amp, std, offset
                 L           = [-range(y)*2    0       mean(y)-range(y)*2          .01    ];
@@ -100,29 +94,29 @@ classdef Tuning < handle
                 CONSTANT    = mean(y);
                 y           = y-CONSTANT;%we are not interested in the baseline, just remove it so we don't need to estimated it.                
             elseif funtype == 4                
-                self.fitfun = @(x,p) make_gaussian_fmri_tau(x,p(1),p(2),p(3));%amp, tau, offset
+                result.fitfun = @(x,p) make_gaussian_fmri_tau(x,p(1),p(2),p(3));%amp, tau, offset
                 L           = [-range(y)*2    0    mean(y)-range(y)*2          .01    ];
                 U           = [range(y)*2     180  mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];
-                self.dof    = 3;
-                self.funname= 'gaussian_tau';                
+                result.dof    = 3;
+                result.funname= 'gaussian_tau';                
             elseif funtype == 5
-                self.fitfun = @(x,p) VonMises_fmri(x, p(1), p(2), p(3));
+                result.fitfun = @(x,p) VonMises_fmri(x, p(1), p(2), p(3));
                 L           = [ -range(y)*2  10.^-16  mean(y)-range(y)*2   0];%amp kappa offset
                 U           = [  range(y)*2  180       mean(y)+range(y)*2   std(y)];
-                self.dof    = 3;
-                self.funname= 'vonmises';                
+                result.dof    = 3;
+                result.funname= 'vonmises';                
             elseif funtype == 6
-                self.fitfun = @(x,p) make_gabor1d_ZeroMean(x,p(1),p(2),p(3),p(4));%amp std freq baseline
+                result.fitfun = @(x,p) make_gabor1d_ZeroMean(x,p(1),p(2),p(3),p(4));%amp std freq baseline
                 L           = [ -range(y)*2  0    1  -range(y)*2    .01    ];
                 U           = [  range(y)*2  180   4   range(y)*2  std(y(:)+rand(length(y),1).*eps)*2 ];
-                self.dof    = 6;
-                self.funname= 'gabor';
+                result.dof    = 6;
+                result.funname= 'gabor';
             elseif funtype == 7
-                self.fitfun = @(x,p) p(1)*cos(x*p(2)) + p(3);%amp std freq baseline
+                result.fitfun = @(x,p) p(1)*cos(x*p(2)) + p(3);%amp std freq baseline
                 L           = [ -range(y)*2  1  -range(y)*2    .01    ];
                 U           = [  range(y)*2  4   range(y)*2 std(y(:)+rand(length(y),1).*eps)*2 ];
-                self.dof    = 3;
-                self.funname= 'cosine';                
+                result.dof    = 3;
+                result.funname= 'cosine';                
             end
             %% set the objective function                        
             result.likelihoodfun  = @(params) sum(-log( normpdf( y - result.fitfun( x,params(1:end-1)) , 0,params(end)) ));
@@ -156,7 +150,7 @@ classdef Tuning < handle
             result.residuals      = y-result.fitfun(x,result.Est);
             result.ss_residuals   = sqrt(mean((y-result.fitfun(x,result.Est)).^2));                                   
             %% Get the likelihood            
-            if ~isempty(self.null_Likelihood)
+            if ~isempty(result.null_Likelihood)
                 result.dof   = result.dof - 1;%the DOF of the null hypothesis is 0.
                 result.pval  = -log10(1-chi2cdf(-2*(result.Likelihood - result.null_Likelihood),result.dof) + eps);
             end
