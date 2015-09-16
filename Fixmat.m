@@ -5,20 +5,20 @@ classdef Fixmat < Project
     
     properties (Hidden,SetAccess = public)
         %related to map computation
-         bc                  = 1;%cocktail blank correction
+         bc                  = 0;%cocktail blank correction
          unitize             = 1;%sums to 1 or not         
-         maptype             = 'conv';%conv or bin
-         binfactor           = 60;%bin size           
+         maptype             = 'conv';%conv or bin         
          kernel_fwhm         = Fixmat.PixelPerDegree*.8;
+         binfactor           %Will be same as kernel_fwhm
+         maps%current maps;
     end
    
     properties (Hidden,SetAccess = private)
         %internal
-        maps
         query
         all_queries
         map_titles
-        selection    
+        selection            
     end
     
     properties (SetAccess = private,Dependent,Hidden)
@@ -93,14 +93,9 @@ classdef Fixmat < Project
             obj.selection = ~(obj.x < obj.rect(2) | obj.x > (obj.rect(2)+obj.rect(4)-1) | obj.y < obj.rect(1) | obj.y > (obj.rect(1)+obj.rect(3)-1) );
             obj.ApplySelection;
             
-        end
-        function set.binfactor(obj,value)
-            obj.binfactor = value;
-%             obj.getmaps(obj.all_queries);
-%             obj.plot
-        end
+        end        
         function out = get.binfactor(obj)
-            out = obj.binfactor;
+            out = obj.kernel_fwhm;
         end
         function UpdateSelection(obj,varargin)
             %takes VARARGIN pairs to update the selection vektor            
@@ -134,17 +129,13 @@ classdef Fixmat < Project
             tmaps = size(obj.maps,3);
             ffigure(1);clf
             for nc = 1:size(obj.maps,3)
-                h     = subplot(floor(size(obj.maps,3)/4),4,nc);          
+                h     = subplot(max(1,floor(size(obj.maps,3)/4)),4,nc);          
                 %plot the image;                                       
                 imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.stimulus);
                 hold on;
                 %                 subplotChangeSize(h,0.05,0.05);
-                h     = imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.maps(:,:,nc),[d u]);
-                if ~obj.bc
-                    set(h,'alphaData',Scale(obj.maps(:,:,nc))*.5+.2);
-                else
-                    set(h,'alphaData',Scale(abs(obj.maps(:,:,nc)))*.5+.2);
-                end
+                h     = imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.maps(:,:,nc),[d u]);                
+                set(h,'alphaData',Scale(abs(obj.maps(:,:,nc)))*.5+.2);               
                 axis image;
                 axis off;                
                 t     = sprintf('%s%d/',obj.map_titles{nc}{:});
@@ -161,8 +152,7 @@ classdef Fixmat < Project
             obj.all_queries = varargin;
             for v = varargin
                 c                 = c+1;
-                obj.UpdateSelection(v{1}{:});                                
-                
+                obj.UpdateSelection(v{1}{:});                
                 if strcmp(obj.maptype,'conv')
                     %accum and conv
                     FixMap            = accumarray([obj.current_y-obj.rect(1)+1 obj.current_x-obj.rect(2)+1],1,[obj.rect(3) obj.rect(4)]);
@@ -177,7 +167,7 @@ classdef Fixmat < Project
                 end
                 obj.maps(:,:,c)       = FixMap;
                 %
-                obj.map_titles{c} = obj.query;
+                obj.map_titles{c}     = obj.query;
             end
             %correct for baseline if wanted.
             if obj.bc
@@ -210,19 +200,22 @@ classdef Fixmat < Project
                 fprintf('no maps stored here\n');
             end
         end
-        function cov(obj)
-            figure(3);clf
-            set(gcf,'position',[1104         152         337         299]);
-            imagesc(cov(obj.vectorize_maps));
-            axis image;
-            colorbar
+        function out = cov(obj)
+%             figure(3);clf
+%             set(gcf,'position',[1104         152         337         299]);
+            out = cov(obj.vectorize_maps);
+%             imagesc(out);
+%             axis image;
+%             colorbar
         end
-        function corr(obj)
-            figure(2);clf
-            set(gcf,'position',[1104         152         337         299])
-            imagesc(corr(obj.vectorize_maps));
-            axis image;
-            colorbar
+        function out = corr(obj)
+            %plots the corrmat between maps             
+%             figure(2);clf
+%             set(gcf,'position',[1104         152         337         299])            
+            out = corr(obj.vectorize_maps);
+%             imagesc(out);
+%             axis image;
+%             colorbar
         end        
         function [x] = current_x(obj)
             %returns the current x y coordinates            
@@ -263,29 +256,41 @@ classdef Fixmat < Project
             out(end) =[];
         end
         function histogram(obj)
-            subject   = unique(obj.subject);
-            phase     = unique(obj.phase);
+            %will generate an histogram of fixation numbers
+            subject    = unique(obj.subject);
+            phase      = unique(obj.phase);
             condition  = unique(obj.deltacsp);
-            count = nan(length(subject),length(condition));
+            count      = nan(length(subject),length(condition));
             sub = 0;
             for ns = subject
                 sub = sub + 1;
-                ph = 0;
+                ph  = 0;
                 for np = phase
                     ph = ph + 1;
                     cond = 0;
                     for nc = condition
                         cond = cond + 1;
-                        dummy = obj.FilterFixmat('subject',ns,'phase',np,'deltacsp',nc);
-                        count(sub,cond,ph) = length(dummy.x);
+                        obj.UpdateSelection('subject',ns,'phase',np,'deltacsp',nc);
+                        %number of trials
+                        repet              = length(unique(obj.trialid(obj.selection)));
+                        %average number of fixation
+                        count(sub,cond,ph) = sum(obj.selection)./repet;
                     end
                 end
             end
             figure;
+            set(gcf,'position',[440   393   920   405]);
             for phases = 1:ph
                 subplot(1,3,phases)
-                imagesc(count(:,:,phases));
+                imagesc(count(:,:,phases),[0 7]);
+                thincolorbar('vert');
+                ylabel('subjects')
+                xlabel('condition');
+                axis image;
+                box off;
+                title(sprintf('Phase: %03d',phases))
             end
+            supertitle('Fixation Counts',1);
         end
         function fixmat = getfixmat(obj,edfdata, edfmeta)
             % fixmat = fixations(edfdata, edfmeta)

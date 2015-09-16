@@ -1,8 +1,7 @@
 classdef Tuning < handle
     properties (Hidden)
-        visualization =0;
-        options = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
-        
+        visualization =1;
+        options = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');        
     end
     %tuning object, can contain any kind of fear-tuning SCR, rating etc.
     properties
@@ -12,6 +11,8 @@ classdef Tuning < handle
         y_std  = []; 
         groupfit
         singlesubject
+        params;
+        pval
         
 %         Est
 %         Likelihood
@@ -41,27 +42,21 @@ classdef Tuning < handle
                 fprintf('Fitting subject %03d\n',ns)
                 self.singlesubject{ns} = self.Fit(self.x(ns,:),self.y(ns,:),funtype); 
             end
+            self.FitGetParam;
+        end
+        
+        function FitGetParam(self)
+            self.params = NaN(length(self.singlesubject),size(self.singlesubject{1}.Est,2));            
+            for unit = 1:length(self.singlesubject)
+                self.params(unit,:) = self.singlesubject{unit}.Est;
+                self.pval(unit)     = self.singlesubject{unit}.pval;
+            end
         end
         
         function GroupFit(self,funtype)            
             %pools different subjects and fit FUNTYPE
             self.groupfit = self.Fit(self.x(:),self.y(:),funtype);
-            %
-            figure;
-            set(gcf,'position',[1038         479         373         327]);
-            bincenters    = linspace(min(self.y(:)),max(self.y(:)),10);
-            [y x]         = hist(self.y,bincenters);
-            y             = y./repmat(sum(y),size(y,1),1)*100;%make it a percentage
-            imagesc(unique(self.x),x,y,[0 100]);
-            colormap hot;
-            thincolorbar('vert');
-            axis xy;
-            hold on;
-            errorbar(unique(self.x)',self.y_mean,self.y_std,'go');            
-            plot(self.groupfit.x,self.groupfit.fit);
-            plot(self.groupfit.x,self.groupfit.fit+self.groupfit.Est(end),'--');
-            plot(self.groupfit.x,self.groupfit.fit-self.groupfit.Est(end),'--');
-            hold off;
+            %            
         end
         
         function result = Fit(self,x,y,funtype)
@@ -144,9 +139,7 @@ classdef Tuning < handle
             Init         = [Init sigmas(i)];%            
             %% Optimize!
             try
-                [result.Est, result.Likelihood, result.ExitFlag]  = fmincon(result.likelihoodfun, Init, [],[],[],[],L,U,[],self.options);
-                
-                
+                [result.Est, result.Likelihood, result.ExitFlag]  = fmincon(result.likelihoodfun, Init, [],[],[],[],L,U,[],self.options); 
                 result.Likelihood = result.likelihoodfun(result.Est);
             catch
                 result.Est         = Init;
@@ -170,8 +163,29 @@ classdef Tuning < handle
                 result.dof   = result.dof - 1;%the DOF of the null hypothesis is 0.
                 result.pval  = -log10(1-chi2cdf(-2*(result.Likelihood - result.null_Likelihood),result.dof) + eps);
             end
-            result.x   = unique(x);
-            result.fit = result.fitfun(result.x,result.Est);
+            result.x       = unique(x);
+            x_HD           = linspace(min(result.x),max(result.x),100);
+            result.fit     = result.fitfun(result.x,result.Est);
+            
+            %% show fit if wanted
+            if self.visualization
+                tsub       = size(self.x,1);
+                Y_ave      = mean(self.y);
+                Y_std      = std(self.y);                
+                Y_sem      = Y_std./sqrt(tsub);
+                
+                figure(100);clf
+                plot(x_HD,result.fitfun(x_HD,result.Est),'ro','linewidth',3);
+                hold on
+                plot(x_HD, result.fitfun(x_HD,Init)  ,'color',[.3 .3 .3] ,'linewidth',3);
+                errorbar(result.x, Y_ave+CONSTANT, Y_sem   , 'b'   ,'linewidth', 3);
+                hold off
+                if funtype > 1
+                    title(sprintf('Likelihood: %03g (p = %5.5g)',result.Likelihood,result.pval));
+                end
+                drawnow;
+                grid on;
+            end
         end
                 
     end
