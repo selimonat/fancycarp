@@ -1,6 +1,7 @@
 classdef Group < Project
     properties (Hidden,Constant)
         mean_correction = 0;%decides if mean correction should be applied
+        align_tunings   = 1;%should ratings be aligned to CS+ face
     end
     properties
         subject
@@ -159,7 +160,7 @@ classdef Group < Project
         end
         %%
        
-        function [rating] = PlotRatings(self,runs,varargin)
+        function [rating] = PlotRatings(self,runs)
             hvfigure;
             trun = length(runs);
             crun = 0;
@@ -167,7 +168,7 @@ classdef Group < Project
                 crun    = crun + 1;
                 %
                 subplot(2,trun,crun);                
-                rating  = self.RatingsRaw(run,varargin{:});%collect group ratings                
+                rating  = self.Ratings(run);%collect group ratings                
                 imagesc(rating.y,[0 10]);thincolorbar('vert');%single subject data
                 set(gca,'xticklabel',{'CS+' 'CS-'},'xtick',[4 8],'fontsize',20,'yticklabel',{''});
                 colormap hot
@@ -185,14 +186,14 @@ classdef Group < Project
             end
         end
         %%
-        function [rating] = Ratings(self,run,varargin)
+        function [rating] = Ratings(self,run)
             %will collect the ratings from single subjects 
             rating.y = [];
             rating.x = [];
             c = 0;
             for s = 1:length(self.subject)
                 if ~isempty(self.subject{s})
-                    dummy = self.subject{s}.GetRating(run,varargin{:});
+                    dummy = self.subject{s}.GetRating(run,self.align_tunings);
                     if ~isempty(dummy)
                         c = c+1;
                         if self.mean_correction
