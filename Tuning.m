@@ -40,7 +40,7 @@ classdef Tuning < handle
             %fit FUNTYPE to each individual subject
             for ns = 1:size(self.x,1)
                 fprintf('Fitting subject %03d\n',ns)
-                self.singlesubject{ns} = self.Fit(self.x(ns,:),self.y(ns,:),funtype); 
+                self.singlesubject{ns} = self.Fit(self.x(ns,:),self.y(ns,:),funtype);                 
             end
             self.FitGetParam;
         end
@@ -169,22 +169,20 @@ classdef Tuning < handle
             
             %% show fit if wanted
             if self.visualization
-                tsub       = size(self.x,1);
-                Y_ave      = mean(self.y);
-                Y_std      = std(self.y);                
-                Y_sem      = Y_std./sqrt(tsub);
-                
+                                                                
                 figure(100);clf
                 plot(x_HD,result.fitfun(x_HD,result.Est),'ro','linewidth',3);
                 hold on
                 plot(x_HD, result.fitfun(x_HD,Init)  ,'color',[.3 .3 .3] ,'linewidth',3);
-                errorbar(result.x, Y_ave+CONSTANT, Y_sem   , 'b'   ,'linewidth', 3);
+                plot(result.x, y+CONSTANT, 'bo-'   ,'linewidth', 3);
                 hold off
                 if funtype > 1
                     title(sprintf('Likelihood: %03g (p = %5.5g)',result.Likelihood,result.pval));
                 end
+                xlim([min(x(:)) max(x(:))]);
                 drawnow;
                 grid on;
+                pause;
             end
         end
                 
