@@ -1,4 +1,7 @@
 classdef Group < Project
+    properties (Hidden,Constant)
+        mean_correction = 0;%decides if mean correction should be applied
+    end
     properties
         subject
         ids
@@ -27,9 +30,8 @@ classdef Group < Project
             for s = 1:length(self.subject)
                 csps = [csps self.subject{s}.csp];
             end
-        end
-        
-        %%
+        end        
+        %
         function ModelRatings(self,run,funtype)
             self.tunings{run} = Tuning(self.RatingsDemeaned(run));%create a tuning object for the RUN for ratings.
             self.tunings{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
@@ -183,7 +185,7 @@ classdef Group < Project
             end
         end
         %%
-        function [rating] = RatingsRaw(self,run,varargin)
+        function [rating] = Ratings(self,run,varargin)
             %will collect the ratings from single subjects 
             rating.y = [];
             rating.x = [];
@@ -193,28 +195,15 @@ classdef Group < Project
                     dummy = self.subject{s}.GetRating(run,varargin{:});
                     if ~isempty(dummy)
                         c = c+1;
+                        if self.mean_correction
+                            dummy.y_mean = dummy.y_mean-mean(dummy.y_mean);
+                        end
                         rating.y   = [rating.y ; dummy.y_mean];
                         rating.x   = [rating.x ; mean(dummy.x)];
                     end
                 end
             end
         end
-        %%
-        function [rating] = RatingsDemeaned(self,run,varargin)
-            %will collect the ratings from single subjects 
-            rating.y = [];
-            rating.x = [];
-            c = 0;
-            for s = 1:length(self.subject)
-                if ~isempty(self.subject{s})
-                    dummy = self.subject{s}.GetRating(run,varargin{:});
-                    if ~isempty(dummy)
-                        c = c+1;
-                        rating.y   = [rating.y ; dummy.y_mean-mean(dummy.y_mean)];
-                        rating.x   = [rating.x ; mean(dummy.x)];
-                    end
-                end
-            end
-        end
+        
     end
 end
