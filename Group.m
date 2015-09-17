@@ -19,7 +19,7 @@ classdef Group < Project
             c = 0;
             for s = subjects
                 fprintf('subject: %03d\n',s)
-                c = c+1;
+                c                = c+1;
                 dummy            = Subject(s);
                 group.subject{c} = dummy;
                 group.ids        = subjects;
@@ -34,17 +34,20 @@ classdef Group < Project
         end        
         %
         function ModelRatings(self,run,funtype)
+            %create a tuning object and fits FUNTYPE to it.
             self.tunings{run} = Tuning(self.Ratings(run));%create a tuning object for the RUN for ratings.
             self.tunings{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
         end
 
         function getSI(self,funtype)
+            %fits FUNTYPE to behavioral ratings and computes Sharpening
+            %Index.
             self.ModelRatings(3,funtype);
             self.ModelRatings(4,funtype);
             self.sigma_cond = [];
             self.sigma_test = [];
             for s = 1:length(self.subject)
-                self.SI = [self.SI; self.tunings{3}.singlesubject{s}.Est(:,2) - self.tunings{4}.singlesubject{s}.Est(:,2)];%take the diff of sigma parameters.
+                self.SI         = [self.SI; self.tunings{3}.singlesubject{s}.Est(:,2) - self.tunings{4}.singlesubject{s}.Est(:,2)];%take the diff of sigma parameters.
                 self.sigma_cond = [self.sigma_cond; self.tunings{3}.singlesubject{s}.Est(:,2)];
                 self.sigma_test = [self.sigma_test; self.tunings{4}.singlesubject{s}.Est(:,2)];
             end
@@ -55,7 +58,7 @@ classdef Group < Project
             self.pmf.subject_alpha = [];
             self.pmf.subject_beta  = [];
             for s = 1:length(self.subject)
-                self.pmf.params1 = cat(3,self.pmf.params1,self.subject{s}.pmf.params1);%concatenate all subjects (third dim)
+                self.pmf.params1       = cat(3,self.pmf.params1,self.subject{s}.pmf.params1);%concatenate all subjects (third dim)
                 self.pmf.subject_alpha =  [self.pmf.subject_alpha; self.subject{s}.pmf.subject_alpha];%mean alpha for CS+/CS- before exp
                 self.pmf.subject_beta  =  [self.pmf.subject_beta; self.subject{s}.pmf.subject_beta];%mean beta for CS+/CS- before exp
             end
