@@ -130,36 +130,8 @@ classdef Group < Project
             drawnow;
             grid on;
             
-        end
-                
-        
-        function [rating] = PlotRatingsDemeaned(self,runs,varargin)
-            hvfigure;
-            trun = length(runs);
-            crun = 0;
-            for run = runs(:)'%for each run make a subplot column
-                crun    = crun + 1;
-                %
-                subplot(2,trun,crun);                
-                rating  = self.RatingsDemeaned(run,varargin{:});%collect group ratings                
-                imagesc(rating.y,[0 10]);thincolorbar('vert');%single subject data
-                set(gca,'xticklabel',{'CS+' 'CS-'},'xtick',[4 8],'fontsize',20,'yticklabel',{''});
-                colormap hot
-                %
-                subplot(2,trun,crun+trun);
-                [y x] = hist(rating.y);
-                y     = y./repmat(sum(y),size(y,1),1)*100;%make it a percentage
-                imagesc(rating.x(1,:),x,y,[0 75]);axis xy;
-                thincolorbar('vert');
-                hold on                
-                h     = errorbar(mean(rating.x),mean(rating.y),std(rating.y),'g-');
-                axis xy;
-                set(gca,'xticklabel',{'CS+' 'CS-'},'xtick',[0 180]);                
-                hold off;
-            end
-        end
-        %%
-       
+        end                                
+        %%       
         function [rating] = PlotRatings(self,runs)
             hvfigure;
             trun = length(runs);
