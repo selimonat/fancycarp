@@ -102,28 +102,30 @@ classdef Group < Project
         end
         
         function PlotRatingFit(self,subject)
-            i =  find(self.ids == subject);
-            xsup = linspace(min(self.tunings{3}.x(1,:)),max(self.tunings{3}.x(1,:)),100);
-            h = figure;
+            i    =  find(self.ids == subject);
+            x_HD = deg2rad(linspace(min(self.tunings{3}.x(1,:)),max(self.tunings{3}.x(1,:)),100));
+            h    = figure(100);clf
+            
             subplot(1,2,1)
-            title('cond')
+            title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings{3}.singlesubject{i}.Likelihood,self.tunings{3}.singlesubject{i}.pval));
+            plot(x_HD,self.tunings{3}.singlesubject{i}.fitfun(x_HD,self.tunings{3}.singlesubject{i}.Est),'ro','linewidth',3);
             hold on;
-            plot(self.tunings{3}.x(i,:),self.tunings{3}.y(i,:),'k.-','MarkerSize',20)
-           
-            %plot(self.tunings{3}.x(i,:),self.tunings{3}.singlesubject{i}.fit,'b','LineWidth',4')
-            plot(xsup,self.tunings{3}.singlesubject{i}.fitfun(xsup,self.tunings{3}.singlesubject{i}.Est),'LineWidth',4')
-        
+            plot(deg2rad(self.tunings{3}.x(i,:)),self.tunings{3}.y(i,:), 'b','linewidth', 3);
+            ylabel('Cond')
+            drawnow;
+            grid on;
+            
             subplot(1,2,2)
-            title('test')
-             hold on;
-            plot(self.tunings{4}.x(i,:),self.tunings{4}.y(i,:),'k.-','MarkerSize',20)
-           
-            %plot(self.tunings{4}.x(i,:),self.tunings{4}.singlesubject{i}.fit,'b','LineWidth',4')
-            plot(xsup,self.tunings{4}.singlesubject{i}.fitfun(xsup,self.tunings{4}.singlesubject{i}.Est),'LineWidth',4')
-    
+            title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings{4}.singlesubject{i}.Likelihood,self.tunings{4}.singlesubject{i}.pval));
+            plot(x_HD,self.tunings{4}.singlesubject{i}.fitfun(x_HD,self.tunings{4}.singlesubject{i}.Est),'ro','linewidth',3);
+            hold on;
+            plot(deg2rad(self.tunings{3}.x(i,:)),self.tunings{4}.y(i,:), 'b','linewidth', 3);
+            ylabel('Test')
             EqualizeSubPlotYlim(h);
             s = supertitle(sprintf('Rating Fits Subject %03d',subject),1);
             set(s,'FontSize',14);
+            drawnow;
+            grid on;
             
         end
                 
