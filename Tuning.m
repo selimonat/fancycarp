@@ -1,6 +1,7 @@
 classdef Tuning < handle
     properties (Hidden)
-        visualization =1;
+        visualization = 1;%visualization of fit results
+        gridsize = 10;%resolution per parameter for initial estimation.
         options = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
     end
     %tuning object, can contain any kind of fear-tuning SCR, rating etc.
@@ -13,15 +14,6 @@ classdef Tuning < handle
         singlesubject
         params;
         pval
-        
-        %         Est
-        %         Likelihood
-        %         ExitFlag
-        %         pval = NaN;
-        %         dof
-        %
-        %         ss_residuals
-        %         residuals
     end
     
     methods
@@ -132,7 +124,7 @@ classdef Tuning < handle
             %% Initial estimation of the parameters
             %if gabor or gaussian, make a grid-estimatation
             if funtype > 1
-                Init = self.RoughEstimator(x,y,result.funname,L,U)';
+                Init = self.RoughEstimator(x,y,result.fitfun,L,U);
             else %null model
                 Init = mean(y);
             end
@@ -209,191 +201,27 @@ classdef Tuning < handle
             end
         end
         
-        function [params]=RoughEstimator(self,x,y,funname,L,U)
-            %%[params]=RoughEstimator(x,y,funtype,L,U)
-            %
-            %   Will roughly estimate the parameters of a Gaussian or Gabor function
-            %   using a grid approach. Generally these initial estimates are a bit
-            %   slower compared to more heuristic approaches however they are nearly as
-            %   good as the result of the gradient descent which makes the optimization
-            %   use less iteration. X and Y are the data points and FUNTYPE follows the
-            %   convention in FitGauss.m and it works for either Gabor or Gaussian
-            %   functions. The estimation uses all the data points, not average at
-            %   given angles. L and U are the lower/upper bounds of the grid. Pay
-            %   attention that the argument orders corresponds to the function selected
-            %   by the funtype.
-            %
-            %   Selim Onat
+        function [params]=RoughEstimator(self,x,y,fun,L,U)
+            %will roughly estimate free parameter values bounded between L
+            %and U for FUN and x values. Error is computed according to Y.
             
-            grid = 10;
-            %%
-            
-            
-            %create a reportoire of Gaussians or Gabors.
-            if strcmp(funname,'gaussian_ZeroMean')
-                %%
-                g    = single(zeros(length(x),50*25));
-                lut  = single(zeros(length(L)-1,size(g,2)));
-                %
-                amps      = linspace(L(1),U(1),grid*2);
-                widths     = linspace(L(2),U(2),grid);
-                %
-                c       = 0;
-                for amp = amps
-                    for width = widths
-                        c        = c+1;
-                        lut(:,c) = [amp;width];
-                        dummy    = make_gaussian_fmri_zeromean(x,amp,width);
-                        g(:,c)   = dummy;
-                    end
-                end
-                
-            elseif strcmp(funname,'gaussian')
-                %%
-                g    = single(zeros(length(x),50*25));
-                lut  = single(zeros(length(L)-1,size(g,2)));
-                %
-                amps      = linspace(L(1),U(1),grid*2);
-                widths     = linspace(L(2),U(2),grid);
-                baselines = linspace(L(3),U(3),grid);
-                %
-                c       = 0;
-                for amp = amps
-                    for width = widths
-                        for baseline = baselines
-                            c        = c+1;
-                            lut(:,c) = [amp;width;baseline];
-                            dummy    = make_gaussian_fmri(x,amp,width,baseline);
-                            g(:,c)   = dummy;
-                        end
-                    end
-                end
-                
-            elseif strcmp(funname,'gaussian_tau')
-                %%
-                g    = single(zeros(length(x),50*25));
-                lut  = single(zeros(length(L)-1,size(g,2)));
-                %
-                amps       = linspace(L(1),U(1),grid*2);
-                widths     = linspace(L(2),U(2),grid);
-                baselines  = linspace(L(3),U(3),grid);
-                %
-                c       = 0;
-                for amp = amps
-                    for width = widths
-                        for baseline = baselines
-                            c        = c+1;
-                            lut(:,c) = [amp;width;baseline];
-                            dummy    = make_gaussian_fmri_tau(x,amp,width,baseline);
-                            g(:,c)   = dummy;
-                        end
-                    end
-                end
-                
-                
-            elseif strcmp(funname,'vonmises')
-                %%
-                g    = single(zeros(length(x),50*25));
-                lut  = single(zeros(length(L)-1,size(g,2)));
-                %
-                amps      = linspace(L(1),U(1),grid*2);
-                widths     = logspace(L(2),U(2),grid);
-                baselines = linspace(L(3),U(3),grid);
-                %
-                c       = 0;
-                for amp = amps
-                    for width = widths
-                        for baseline = baselines
-                            c        = c+1;
-                            lut(:,c) = [amp;width;baseline];
-                            dummy    = make_gaussian_fmri_tau(x,amp,width,baseline);
-                            g(:,c)   = dummy;
-                        end
-                    end
-                end
-                
-                
-                
-                
-            elseif strcmp(funname,'gabor')
-                %%
-                grid = 15;
-                g    = single(zeros(length(x),grid*grid*10*1*grid));
-                lut  = single(zeros(length(L)-1,size(g,2)));
-                %
-                amps      = linspace(L(1),U(1),grid);
-                widths    = linspace(L(2),U(2),grid);
-                freqs     = linspace(L(3),U(3),grid);
-                baselines = linspace(L(4),U(4),grid);
-                %
-                c       = 0;
-                for amp = amps
-                    for width = widths
-                        for freq = freqs;
-                            for baseline = baselines;
-                                c        = c+1;
-                                lut(:,c) = [amp;width;freq;baseline];
-                                dummy    = make_gabor1d_ZeroMean(x,amp,width,freq,baseline);
-                                g(:,c)   = dummy;
-                            end
-                        end
-                    end
-                end
-                
-            elseif strcmp(funname,'cosine')
-                %%
-                grid = 15;
-                g    = single(zeros(length(x),grid*grid*10*1*grid));
-                lut  = single(zeros(length(L)-1,size(g,2)));
-                %
-                amps       = linspace(L(1),U(1),grid);
-                freqs      = linspace(L(2),U(2),grid);
-                baselines  = linspace(L(3),U(3),grid);
-                %
-                c       = 0;
-                for amp = amps
-                    for freq = freqs
-                        for baseline = baselines
-                            c        = c+1;
-                            lut(:,c) = [amp;freq;baseline];
-                            dummy    = amp*cos(x*freq)+baseline;
-                            g(:,c)   = dummy;
-                        end
-                    end
-                end
-                
-            elseif strcmp(funname,'vonmisses_mobile')
-                %%
-                g    = single(zeros(length(x),grid*grid*10*1*grid));
-                lut  = single(zeros(length(L)-1,size(g,2)));
-                %
-                amps      = linspace(L(1),U(1),grid);
-                widths    = linspace(L(2),U(2),grid);
-                freqs     = linspace(L(3),U(3),grid);
-                baselines = linspace(L(4),U(4),grid);
-                %
-                c       = 0;
-                for amp = amps
-                    for width = widths
-                        for freq = freqs;
-                            for baseline = baselines;
-                                c        = c+1;
-                                lut(:,c) = [amp;width;freq;baseline];                                
-                                dummy    = self.VonMises(x,amp,width,freq,baseline);
-                                g(:,c)   = dummy;
-                            end
-                        end
-                    end
-                end
-                
+            %% get a grid  
+            tparam   = length(L);
+            for n = 1:tparam
+                grid_in{n} = linspace(L(n),U(n),self.gridsize);
             end
-            
-            
-            %%
-            res   = (sum( (g - repmat((y(:)),1,size(g,2))).^2 ));
-            [m i] = min(res);
-            
-            params = double(lut(:,i));
+            G      = cell(1,tparam);
+            [G{:}] = ndgrid(grid_in{:});%generate a grid
+            G      = cat(tparam+1,G{:});%cell to matrix
+            G      = permute(G,[tparam+1 1:tparam]);%change dimension orders so that
+            G      = reshape(G,[tparam,10^tparam])';%we can make Nx3 matrix with reshape
+            %%            
+            error  = zeros(1,10^tparam);
+            for npoint = 1:10^tparam;
+                error(npoint) = sum(y - fun(x,G(npoint,:))).^2;%residual error
+            end
+            [m i]  = min(error);            
+            params = double(G(i,:));
             
         end       
     end
