@@ -103,14 +103,14 @@ classdef Group < Project
         
         function PlotRatingFit(self,subject)
             i    =  find(self.ids == subject);
-            x_HD = deg2rad(linspace(min(self.tunings{3}.x(1,:)),max(self.tunings{3}.x(1,:)),100));
+            x_HD = linspace(min(self.tunings{3}.x(1,:)),max(self.tunings{3}.x(1,:)),100);
             h    = figure(100);clf
             
             subplot(1,2,1)
             title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings{3}.singlesubject{i}.Likelihood,self.tunings{3}.singlesubject{i}.pval));
             plot(x_HD,self.tunings{3}.singlesubject{i}.fitfun(x_HD,self.tunings{3}.singlesubject{i}.Est),'ro','linewidth',3);
             hold on;
-            plot(deg2rad(self.tunings{3}.x(i,:)),self.tunings{3}.y(i,:), 'b','linewidth', 3);
+            plot(self.tunings{3}.x(i,:),self.tunings{3}.y(i,:), 'b','linewidth', 3);
             ylabel('Cond')
             drawnow;
             grid on;
@@ -119,7 +119,7 @@ classdef Group < Project
             title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings{4}.singlesubject{i}.Likelihood,self.tunings{4}.singlesubject{i}.pval));
             plot(x_HD,self.tunings{4}.singlesubject{i}.fitfun(x_HD,self.tunings{4}.singlesubject{i}.Est),'ro','linewidth',3);
             hold on;
-            plot(deg2rad(self.tunings{3}.x(i,:)),self.tunings{4}.y(i,:), 'b','linewidth', 3);
+            plot(self.tunings{3}.x(i,:),self.tunings{4}.y(i,:), 'b','linewidth', 3);
             ylabel('Test')
             EqualizeSubPlotYlim(h);
             s = supertitle(sprintf('Rating Fits Subject %03d',subject),1);
