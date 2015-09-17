@@ -22,7 +22,7 @@ classdef Group < Project
                 c = c+1;
                 dummy            = Subject(s);
                 group.subject{c} = dummy;
-                group.ids = subjects;
+                group.ids        = subjects;
                 group.getPMF;
             end
         end
@@ -34,7 +34,7 @@ classdef Group < Project
         end        
         %
         function ModelRatings(self,run,funtype)
-            self.tunings{run} = Tuning(self.RatingsDemeaned(run));%create a tuning object for the RUN for ratings.
+            self.tunings{run} = Tuning(self.Ratings(run));%create a tuning object for the RUN for ratings.
             self.tunings{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
         end
 
@@ -105,34 +105,37 @@ classdef Group < Project
         end
         
         function PlotRatingFit(self,subject)
-            i    =  find(self.ids == subject);
-            x_HD = linspace(min(self.tunings{3}.x(1,:)),max(self.tunings{3}.x(1,:)),100);
-            h    = figure(100);clf
-            
-            subplot(1,2,1)
-            title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings{3}.singlesubject{i}.Likelihood,self.tunings{3}.singlesubject{i}.pval));
-            plot(x_HD,self.tunings{3}.singlesubject{i}.fitfun(x_HD,self.tunings{3}.singlesubject{i}.Est),'ro','linewidth',3);
-            hold on;
-            plot(self.tunings{3}.x(i,:),self.tunings{3}.y(i,:), 'b','linewidth', 3);
-            ylabel('Cond')
-            drawnow;
-            grid on;
-            
-            subplot(1,2,2)
-            title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings{4}.singlesubject{i}.Likelihood,self.tunings{4}.singlesubject{i}.pval));
-            plot(x_HD,self.tunings{4}.singlesubject{i}.fitfun(x_HD,self.tunings{4}.singlesubject{i}.Est),'ro','linewidth',3);
-            hold on;
-            plot(self.tunings{3}.x(i,:),self.tunings{4}.y(i,:), 'b','linewidth', 3);
-            ylabel('Test')
-            EqualizeSubPlotYlim(h);
-            s = supertitle(sprintf('Rating Fits Subject %03d',subject),1);
-            set(s,'FontSize',14);
-            drawnow;
-            grid on;
-            
+            if ~isempty(self.tunings)
+                i    =  find(self.ids == subject);
+                x_HD = linspace(min(self.tunings{3}.x(1,:)),max(self.tunings{3}.x(1,:)),100);
+                h    = figure(100);clf
+                
+                subplot(1,2,1)
+                title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings{3}.singlesubject{i}.Likelihood,self.tunings{3}.singlesubject{i}.pval));
+                plot(x_HD,self.tunings{3}.singlesubject{i}.fitfun(x_HD,self.tunings{3}.singlesubject{i}.Est),'ro','linewidth',3);
+                hold on;
+                plot(self.tunings{3}.x(i,:),self.tunings{3}.y(i,:), 'b','linewidth', 3);
+                ylabel('Cond')
+                drawnow;
+                grid on;
+                
+                subplot(1,2,2)
+                title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings{4}.singlesubject{i}.Likelihood,self.tunings{4}.singlesubject{i}.pval));
+                plot(x_HD,self.tunings{4}.singlesubject{i}.fitfun(x_HD,self.tunings{4}.singlesubject{i}.Est),'ro','linewidth',3);
+                hold on;
+                plot(self.tunings{3}.x(i,:),self.tunings{4}.y(i,:), 'b','linewidth', 3);
+                ylabel('Test')
+                EqualizeSubPlotYlim(h);
+                s = supertitle(sprintf('Rating Fits Subject %03d',subject),1);
+                set(s,'FontSize',14);
+                drawnow;
+                grid on;
+            else
+                fprintf('No tuning object found here yet...\n');
+            end
         end                                
         %%       
-        function [rating] = PlotRatings(self,runs)
+        function [rating] = PlotRatings(self,runs)            
             hvfigure;
             trun = length(runs);
             crun = 0;
