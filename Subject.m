@@ -30,7 +30,7 @@ classdef Subject < Project
     
     methods
         function out = getPMF(self)
-            load(sprintf('%sweibull%sdata.mat',Project.path_project,filesep));
+            load(sprintf('%smidlevel%sweibull%sdata.mat',Project.path_project,filesep,filesep));
             out = fits_all_RE(self.id);
             %lines in the output are 
             %1/ CS+ before
