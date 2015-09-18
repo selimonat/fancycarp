@@ -1,8 +1,8 @@
 classdef Tuning < handle
     properties (Hidden)
         visualization = 1;%visualization of fit results
-        gridsize = 10;%resolution per parameter for initial estimation.
-        options = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
+        gridsize      = 20;%resolution per parameter for initial estimation.
+        options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
     end
     %tuning object, can contain any kind of fear-tuning SCR, rating etc.
     properties
@@ -74,11 +74,13 @@ classdef Tuning < handle
                 result.fitfun = @(x,p) make_gaussian_fmri(x,p(1),p(2),p(3));%2 amp, std, offset
                 L           = [-range(y)*2    0       mean(y)-range(y)*2          .01    ];
                 U           = [range(y)*2     180      mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];%
+                L           = [0      0        0          .01    ];
+                U           = [10     180      10    std(y(:)+rand(length(y),1).*eps)*2 ];%
                 result.dof    = 3;
                 result.funname= 'gaussian';
             elseif funtype == 3
-                result.fitfun = @(x,p) make_gaussian_fmri_zeromean(x,p(1),p(2));%2 amp fwhm
-                L           = [ -range(y)*2  0     .01    ];
+                result.fitfun = @(x,p) self.make_gaussian_fmri_zeromean(x,p(1),p(2));%2 amp fwhm
+                L           = [ -range(y)*2  22.5          .01    ];
                 U           = [  range(y)*2  180       std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
                 result.funname= 'gaussian_ZeroMean';
@@ -109,7 +111,7 @@ classdef Tuning < handle
                 U           = [  range(y)*2  4   range(y)*2 std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
                 result.funname= 'cosine';
-            elseif funtype == 8                
+            elseif funtype == 8
                 result.fitfun = @(x,p) self.VonMises(x,p(1),p(2),p(3),p(4));%amp,kappa,centerX,offset
                 L             = [ min(y(:))-std(y)     0.1        min(x)   min(y(:))-std(y)   eps ];
                 U             = [ max(y(:))+std(y)  range(x)*1.5  max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];
@@ -124,7 +126,7 @@ classdef Tuning < handle
             %% Initial estimation of the parameters
             %if gabor or gaussian, make a grid-estimatation
             if funtype > 1
-                Init = self.RoughEstimator(x,y,result.fitfun,L,U);
+                Init = self.RoughEstimator(x,y,result.fitfun,L(1:end-1),U(1:end-1));%[7.1053 15.5556 1.0382];
             else %null model
                 Init = mean(y);
             end
@@ -184,28 +186,28 @@ classdef Tuning < handle
                 plot(x_HD,result.fitfun(x_HD,result.Est),'ro','linewidth',3);
                 hold on
                 plot(x_HD, result.fitfun(x_HD,Init)  ,'color',[.3 .3 .3] ,'linewidth',3);
-
+                
                 if isgroup
                     errorbar(result.x, Y_ave+CONSTANT, Y_sem   , 'b'   ,'linewidth', 3);
                 else
                     plot(result.x, y+CONSTANT, 'b'   ,'linewidth', 3);
                 end
-
+                
                 hold off
                 if funtype > 1
                     title(sprintf('Likelihood: %03g (p = %5.5g)',result.Likelihood,result.pval));
                 end
                 xlim([min(x(:)) max(x(:))]);
                 drawnow;
-                grid on;                
+                grid on;
+                pause;
             end
         end
         
         function [params]=RoughEstimator(self,x,y,fun,L,U)
             %will roughly estimate free parameter values bounded between L
-            %and U for FUN and x values. Error is computed according to Y.
-            
-            %% get a grid  
+            %and U for FUN and x values. Error is computed according to Y.        
+            %% get a grid            
             tparam   = length(L);
             for n = 1:tparam
                 grid_in{n} = linspace(L(n),U(n),self.gridsize);
@@ -214,25 +216,38 @@ classdef Tuning < handle
             [G{:}] = ndgrid(grid_in{:});%generate a grid
             G      = cat(tparam+1,G{:});%cell to matrix
             G      = permute(G,[tparam+1 1:tparam]);%change dimension orders so that
-            G      = reshape(G,[tparam,10^tparam])';%we can make Nx3 matrix with reshape
-            %%            
-            error  = zeros(1,10^tparam);
-            for npoint = 1:10^tparam;
+            G      = reshape(G,[tparam,self.gridsize^tparam])';%we can make Nx3 matrix with reshape
+            %% compute the error for each parameter combination
+            error  = zeros(1,self.gridsize^tparam);
+            for npoint = 1:self.gridsize^tparam;
                 error(npoint) = sum(y - fun(x,G(npoint,:))).^2;%residual error
             end
-            [m i]  = min(error);            
+            [m i]  = min(error);
             params = double(G(i,:));
-            
-        end       
+        end
     end
     methods (Static)
-         function  [out] = VonMises(X,amp,kappa,centerX,offset)
+        function  [out] = VonMises(X,amp,kappa,centerX,offset)
             %[out] = VonMises(X,amp,centerX,kappa,offset)
             %
             %This is a variation of the von Mises distribution explained here:
             %http://en.wikipedia.org/wiki/Von_Mises_distribution.
             out    =  (exp(kappa*cos(deg2rad(X-centerX)))-exp(-kappa))./(exp(kappa)-exp(-kappa));%put it btw [0 and 1]
             out    =  amp*out + offset;%and now scale it
+        end
+        function [out] = make_gaussian_fmri_zeromean(x,amp,sd)            
+            %
+            %	Generates a Gaussian with AMP, FWHM and offset parameters. The center location is
+            %	fixed to zero. 
+                                                
+            d = mean(diff(x));                
+            %for speed length(X) can be precomputed
+            XT = length(x);
+            %as well as d
+            % d  = 0.02;
+            %out      = amp.*exp(-tau*(x.^2)/2) - amp*sqrt(2*pi/tau)./d./XT;
+            
+            out      = amp.*exp(-(x./sd).^2/2) - amp*sqrt(2*pi*sd.^2)./d./XT;
         end
     end
 end
