@@ -77,6 +77,14 @@ classdef Project < handle
                 path2data = regexprep(path2data,'mat',varargin{2});
             end
         end
+        
+        function getMasks(self)
+        load(sprintf('%smidlevel%ssubjmasks%sETmask.mat',self.path_project,filesep,filesep));
+        load(sprintf('%smidlevel%ssubjmasks%sSCRmask.mat',self.path_project,filesep,filesep));
+        load(sprintf('%smidlevel%ssubjmasks%sPMFmask.mat',self.path_project,filesep,filesep));
+        
+        %load(sprintf('%smidlevel%ssubjmasks%sRATEmask.mat',Project.path_project,filesep,filesep));
+        end
     end
     
 end
