@@ -73,14 +73,12 @@ classdef Tuning < handle
             elseif funtype == 2
                 result.fitfun = @(x,p) make_gaussian_fmri(x,p(1),p(2),p(3));%2 amp, std, offset
                 L           = [-range(y)*2    0       mean(y)-range(y)*2          .01    ];
-                U           = [range(y)*2     180      mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];%
-                L           = [0      0        0          .01    ];
-                U           = [10     180      10    std(y(:)+rand(length(y),1).*eps)*2 ];%
+                U           = [range(y)*2     180      mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];%                
                 result.dof    = 3;
                 result.funname= 'gaussian';
             elseif funtype == 3
                 result.fitfun = @(x,p) self.make_gaussian_fmri_zeromean(x,p(1),p(2));%2 amp fwhm
-                L           = [ -range(y)*2  22.5          .01    ];
+                L           = [ -range(y)*2  5          .01    ];
                 U           = [  range(y)*2  180       std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
                 result.funname= 'gaussian_ZeroMean';
@@ -220,10 +218,11 @@ classdef Tuning < handle
             %% compute the error for each parameter combination
             error  = zeros(1,self.gridsize^tparam);
             for npoint = 1:self.gridsize^tparam;
-                error(npoint) = sum(y - fun(x,G(npoint,:))).^2;%residual error
+                error(npoint) = sum((y - fun(x,G(npoint,:))).^2);%residual error
             end
             [m i]  = min(error);
             params = double(G(i,:));
+            keyboard
         end
     end
     methods (Static)
