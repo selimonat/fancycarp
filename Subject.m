@@ -37,8 +37,8 @@ classdef Subject < Project
             %2/ CS- before
             %3/ CS+ after
             %4/ CS- after
-            out.subject_alpha = mean(out.params1(1:2,1),1);
-            out.subject_beta  = mean(out.params1(1:2,2),1);
+            out.subject_alpha = mean(out.params1(1:4,1),1);
+            out.subject_beta  = mean(out.params1(1:4,2),1);
         end
         
         function pmfplot(self)
