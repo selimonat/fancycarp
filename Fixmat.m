@@ -39,13 +39,12 @@ classdef Fixmat < Project
         eye     = [];
         deltacsp= [];
         file    = [];
-        fixx    = [];
-        fixy    = [];
         oddball = [];
         trialid = [];
         ucs     = [];
         fix     = [];
-        
+        chain   = [];
+        isref   = [];
     end
     
     events
@@ -78,15 +77,18 @@ classdef Fixmat < Project
                     dummy.subject= uint32(repmat(subject,1,length(dummy.x)));
                     %and append it to the previous fixmat
                     for fns = fieldnames(dummy)'
-                        if isempty(obj.(fns{1}))
-                            obj.(fns{1}) = [];
+                        if isprop(obj,fns{1})%if it is not a property dont even consider
+                            if isempty(obj.(fns{1}))%initialize it if the first time
+                                obj.(fns{1}) = [];
+                            end
+                            obj.(fns{1}) = [obj.(fns{1}) dummy.(fns{1})];                       
                         end
-                        obj.(fns{1}) = [obj.(fns{1}) dummy.(fns{1})];
                     end
-                end
+                end                
+                %%
                 obj.x = round(obj.x);
                 obj.y = round(obj.y);
-            end            
+            end                            
             %% take fixations which are only coming from the required phase.            
             obj.UpdateSelection('phase',runs);
             obj.ApplySelection;
@@ -111,7 +113,9 @@ classdef Fixmat < Project
             %removes fixations which are FALSE in selection                        
             for p = properties(obj)'
                 if ~strcmp(p{1},'rect') && ~strcmp(p{1},'maps') && ~strcmp(p{1},'selection');%all the properties unrelated to fixation data.
-                    obj.(p{1})(~obj.selection) = [];
+                    if ~isempty(obj.(p{1}))%sometimes the property is not filled in
+                        obj.(p{1})(~obj.selection) = [];
+                    end
                 end
             end
             obj.query = [];
