@@ -39,12 +39,12 @@ classdef Fixmat < Project
         eye     = [];
         deltacsp= [];
         file    = [];
-        fixx    = [];
-        fixy    = [];
         oddball = [];
         trialid = [];
         ucs     = [];
-        fix     = [];        
+        fix     = [];
+        chain   = [];
+        isref   = [];        
     end
     
     events
@@ -119,14 +119,16 @@ classdef Fixmat < Project
         function plot(obj)    
             
             [d u] = GetColorMapLimits(obj.maps,4);
-%             if ~obj.bc
-%                 d = 0;
-%             end                                            
+            if sum(obj.maps(:) < 0) >= 0%if there are no negative values
+                d = 0;
+            end                                            
             %
-            tmaps = size(obj.maps,3);
-            ffigure(1);clf
+            tmaps   = size(obj.maps,3);
+%             ffigure(1);
+            clf                        
+            nsp     = obj.subplot_number;
             for nc = 1:size(obj.maps,3)
-                h     = subplot(max(1,floor(size(obj.maps,3)/4)),4,nc);          
+                h   = subplot(nsp(1),nsp(2),nc);          
                 %plot the image;                                       
                 imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.stimulus);
                 hold on;
@@ -142,7 +144,7 @@ classdef Fixmat < Project
                 t     = sprintf('%s%d/',obj.map_titles{nc}{:});
                 title(t,'interpreter','none');
             end
-            thincolorbar('vert')
+            colorbar
         end
         function getmaps(obj,varargin)
             %will populate the maps property based on the filter in
@@ -204,6 +206,11 @@ classdef Fixmat < Project
             else
                 fprintf('no maps stored here\n');
             end
+        end
+        function [out] = subplot_number(self);
+            % how many subplots
+            [row col] = GetSubplotNumber(size(self.maps,3));
+            out       = sort([row col]);
         end
         function out = cov(obj)
 %             figure(3);clf
