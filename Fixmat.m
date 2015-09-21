@@ -9,7 +9,7 @@ classdef Fixmat < Project
          unitize             = 1;%sums to 1 or not         
          maptype             = 'conv';%conv or bin         
          kernel_fwhm         = Fixmat.PixelPerDegree*.8;
-         binfactor           %Will be same as kernel_fwhm
+         binsize             = 25;
          maps%current maps;
     end
    
@@ -93,10 +93,7 @@ classdef Fixmat < Project
             obj.selection = ~(obj.x < obj.rect(2) | obj.x > (obj.rect(2)+obj.rect(4)-1) | obj.y < obj.rect(1) | obj.y > (obj.rect(1)+obj.rect(3)-1) );
             obj.ApplySelection;
             
-        end        
-        function out = get.binfactor(obj)
-            out = obj.kernel_fwhm;
-        end
+        end                
         function UpdateSelection(obj,varargin)
             %takes VARARGIN pairs to update the selection vektor            
             obj.selection = logical(ones(1,length(obj.subject)));
@@ -121,10 +118,10 @@ classdef Fixmat < Project
         end
         function plot(obj)    
             
-            [d u] = GetColorMapLimits(obj.maps,7);
-            if ~obj.bc
-                d = 0;
-            end                                            
+            [d u] = GetColorMapLimits(obj.maps,4);
+%             if ~obj.bc
+%                 d = 0;
+%             end                                            
             %
             tmaps = size(obj.maps,3);
             ffigure(1);clf
@@ -134,13 +131,18 @@ classdef Fixmat < Project
                 imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.stimulus);
                 hold on;
                 %                 subplotChangeSize(h,0.05,0.05);
-                h     = imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.maps(:,:,nc),[d u]);                
+                h     = imagesc(obj.bincenters_x,obj.bincenters_y,obj.maps(:,:,nc),[d u]);
+%                 if strcmp(obj.maptype,'conv')
+%                     [y x ] =meshgrid(obj.bincenters_y(obj.mapsize(1)+1),obj.bincenters_x(obj.mapsize(2)+1));
+%                     contour(x,y,obj.maps(:,:,nc)',[0 0],'k');
+%                 end
                 set(h,'alphaData',Scale(abs(obj.maps(:,:,nc)))*.5+.2);               
                 axis image;
                 axis off;                
                 t     = sprintf('%s%d/',obj.map_titles{nc}{:});
                 title(t,'interpreter','none');
             end
+            thincolorbar('vert')
         end
         function getmaps(obj,varargin)
             %will populate the maps property based on the filter in
@@ -159,7 +161,10 @@ classdef Fixmat < Project
                     FixMap            = conv2(sum(obj.kernel),sum(obj.kernel,2),FixMap,'same');
                 elseif strcmp(obj.maptype,'bin')
                     %divide by a factor (i.e. binning) and accum, but no conv                                        
-                    [FixMap]          = hist3([obj.current_y obj.current_x],'edges',obj.binedges);                    
+                    [FixMap]          = hist3([obj.current_y obj.current_x],'edges',obj.binedges);
+                    %remove the last column and row
+                    FixMap(end,:)     = [];
+                    FixMap(:,end)     = [];
                 end
                 %
                 if obj.unitize
@@ -184,9 +189,9 @@ classdef Fixmat < Project
             if strcmp(obj.maptype,'conv')
                 out      = map(obj.rect(2)/2-obj.mapsize : obj.rect(2)/2+obj.mapsize, obj.rect(4)/2-obj.mapsize: obj.rect(4)/2+obj.mapsize);
             elseif strcmp(obj.maptype,'bin')
-                new_size = obj.mapsize./obj.binfactor;
+                new_size = obj.mapsize./obj.binsize;
                 
-                out      = map(obj.rect(2)/obj.binfactor/2-new_size : obj.rect(2)/obj.binfactor/2+new_size, obj.rect(4)/obj.binfactor/2-new_size: obj.rect(4)/obj.binfactor/2+new_size);
+                out      = map(obj.rect(2)/obj.binsize/2-new_size : obj.rect(2)/obj.binsize/2+new_size, obj.rect(4)/obj.binsize/2-new_size: obj.rect(4)/obj.binsize/2+new_size);
             end
         end        
         function out = kernel(obj)            
@@ -229,8 +234,8 @@ classdef Fixmat < Project
             out = [obj.screen_resolution(1)/2-obj.window obj.screen_resolution(2)/2-obj.window [obj.window obj.window]*2];
         end
         function out = get.binedges(obj)
-            out = {obj.rect(1):obj.binfactor:(obj.rect(1)+obj.rect(3)) ...
-                               obj.rect(2):obj.binfactor:(obj.rect(2)+obj.rect(4))};                           
+            out = {obj.rect(1):obj.binsize:(obj.rect(1)+obj.rect(3)) ...
+                               obj.rect(2):obj.binsize:(obj.rect(2)+obj.rect(4))};                           
         end
         function [out] = bincenters_y(obj,varargin)
             %
@@ -254,6 +259,14 @@ classdef Fixmat < Project
             out = linspace( min(obj.binedges{2}), max(obj.binedges{2}),resolution);            
             out = out + mean(unique(diff(out)))/2;
             out(end) =[];
+        end
+        function [out] = mapsize(obj,varargin)
+            if ~isempty(obj.maps)
+                %returns size of fixmap along VARARGIN dimension
+                out = size(obj.maps,varargin{1});
+            else 
+                out =[];
+            end
         end
         function histogram(obj)
             %will generate an histogram of fixation numbers
