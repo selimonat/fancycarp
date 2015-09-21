@@ -167,7 +167,7 @@ classdef Fixmat < Project
                 end
                 obj.maps(:,:,c)       = FixMap;
                 %
-                obj.map_titles{c}     = obj.query;
+                obj.map_titles{c}     = obj.query(1:4);
             end
             %correct for baseline if wanted.
             if obj.bc
