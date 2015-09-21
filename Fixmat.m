@@ -39,12 +39,13 @@ classdef Fixmat < Project
         eye     = [];
         deltacsp= [];
         file    = [];
+        fixx    = [];
+        fixy    = [];
         oddball = [];
         trialid = [];
         ucs     = [];
         fix     = [];
-        chain   = [];
-        isref   = [];        
+        
     end
     
     events
