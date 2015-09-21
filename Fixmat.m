@@ -7,7 +7,7 @@ classdef Fixmat < Project
         %related to map computation
          bc                  = 0;%cocktail blank correction
          unitize             = 1;%sums to 1 or not         
-         maptype             = 'conv';%conv or bin         
+         maptype             = 'bin';%conv or bin         
          kernel_fwhm         = Fixmat.PixelPerDegree*.8;
          binsize             = 25;
          maps%current maps;
@@ -169,6 +169,7 @@ classdef Fixmat < Project
                 elseif strcmp(obj.maptype,'bin')
                     %divide by a factor (i.e. binning) and accum, but no conv                                        
                     [FixMap]          = hist3([obj.current_y obj.current_x],'edges',obj.binedges);
+                    FixMap            = FixMap/obj.current_ttrial;%divide by the number of trials
                     %remove the last column and row
                     FixMap(end,:)     = [];
                     FixMap(:,end)     = [];
@@ -241,6 +242,10 @@ classdef Fixmat < Project
         function [y] = current_y(obj)
             %returns the current x y coordinates
             y = obj.y(obj.selection)';            
+        end
+        function ttrial = current_ttrial(obj)
+            %computes number of trials included in the current selection
+            ttrial = length(unique(obj.trialid(obj.selection)));
         end
         function out = get.rect(obj)
             out = [obj.screen_resolution(1)/2-obj.window obj.screen_resolution(2)/2-obj.window [obj.window obj.window]*2];
