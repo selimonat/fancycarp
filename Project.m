@@ -12,11 +12,13 @@ classdef Project < handle
     properties (Hidden,Constant)
         path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sdata%s',homedir,filesep,filesep,filesep,filesep)
         path_stimuli      = sprintf('%sstimuli%s',Project.path_project,filesep);
+        ETMaskpath        = sprintf('%smidlevel%ssubjmasks%sETmask.mat',Project.path_project,filesep,filesep)
         condition_labels  = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
         plot_style
         subjects_600      = [27,37:40,42:65];
         subjects_1500     = [6:26,28,30:36];        
         BDNF              = [2 1 1 1 2 1 2 1 2 2 1 1 1 2 1 1 2 2 2 2 1 1 1 2 1 1 1 1 1 1 1];
+        ETMask
     end
     
     methods
@@ -78,13 +80,13 @@ classdef Project < handle
             end
         end
         
-        function getMasks(self)
-        load(sprintf('%smidlevel%ssubjmasks%sETmask.mat',self.path_project,filesep,filesep));
-        load(sprintf('%smidlevel%ssubjmasks%sSCRmask.mat',self.path_project,filesep,filesep));
-        load(sprintf('%smidlevel%ssubjmasks%sPMFmask.mat',self.path_project,filesep,filesep));
-        
-        %load(sprintf('%smidlevel%ssubjmasks%sRATEmask.mat',Project.path_project,filesep,filesep));
+        function out = getMask(self,varargin)
+            %varargin is ET, SCR, PMF            
+            a = load(sprintf('%smidlevel%ssubjmasks%s%smask.mat',self.path_project,filesep,filesep,varargin{1}));
+            dummy = fieldnames(a);
+            out   = a.(dummy{1});
         end
+                
     end
     
 end
