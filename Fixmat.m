@@ -7,7 +7,7 @@ classdef Fixmat < Project
         %related to map computation
          bc                  = 0;%cocktail blank correction
          unitize             = 1;%sums to 1 or not         
-         maptype             = 'bin';%conv or bin         
+         maptype             = 'conv';%conv or bin         
          kernel_fwhm         = Fixmat.PixelPerDegree*.8;
          binsize             = 25;
          maps%current maps;
@@ -129,7 +129,7 @@ classdef Fixmat < Project
             end                                            
             %
             tmaps   = size(obj.maps,3);
-%             ffigure(1);
+            ffigure(1);
             clf                        
             nsp     = obj.subplot_number;
             for nc = 1:size(obj.maps,3)
@@ -302,7 +302,7 @@ classdef Fixmat < Project
                         cond = cond + 1;
                         obj.UpdateSelection('subject',ns,'phase',np,'deltacsp',nc);
                         %number of trials
-                        repet              = length(unique(obj.trialid(obj.selection)));
+                        repet              = obj.current_ttrial;
                         %average number of fixation
                         count(sub,cond,ph) = sum(obj.selection)./repet;
                     end
