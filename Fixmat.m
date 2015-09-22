@@ -245,7 +245,7 @@ classdef Fixmat < Project
         end
         function ttrial = current_ttrial(obj)
             %computes number of trials included in the current selection
-            ttrial = length(unique(obj.trialid(obj.selection)));
+            ttrial = length(unique([obj.trialid(obj.selection) ;obj.subject(obj.selection)]','rows'));
         end
         function out = get.rect(obj)
             out = [obj.screen_resolution(1)/2-obj.window obj.screen_resolution(2)/2-obj.window [obj.window obj.window]*2];
