@@ -18,7 +18,6 @@ classdef Project < handle
         subjects_600      = [27,37:40,42:65];
         subjects_1500     = [6:26,28,30:36];        
         BDNF              = [2 1 1 1 2 1 2 1 2 2 1 1 1 2 1 1 2 2 2 2 1 1 1 2 1 1 1 1 1 1 1];
-        ETMask
     end
     
     methods
