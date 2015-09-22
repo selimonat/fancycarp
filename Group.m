@@ -1,6 +1,6 @@
 classdef Group < Project
     properties (Hidden,Constant)
-        mean_correction = 0;%decides if mean correction should be applied
+        mean_correction = 1;%decides if mean correction should be applied
         align_tunings   = 1;%should ratings be aligned to CS+ face
     end
     properties
@@ -17,7 +17,7 @@ classdef Group < Project
         %%
         function group = Group(subjects)
             c = 0;
-            for s = subjects
+            for s = subjects(:)'
                 fprintf('subject: %03d\n',s)
                 c                = c+1;
                 dummy            = Subject(s);
