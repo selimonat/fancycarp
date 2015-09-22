@@ -55,8 +55,8 @@ classdef Fixmat < Project
         function obj = Fixmat(subjects,runs)%constructor
             %%
             %initialize
-            for subject = subjects
-                for run = runs
+            for subject = subjects(:)'
+                for run = runs(:)'
                     %%                    
                     dummy = load(obj.path2data(subject,run,'eye'));
                     %this is necessary to expand the PTB message to
@@ -123,8 +123,8 @@ classdef Fixmat < Project
         end
         function plot(obj)    
             
-            [d u] = GetColorMapLimits(obj.maps,4);
-            if sum(obj.maps(:) < 0) >= 0%if there are no negative values
+            [d u] = GetColorMapLimits(obj.maps,5);
+            if sum(obj.maps(:) < 0) == 0%if there are no negative values
                 d = 0;
             end                                            
             %
@@ -143,7 +143,7 @@ classdef Fixmat < Project
 %                     [y x ] =meshgrid(obj.bincenters_y(obj.mapsize(1)+1),obj.bincenters_x(obj.mapsize(2)+1));
 %                     contour(x,y,obj.maps(:,:,nc)',[0 0],'k');
 %                 end
-                set(h,'alphaData',Scale(abs(obj.maps(:,:,nc)))*.5+.2);               
+                set(h,'alphaData',Scale(abs(obj.maps(:,:,nc)))*.7+.1);               
                 axis image;
                 axis off;                
                 t     = sprintf('%s%d/',obj.map_titles{nc}{:});
