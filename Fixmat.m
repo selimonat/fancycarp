@@ -7,7 +7,7 @@ classdef Fixmat < Project
         %related to map computation
          bc                  = 0;%cocktail blank correction
          unitize             = 1;%sums to 1 or not         
-         maptype             = 'bin';%conv or bin         
+         maptype             = 'conv';%conv or bin         
          kernel_fwhm         = Fixmat.PixelPerDegree*.8;
          binsize             = 25;
          maps%current maps;
@@ -55,8 +55,8 @@ classdef Fixmat < Project
         function obj = Fixmat(subjects,runs)%constructor
             %%
             %initialize
-            for subject = subjects
-                for run = runs
+            for subject = subjects(:)'
+                for run = runs(:)'
                     %%                    
                     dummy = load(obj.path2data(subject,run,'eye'));
                     %this is necessary to expand the PTB message to
@@ -123,13 +123,13 @@ classdef Fixmat < Project
         end
         function plot(obj)    
             
-            [d u] = GetColorMapLimits(obj.maps,4);
-            if sum(obj.maps(:) < 0) >= 0%if there are no negative values
+            [d u] = GetColorMapLimits(obj.maps,5);
+            if sum(obj.maps(:) < 0) == 0%if there are no negative values
                 d = 0;
             end                                            
             %
             tmaps   = size(obj.maps,3);
-%             ffigure(1);
+            ffigure(1);
             clf                        
             nsp     = obj.subplot_number;
             for nc = 1:size(obj.maps,3)
@@ -143,7 +143,7 @@ classdef Fixmat < Project
 %                     [y x ] =meshgrid(obj.bincenters_y(obj.mapsize(1)+1),obj.bincenters_x(obj.mapsize(2)+1));
 %                     contour(x,y,obj.maps(:,:,nc)',[0 0],'k');
 %                 end
-                set(h,'alphaData',Scale(abs(obj.maps(:,:,nc)))*.5+.2);               
+                set(h,'alphaData',Scale(abs(obj.maps(:,:,nc)))*.7+.1);               
                 axis image;
                 axis off;                
                 t     = sprintf('%s%d/',obj.map_titles{nc}{:});
@@ -245,7 +245,7 @@ classdef Fixmat < Project
         end
         function ttrial = current_ttrial(obj)
             %computes number of trials included in the current selection
-            ttrial = length(unique(obj.trialid(obj.selection)));
+            ttrial = length(unique([obj.trialid(obj.selection) ;obj.subject(obj.selection)]','rows'));
         end
         function out = get.rect(obj)
             out = [obj.screen_resolution(1)/2-obj.window obj.screen_resolution(2)/2-obj.window [obj.window obj.window]*2];
@@ -302,7 +302,7 @@ classdef Fixmat < Project
                         cond = cond + 1;
                         obj.UpdateSelection('subject',ns,'phase',np,'deltacsp',nc);
                         %number of trials
-                        repet              = length(unique(obj.trialid(obj.selection)));
+                        repet              = obj.current_ttrial;
                         %average number of fixation
                         count(sub,cond,ph) = sum(obj.selection)./repet;
                     end
