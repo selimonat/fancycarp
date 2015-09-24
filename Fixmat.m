@@ -145,7 +145,7 @@ classdef Fixmat < Project
 %                 end
                 set(h,'alphaData',Scale(abs(obj.maps(:,:,nc)))*.7+.1);               
                 axis image;
-                axis off;                
+                axis off;
                 t     = sprintf('%s%d/',obj.map_titles{nc}{:});
                 title(t,'interpreter','none');
             end
