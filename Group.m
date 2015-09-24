@@ -63,7 +63,22 @@ classdef Group < Project
                 self.pmf.subject_beta  =  [self.pmf.subject_beta; self.subject{s}.pmf.subject_beta];%mean beta for CS+/CS- before exp
             end
         end
-        
+       
+        function plotPMFbars(self)
+            means     = reshape(mean(self.pmf.params1(:,1,:),3),2,2);%compute the mean
+            stds      = reshape(std(self.pmf.params1(:,1,:),0,3),2,2);
+            sem       = stds/sqrt(length(self.ids));
+            
+            fig=figure;
+            [h,e] = barwitherr(sem,means);
+            set(gca,'XTickLabel',{'CS+','CS-'})
+            set(e,'LineWidth',1.5)
+            set(h(1), 'FaceColor','r')
+            set(h(2), 'FaceColor',[143/255 0 0 ])
+            ylim([20 80])
+            ylabel('threshold \alpha (degrees)')
+            legend('before','after','orientation','horizontal','location','southoutside')
+        end
         function out = parameterMat(self)
             %1/subject alpha
             %subject beta
