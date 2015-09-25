@@ -77,11 +77,8 @@ classdef Fixmat < Project
                     dummy.subject= uint32(repmat(subject,1,length(dummy.x)));
                     %and append it to the previous fixmat
                     for fns = fieldnames(dummy)'
-                        if isprop(obj,fns{1})%if it is not a property dont even consider
-                            if isempty(obj.(fns{1}))%initialize it if the first time
-                                obj.(fns{1}) = [];
-                            end
-                            obj.(fns{1}) = [obj.(fns{1}) dummy.(fns{1})];                       
+                        if isprop(obj,fns{1})%if it is not a property dont even consider                            
+                            obj.(fns{1}) = [obj.(fns{1}) dummy.(fns{1})];%append it to the previous
                         end
                     end
                 end                
