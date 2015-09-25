@@ -55,8 +55,8 @@ classdef Fixmat < Project
         function obj = Fixmat(subjects,runs)%constructor
             %%
             %initialize
-            for subject = subjects(:)'
-                for run = runs(:)'
+            for run = runs(:)'
+                for subject = subjects(:)'                
                     %%                    
                     dummy = load(obj.path2data(subject,run,'eye'));
                     %this is necessary to expand the PTB message to
