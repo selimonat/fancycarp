@@ -65,34 +65,35 @@ classdef Fixmat < Project
                     for nt = 1:length(dummy.trials)
                         %extract relevant info first from the text message
                         T = dummy.trials(nt).TRIALID.msg(1,:);
-                        %add them as msg so that fixations.m can create the fields
+                        %add them as msg so that .getfixmat can create the fields
                         pairs = regexp(T,'[\w-]*','match');
                         for np = 1:2:length(pairs)-1
                             dummy.trials(nt).(lower(pairs{np})).msg = pairs{np+1};
                         end
                     end
                     %
-                    dummy.trials = rmfield(dummy.trials,{'TRIALID'});%make fixations happy
-                    dummy        = obj.getfixmat(dummy.trials,dummy.info);%get the fixmat
-                    dummy.subject= uint32(repmat(subject,1,length(dummy.x)));
+                    dummy.trials = rmfield(dummy.trials,{'TRIALID'});%make .getfixmat happy
+                    dummy        = obj.getfixmat(dummy.trials,dummy.info);%get the fixmat                    
+                    dummy.subject= repmat(uint32(subject),1,length(dummy.x));
                     %and append it to the previous fixmat
-                    for fns = fieldnames(dummy)'
-                        if isprop(obj,fns{1})%if it is not a property dont even consider                            
-                            obj.(fns{1}) = [obj.(fns{1}) dummy.(fns{1})];%append it to the previous
+                    for fns = properties(obj)'
+                        %% take fixations which are only coming from the required phase.            
+                        %(e.g. ratings in baseline are coded as 5)                                    
+                        valid_fix = dummy.phase == run;
+                        if isfield(dummy,fns{1})%if it is not a property dont even consider                            
+                            obj.(fns{1}) = [obj.(fns{1}) dummy.(fns{1})(valid_fix)];%append it to the previous
+                        else
+                            obj.(fns{1}) = [obj.(fns{1}) zeros(1,sum(valid_fix))];%append it to the previous
                         end
-                    end
-                end                
-                %%
-                obj.x = round(obj.x);
-                obj.y = round(obj.y);
-            end                            
-            %% take fixations which are only coming from the required phase.            
-            obj.UpdateSelection('phase',runs);
-            obj.ApplySelection;
+                    end                                        
+                end                    
+            end                                                    
             %% remove fixations outside of the image border
             obj.selection = ~(obj.x < obj.rect(2) | obj.x > (obj.rect(2)+obj.rect(4)-1) | obj.y < obj.rect(1) | obj.y > (obj.rect(1)+obj.rect(3)-1) );
             obj.ApplySelection;
-            
+            %% round coordinates to pixels
+            obj.x = round(obj.x);
+            obj.y = round(obj.y);
         end                
         function UpdateSelection(obj,varargin)
             %takes VARARGIN pairs to update the selection vektor            
@@ -116,7 +117,7 @@ classdef Fixmat < Project
                 end
             end
             obj.query = [];
-            fprintf('Selection removed from the object...\n');
+            fprintf('Selection (%04d fixations) removed from the object...\n',sum(~obj.selection));
         end
         function plot(obj)    
             
