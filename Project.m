@@ -80,7 +80,7 @@ classdef Project < handle
         end
         
         function out = getMask(self,varargin)
-            %varargin is ET_feargen, ET_discr, SCR, PMF            
+            %varargin is ET_feargen, ET_discr, SCR, PMF,RATE          
             a = load(sprintf('%smidlevel%ssubjmasks%s%smask.mat',self.path_project,filesep,filesep,varargin{1}));
             dummy = fieldnames(a);
             out   = a.(dummy{1});
