@@ -1,6 +1,6 @@
 classdef Tuning < handle
     properties (Hidden)
-        visualization = 1;%visualization of fit results
+        visualization = 0;%visualization of fit results
         gridsize      = 20;%resolution per parameter for initial estimation.
         options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
     end
@@ -198,7 +198,6 @@ classdef Tuning < handle
                 xlim([min(x(:)) max(x(:))]);
                 drawnow;
                 grid on;
-                pause;
             end
         end
         
@@ -221,8 +220,7 @@ classdef Tuning < handle
                 error(npoint) = sum((y - fun(x,G(npoint,:))).^2);%residual error
             end
             [m i]  = min(error);
-            params = double(G(i,:));
-            keyboard
+            params = double(G(i,:));            
         end
     end
     methods (Static)
