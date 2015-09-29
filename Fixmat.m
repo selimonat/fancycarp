@@ -94,7 +94,7 @@ classdef Fixmat < Project
             %% round coordinates to pixels
             obj.x = round(obj.x);
             obj.y = round(obj.y);
-        end                
+        end
         function UpdateSelection(obj,varargin)
             %takes VARARGIN pairs to update the selection vektor            
             obj.selection = logical(ones(1,length(obj.subject)));
@@ -104,7 +104,7 @@ classdef Fixmat < Project
             fprintf('Selection vector updated...\n');
             obj.selection = logical(obj.selection);
             obj.query     = varargin;
-        end        
+        end
         function ApplySelection(obj)
             %removes fixations based on the fixation vecktor, only used in
             %the constructor.            
