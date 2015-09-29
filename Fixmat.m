@@ -119,34 +119,45 @@ classdef Fixmat < Project
             obj.query = [];
             fprintf('Selection (%04d fixations) removed from the object...\n',sum(~obj.selection));
         end
-        function plot(obj)    
+        function plot(obj,varargin)    
             
-            [d u] = GetColorMapLimits(obj.maps,5);
-            if sum(obj.maps(:) < 0) == 0%if there are no negative values
-                d = 0;
-            end                                            
+            M = obj.maps;
+            if nargin > 1
+                cmap = varargin{1};
+            else
+                cmap = 'linear';
+            end
+            %get colormap limits.
+            if strcmp(cmap,'linear')
+                [d u] = GetColorMapLimits(M,7);
+                if sum(obj.maps(:) < 0) == 0%if there are no negative values
+                    d = 0;
+                end                                      
+            elseif strcmp(cmap,'log')                            
+                u = max(log10(M(:)));
+                d = u - 1;
+                M = log10(M);            
+            end
             %
-            tmaps   = size(obj.maps,3);
             ffigure(1);
             clf                        
             nsp     = obj.subplot_number;
-            for nc = 1:size(obj.maps,3)
+            for nc = 1:size(M,3)
                 h   = subplot(nsp(1),nsp(2),nc);          
+                
                 %plot the image;                                       
                 imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.stimulus);
                 hold on;
-                %                 subplotChangeSize(h,0.05,0.05);
-                h     = imagesc(obj.bincenters_x,obj.bincenters_y,obj.maps(:,:,nc),[d u]);
-%                 if strcmp(obj.maptype,'conv')
-%                     [y x ] =meshgrid(obj.bincenters_y(obj.mapsize(1)+1),obj.bincenters_x(obj.mapsize(2)+1));
-%                     contour(x,y,obj.maps(:,:,nc)',[0 0],'k');
-%                 end
-                set(h,'alphaData',Scale(abs(obj.maps(:,:,nc)))*.7+.1);               
+                h     = imagesc(obj.bincenters_x,obj.bincenters_y,M(:,:,nc),[d u]);
+                set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.9+.1);               
                 axis image;
                 axis off;
-                t     = sprintf('%s%d/',obj.map_titles{nc}{:});
+                try
+                t     = sprintf('%s%d/',obj.map_titles{nc}{:});                
                 title(t,'interpreter','none');
+                end
             end
+            %             thincolorbar('vert');
             colorbar
         end
         function getmaps(obj,varargin)
@@ -178,7 +189,7 @@ classdef Fixmat < Project
                 end
                 obj.maps(:,:,c)       = FixMap;
                 %
-                obj.map_titles{c}     = obj.query(1:4);
+                obj.map_titles{c}     = obj.query(:);
             end
             %correct for baseline if wanted.
             if obj.bc
@@ -283,7 +294,7 @@ classdef Fixmat < Project
                 out =[];
             end
         end
-        function histogram(obj)
+        function [count index] = histogram(obj)
             %will generate an histogram of fixation numbers
             subject    = unique(obj.subject);
             phase      = unique(obj.phase);
@@ -292,12 +303,14 @@ classdef Fixmat < Project
             sub = 0;
             for ns = subject
                 sub = sub + 1;
+                index.sub(sub) = ns;
                 ph  = 0;
                 for np = phase
                     ph = ph + 1;
-                    cond = 0;
-                    for nc = condition
+                    cond = 0;                    
+                    for nc = condition                        
                         cond = cond + 1;
+                        index.cond(cond) = double(nc);%column identities
                         obj.UpdateSelection('subject',ns,'phase',np,'deltacsp',nc);
                         %number of trials
                         repet              = obj.current_ttrial;
@@ -309,7 +322,7 @@ classdef Fixmat < Project
             figure;
             set(gcf,'position',[440   393   920   405]);
             for phases = 1:ph
-                subplot(1,3,phases)
+                subplot(1,ph,phases)
                 imagesc(count(:,:,phases),[0 7]);
                 thincolorbar('vert');
                 ylabel('subjects')
