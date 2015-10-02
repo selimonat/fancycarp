@@ -220,7 +220,7 @@ classdef Tuning < handle
                 error(npoint) = sum((y - fun(x,G(npoint,:))).^2);%residual error
             end
             [m i]  = min(error);
-            params = double(G(i,:));            
+            params = double(G(i,:));
         end
     end
     methods (Static)
