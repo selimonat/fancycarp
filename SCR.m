@@ -139,36 +139,44 @@ classdef SCR < handle
                 %% will extract SCR data of a given block or blocks
                 block                     = varargin{2};
                 scr                       = varargin{1};
-                i                         = scr.BlockBorders_index(block,1):scr.BlockBorders_index(block,2);
-                scr.data                  = [];
+                i                         = scr.BlockBorders_index(block,1):scr.BlockBorders_index(block,2);                
                 scr.y                     = scr.y(i);
                 scr.time                  = scr.time(i);
                 scr.tsample               = length(scr.y);
                 scr.BlockBorders_index    = scr.BlockBorders_index(block,:);
                 scr.BlockBorders_time     = scr.BlockBorders_time(block,:);
                 scr.event                 = scr.event(i,:);
-                scr.tonic                 = [];
-                scr.phasic                = [];
+                try
+                    scr.tonic                 = scr.tonic(i);
+                end
+                try
+                    scr.phasic                = scr.phasic(i);
+                end
+                try
+                    scr.data                  = scr.data(i);
+                end
             end
         end
     end
     methods
-        
+        function out = cut(self,block)
+            out = SCR(self,block);
+        end
         function plot(self)
             %% plot different event channels
             
             figure(1);clf;
             set(gcf,'position',[1         444        1440         362]);
             % plot the SCR
-            plot(self.time,self.y,'color','k');
+            plot(self.time./1000,self.y,'color','k');
             hold on;
             % mark stimulus onsets
             for n = 1:length(self.event_name)
                 i  = self.event(:,n);
-                plot(self.time(i),self.y(i), self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} );
+                plot(self.time(i)./1000,self.y(i), self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} );
             end
             %% phase transitions as lines
-            i   = self.BlockBorders_time(:,1);%start of phases
+            i   = self.BlockBorders_time(:,1)./1000;%start of phases
             plot( repmat(i,1,2)', repmat(ylim,size(i,1),1)' , '-','color','k');
             %% put a # to different blocks
             cc = 0;
@@ -272,7 +280,34 @@ classdef SCR < handle
             end
             linespecs = linespecs(condition);
         end
-        
+        function downsample(self,n)
+            %will downsample the object instance by N            
+            self.y                  = downsample(self.y,n);
+            self.time               = self.time(1:n:end);
+            self.tsample            = length(self.y);
+            self.sampling_period    = self.sampling_period*n;
+            self.sampling_rate      = self.sampling_rate/n;
+            self.BlockBorders_index = self.BlockBorders_index./n;
+            self.BlockBorders_time  = self.BlockBorders_time;
+            %
+            tevent                  = size(self.event,2);
+            tsample                 = size(self.y,1);
+            new_mat                 = logical(zeros(tsample,tevent));
+            for event = 1:tevent
+                i = round(find(self.event(:,event))./n);
+                new_mat(i,event) = 1;                
+            end            
+            self.event = new_mat;
+            try
+            self.data               = downsample(self.data,n);
+            end
+            try
+            self.tonic               = downsample(self.tonic,n);
+            end
+            try
+            self.phasic               = downsample(self.phasic,n);
+            end            
+        end
     end
     
 end
