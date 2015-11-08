@@ -40,11 +40,13 @@ end
 for m=1:nb;
     z(m,:)=z(m,:)/norm(z(m,:));
 end
-%% Orthonormal Basis sets 
+% Orthonormal Basis sets 
 [~ , ~, P]=svd((z),'econ');
 %% Asymmetric least squares 
 w=ones(N,1);
 target=1; 
+e = [];
+viz = 0;
 while target
     W=spdiags(w,0,N,N); 
     bw=(P'*W); 
@@ -53,6 +55,15 @@ while target
     w0=w;
     w(xab>(xb))=p; w(xab<=(xb))=(1-p);
     target = sum(abs(w - w0)) > 0;
+    if viz
+        e = [e sum(abs(xab - xb))];
+        subplot(1,2,1);plot(e);
+        subplot(1,2,2);plot(xb);
+        hold on;
+        plot(xab,'r');hold off;
+        drawnow
+        pause(.1)
+    end
 end
 xa=xab-xb;
 % Normalize basis functions
