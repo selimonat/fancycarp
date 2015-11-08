@@ -1,9 +1,9 @@
 classdef Project < handle
     properties (Hidden, Constant)
-        colors            = [ [0 0 0];circshift( hsv(8), [3 0] );[.4 .4 .4];[.8 .8 .8]];
+        colors            = [ [0 0 0];circshift( hsv(8), [3 0] );[.8 0 0];[.8 0 0]];
         line              = {'-' '-' '-' '-' '-' '-' '-' '-' '-' '.' '.'};
         symbol            = {'.' '.' '.' '.' '.' '.' '.' '.' '.' 'p' 's'};
-        marker_size       = {20  20  20  20  20  20  20  20  20  10  10};
+        marker_size       = {10 10 10 10 10 10 10 10 10 10 10};
         line_width        = {2  2  2  2  2  2  2  2  2  1  1};
         condition_indices = {1000 45 90 135 180 225 270 315 360 1001 1002};
         screen_resolution = [1200 1600];
