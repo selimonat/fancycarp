@@ -1,14 +1,16 @@
 classdef SCR < handle
     
     properties (Constant = true, Hidden)
-        default_run = 4;%at which run the scr data is located.
+        default_run = 4;%at which run the scr data is located.        
     end
     properties (Hidden)
         hdr
         markers
         block2phase
-        p = 0.001;
-        nfreq = 20;
+        p         = 0.0001;
+        nfreq     = 20;
+        FIR_delay = 15000;%in milliseconds
+        path_acqfile;%path to the file
     end
     properties
         data
@@ -22,11 +24,13 @@ classdef SCR < handle
         sampling_period
         BlockBorders_index
         BlockBorders_time
+        BlockNames
         event           = [];
         event_name      = {};
         event_plotting  = {};
         tonic
         phasic
+        model
     end
     
     methods
@@ -38,9 +42,14 @@ classdef SCR < handle
             %s is either the subject number of block id.
             if length(varargin) == 1%construct
                 s = varargin{1};
-                path_acqfile  = s.path2data(s.id,SCR.default_run,'scr','acq');
-                if exist(path_acqfile);
-                    dummy         = load_acq(path_acqfile);
+                scr.path_acqfile  = s.path2data(s.id,SCR.default_run,'scr','acq');
+                if exist(scr.path_acqfile);
+                    if ~exist(sprintf('%s.mat',scr.path_acqfile))
+                        dummy     = load_acq(scr.path_acqfile);
+                        save(sprintf('%s.mat',scr.path_acqfile),'dummy')
+                    else
+                        load(sprintf('%s.mat',scr.path_acqfile));%will spawn dummy
+                    end
                     scr.hdr       = dummy.hdr;
                     data          = dummy.data;
                     data          = data(1:end-10,:);%remove the ends, coz of big jumps
@@ -59,7 +68,8 @@ classdef SCR < handle
                     %and detect the time index
                     i                      = find(diff(data(:,c)) > 0);
                     %most probably 2 pulses faster than 30s is a falschbeginn
-                    i(diff(scr.time(i)/1000) < 30)            = [];
+                    i(diff(scr.time(i)/1000) < 40)            = [];                    
+                    %%
                     scr.BlockBorders_index = [i [i(2:end); scr.tsample]];
                     scr.BlockBorders_time  = scr.time(scr.BlockBorders_index);
                     tblock                 = length(i);
@@ -69,16 +79,16 @@ classdef SCR < handle
                     while length(block_names) ~= tblock
                         block_names      = [block_names {sprintf('calibration%02d',tblock - length(block_names))}];
                     end
-                    block_names = fliplr(block_names);%correct for the order.
+                    block_names    = fliplr(block_names);%correct for the order.
                     %% label each SCR block in terms of experimental phase
-                    scr.block2phase = nan(1,tblock);
+                    scr.block2phase                                     = nan(1,tblock);
                     scr.block2phase([(tblock-5) (tblock-3) (tblock-1)]) = [2 3 4];
+                    scr.BlockNames                                      = block_names; 
                     %%
                     for nblock = find(~isnan(scr.block2phase))
                         % event times in units of samples
                         i                      = scr.BlockBorders_index(nblock,1):scr.BlockBorders_index(nblock,2);%range of the block
-                        onset_sample           = find(data(:,3));%all stim onsets
-                        hold on
+                        onset_sample           = find(data(:,3));%all stim onsets                        
                         onset_sample           = onset_sample(ismember(onset_sample,i));%take only this blocks's onsets
                         onset_sample           = onset_sample(diff([-Inf; onset_sample]) > 1);%clean repeats
                         onset_sample           = onset_sample(ismember(onset_sample,i));%take only this phase's onsets
@@ -139,12 +149,12 @@ classdef SCR < handle
                 %% will extract SCR data of a given block or blocks
                 block                     = varargin{2};
                 scr                       = varargin{1};
-                i                         = scr.BlockBorders_index(block,1):scr.BlockBorders_index(block,2);                
+                i                         = min(scr.BlockBorders_index(block,1)):max(scr.BlockBorders_index(block,2));
                 scr.y                     = scr.y(i);
                 scr.time                  = scr.time(i);
                 scr.tsample               = length(scr.y);
                 scr.BlockBorders_index    = scr.BlockBorders_index(block,:);
-                scr.BlockBorders_time     = scr.BlockBorders_time(block,:);
+                scr.BlockBorders_time     = scr.BlockBorders_time(block,:);                
                 scr.event                 = scr.event(i,:);
                 try
                     scr.tonic                 = scr.tonic(i);
@@ -165,16 +175,19 @@ classdef SCR < handle
         function plot(self)
             %% plot different event channels
             
-            figure(1);clf;
-            set(gcf,'position',[1         444        1440         362]);
+            figure;clf;
+            set(gcf,'position',[1 309  1920  497]);
             % plot the SCR
-            plot(self.time./1000,self.y,'color','k');
+            plot(self.time./1000,self.y,'color','k','linewidth',1);
+            axis tight;
             hold on;
             % mark stimulus onsets
+            level = mean(self.y);
             for n = 1:length(self.event_name)
                 i  = self.event(:,n);
                 plot(self.time(i)./1000,self.y(i), self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} );
             end
+            
             %% phase transitions as lines
             i   = self.BlockBorders_time(:,1)./1000;%start of phases
             plot( repmat(i,1,2)', repmat(ylim,size(i,1),1)' , '-','color','k');
@@ -193,19 +206,14 @@ classdef SCR < handle
         end
         function plot_decomposition(self)
             hhfigure;
-            plot(self.time./1000,self.y,'r');
+            self.plot            
             hold on;
             plot(self.time./1000,self.phasic,'k');
-            plot(self.time./1000,self.tonic,'color',[.4 .4 .4]);
-            % mark stimulus onsets
-            for n = 1:length(self.event_name)
-                i  = self.event(:,n);
-                if sum(i) ~= 0%do nothing if there is no event in the section
-                    plot(self.time(i)./1000,0, self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} );
-                end
-            end
+            plot(self.time./1000,self.tonic,'color',[.4 .4 .4]);            
+            plot(self.time./1000,self.tonic+self.phasic,'r');
             grid on;
             axis tight;
+            hold off
         end
         %         function o       = get.y_tonic_spline(self)
         %             Y     = self.y(self.BlockBorders_index(1,1):self.BlockBorders_index(1,2));
@@ -226,36 +234,35 @@ classdef SCR < handle
                 self.data  = sgolayfilt(self.data,5,751);
             end
         end
-        function self    = diff(self)
+        function self = diff(self)
+            %takes the temporal difference.
             if isempty(self.data);self.data=self.y;end
             self.data         = diff(self.data);
             self.data(end+1)  = self.data(end);
         end
-        
-        function self    = zscore(self)
-            if isempty(self.data);self.data=self.y;end
-            self.data         = zscore(self.data);
-        end
+                
         function self = tonic_lowpass(self)
+            %computes the low-pass version of the signal supposed to
+            %represent the tonic response.
             if isempty(self.data);self.data=self.y;end
             d            = fdesign.lowpass('Fp',0.00001);
             Hd           = design(d, 'ellip');
             self.tonic   = filtfilt(Hd.sosMatrix,Hd.ScaleValues,self.data);
             self.phasic  = self.data - self.tonic;
-        end
-        function self = tonic_tfals(self)
-            [self.phasic,self.tonic] = TFALS(self.data,self.nfreq,self.p);
-        end
+        end        
         
         function xcorr(self,block)
             %%
+            self.data = [];
             figure(2);clf;
             cc = 0;
+            self.smooth('sgolay');
+            self.diff;
             for conds = {1:11 12:16 17:27 28:29};
                 cc = cc +1;
                 subplot(1,4,cc)
                 for n = conds{1}
-                    [r lag] = xcorr(self.y_diff2,double(self.event(:,n)),3000);
+                    [r lag] = xcorr(self.data,double(self.event(:,n)),round(self.sampling_rate*10));
                     plot(lag(lag>0),r(lag>0),self.event_plotting{n}.line_width{1}{:},self.event_plotting{n}.color{1}{:});
                     hold on;
                     drawnow;
@@ -281,12 +288,12 @@ classdef SCR < handle
             linespecs = linespecs(condition);
         end
         function downsample(self,n)
-            %will downsample the object instance by N            
-            self.y                  = downsample(self.y,n);
-            self.time               = self.time(1:n:end);
-            self.tsample            = length(self.y);
             self.sampling_period    = self.sampling_period*n;
             self.sampling_rate      = self.sampling_rate/n;
+            %will downsample the object instance by N
+            self.y                  = decimate(self.y,n);
+            self.time               = [(0:length(self.y)-1)*self.sampling_period]'+self.time(1);
+            self.tsample            = length(self.y);
             self.BlockBorders_index = self.BlockBorders_index./n;
             self.BlockBorders_time  = self.BlockBorders_time;
             %
@@ -294,20 +301,206 @@ classdef SCR < handle
             tsample                 = size(self.y,1);
             new_mat                 = logical(zeros(tsample,tevent));
             for event = 1:tevent
-                i = round(find(self.event(:,event))./n);
-                new_mat(i,event) = 1;                
-            end            
+                i                = round(find(self.event(:,event))./n);
+                new_mat(i,event) = 1;
+            end
             self.event = new_mat;
             try
-            self.data               = downsample(self.data,n);
+                self.data               = downsample(self.data,n);
             end
             try
-            self.tonic               = downsample(self.tonic,n);
+                self.tonic               = downsample(self.tonic,n);
             end
             try
-            self.phasic               = downsample(self.phasic,n);
-            end            
+                self.phasic               = downsample(self.phasic,n);
+            end
+        end
+        function [FIRmat,FIRtime] = FIR(self,events_i)
+            %produces a FIR matrix using event index
+            e       = self.event(:,events_i);
+            tcond   = size(e,2);
+            tshift  = self.FIR_delay./self.sampling_period;%number of sample shifts
+            FIRtime = [0:(tshift-1)]*self.sampling_period;
+            FIRmat  = logical(zeros(self.tsample,tcond*tshift));
+            counter = 0;
+            for nc = 1:size(e,2)
+                for shift = 1:tshift
+                    tshift*(nc-1)+shift;
+                    counter                   = counter + 1;
+                    FIRmat(shift:end,counter) = e(1:end-shift+1,nc);
+                end
+            end
+        end
+        function [P]      = FourierBasis(self,tsample)
+            %
+            if nargin < 2
+                tsample = self.tsample;
+            end
+            %% Normalized Fourier basis sets            
+            t     = 0:tsample-1;
+            nb    = self.nfreq*2+1;
+            z     = zeros(nb,tsample);
+            z(1,:)= ones(1,tsample);
+            fs    = 0.25;
+            for i=1:self.nfreq
+                z(2*i,:)  = cos((2*pi*fs*t)/tsample);
+                z(2*i+1,:)= sin((2*pi*fs*t)/tsample);
+                if fs < 0.5
+                    fs = 0.25+fs;
+                elseif fs == 0.5;
+                    fs = 0.5+fs;
+                else
+                    fs = 1+fs;
+                end
+                % Calculate number of data points in xab
+                % calculate basis functions % calculate basis functions
+            end
+            for m=1:nb;
+                z(m,:)=z(m,:)/norm(z(m,:));
+            end
+            % Orthonormal Basis sets
+            [~ , ~, P]=svd((z),'econ');
+        end
+        function tonic_tfals(self)
+            % Normalize basis functions
+                % Orthogonalize basis functions
+                % Generate sparse matrix of asymmetric weights
+                % perform least squares fit % Estimate baseline
+                % Calculate baseline corrected signal vector
+                %see TFALS.m for more details.
+            %%
+            if ~isempty(self.data)                                
+                %
+                p      = 0.001;   %p=Asymmetry parameter (0.001>=p<=0.1) %
+                Y      = self.data;
+                pa     = round(self.tsample/2);%pad amount
+                Y      = padarray(Y,[pa 0],'replicate','both');                
+                tsample= self.tsample + pa*2;
+                P      = self.FourierBasis(tsample);
+                %% Asymmetric least squares
+                w      = ones(tsample,1);
+                target = 1;
+                e      = [];
+                viz    = 0;
+                while target
+                    W          = spdiags(w,0,tsample,tsample);
+                    bw         = (P'*W);
+                    q          = (bw*P)\(bw*Y);
+                    self.tonic = P*q;
+                    w0         = w;
+                    w(Y>(self.tonic))    = p;
+                    w(Y<=(self.tonic))   = (1-p);
+                    target               = sum(abs(w - w0)) > 0;
+                    if viz
+                        e = [e sum(abs(Y - self.tonic))];
+                        subplot(1,2,1);plot(e);
+                        subplot(1,2,2);plot(self.tonic);
+                        hold on;
+                        plot(Y,'r');hold off;
+                        drawnow
+                        pause(.1)
+                    end
+                end
+                %clean the flankers
+                self.tonic(1:pa)          = [];                
+                self.tonic(end-pa+1:end)  = [];                
+                %get the phasic
+                self.phasic               = self.data-self.tonic;
+                
+            else
+                fprintf('.data is empty honey\n')
+            end
+        end
+        function asymmetricls_decomposition_diff(self,event_i)            
+%             self.smooth('sgolay');
+            self.data = self.y;
+            self.tonic_tfals;%will provide both the tonic fit, the residuals are phasic.
+            %model the phasic responses using FIR.
+            [FIR self.model.FIRtime]= self.FIR(event_i);
+            %                                    
+            self.phasic             = diff(self.phasic);
+            self.phasic(end+1)      = self.phasic(end);
+            %
+            self.model.betas        = FIR\self.phasic;%now model the phasic response
+%             self.model.betas        = cumsum(reshape(self.model.betas,[150 11]));
+%             self.model.betas        = self.model.betas(:);
+            self.model.fit          = cumsum(FIR*self.model.betas) + self.tonic;%fit = fit_tonic + fit_phasic
+            self.model.fit_phasic   = cumsum(FIR*self.model.betas);
+            self.model.fit_tonic    = self.tonic;
+            self.model.r2           = corr2(self.model.fit, self.data);
+            self.model.r2_phasic    = corr2(self.phasic   , FIR*self.model.betas);
+        end
+        function asymmetricls_decomposition(self,event_i)
+            self.tonic_tfals;%will provide both the tonic fit, the residuals are phasic.
+            %model the phasic responses using FIR.
+            [FIR self.model.FIRtime]= self.FIR(event_i);
+            self.model.betas        = FIR\self.phasic;%now model the phasic response
+            self.model.fit          = FIR*self.model.betas + self.tonic;%fit = fit_tonic + fit_phasic
+            self.model.fit_phasic   = FIR*self.model.betas;
+            self.model.fit_tonic    = self.tonic;
+            self.model.r2           = corr2(self.model.fit, self.data);
+            self.model.r2_phasic    = corr2(self.phasic   , FIR*self.model.betas);
+        end
+        function plot_bateman(self)
+            %%
+            self.smooth('sgolay');
+            self.tonic_tfals;
+            %%
+            
+        end
+        function plot_model(self)
+            
+            self.plot;
+            hold on;
+            plot(self.time./1000,self.model.fit_phasic,'r');
+            plot(self.time./1000,self.phasic,'k');
+            plot(self.time./1000,self.model.fit_tonic,'color',[.4 .4 .4]);            
+            plot(self.time./1000,self.model.fit_tonic+self.model.fit_phasic,'r');
+            grid on;
+            axis tight;
+            hold off            
+        end
+        function leastsquare_decomposition(self,event_i)
+            %will model the data using FIR and FourierBasis set.
+            if ~isempty(self.data)
+                FIR              = self.FIR(event_i);
+                P                = self.FourierBasis;
+                self.model.betas = [FIR P]\self.data;
+                self.model.fit   = [FIR P]*self.model.betas;
+                self.model.r2    = corr2(self.model.fit,self.data);
+                % estimated tonic and phasic responses.
+                self.tonic       = P*self.model.betas(end-size(P,2)+1:end);
+                self.phasic      = FIR*self.model.betas(1:end-size(P,2));
+            else
+                fprintf('data field is empty dickhead\n');
+            end
+        end
+        function ledalab(self,string_id)
+            ledalab_defaults  = {'open', 'mat', 'downsample', 5,'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1};
+            %% transform events to ledalab format            
+            data.conductance            = self.y;
+            data.time                   = self.time/1000;%in seconds
+            data.time                   = data.time - min(data.time(:));
+            data.samplingrate           = self.sampling_rate;%Hz
+            data.samplingperiod         = self.sampling_period/1000;%in s
+            
+            conditions                  = find(cellfun(@(x) ~isempty(regexp(x,string_id)), self.event_name ));
+            c = 0;            
+            for ncond = conditions
+                for nEvent = find(self.event(:,ncond))'
+                    c                   = c+1;
+                    data.event(c).time  = (nEvent*data.samplingperiod);%in ms
+                    data.event(c).nid   = ncond;%add a constant to differentiate phases.
+                    data.event(c).name  = self.event_name{ncond};%in string                    
+                end                
+            end
+            filename = regexprep(self.path_acqfile,'data.acq','ledalab');
+            if exist(filename) == 0;mkdir(filename);end
+            filename = sprintf('%s%sdata.mat',filename,filesep);
+            fprintf('filename to ledalab is %s\n',filename)
+            save(filename,'data');
+            Ledalab({filename},ledalab_defaults{:});
+            
         end
     end
-    
 end
