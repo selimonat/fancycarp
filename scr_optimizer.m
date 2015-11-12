@@ -1,17 +1,19 @@
 %% get the subject object
 viz = 0;
 addpath('/Users/onat/Documents/Code/Matlab/oop/');
-options  = optimset('algorithm',{'levenberg-marquardt',.01},'display','final','MaxFunEvals',25000,'maxiter',25000,'tolx',10^-12,'tolfun',10^-12);;
+options  = optimset('algorithm',{'levenberg-marquardt',.01},'display','iter','MaxFunEvals',25000,'maxiter',25000,'tolx',10^-12,'tolfun',10^-12);
+%     options  = optimset('algorithm',{'levenberg-marquardt',.01},'display','iter','MaxFunEvals',50000,'maxiter',50000,'tolx',10^-12,'tolfun',10^-12,'OutputFcn',@scr_optimizer_plot);
 global time
 global onsets
 global original
+filter_string = 'cond';
 for subject = [Project.subjects_1500 Project.subjects_600];
     tic
     try
         fprintf('Working on subject %02d, started at %s\n',subject,datestr(now,'hh:mm:ss'))
         s  = Subject(subject);
         %detect the calibration phases
-        phase_id = cellfun(@(x) ~isempty(regexp(x,'calib')), s.scr.BlockNames );
+        phase_id = cellfun(@(x) ~isempty(regexp(x,filter_string)), s.scr.BlockNames );
         s.scr.cut(phase_id);%cut the required segment in
         s.scr.smooth('sgolay');%smooth the data to get pixel noise out
         s.scr.tonic_tfals;%detect the tonic component
@@ -20,7 +22,7 @@ for subject = [Project.subjects_1500 Project.subjects_600];
             s.scr.plot;
         end
         %% collect the events, data and time variable to build the generative model...
-        event_id                           = cellfun(@(x) ~isempty(regexp(x,'calib')), s.scr.event_name );%detect the relevant event column
+        event_id                           = cellfun(@(x) ~isempty(regexp(x,filter_string)), s.scr.event_name );%detect the relevant event column
         [onset_sample x]                   = find(s.scr.event(:,event_id));%in samples
         % exclude samples too far from first and last events.
         %
@@ -31,11 +33,10 @@ for subject = [Project.subjects_1500 Project.subjects_600];
         data(time < (min(onsets)-10))      = 0;
         data(time > (max(onsets)+10))      = 0;
         fun                                = @(params) sum(abs((data - scr_model( time , onsets(:), params ))));
-        funlsq                             = @(params) sum(abs(data - scr_model( time , onsets(:), params )));
+        funlsq                             = @(params) (abs(data - scr_model( time , onsets(:), params )));
         %%
         R    = range(data);
-        t    = 1000;
-        viz  = 0;
+        t    = 1000;        
         err  = [];
         tau1 = zeros(1,t);tau2=tau1;latency=tau1;amp1=tau1;
         n    = 0;
@@ -70,10 +71,9 @@ for subject = [Project.subjects_1500 Project.subjects_600];
             hold on;
             plot(s.scr.time./1000,scr_model(s.scr.time/1000,onsets,params0),'r');
             title(mat2str(fun(params0)));
+            drawnow;
         end
-        %% fit everything
-        %     options  = optimset('algorithm',{'levenberg-marquardt',.01},'display','iter','MaxFunEvals',50000,'maxiter',50000,'tolx',10^-12,'tolfun',10^-12,'OutputFcn',@plotiter);
-        
+        %% fit everything                
         % x  = fmincon(fun,params0,[],[],[],[],LB,UB,[],options)
         %     x = fminsearch(fun,params0,options);
         x = lsqnonlin(funlsq,params0,[],[],options);
@@ -82,7 +82,7 @@ for subject = [Project.subjects_1500 Project.subjects_600];
         plot(time,data,'k');
         hold on;
         plot(time,scr_model(time,onsets,x),'r');
-        SaveFigure(sprintf('/Users/onat/Pictures/SCR/scr_model/subject_%02d_calibration.png',subject),'-r150')
+        SaveFigure(sprintf('/Users/onat/Pictures/SCR/scr_model/subject_%02d_calibration.png',subject),'-r250')
         %% store
         param_fit{subject} = x;
         save('/Users/onat/Pictures/SCR/scr_model/data.mat','param_fit');
