@@ -149,7 +149,10 @@ classdef SCR < handle
                 %% will extract SCR data of a given block or blocks
                 block                     = varargin{2};
                 scr                       = varargin{1};
-                i                         = min(scr.BlockBorders_index(block,1)):max(scr.BlockBorders_index(block,2));
+                min_i                     = min(scr.BlockBorders_index(block,1));
+                max_i                     = max(scr.BlockBorders_index(block,2));
+                max_i                     = min( max_i + (10*1000)*scr.sampling_period , scr.tsample);%add 10 seconds, but not if it exceeds the experiments length
+                i                         = min_i:max_i;
                 scr.y                     = scr.y(i);
                 scr.time                  = scr.time(i);
                 scr.tsample               = length(scr.y);
@@ -477,29 +480,34 @@ classdef SCR < handle
         end
         function ledalab(self,string_id)
             ledalab_defaults  = {'open', 'mat', 'downsample', 5,'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1};
-            %% transform events to ledalab format            
-            data.conductance            = self.y;
-            data.time                   = self.time/1000;%in seconds
-            data.time                   = data.time - min(data.time(:));
-            data.samplingrate           = self.sampling_rate;%Hz
-            data.samplingperiod         = self.sampling_period/1000;%in s
-            
-            conditions                  = find(cellfun(@(x) ~isempty(regexp(x,string_id)), self.event_name ));
-            c = 0;            
-            for ncond = conditions
-                for nEvent = find(self.event(:,ncond))'
-                    c                   = c+1;
-                    data.event(c).time  = (nEvent*data.samplingperiod);%in ms
-                    data.event(c).nid   = ncond;%add a constant to differentiate phases.
-                    data.event(c).name  = self.event_name{ncond};%in string                    
-                end                
+            %
+            foldername = regexprep(self.path_acqfile,'data.acq','ledalab');
+            if exist(foldername) == 0;mkdir(foldername);end
+            filename         = sprintf('%s%sdata.mat',foldername,filesep);
+            filename_results = regexprep(filename,'data.mat','data_results.mat');
+            fprintf('filename to ledalab is %s\n',filename);
+            if exist(filename_results) == 0
+                %% transform events to ledalab format
+                data.conductance            = self.y;
+                data.time                   = self.time/1000;%in seconds
+                data.time                   = data.time - min(data.time(:));
+                data.samplingrate           = self.sampling_rate;%Hz
+                data.samplingperiod         = self.sampling_period/1000;%in s
+                
+                conditions                  = find(cellfun(@(x) ~isempty(regexp(x,string_id)), self.event_name ));
+                c = 0;
+                for ncond = conditions
+                    for nEvent = find(self.event(:,ncond))'
+                        c                   = c+1;
+                        data.event(c).time  = (nEvent*data.samplingperiod);%in ms
+                        data.event(c).nid   = ncond;%add a constant to differentiate phases.
+                        data.event(c).name  = self.event_name{ncond};%in string
+                    end
+                end
+                save(filename,'data');
+                Ledalab({filename},ledalab_defaults{:});
             end
-            filename = regexprep(self.path_acqfile,'data.acq','ledalab');
-            if exist(filename) == 0;mkdir(filename);end
-            filename = sprintf('%s%sdata.mat',filename,filesep);
-            fprintf('filename to ledalab is %s\n',filename)
-            save(filename,'data');
-            Ledalab({filename},ledalab_defaults{:});
+            leda = load(filename_results);
             
         end
     end
