@@ -4,6 +4,7 @@ classdef SCR < handle
         default_run = 4;%at which run the scr data is located.        
     end
     properties (Hidden)
+        ledalab_defaults      = {'open', 'mat', 'downsample', 5,'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1};
         hdr
         markers
         block2phase
@@ -13,6 +14,7 @@ classdef SCR < handle
         path_acqfile;%path to the file
     end
     properties
+        ledalab
         data
     end
     % The following properties can be set only by class methods
@@ -104,7 +106,7 @@ classdef SCR < handle
                             ind                            = ismember(cond_seq,cond_ids(ii));%samples for this stim_id
                             zero_vec(onset_sample(ind),ii) = true;%
                             %replace stimall with face index
-                            scr.event_name                 = [ scr.event_name         sprintf('%s_%d',block_names{nblock},cond_ids(ii))];
+                            scr.event_name                 = [ scr.event_name         sprintf('%s_%04d',block_names{nblock},cond_ids(ii))];
                             scr.event_plotting             = [ scr.event_plotting     s.plot_style(cond_ids(ii))];
                         end
                         scr.event                          = logical([scr.event zero_vec]);
@@ -158,6 +160,7 @@ classdef SCR < handle
                 scr.tsample               = length(scr.y);
                 scr.BlockBorders_index    = scr.BlockBorders_index(block,:);
                 scr.BlockBorders_time     = scr.BlockBorders_time(block,:);                
+                scr.BlockNames            = scr.BlockNames(block);
                 scr.event                 = scr.event(i,:);
                 try
                     scr.tonic                 = scr.tonic(i);
@@ -478,37 +481,53 @@ classdef SCR < handle
                 fprintf('data field is empty dickhead\n');
             end
         end
-        function ledalab(self,string_id)
-            ledalab_defaults  = {'open', 'mat', 'downsample', 5,'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1};
+        function run_ledalab(self)
+            %will run ledalab on all the data. Use cut method to restrict
+            %the analysis to a single block phase or so.
+            addpath('/Users/onat/Documents/Code/Matlab/ledalab/');
             %
-            foldername = regexprep(self.path_acqfile,'data.acq','ledalab');
-            if exist(foldername) == 0;mkdir(foldername);end
-            filename         = sprintf('%s%sdata.mat',foldername,filesep);
-            filename_results = regexprep(filename,'data.mat','data_results.mat');
+            foldername            = regexprep(self.path_acqfile,'data.acq','ledalab');%storage of ledalab related files
+            if exist(foldername) == 0;mkdir(foldername);end%create it if necessary.
+            filename              = sprintf(['%s%sdata_' repmat('%s_',1,length(self.BlockNames))],foldername,filesep,self.BlockNames{:});%used by ledalab
+            filename(end)         = [];
+            filename_results      = [filename '_results.mat'];%produced by ledalab
+            filename              = [filename '.mat'];
             fprintf('filename to ledalab is %s\n',filename);
+            
             if exist(filename_results) == 0
-                %% transform events to ledalab format
+                %% convert to data format that ledalab understands.
                 data.conductance            = self.y;
                 data.time                   = self.time/1000;%in seconds
                 data.time                   = data.time - min(data.time(:));
                 data.samplingrate           = self.sampling_rate;%Hz
                 data.samplingperiod         = self.sampling_period/1000;%in s
-                
-                conditions                  = find(cellfun(@(x) ~isempty(regexp(x,string_id)), self.event_name ));
+                %% transform events to ledalab format                
+                %find all conditions that are in this batch
+                conditions = [];
+                for bnames = self.BlockNames;
+                conditions                  = [conditions find(cellfun(@(x) ~isempty(regexp(x,bnames{1})), self.event_name ))];%detect only the required conditions
+                end
+                %store
                 c = 0;
                 for ncond = conditions
                     for nEvent = find(self.event(:,ncond))'
                         c                   = c+1;
                         data.event(c).time  = (nEvent*data.samplingperiod);%in ms
                         data.event(c).nid   = ncond;%add a constant to differentiate phases.
-                        data.event(c).name  = self.event_name{ncond};%in string
+                        data.event(c).name  = self.event_name{ncond};
                     end
                 end
                 save(filename,'data');
-                Ledalab({filename},ledalab_defaults{:});
+                %%
+                Ledalab({filename},self.ledalab_defaults{:});
             end
-            leda = load(filename_results);
-            
+            leda         = load(filename_results);
+            self.phasic  = leda.analysis.phasicData;
+            self.tonic   = leda.analysis.tonicData;
+            self.ledalab = leda.analysis.split_driver;
+        end
+        function plot_ledalab(self)
+            plot(self.ledalab.x(:,1),self.ledalab.mean(:,1:9))
         end
     end
 end
