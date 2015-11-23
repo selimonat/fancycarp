@@ -178,6 +178,10 @@ classdef SCR < handle
         function out = cut(self,block)
             out = SCR(self,block);
         end
+        function out = findphase(self,filter_string);
+            out = cellfun(@(x) ~isempty(regexp(x,filter_string)), self.BlockNames );
+            out = find(out);            
+        end
         function plot(self)
             %% plot different event channels
             
@@ -220,16 +224,7 @@ classdef SCR < handle
             grid on;
             axis tight;
             hold off
-        end
-        %         function o       = get.y_tonic_spline(self)
-        %             Y     = self.y(self.BlockBorders_index(1,1):self.BlockBorders_index(1,2));
-        %             X     = self.time(self.BlockBorders_index(1,1):self.BlockBorders_index(1,2));
-        %             [~,m] = DetectPeaks(Y);
-        %             s     = std(m);
-        %             i     = find(s > mean(std(rand(3000)+1)));
-        %             peaks = find(diff(i) > 20);
-        %
-        %         end
+        end  
         function self = smooth(self,method)
             %
             if isempty(self.data);self.data=self.y;end
