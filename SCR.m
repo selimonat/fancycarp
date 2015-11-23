@@ -16,6 +16,7 @@ classdef SCR < handle
     properties
         ledalab
         data
+        fear_tuning
     end
     % The following properties can be set only by class methods
     properties (SetAccess = private)
@@ -519,10 +520,29 @@ classdef SCR < handle
             leda         = load(filename_results);
             self.phasic  = leda.analysis.phasicData;
             self.tonic   = leda.analysis.tonicData;
-            self.ledalab = leda.analysis.split_driver;
+            self.ledalab = leda.analysis.split_driver;            
         end
         function plot_ledalab(self)
             plot(self.ledalab.x(:,1),self.ledalab.mean(:,1:9))
+        end
+        function plot_tuning_ledalab(self,varargin)
+            if nargin > 1
+                conds = varargin{1};
+            else
+                conds = 1:11;
+            end
+            %will return average SCR values for conditions CONDS
+            %(optional).            
+            if ~isempty(self.ledalab)%if ledalab analysis is done
+                %detect time window, based on averaged data we take [1.5 4]
+                %seconds. Could be improved for single-subject variations
+                i                    = (self.ledalab.x(:,1) >= 1.5)&(self.ledalab.x(:,1) <= 4);
+                self.fear_tuning     = mean(self.ledalab.mean(i,:));%take out the average in that window                                
+                self.fear_tuning = self.fear_tuning(:,conds);                
+            else%if the analysis not done yet,
+                self.run_ledalab;%first do it
+                self.plot_tuning_ledalab(conds);%and call yourself.
+            end
         end
     end
 end
