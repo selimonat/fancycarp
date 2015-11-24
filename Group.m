@@ -11,6 +11,7 @@ classdef Group < Project
         SI        
         sigma_cond
         sigma_test
+        SCR_ampl
     end
     
     methods
@@ -35,10 +36,19 @@ classdef Group < Project
         %
         function ModelRatings(self,run,funtype)
             %create a tuning object and fits FUNTYPE to it.
-            self.tunings{run} = Tuning(self.Ratings(run));%create a tuning object for the RUN for ratings.
-            self.tunings{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
+            self.tunings.rate{run} = Tuning(self.Ratings(run));%create a tuning object for the RUN for ratings.
+            self.tunings.rate{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
         end
-
+        function ModelSCR(self,run,funtype)
+            %create a tuning object and fits FUNTYPE to it.
+            self.SCRtunings{run} = Tuning(self.getSCRs(run));%create a tuning object for the RUN for SCRS.
+            self.SCRtunings{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
+        end
+        function getSCRtunings(self,run,funtype)
+            self.ModelSCR(run,funtype);
+            self.SCR_ampl = self.SCRtunings{run}.y;
+        end
+           
         function getSI(self,funtype)
             %fits FUNTYPE to behavioral ratings and computes Sharpening
             %Index.
@@ -52,6 +62,7 @@ classdef Group < Project
                 self.sigma_test = [self.sigma_test; self.tunings{4}.singlesubject{s}.Est(:,2)];
             end
         end
+       
         %%
         function getPMF(self)
             c = 0;
@@ -166,6 +177,20 @@ classdef Group < Project
             end
         end
         %%
+        function [scr] = getSCRs(self,run)
+            %will collect the ratings from single subjects 
+            scr.y = [];
+            scr.x = [];
+            for s = 1:length(self.subject)
+                if ~isempty(self.subject{s})
+                    dummy = self.subject{s}.GetSCR(run);
+                    if ~isempty(dummy)
+                        scr.y   = [scr.y; dummy.y];
+                        scr.x   = [scr.x; dummy.x];
+                    end
+                end
+            end
+        end
         function [rating] = Ratings(self,run)
             %will collect the ratings from single subjects 
             rating.y = [];
