@@ -72,7 +72,7 @@ classdef Project < handle
             %will return the path to phase/data_type/
             path2data = self.pathfinder(subject , run);
             if length(varargin) >= 1 
-                path2data = sprintf('%s%s/data.mat',path2data,varargin{1});
+                path2data = sprintf('%s%s%sdata.mat',path2data,varargin{1},filesep);
             end
             if length(varargin) == 2
                 path2data = regexprep(path2data,'mat',varargin{2});
