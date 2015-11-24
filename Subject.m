@@ -20,7 +20,7 @@ classdef Subject < Project
                 end
                 s.csp = s.paradigm{2}.stim.cs_plus;
                 s.csn = s.paradigm{2}.stim.cs_neg;
-                %                 s.scr = SCR(s);
+                                s.scr = SCR(s);
                 s.pmf = s.getPMF;
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path)
@@ -37,8 +37,8 @@ classdef Subject < Project
             %2/ CS- before
             %3/ CS+ after
             %4/ CS- after
-            out.subject_alpha = mean(out.params1(1:4,1),1);
-            out.subject_beta  = mean(out.params1(1:4,2),1);
+            out.subject_alpha = mean(out.params1(1:2,1),1);
+            out.subject_beta  = mean(out.params1(1:2,2),1);
         end
         
         function pmfplot(self)
