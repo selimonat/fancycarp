@@ -41,12 +41,12 @@ classdef Group < Project
         end
         function ModelSCR(self,run,funtype)
             %create a tuning object and fits FUNTYPE to it.
-            self.SCRtunings{run} = Tuning(self.getSCRs(run));%create a tuning object for the RUN for SCRS.
-            self.SCRtunings{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
+            self.tunings.scr = Tuning(self.getSCRs(run));%create a tuning object for the RUN for SCRS.
+            self.tunings.scr.SingleSubjectFit(funtype);%call fit method from the tuning object
         end
         function getSCRtunings(self,run,funtype)
             self.ModelSCR(run,funtype);
-            self.SCR_ampl = self.SCRtunings{run}.y;
+            self.SCR_ampl = self.tunings.scr.params(:,1);
         end
            
         function getSI(self,funtype)
@@ -57,9 +57,9 @@ classdef Group < Project
             self.sigma_cond = [];
             self.sigma_test = [];
             for s = 1:length(self.subject)
-                self.SI         = [self.SI; self.tunings{3}.singlesubject{s}.Est(:,2) - self.tunings{4}.singlesubject{s}.Est(:,2)];%take the diff of sigma parameters.
-                self.sigma_cond = [self.sigma_cond; self.tunings{3}.singlesubject{s}.Est(:,2)];
-                self.sigma_test = [self.sigma_test; self.tunings{4}.singlesubject{s}.Est(:,2)];
+                self.SI         = [self.SI; self.tunings.rate{3}.singlesubject{s}.Est(:,2) - self.tunings.rate{4}.singlesubject{s}.Est(:,2)];%take the diff of sigma parameters.
+                self.sigma_cond = [self.sigma_cond; self.tunings.rate{3}.singlesubject{s}.Est(:,2)];
+                self.sigma_test = [self.sigma_test; self.tunings.rate{4}.singlesubject{s}.Est(:,2)];
             end
         end
        
@@ -102,7 +102,8 @@ classdef Group < Project
                       'csp_imprvmtn_cted' ...
                       'rating_cond' ... 
                       'rating_test' ... 
-                      'SI'};
+                      'SI'...
+                      'SCR ampl'};
                   
             out = [self.pmf.csp_before_alpha,...
                    self.pmf.csp_after_alpha,...              
@@ -117,29 +118,30 @@ classdef Group < Project
                    (self.pmf.csp_before_alpha-self.pmf.csp_after_alpha)-(self.pmf.csn_before_alpha-self.pmf.csn_after_alpha),...
                    self.sigma_cond,...
                    self.sigma_test,...
-                   self.SI];
+                   self.SI
+                   self.SCR_ampl];
         end
         
         function PlotRatingFit(self,subject)
-            if ~isempty(self.tunings)
+            if ~isempty(self.tunings.rate)
                 i    =  find(self.ids == subject);
-                x_HD = linspace(min(self.tunings{3}.x(1,:)),max(self.tunings{3}.x(1,:)),100);
+                x_HD = linspace(min(self.tunings.rate{3}.x(1,:)),max(self.tunings.rate{3}.x(1,:)),100);
                 h    = figure(100);clf
                 
                 subplot(1,2,1)
-                title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings{3}.singlesubject{i}.Likelihood,self.tunings{3}.singlesubject{i}.pval));
-                plot(x_HD,self.tunings{3}.singlesubject{i}.fitfun(x_HD,self.tunings{3}.singlesubject{i}.Est),'ro','linewidth',3);
+                title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings.rate{3}.singlesubject{i}.Likelihood,self.tunings.rate{3}.singlesubject{i}.pval));
+                plot(x_HD,self.tunings.rate{3}.singlesubject{i}.fitfun(x_HD,self.tunings.rate{3}.singlesubject{i}.Est),'ro','linewidth',3);
                 hold on;
-                plot(self.tunings{3}.x(i,:),self.tunings{3}.y(i,:), 'b','linewidth', 3);
+                plot(self.tunings.rate{3}.x(i,:),self.tunings.rate{3}.y(i,:), 'b','linewidth', 3);
                 ylabel('Cond')
                 drawnow;
                 grid on;
                 
                 subplot(1,2,2)
-                title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings{4}.singlesubject{i}.Likelihood,self.tunings{4}.singlesubject{i}.pval));
+                title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings.rate{4}.singlesubject{i}.Likelihood,self.tunings.rate{4}.singlesubject{i}.pval));
                 plot(x_HD,self.tunings{4}.singlesubject{i}.fitfun(x_HD,self.tunings{4}.singlesubject{i}.Est),'ro','linewidth',3);
                 hold on;
-                plot(self.tunings{3}.x(i,:),self.tunings{4}.y(i,:), 'b','linewidth', 3);
+                plot(self.tunings.rate{3}.x(i,:),self.tunings.rate{4}.y(i,:), 'b','linewidth', 3);
                 ylabel('Test')
                 EqualizeSubPlotYlim(h);
                 s = supertitle(sprintf('Rating Fits Subject %03d',subject),1);
@@ -183,7 +185,7 @@ classdef Group < Project
             scr.x = [];
             for s = 1:length(self.subject)
                 if ~isempty(self.subject{s})
-                    dummy = self.subject{s}.GetSCR(run);
+                    dummy = self.subject{s}.GetSubSCR(run);
                     if ~isempty(dummy)
                         scr.y   = [scr.y; dummy.y];
                         scr.x   = [scr.x; dummy.x];
