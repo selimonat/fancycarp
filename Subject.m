@@ -20,7 +20,7 @@ classdef Subject < Project
                 end
                 s.csp = s.paradigm{2}.stim.cs_plus;
                 s.csn = s.paradigm{2}.stim.cs_neg;
-                %                 s.scr = SCR(s);
+                s.scr = SCR(s);
                 s.pmf = s.getPMF;
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path)
@@ -101,6 +101,18 @@ classdef Subject < Project
                 fprintf('no rating present for this subject and run (%d) \n',run);
             end            
         end
-            
+        function out    = GetSCR(self,run,cond)
+            if nargin < 3
+                cond=1:8;
+            end
+            conddummy=[-135:45:180 500 1000 3000];
+            % s is a subject instance
+            out = [];
+            self.scr.cut(run);
+            self.scr.run_ledalab;
+            self.scr.plot_tuning_ledalab(cond);
+            out.y = self.scr.fear_tuning;
+            out.x = conddummy(cond);
+        end
     end
 end
