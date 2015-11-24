@@ -1,7 +1,7 @@
 classdef SCR < handle
     
     properties (Constant = true, Hidden)
-        default_run = 4;%at which run the scr data is located.        
+        default_run = 4;%at which run the scr data is located.
     end
     properties (Hidden)
         ledalab_defaults      = {'open', 'mat', 'downsample', 5,'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1};
@@ -17,6 +17,7 @@ classdef SCR < handle
         ledalab
         data
         fear_tuning
+        ml
     end
     % The following properties can be set only by class methods
     properties (SetAccess = private)
@@ -71,7 +72,7 @@ classdef SCR < handle
                     %and detect the time index
                     i                      = find(diff(data(:,c)) > 0);
                     %most probably 2 pulses faster than 30s is a falschbeginn
-                    i(diff(scr.time(i)/1000) < 40)            = [];                    
+                    i(diff(scr.time(i)/1000) < 40)            = [];
                     %%
                     scr.BlockBorders_index = [i [i(2:end); scr.tsample]];
                     scr.BlockBorders_time  = scr.time(scr.BlockBorders_index);
@@ -86,12 +87,12 @@ classdef SCR < handle
                     %% label each SCR block in terms of experimental phase
                     scr.block2phase                                     = nan(1,tblock);
                     scr.block2phase([(tblock-5) (tblock-3) (tblock-1)]) = [2 3 4];
-                    scr.BlockNames                                      = block_names; 
+                    scr.BlockNames                                      = block_names;
                     %%
                     for nblock = find(~isnan(scr.block2phase))
                         % event times in units of samples
                         i                      = scr.BlockBorders_index(nblock,1):scr.BlockBorders_index(nblock,2);%range of the block
-                        onset_sample           = find(data(:,3));%all stim onsets                        
+                        onset_sample           = find(data(:,3));%all stim onsets
                         onset_sample           = onset_sample(ismember(onset_sample,i));%take only this blocks's onsets
                         onset_sample           = onset_sample(diff([-Inf; onset_sample]) > 1);%clean repeats
                         onset_sample           = onset_sample(ismember(onset_sample,i));%take only this phase's onsets
@@ -160,7 +161,7 @@ classdef SCR < handle
                 scr.time                  = scr.time(i);
                 scr.tsample               = length(scr.y);
                 scr.BlockBorders_index    = scr.BlockBorders_index(block,:);
-                scr.BlockBorders_time     = scr.BlockBorders_time(block,:);                
+                scr.BlockBorders_time     = scr.BlockBorders_time(block,:);
                 scr.BlockNames            = scr.BlockNames(block);
                 scr.event                 = scr.event(i,:);
                 try
@@ -181,7 +182,7 @@ classdef SCR < handle
         end
         function out = findphase(self,filter_string);
             out = cellfun(@(x) ~isempty(regexp(x,filter_string)), self.BlockNames );
-            out = find(out);            
+            out = find(out);
         end
         function plot(self)
             %% plot different event channels
@@ -217,15 +218,15 @@ classdef SCR < handle
         end
         function plot_decomposition(self)
             hhfigure;
-            self.plot            
+            self.plot
             hold on;
             plot(self.time./1000,self.phasic,'k');
-            plot(self.time./1000,self.tonic,'color',[.4 .4 .4]);            
+            plot(self.time./1000,self.tonic,'color',[.4 .4 .4]);
             plot(self.time./1000,self.tonic+self.phasic,'r');
             grid on;
             axis tight;
             hold off
-        end  
+        end
         function self = smooth(self,method)
             %
             if isempty(self.data);self.data=self.y;end
@@ -242,7 +243,7 @@ classdef SCR < handle
             self.data         = diff(self.data);
             self.data(end+1)  = self.data(end);
         end
-                
+        
         function self = tonic_lowpass(self)
             %computes the low-pass version of the signal supposed to
             %represent the tonic response.
@@ -251,7 +252,7 @@ classdef SCR < handle
             Hd           = design(d, 'ellip');
             self.tonic   = filtfilt(Hd.sosMatrix,Hd.ScaleValues,self.data);
             self.phasic  = self.data - self.tonic;
-        end        
+        end
         
         function xcorr(self,block)
             %%
@@ -315,6 +316,8 @@ classdef SCR < handle
             end
             try
                 self.phasic               = downsample(self.phasic,n);
+            catch
+                fprintf('Downsampling failed, likely cause Ledalab''s downsample shadows it\n');
             end
         end
         function [FIRmat,FIRtime] = FIR(self,events_i)
@@ -338,7 +341,7 @@ classdef SCR < handle
             if nargin < 2
                 tsample = self.tsample;
             end
-            %% Normalized Fourier basis sets            
+            %% Normalized Fourier basis sets
             t     = 0:tsample-1;
             nb    = self.nfreq*2+1;
             z     = zeros(nb,tsample);
@@ -365,18 +368,18 @@ classdef SCR < handle
         end
         function tonic_tfals(self)
             % Normalize basis functions
-                % Orthogonalize basis functions
-                % Generate sparse matrix of asymmetric weights
-                % perform least squares fit % Estimate baseline
-                % Calculate baseline corrected signal vector
-                %see TFALS.m for more details.
+            % Orthogonalize basis functions
+            % Generate sparse matrix of asymmetric weights
+            % perform least squares fit % Estimate baseline
+            % Calculate baseline corrected signal vector
+            %see TFALS.m for more details.
             %%
-            if ~isempty(self.data)                                
+            if ~isempty(self.data)
                 %
                 p      = 0.001;   %p=Asymmetry parameter (0.001>=p<=0.1) %
                 Y      = self.data;
                 pa     = round(self.tsample/2);%pad amount
-                Y      = padarray(Y,[pa 0],'replicate','both');                
+                Y      = padarray(Y,[pa 0],'replicate','both');
                 tsample= self.tsample + pa*2;
                 P      = self.FourierBasis(tsample);
                 %% Asymmetric least squares
@@ -404,8 +407,8 @@ classdef SCR < handle
                     end
                 end
                 %clean the flankers
-                self.tonic(1:pa)          = [];                
-                self.tonic(end-pa+1:end)  = [];                
+                self.tonic(1:pa)          = [];
+                self.tonic(end-pa+1:end)  = [];
                 %get the phasic
                 self.phasic               = self.data-self.tonic;
                 
@@ -413,19 +416,19 @@ classdef SCR < handle
                 fprintf('.data is empty honey\n')
             end
         end
-        function asymmetricls_decomposition_diff(self,event_i)            
-%             self.smooth('sgolay');
+        function asymmetricls_decomposition_diff(self,event_i)
+            %             self.smooth('sgolay');
             self.data = self.y;
             self.tonic_tfals;%will provide both the tonic fit, the residuals are phasic.
             %model the phasic responses using FIR.
             [FIR self.model.FIRtime]= self.FIR(event_i);
-            %                                    
+            %
             self.phasic             = diff(self.phasic);
             self.phasic(end+1)      = self.phasic(end);
             %
             self.model.betas        = FIR\self.phasic;%now model the phasic response
-%             self.model.betas        = cumsum(reshape(self.model.betas,[150 11]));
-%             self.model.betas        = self.model.betas(:);
+            %             self.model.betas        = cumsum(reshape(self.model.betas,[150 11]));
+            %             self.model.betas        = self.model.betas(:);
             self.model.fit          = cumsum(FIR*self.model.betas) + self.tonic;%fit = fit_tonic + fit_phasic
             self.model.fit_phasic   = cumsum(FIR*self.model.betas);
             self.model.fit_tonic    = self.tonic;
@@ -456,11 +459,11 @@ classdef SCR < handle
             hold on;
             plot(self.time./1000,self.model.fit_phasic,'r');
             plot(self.time./1000,self.phasic,'k');
-            plot(self.time./1000,self.model.fit_tonic,'color',[.4 .4 .4]);            
+            plot(self.time./1000,self.model.fit_tonic,'color',[.4 .4 .4]);
             plot(self.time./1000,self.model.fit_tonic+self.model.fit_phasic,'r');
             grid on;
             axis tight;
-            hold off            
+            hold off
         end
         function leastsquare_decomposition(self,event_i)
             %will model the data using FIR and FourierBasis set.
@@ -480,7 +483,7 @@ classdef SCR < handle
         function run_ledalab(self)
             %will run ledalab on all the data. Use cut method to restrict
             %the analysis to a single block phase or so.
-            addpath('/Users/onat/Documents/Code/Matlab/ledalab/');
+%             addpath('/Users/onat/Documents/Code/Matlab/ledalab/');
             %
             foldername            = regexprep(self.path_acqfile,'data.acq','ledalab');%storage of ledalab related files
             if exist(foldername) == 0;mkdir(foldername);end%create it if necessary.
@@ -497,11 +500,11 @@ classdef SCR < handle
                 data.time                   = data.time - min(data.time(:));
                 data.samplingrate           = self.sampling_rate;%Hz
                 data.samplingperiod         = self.sampling_period/1000;%in s
-                %% transform events to ledalab format                
+                %% transform events to ledalab format
                 %find all conditions that are in this batch
                 conditions = [];
                 for bnames = self.BlockNames;
-                conditions                  = [conditions find(cellfun(@(x) ~isempty(regexp(x,bnames{1})), self.event_name ))];%detect only the required conditions
+                    conditions                  = [conditions find(cellfun(@(x) ~isempty(regexp(x,bnames{1})), self.event_name ))];%detect only the required conditions
                 end
                 %store
                 c = 0;
@@ -520,7 +523,7 @@ classdef SCR < handle
             leda         = load(filename_results);
             self.phasic  = leda.analysis.phasicData;
             self.tonic   = leda.analysis.tonicData;
-            self.ledalab = leda.analysis.split_driver;            
+            self.ledalab = leda.analysis.split_driver;
         end
         function plot_ledalab(self)
             plot(self.ledalab.x(:,1),self.ledalab.mean(:,1:9))
@@ -532,17 +535,43 @@ classdef SCR < handle
                 conds = 1:11;
             end
             %will return average SCR values for conditions CONDS
-            %(optional).            
+            %(optional).
             if ~isempty(self.ledalab)%if ledalab analysis is done
                 %detect time window, based on averaged data we take [1.5 4]
                 %seconds. Could be improved for single-subject variations
                 i                    = (self.ledalab.x(:,1) >= 1.5)&(self.ledalab.x(:,1) <= 4);
-                self.fear_tuning     = mean(self.ledalab.mean(i,:));%take out the average in that window                                
-                self.fear_tuning = self.fear_tuning(:,conds);                
+                self.fear_tuning     = mean(self.ledalab.mean(i,:));%take out the average in that window
+                self.fear_tuning = self.fear_tuning(:,conds);
             else%if the analysis not done yet,
                 self.run_ledalab;%first do it
                 self.plot_tuning_ledalab(conds);%and call yourself.
             end
+        end
+        function ML_fit(self)
+            
+            %run the ML estimation
+            params = [];
+%             if length(self.BlockNames) == 1
+                
+                filter_string                            = self.BlockNames{1};
+                event_id                                 = cellfun(@(x) ~isempty( regexp(x,filter_string)), self.event_name );%detect the relevant event column
+                [onset_sample x]                         = find(self.event(:,event_id));%in samples
+                ml.onsets                                   = self.time(onset_sample)./1000;%onset times in s
+                ml.data                                  = self.phasic(:);%data we want to model
+                ml.time                                  = self.time(:)./1000;
+                ml.data(ml.time < (min(ml.onsets)-10))      = 0;
+                ml.data(ml.time > (max(ml.onsets)+10))      = 0;
+                
+                ml.funlsq                             = @(params) (abs(ml.data - scr_model( ml.time , ml.onsets(:), params ))).^2;%squared deviations
+                ml.params0                            = [rand(1,240) 2 6 2];%initial values.
+                ml.LB                                 = [zeros(1,length(ml.onsets)) 0 0 0];%lower boundaries
+%                 options                            = optimset('algorithm',{'levenberg-marquardt',.01},'display','iter','MaxFunEvals',50000,'maxiter',50000,'tolx',10^-12,'tolfun',10^-12,'OutputFcn',@scr_optimizer_plot);
+                ml.options                            = optimset('algorithm',{'levenberg-marquardt',.01},'display','iter','MaxFunEvals',2500,'maxiter',2500,'tolx',10^-12,'tolfun',10^-12);
+                ml.params                             = lsqnonlin(ml.funlsq,ml.params0,ml.LB,[],ml.options);
+                self.ml = ml;
+%             else
+%                 fprintf('Please cut me so that I have exactly one block\n');
+%             end
         end
     end
 end
