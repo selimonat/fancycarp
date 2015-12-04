@@ -78,7 +78,7 @@ classdef Tuning < handle
                 result.funname= 'gaussian';
             elseif funtype == 3
                 result.fitfun = @(x,p) self.make_gaussian_fmri_zeromean(x,p(1),p(2));%2 amp fwhm
-                L           = [ 0.01  5          .01    ];
+                L           = [ -range(y)*2 5          .01    ];
                 U           = [  range(y)*2  180       std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
                 result.funname= 'gaussian_ZeroMean';
