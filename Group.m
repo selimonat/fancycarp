@@ -139,7 +139,7 @@ classdef Group < Project
                 
                 subplot(1,2,2)
                 title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings.rate{4}.singlesubject{i}.Likelihood,self.tunings.rate{4}.singlesubject{i}.pval));
-                plot(x_HD,self.tunings{4}.singlesubject{i}.fitfun(x_HD,self.tunings{4}.singlesubject{i}.Est),'ro','linewidth',3);
+                plot(x_HD,self.tunings.rate{4}.singlesubject{i}.fitfun(x_HD,self.tunings.rate{4}.singlesubject{i}.Est),'ro','linewidth',3);
                 hold on;
                 plot(self.tunings.rate{3}.x(i,:),self.tunings.rate{4}.y(i,:), 'b','linewidth', 3);
                 ylabel('Test')
