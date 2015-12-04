@@ -119,19 +119,14 @@ classdef Fixmat < Project
             obj.query = [];
             fprintf('Selection (%04d fixations) removed from the object...\n',sum(~obj.selection));
         end
-        function [H,T,order] = dendrogram(obj,opt)%varargin tells if reorder by optimal leafOrder
+        function [H,T,order] = dendrogram(obj)%varargin tells if reorder by optimal leafOrder
             vecmaps = obj.vectorize_maps;
             tree = linkage(vecmaps','average','correlation');
             D = pdist(vecmaps','correlation');
             leafOrder = optimalleaforder(tree,D);
             figure;
-            if opt==0
-                [H,T,order] = dendrogram(tree,0);
-                title('default leaforder')
-            else
-                [H,T,order] = dendrogram(tree,0,'Reorder',leafOrder);
-                title('optimal leaforder')
-            end
+            [H,T,order] = dendrogram(tree,0,'Reorder',leafOrder);
+            title('optimal leaforder')
         end
         function plot(obj,varargin)    
             
