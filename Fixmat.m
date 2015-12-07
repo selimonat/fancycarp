@@ -10,6 +10,8 @@ classdef Fixmat < Project
          maptype             = 'conv';%conv or bin         
          kernel_fwhm         = Fixmat.PixelPerDegree*.8;
          binsize             = 25;
+         linkage_method      = 'average';
+         linkage_metric      = 'correlation';
          maps%current maps;
     end
    
@@ -119,10 +121,19 @@ classdef Fixmat < Project
             obj.query = [];
             fprintf('Selection (%04d fixations) removed from the object...\n',sum(~obj.selection));
         end
-        function [H,T,order] = dendrogram(obj)%varargin tells if reorder by optimal leafOrder
+        function getsubmaps(obj)
+            v = [];
+            c = 0;
+            for sub=unique(obj.subject)
+                c    = c+1;
+                v{c} = {'subject' sub};
+            end
+            obj.getmaps(v{:});
+        end
+        function [H,T,order,tree] = dendrogram(obj)%varargin tells if reorder by optimal leafOrder
             vecmaps = obj.vectorize_maps;
-            tree = linkage(vecmaps','average','correlation');
-            D = pdist(vecmaps','correlation');
+            tree = linkage(vecmaps',obj.linkage_method,obj.linkage_metric);
+            D = pdist(vecmaps',obj.linkage_metric);
             leafOrder = optimalleaforder(tree,D);
             figure;
             [H,T,order] = dendrogram(tree,0,'Reorder',leafOrder);
