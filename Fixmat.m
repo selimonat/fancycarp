@@ -139,6 +139,26 @@ classdef Fixmat < Project
             [H,T,order] = dendrogram(tree,0,'Reorder',leafOrder);
             title('optimal leaforder')
         end
+        function plotband(obj,varargin)%varargin can reorder the subjmaps
+            if nargin > 1
+                order = varargin{1};
+            else
+                order = unique(obj.subject);
+            end
+            N = length(order);
+            figure;
+            c=0;
+            for sub = order;
+                c=c+1;
+                obj.getmaps({'subject' sub})
+                h = subplot(1,N,c);imagesc(obj.maps);
+                title(num2str(sub))
+                axis square
+                axis off
+                subplotChangeSize(h,.01,.01);
+                colorbar off
+            end
+        end
         function plot(obj,varargin)    
             
             M = obj.maps;
