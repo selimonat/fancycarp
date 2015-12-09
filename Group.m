@@ -48,6 +48,15 @@ classdef Group < Project
             self.ModelSCR(run,funtype);
             self.SCR_ampl = self.tunings.scr.params(:,1);
         end
+        
+        function [out] = getSCRmeans(phase)
+            for n = 1:length(self.ids)
+                    ind = self.subject{n}.scr.findphase(phase);
+                    self.subject{n}.scr.cut(ind);
+                    self.subject{n}.scr.run_ledalab;
+                    out(:,:,n) = self.subject{n}.scr.ledalab.mean(1:800,1:8);
+            end
+        end
            
         function getSI(self,funtype)
             %fits FUNTYPE to behavioral ratings and computes Sharpening
