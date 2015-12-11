@@ -20,8 +20,10 @@ classdef Subject < Project
                 end
                 s.csp = s.paradigm{2}.stim.cs_plus;
                 s.csn = s.paradigm{2}.stim.cs_neg;
-                s.scr = SCR(s);
-                s.pmf = s.getPMF;
+%                 s.scr = SCR(s);
+                try
+                 s.pmf = s.getPMF;
+                end
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path)
             end
