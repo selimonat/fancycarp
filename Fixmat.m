@@ -121,12 +121,39 @@ classdef Fixmat < Project
             obj.query = [];
             fprintf('Selection (%04d fixations) removed from the object...\n',sum(~obj.selection));
         end
+        function [cormat] = condcorrmat(obj,ph,plot)
+            tsub = length(unique(obj.subject));
+            cormat = nan(8,8,tsub);
+            subc            = 0;
+            for sub = unique(obj.subject);
+                subc = subc + 1;
+                %create the query cell
+                v = [];
+                c = 0;
+                for cond = -135:45:180
+                    c    = c+1;
+                    v{c} = {'phase', ph, 'deltacsp' cond 'subject' sub};
+                end
+                % plot and save fixation maps
+                obj.getmaps(v{:});
+                maps = obj.maps;
+                obj.maps   = maps(:,:,1:8) - repmat(mean(maps(:,:,1:8),3),[1 1 8]);%take out the average
+                cormat(:,:,subc) = obj.corr;
+            end
+            if plot ==1
+                figure;
+                imagesc(median(cormat,3),[-.1 .1])
+                axis square;colorbar
+                set(gca,'fontsize',15)
+                axis off
+            end
+        end
         function getsubmaps(obj)
             v = [];
             c = 0;
             for sub=unique(obj.subject)
                 c    = c+1;
-                v{c} = {'subject' sub};
+                v{c} = {'subject' sub 'deltacsp' -135:45:180};
             end
             obj.getmaps(v{:});
         end
@@ -152,7 +179,7 @@ classdef Fixmat < Project
                 c=c+1;
                 obj.getmaps({'subject' sub})
                 h = subplot(1,N,c);imagesc(obj.maps);
-                title(num2str(sub))
+%                 title(num2str(sub))
                 axis square
                 axis off
                 subplotChangeSize(h,.01,.01);
