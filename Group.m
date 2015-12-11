@@ -187,6 +187,40 @@ classdef Group < Project
                 hold off;
             end
         end
+        function PlotRatingResults(self)
+            %%
+            f=figure;
+            subplot(1,2,1);
+            h = bar(self.tunings.rate{3}.x(1,:),self.tunings.rate{3}.y_mean);SetFearGenBarColors(h);
+            hold on;
+            errorbar(self.tunings.rate{3}.x(1,:),self.tunings.rate{3}.y_mean,self.tunings.rate{3}.y_std./sqrt(length(self.ids)),'k.');
+            xlim([-160 200]);
+            box off
+            set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
+            x = linspace(self.tunings.rate{3}.x(1,1),self.tunings.rate{3}.x(1,end),100);
+            plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:2))) ,'k--','linewidth',1);
+            hold off
+            set(gca,'fontsize',14);
+            axis square
+            t=title('Conditioning');set(t,'FontSize',14);
+            %
+            subplot(1,2,2);
+            h = bar(self.tunings.rate{4}.x(1,:),self.tunings.rate{4}.y_mean);SetFearGenBarColors(h);hold on;
+            errorbar(self.tunings.rate{4}.x(1,:),self.tunings.rate{4}.y_mean,self.tunings.rate{4}.y_std./sqrt(length(self.ids)),'k.');
+            EqualizeSubPlotYlim(gcf);
+            box off
+            xlim([-160 200]);
+            set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
+            x = linspace(self.tunings.rate{4}.x(1,1),self.tunings.rate{4}.x(1,end),100);
+            plot(x ,  self.tunings.rate{4}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{4}.params(:,1:2))) ,'k','linewidth',1);
+            x = linspace(self.tunings.rate{3}.x(1,1),self.tunings.rate{3}.x(1,end),100);
+            plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:2))) ,'k--','linewidth',1);
+            set(gca,'fontsize',14);
+            axis square
+            t=title('Test');set(t,'FontSize',14);
+            annotation(f,'textbox',[0.78 0.65 0.1 0.1],'String',['SI = ' num2str(mean(self.SI))],'FitBoxToText','off','LineStyle','none');
+            hold off
+        end
         %%
         function [scr] = getSCRs(self,run)
             %will collect the ratings from single subjects 
