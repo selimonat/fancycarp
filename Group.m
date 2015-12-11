@@ -24,7 +24,9 @@ classdef Group < Project
                 dummy            = Subject(s);
                 group.subject{c} = dummy;
                 group.ids        = subjects;
+                try
                 group.getPMF;
+                end
             end
         end
         function csps = getcsp(self)
