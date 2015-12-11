@@ -48,6 +48,15 @@ classdef Group < Project
             self.ModelSCR(run,funtype);
             self.SCR_ampl = self.tunings.scr.params(:,1);
         end
+        
+        function [out] = getSCRmeans(phase)
+            for n = 1:length(self.ids)
+                    ind = self.subject{n}.scr.findphase(phase);
+                    self.subject{n}.scr.cut(ind);
+                    self.subject{n}.scr.run_ledalab;
+                    out(:,:,n) = self.subject{n}.scr.ledalab.mean(1:800,1:8);
+            end
+        end
            
         function getSI(self,funtype)
             %fits FUNTYPE to behavioral ratings and computes Sharpening
@@ -139,7 +148,7 @@ classdef Group < Project
                 
                 subplot(1,2,2)
                 title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings.rate{4}.singlesubject{i}.Likelihood,self.tunings.rate{4}.singlesubject{i}.pval));
-                plot(x_HD,self.tunings{4}.singlesubject{i}.fitfun(x_HD,self.tunings{4}.singlesubject{i}.Est),'ro','linewidth',3);
+                plot(x_HD,self.tunings.rate{4}.singlesubject{i}.fitfun(x_HD,self.tunings.rate{4}.singlesubject{i}.Est),'ro','linewidth',3);
                 hold on;
                 plot(self.tunings.rate{3}.x(i,:),self.tunings.rate{4}.y(i,:), 'b','linewidth', 3);
                 ylabel('Test')

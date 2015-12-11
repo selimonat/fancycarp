@@ -10,6 +10,8 @@ classdef Fixmat < Project
          maptype             = 'conv';%conv or bin         
          kernel_fwhm         = Fixmat.PixelPerDegree*.8;
          binsize             = 25;
+         linkage_method      = 'average';
+         linkage_metric      = 'correlation';
          maps%current maps;
     end
    
@@ -119,6 +121,44 @@ classdef Fixmat < Project
             obj.query = [];
             fprintf('Selection (%04d fixations) removed from the object...\n',sum(~obj.selection));
         end
+        function getsubmaps(obj)
+            v = [];
+            c = 0;
+            for sub=unique(obj.subject)
+                c    = c+1;
+                v{c} = {'subject' sub};
+            end
+            obj.getmaps(v{:});
+        end
+        function [H,T,order,tree] = dendrogram(obj)%varargin tells if reorder by optimal leafOrder
+            vecmaps = obj.vectorize_maps;
+            tree = linkage(vecmaps',obj.linkage_method,obj.linkage_metric);
+            D = pdist(vecmaps',obj.linkage_metric);
+            leafOrder = optimalleaforder(tree,D);
+            figure;
+            [H,T,order] = dendrogram(tree,0,'Reorder',leafOrder);
+            title('optimal leaforder')
+        end
+        function plotband(obj,varargin)%varargin can reorder the subjmaps
+            if nargin > 1
+                order = varargin{1};
+            else
+                order = unique(obj.subject);
+            end
+            N = length(order);
+            figure;
+            c=0;
+            for sub = order;
+                c=c+1;
+                obj.getmaps({'subject' sub})
+                h = subplot(1,N,c);imagesc(obj.maps);
+                title(num2str(sub))
+                axis square
+                axis off
+                subplotChangeSize(h,.01,.01);
+                colorbar off
+            end
+        end
         function plot(obj,varargin)    
             
             M = obj.maps;
@@ -139,7 +179,7 @@ classdef Fixmat < Project
                 M = log10(M);            
             end
             %
-            ffigure(1);
+            ffigure;
             clf                        
             nsp     = obj.subplot_number;
             for nc = 1:size(M,3)
