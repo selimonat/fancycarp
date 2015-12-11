@@ -59,7 +59,18 @@ classdef Fixmat < Project
             %initialize
             for run = runs(:)'
                 for subject = subjects(:)'                
-                    %%                    
+                    if exist(regexprep(obj.path2data(subject,run,'eye'),'.mat','.edf')) ~= 0 %does the subject has an edf file?
+
+					%% edf2mat conversion                    
+					if ~exist(obj.path2data(subject,run,'eye'))%is the edf file converted?
+							fprintf('-edfread not yet ran (subject:%03d, run:%03d)\n-Roger that, will do it ASAP, sir!\n',subject,run);
+							[trials info] = edfread(regexprep(obj.path2data(subject,run,'eye'),'.mat','.edf'),'TRIALID');
+							save(obj.path2data(subject,run,'eye'),'trials','info');
+							%if the conversion fails the code will fail, it is recommended to rename the data.edf file to something else then.
+					else
+						fprintf('edf is converted (subject:%03d, run:%03d)\n',subject,run);
+					end
+
                     dummy = load(obj.path2data(subject,run,'eye'));
                     %this is necessary to expand the PTB message to
                     %something that is understandable by the fixations
@@ -87,7 +98,8 @@ classdef Fixmat < Project
                         else
                             obj.(fns{1}) = [obj.(fns{1}) zeros(1,sum(valid_fix))];%append it to the previous
                         end
-                    end                                        
+                    end
+				end
                 end                    
             end                                                    
             %% remove fixations outside of the image border
