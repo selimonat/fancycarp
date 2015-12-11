@@ -563,7 +563,7 @@ classdef SCR < handle
                 ml.data(ml.time > (max(ml.onsets)+10))      = 0;
                 
                 ml.funlsq                             = @(params) (abs(ml.data - scr_model( ml.time , ml.onsets(:), params ))).^2;%squared deviations
-                ml.params0                            = [rand(1,240) 2 6 2];%initial values.
+                ml.params0                            = [rand(1,length(ml.onsets)) 2 6 2];%initial values.
                 ml.LB                                 = [zeros(1,length(ml.onsets)) 0 0 0];%lower boundaries
 %                 options                            = optimset('algorithm',{'levenberg-marquardt',.01},'display','iter','MaxFunEvals',50000,'maxiter',50000,'tolx',10^-12,'tolfun',10^-12,'OutputFcn',@scr_optimizer_plot);
                 ml.options                            = optimset('algorithm',{'levenberg-marquardt',.01},'display','iter','MaxFunEvals',2500,'maxiter',2500,'tolx',10^-12,'tolfun',10^-12);
