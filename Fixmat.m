@@ -20,7 +20,8 @@ classdef Fixmat < Project
         query
         all_queries
         map_titles
-        selection            
+        selection
+        realcond%all conditions that are not ucs,odd,or nulltrial
     end
     
     properties (SetAccess = private,Dependent,Hidden)
@@ -108,6 +109,7 @@ classdef Fixmat < Project
             %% round coordinates to pixels
             obj.x = round(obj.x);
             obj.y = round(obj.y);
+            obj.realcond = unique(obj.deltacsp(~ismember(obj.deltacsp,[500 1000 3000])));
         end
         function UpdateSelection(obj,varargin)
             %takes VARARGIN pairs to update the selection vektor            
@@ -165,7 +167,7 @@ classdef Fixmat < Project
             c = 0;
             for sub=unique(obj.subject)
                 c    = c+1;
-                v{c} = {'subject' sub 'deltacsp' -135:45:180};
+                v{c} = {'subject' sub 'deltacsp' obj.realcond};
             end
             obj.getmaps(v{:});
         end
@@ -189,7 +191,7 @@ classdef Fixmat < Project
             c=0;
             for sub = order;
                 c=c+1;
-                obj.getmaps({'subject' sub})
+                obj.getmaps({'subject' sub 'deltacsp' obj.realcond})
                 h = subplot(1,N,c);imagesc(obj.maps);
 %                 title(num2str(sub))
                 axis square
