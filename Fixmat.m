@@ -189,7 +189,7 @@ classdef Fixmat < Project
             N = length(order);
             figure;
             c=0;
-            for sub = order;
+            for sub = order(:)';
                 c=c+1;
                 obj.getmaps({'subject' sub 'deltacsp' obj.realcond})
                 h = subplot(1,N,c);imagesc(obj.maps);
