@@ -7,7 +7,8 @@ classdef Tuning < handle
     %tuning object, can contain any kind of fear-tuning SCR, rating etc.
     properties
         x =[];
-        y =[];
+        y      =[];
+        ids    =[];
         y_mean = [];
         y_std  = [];
         groupfit
@@ -19,8 +20,9 @@ classdef Tuning < handle
     methods
         function tuning = Tuning(data,varargin)
             %data is anything that has a x and y fields.
-            tuning.x = data.x;
-            tuning.y = data.y;
+            tuning.x   = data.x;
+            tuning.y   = data.y;
+            tuning.ids = data.ids;
             for x  = unique(tuning.x(:)')
                 i             = tuning.x == x;
                 tuning.y_mean = [tuning.y_mean mean(tuning.y(i))];
@@ -30,8 +32,9 @@ classdef Tuning < handle
         
         function SingleSubjectFit(self,funtype)
             %fit FUNTYPE to each individual subject
-            for ns = 1:size(self.x,1)
-                fprintf('Fitting subject %03d\n',ns)
+            ts = size(self.x,1);
+            for ns = 1:ts
+                fprintf('Fitting subject %03d of %03d, id: %03d\n',ns,ts,self.ids(ns));
                 self.singlesubject{ns} = self.Fit(self.x(ns,:),self.y(ns,:),funtype);
             end
             self.FitGetParam;
@@ -53,12 +56,7 @@ classdef Tuning < handle
         
         function result = Fit(self,x,y,funtype)
             %Fits FUNTYPE to a tuning defined in x and y
-            %for later plotting, check if Group or SingleSubject Fit:
-            if size(x,1)>length(unique(x))
-                isgroup = 1;
-            else
-                isgroup = 0;
-            end
+            
             %% set the function to be fitted
             x        = x(:);
             y        = y(:);%make it sure to have columns
@@ -113,8 +111,8 @@ classdef Tuning < handle
                 result.funname= 'cosine';
             elseif funtype == 8
                 result.fitfun = @(x,p) self.VonMises(x,p(1),p(2),p(3),p(4));%amp,kappa,centerX,offset
-                L             = [ min(y(:))-std(y)     0.1        min(x)   min(y(:))-std(y)   eps ];
-                U             = [ max(y(:))+std(y)  range(x)*1.5  max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];
+                L             = [ -range(y(:))     0.1        min(x)   min(y(:))-std(y)   eps ];
+                U             = [ range(y(:))      17  max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
                 %                 L      = [ eps                   0.1   eps     -pi   eps ];
                 %                 U      = [ min(10,range(y)*1.1)  20   2*pi   pi   10];
                 result.dof    = 3;
@@ -172,34 +170,28 @@ classdef Tuning < handle
             if self.visualization
                 
                 c       = 0;
-                tsub       = size(self.x,1);%to compute SEM we need the number of subjects.
-                xs = sort(unique(self.x));
+                tsub       = size(x,1);%to compute SEM we need the number of subjects.
+                xs = sort(unique(x));
                 for nx = xs(:)'%for each unique X variable compute a the average/std/sem values.
                     c               = c+1;
-                    Y_ave(c)        = mean(self.y(self.x==nx));
-                    Y_ave_trim(c)   = trimmean(self.y(self.x==nx),5);
-                    Y_std(c,1)      = std(self.y(self.x==nx));%will be used to plot errorbars
+                    Y_ave(c)        = mean(y(x==nx));
+                    Y_ave_trim(c)   = trimmean(y(x==nx),5);
+                    Y_std(c,1)      = std(y(x==nx));%will be used to plot errorbars
                     Y_sem(c,1)      = Y_std(c,1)./sqrt(tsub);
                 end
                 
                 figure(100);clf
                 plot(x_HD,result.fitfun(x_HD,result.Est),'ro','linewidth',3);
                 hold on
-                plot(x_HD, result.fitfun(x_HD,Init)  ,'color',[.3 .3 .3] ,'linewidth',3);
-                
-                if isgroup
-                    errorbar(result.x, Y_ave+CONSTANT, Y_sem   , 'b'   ,'linewidth', 3);
-                else
-                    plot(result.x, y+CONSTANT, 'b'   ,'linewidth', 3);
-                end
-                
+                plot(x_HD, result.fitfun(x_HD,Init)  ,'color',[.3 .3 .3] ,'linewidth',3);                                
+                errorbar(result.x, Y_ave+CONSTANT, Y_sem   , 'b'   ,'linewidth', 3);                                
                 hold off
                 if funtype > 1
                     title(sprintf('Likelihood: %03g (p = %5.5g)',result.Likelihood,result.pval));
                 end
                 xlim([min(x(:)) max(x(:))]);
                 drawnow;
-                grid on;                
+                grid on;                      
             end
         end
         
