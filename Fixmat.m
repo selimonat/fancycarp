@@ -187,6 +187,9 @@ classdef Fixmat < Project
             %will plot fixmaps as a dendrogram. VARARGIN limits the number
             %of leafs, use 0 to have as many leafs as number of fixmaps
             
+            if isempty(obj.dendro_tree);
+                obj.linkage;
+            end
             
             % plotting business
             %plot the dendro
@@ -206,28 +209,35 @@ classdef Fixmat < Project
             % plot cluster averages        
             figure;
             tcluster = max(T(:));
-            for ncluster = 1:tcluster
-                subplot(2,tcluster,ncluster)
+            c = 0;
+            for ncluster = unique(T(order0),'stable')'
+                c = c + 1;
+                subplot(3,tcluster,c)
                 imagesc(mean(obj.maps(:,:,T == ncluster),3))
                 axis image
                 axis off;
                 title(sprintf('(N = %03d)\n',sum(T==ncluster)));
             end
+            %
             %plot the data vector for each cluster also
-            subplot(2,tcluster,k+1:k*2)
-            for ncluster = 1:tcluster                
+            subplot(3,tcluster,k+1:k*2)
+            for ncluster = unique(T(order0),'stable')'
                 m(ncluster) = mean(data(T == ncluster));
                 s(ncluster) = std(data(T == ncluster))./sqrt(sum(T==ncluster));                
             end
             errorbar(1:tcluster,m,s);
+            %
+            subplot(3,tcluster,(k+1:k*2)+k)
+            for ncluster1 = unique(T(order0),'stable')'
+                for ncluster2 = unique(T(order0),'stable')'
+                    [h p stats] = ttest2(data(T == ncluster1),data(T == ncluster2));
+                    tmat(ncluster1,ncluster2) = -log10(p);
+                end               
+            end
+            imagesc(tmat);
+            colorbar
         end
-        
-        function SplitByBranches(obj,data,k)
-            %Will split DATA into K barplots based on a dendogram
-            %representation with K branches.
-            
-        end
-        
+      
         function plotband(obj,varargin)%varargin can reorder the subjmaps
             if nargin > 1
                 order = varargin{1};
