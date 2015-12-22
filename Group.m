@@ -240,8 +240,9 @@ classdef Group < Project
         end
         function [rating] = Ratings(self,run)
             %will collect the ratings from single subjects 
-            rating.y = [];
-            rating.x = [];
+            rating.y  = [];
+            rating.x  = [];
+            rating.ids = [];
             c = 0;
             for s = 1:length(self.subject)
                 if ~isempty(self.subject{s})
@@ -250,9 +251,11 @@ classdef Group < Project
                         c = c+1;
                         if self.mean_correction
                             dummy.y_mean = dummy.y_mean-mean(dummy.y_mean);
+                            dummy.y      = dummy.y - mean(dummy.y(:));
                         end
-                        rating.y   = [rating.y ; dummy.y_mean];
-                        rating.x   = [rating.x ; mean(dummy.x)];
+                        rating.y   = [rating.y ; dummy.y(:)'];
+                        rating.x   = [rating.x ; dummy.x(:)'];
+                        rating.ids  = [rating.ids; self.ids(s)];
                     end
                 end
             end
