@@ -60,7 +60,7 @@ classdef Fixmat < Project
             %initialize
             for run = runs(:)'
                 for subject = subjects(:)'                
-                    if exist(regexprep(obj.path2data(subject,run,'eye'),'.mat','.edf')) ~= 0 %does the subject has an edf file?
+%                     if exist(regexprep(obj.path2data(subject,run,'eye'),'.mat','.edf')) ~= 0 %does the subject has an edf file?
 
 					%% edf2mat conversion                    
 					if ~exist(obj.path2data(subject,run,'eye'))%is the edf file converted?
@@ -101,7 +101,7 @@ classdef Fixmat < Project
                         end
                     end
 				end
-                end                    
+%                 end                    
             end                                                    
             %% remove fixations outside of the image border
             obj.selection = ~(obj.x < obj.rect(2) | obj.x > (obj.rect(2)+obj.rect(4)-1) | obj.y < obj.rect(1) | obj.y > (obj.rect(1)+obj.rect(3)-1) );
@@ -171,15 +171,36 @@ classdef Fixmat < Project
             end
             obj.getmaps(v{:});
         end
-        function [H,T,order,tree] = dendrogram(obj)%varargin tells if reorder by optimal leafOrder
-            vecmaps = obj.vectorize_maps;
-            tree = linkage(vecmaps',obj.linkage_method,obj.linkage_metric);
-            D = pdist(vecmaps',obj.linkage_metric);
-            leafOrder = optimalleaforder(tree,D);
+        function [H,T,order,tree] = dendrogram(obj,varargin)
+            %varargin is the number of maximum leafs. If not entered, 0 is
+            %used.
+            k = 0;
+            if nargin > 1
+                k = varargin{1};
+            end
+            
+            vecmaps     = obj.vectorize_maps;
+            tree        = linkage(vecmaps',obj.linkage_method,obj.linkage_metric);
+            D           = pdist(vecmaps',obj.linkage_metric);
+            leafOrder   = optimalleaforder(tree,D);
             figure;
-            [H,T,order] = dendrogram(tree,0,'Reorder',leafOrder);
+            [H,T,order] = dendrogram(tree,k,'Reorder',leafOrder);
             title('optimal leaforder')
+            ffigure;
+            maps = obj.maps(:,:,leafOrder);
+            imagesc(reshape(maps,[size(maps,1) size(maps,2)*size(maps,3)]));
+            axis image;
+            set(gca,'xtick',0:size(maps,1):max(xlim)-1,'ytick',[],'xticklabel',[],'xcolor','r');
+            grid on
+            subplotChangeSize(gca,.15,.25);
         end
+        
+        function SplitByBranches(obj,data,k)
+            %Will split DATA into K barplots based on a dendogram
+            %representation with K branches.
+            
+        end
+        
         function plotband(obj,varargin)%varargin can reorder the subjmaps
             if nargin > 1
                 order = varargin{1};
