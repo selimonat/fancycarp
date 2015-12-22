@@ -189,7 +189,7 @@ classdef Fixmat < Project
             N = length(order);
             figure;
             c=0;
-            for sub = order;
+            for sub = order(:)';
                 c=c+1;
                 obj.getmaps({'subject' sub 'deltacsp' obj.realcond})
                 h = subplot(1,N,c);imagesc(obj.maps);
@@ -199,6 +199,27 @@ classdef Fixmat < Project
                 subplotChangeSize(h,.01,.01);
                 colorbar off
             end
+        end
+        function [out] = clustertest(obj,cluster,criterion)
+            k = size(cluster,2);
+            N = length([cluster(1:k).subs]);
+            fprintf('Basing analysis on %d clusters.\n',k)
+            clf
+            group =nan(N,1);
+            for n = 1:k
+                group(cluster(n).subs) = n;
+                m(n) = mean(criterion(cluster(n).subs));
+                s(n) = std(criterion(cluster(n).subs));
+                bar(n,m(n))
+                hold on
+                errorbar(n,m(n),s(n)./sqrt(length(cluster(n).subs)),'k.')
+                xlim([0 k+1])
+            end
+            [out.anova.p,out.anova.tab,out.anova.stats] = anova1(criterion,group); %compares k groups
+            imax = find(max(m));
+            imin = find(min(m));
+            [~,out.ttest.p,out.ttest.ci] = ttest2(criterion(cluster(imax).subs),criterion(cluster(imin).subs));%compares higgest to smallest bar
+            
         end
         function plot(obj,varargin)    
             
