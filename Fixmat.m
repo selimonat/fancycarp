@@ -12,6 +12,9 @@ classdef Fixmat < Project
          binsize             = 25;
          linkage_method      = 'average';
          linkage_metric      = 'correlation';
+         dendro_tree         = [];%results of linkage analysis will be stored here.
+         dendro_D            = [];
+         dendro_leafOrder    = [];
          maps%current maps;
     end
    
@@ -171,28 +174,52 @@ classdef Fixmat < Project
             end
             obj.getmaps(v{:});
         end
-        function [H,T,order,tree] = dendrogram(obj,varargin)
-            %varargin is the number of maximum leafs. If not entered, 0 is
-            %used.
-            k = 0;
-            if nargin > 1
-                k = varargin{1};
-            end
-            
+        function linkage(obj)
+            fprintf('Conducting linkage analysis with linkage method: _%s_ and linkage metric: _%s_\n',char(obj.linkage_method),obj.linkage_metric);
+            %provides data for a dendrogram analysis.
             vecmaps     = obj.vectorize_maps;
-            tree        = linkage(vecmaps',obj.linkage_method,obj.linkage_metric);
-            D           = pdist(vecmaps',obj.linkage_metric);
-            leafOrder   = optimalleaforder(tree,D);
-            figure;
-            [H,T,order] = dendrogram(tree,k,'Reorder',leafOrder);
+            obj.dendro_tree        = linkage(vecmaps',obj.linkage_method,obj.linkage_metric);            
+            obj.dendro_D           = pdist(vecmaps',obj.linkage_metric);            
+            obj.dendro_leafOrder   = optimalleaforder(obj.dendro_tree,obj.dendro_D);            
+        end
+        
+        function [branch_id]=dendrogram(obj,k,data)
+            %will plot fixmaps as a dendrogram. VARARGIN limits the number
+            %of leafs, use 0 to have as many leafs as number of fixmaps
+            
+            
+            % plotting business
+            %plot the dendro
+            figure(101);                        
+            [H,T,order]    = dendrogram(obj.dendro_tree,k);
+            [~,~,order0]   = dendrogram(obj.dendro_tree,0,'colorthreshold',obj.dendro_tree(end-k+2,3),'reorder',obj.dendro_leafOrder);
             title('optimal leaforder')
+            % plot the single subject fixation maps
             ffigure;
-            maps = obj.maps(:,:,leafOrder);
+            maps = obj.maps(:,:,order0);
+            %
             imagesc(reshape(maps,[size(maps,1) size(maps,2)*size(maps,3)]));
             axis image;
             set(gca,'xtick',0:size(maps,1):max(xlim)-1,'ytick',[],'xticklabel',[],'xcolor','r');
             grid on
             subplotChangeSize(gca,.15,.25);
+            % plot cluster averages        
+            figure;
+            tcluster = max(T(:));
+            for ncluster = 1:tcluster
+                subplot(2,tcluster,ncluster)
+                imagesc(mean(obj.maps(:,:,T == ncluster),3))
+                axis image
+                axis off;
+                title(sprintf('(N = %03d)\n',sum(T==ncluster)));
+            end
+            %plot the data vector for each cluster also
+            subplot(2,tcluster,k+1:k*2)
+            for ncluster = 1:tcluster                
+                m(ncluster) = mean(data(T == ncluster));
+                s(ncluster) = std(data(T == ncluster))./sqrt(sum(T==ncluster));                
+            end
+            errorbar(1:tcluster,m,s);
         end
         
         function SplitByBranches(obj,data,k)
