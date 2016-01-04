@@ -187,18 +187,19 @@ classdef Fixmat < Project
             %will plot fixmaps as a dendrogram. VARARGIN limits the number
             %of leafs, use 0 to have as many leafs as number of fixmaps
             
-            if isempty(obj.dendro_tree);
+            if isempty(obj.dendro_tree)
                 obj.linkage;
             end
             
             % plotting business
             %plot the dendro
             figure(101);                        
-            [H,T,order]    = dendrogram(obj.dendro_tree,k);
+            [H,T,order]    = dendrogram(obj.dendro_tree,k); 
             [~,~,order0]   = dendrogram(obj.dendro_tree,0,'colorthreshold',obj.dendro_tree(end-k+2,3),'reorder',obj.dendro_leafOrder);
             title('optimal leaforder')
+            branch_id = T;
             % plot the single subject fixation maps
-            ffigure;
+            figure;
             maps = obj.maps(:,:,order0);
             %
             imagesc(reshape(maps,[size(maps,1) size(maps,2)*size(maps,3)]));
@@ -216,16 +217,22 @@ classdef Fixmat < Project
                 imagesc(mean(obj.maps(:,:,T == ncluster),3))
                 axis image
                 axis off;
-                title(sprintf('(N = %03d)\n',sum(T==ncluster)));
+                title(sprintf('(N  = %03d)\n',sum(T==ncluster)));
             end
             %
             %plot the data vector for each cluster also
             subplot(3,tcluster,k+1:k*2)
-            for ncluster = unique(T(order0),'stable')'
-                m(ncluster) = mean(data(T == ncluster));
-                s(ncluster) = std(data(T == ncluster))./sqrt(sum(T==ncluster));                
+            clusterord = unique(T(order0),'stable')';
+            c=0;
+            for ncluster = clusterord
+                c=c+1;
+                N(ncluster) = sum(~isnan(data(T == ncluster)));
+                m(ncluster) = nanmean(data(T == ncluster));
+                s(ncluster) = nanstd(data(T == ncluster))./sqrt(N(ncluster));
+                text(c,m(ncluster)+s(ncluster)*1.3, sprintf('(N=%03d)\n',N(ncluster)));
+                hold on;
             end
-            errorbar(1:tcluster,m,s);
+            errorbar(1:tcluster,m(clusterord),s(clusterord));
             %
             subplot(3,tcluster,(k+1:k*2)+k)
             for ncluster1 = unique(T(order0),'stable')'
@@ -235,6 +242,7 @@ classdef Fixmat < Project
                 end               
             end
             imagesc(tmat);
+            set(gca,'XTickLabel',clusterord,'YTickLabel',clusterord)
             colorbar
         end
       
