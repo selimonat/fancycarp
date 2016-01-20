@@ -3,6 +3,7 @@ classdef Subject < ProjectMR
         paradigm
 		trio_name    =[];
 		trio_folder  =[];
+        default_run  = 1;
     end
     properties (SetAccess = private)
         id
@@ -22,8 +23,8 @@ classdef Subject < ProjectMR
                 for nrun = 1:5
                     s.paradigm{nrun} = s.load_paradigm(nrun);
                 end
-                s.csp = s.paradigm{2}.stim.cs_plus;
-                s.csn = s.paradigm{2}.stim.cs_neg;
+                s.csp = s.paradigm{s.default_run}.stim.cs_plus;
+                s.csn = s.paradigm{s.default_run}.stim.cs_neg;
                 s.scr = SCR(s);
                 try
                     s.pmf = s.getPMF;
@@ -39,16 +40,40 @@ classdef Subject < ProjectMR
     
     methods
         
-        function ConvertDicom
-            matlabbatch{1}.spm.util.import.dicom.data = {
-                '/Users/onat/Desktop/fearamy/data/sub001/run001/mrt/MR.18966.1234'
-                '/Users/onat/Desktop/fearamy/data/sub001/run001/mrt/MR.18966.1239'
-                };
-            matlabbatch{1}.spm.util.import.dicom.root = 'flat';
-            matlabbatch{1}.spm.util.import.dicom.outdir = {'/Users/onat/Desktop/fearamy/data/sub001/run001/mrt'};
-            matlabbatch{1}.spm.util.import.dicom.protfilter = '.*';
-            matlabbatch{1}.spm.util.import.dicom.convopts.format = 'nii';
-            matlabbatch{1}.spm.util.import.dicom.convopts.icedims = 0;
+        function ConvertDicom(self)
+            %% dicom conversion
+            matlabbatch = [];
+            for nrun = 1:self.tRuns
+                files                                                    = cellstr(spm_select('FPListRec',self.path2data(self.id,nrun),'^MR'));
+                matlabbatch{nrun}.spm.util.import.dicom.data             = files;
+                matlabbatch{nrun}.spm.util.import.dicom.root             = 'flat';
+                matlabbatch{nrun}.spm.util.import.dicom.outdir           = {fileparts(self.path2data(self.id,nrun,'mrt'))};
+                matlabbatch{nrun}.spm.util.import.dicom.protfilter       = '.*';
+                matlabbatch{nrun}.spm.util.import.dicom.convopts.format  = 'nii';
+                matlabbatch{nrun}.spm.util.import.dicom.convopts.icedims = 0;
+            end
+            fprintf('Dicom conversion...\n');
+            spm_jobman('run', matlabbatch);
+            %% delete the dicom files
+            fprintf('Cleaning...\n');
+            for nrun = 1:self.tRuns
+                delete(sprintf('%smrt%sMR*',self.path2data(self.id,nrun),filesep));
+            end            
+            %% merge to 4D
+            fprintf('Merging...\n');
+            matlabbatch = [];
+            c           = 0;
+            for nrun = 1:self.tRuns
+                files = spm_select('FPListRec',self.path2data(self.id,nrun),'^fTRIO');
+                if ~isempty(files)
+                    c     = c + 1;
+                    matlabbatch{c}{1}.spm.util.cat.vols  = cellstr(files);
+                    matlabbatch{c}{1}.spm.util.cat.name  = 'data.nii';
+                    matlabbatch{c}{1}.spm.util.cat.dtype = 0;
+                end
+            end           
+            spm_jobman('run', matlabbatch{n});
+           
         end
         function GetDicom(self)            
 			%Will dump all the Dicoms based on Sessions entered in the
@@ -160,5 +185,12 @@ classdef Subject < ProjectMR
             out.x = conddummy(cond);
             out.ind = cutnum;
         end
+        
+        function [o]=tRuns(self)
+            %% returns the total number of runs in a folder
+            [~, d] = spm_select('FPList',self.path,'^run');
+            o      = size(d,1);
+        end
+        
     end
 end
