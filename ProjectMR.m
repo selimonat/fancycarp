@@ -4,9 +4,9 @@ classdef ProjectMR < handle
     end
     properties (Constant)
         path_project       = sprintf('%s%sDesktop%sfearamy/',homedir,filesep,filesep);        
-        trio_names         = { 'TRIO_12476' };
+        trio_names         = { 'TRIO-17370' };
         trio_folders       = {   [1:22]    };
-        subjects           = [1]
+        subjects           = [1];
     end
     
     methods        

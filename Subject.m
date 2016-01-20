@@ -1,6 +1,8 @@
-classdef Subject < Project
+classdef Subject < ProjectMR
     properties (Hidden)
         paradigm
+		trio_name    =[];
+		trio_folder  =[];
     end
     properties (SetAccess = private)
         id
@@ -14,7 +16,9 @@ classdef Subject < Project
         function s = Subject(id)%constructor
             s.id              = id;
             s.path            = s.pathfinder(s.id,[]);
-            if exist(s.path)
+			s.trio_name 	  = s.trio_names{s.id};
+            s.trio_folder 	  = s.trio_folders{s.id};
+			if exist(s.path)
                 for nrun = 1:5
                     s.paradigm{nrun} = s.load_paradigm(nrun);
                 end
@@ -35,21 +39,30 @@ classdef Subject < Project
             
         end
         function GetDicom(self)                                    
-            [status paths]   = system(['/common/apps/bin/dicq -t --folders --exam=' ExperimentID ]);
-            paths            = strsplit(paths,'\n');%split paths            
-            [status result]  = system(['/common/apps/bin/dicq --series --exam=' ExperimentID]);
-            %% save the desired runs to disk
+			%Will dump all the Dicoms
+			[status paths]   = system(['/common/apps/bin/dicq -t --series --exam=' self.trio_name]);
+			paths            = strsplit(paths,'\n');%split paths            
+            [status result]  = system(['/common/apps/bin/dicq --series --exam=' self.trio_name]);
+            result
+			fprintf('Will now dump the following series:\n');
+			fprintf('%i ',self.trio_folders{1}(:)')
+			fprintf('\n');
+			%% save the desired runs to disk
             n = 0;
-            for f = self.trio_folders
+            for f = self.trio_folders{1}(:)'
                 n = n +1;
-                sprintf('Executing:\n cp -vr %s ~/Desktop',paths{f});
-                [a b]            = system(sprintf('echo cp -vr %s %s%ssub%03d/mrt/run%03d',paths{f},self.path_project,filesep,self.id,n));
-            end
+                dest             = sprintf('%sdata%ssub%03d/run%03d/mrt/',self.path_project,filesep,self.id,n)
+                if exist(dest) == 0
+					mkdir(dest)
+				end
+				[a b]            = system(sprintf('cp -vr %s/* %s',paths{f},dest));
+            	if a ~= 0
+					keyboard
+				end
+			end
             
         end
             
-            
-        end
         function out = getPMF(self)
             load(sprintf('%smidlevel%sweibull%sdata.mat',Project.path_project,filesep,filesep));
             out = data(self.id);
