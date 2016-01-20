@@ -26,8 +26,11 @@ classdef Subject < ProjectMR
                 s.csn = s.paradigm{2}.stim.cs_neg;
                 s.scr = SCR(s);
                 try
-                 s.pmf = s.getPMF;
+                    s.pmf = s.getPMF;
                 end
+%                 try
+%                     s.bold = BOLD(s);
+%                 end
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path)
             end
@@ -35,11 +38,21 @@ classdef Subject < ProjectMR
     end
     
     methods
-        function GetHR(self)
-            
+        
+        function ConvertDicom
+            matlabbatch{1}.spm.util.import.dicom.data = {
+                '/Users/onat/Desktop/fearamy/data/sub001/run001/mrt/MR.18966.1234'
+                '/Users/onat/Desktop/fearamy/data/sub001/run001/mrt/MR.18966.1239'
+                };
+            matlabbatch{1}.spm.util.import.dicom.root = 'flat';
+            matlabbatch{1}.spm.util.import.dicom.outdir = {'/Users/onat/Desktop/fearamy/data/sub001/run001/mrt'};
+            matlabbatch{1}.spm.util.import.dicom.protfilter = '.*';
+            matlabbatch{1}.spm.util.import.dicom.convopts.format = 'nii';
+            matlabbatch{1}.spm.util.import.dicom.convopts.icedims = 0;
         end
-        function GetDicom(self)                                    
-			%Will dump all the Dicoms
+        function GetDicom(self)            
+			%Will dump all the Dicoms based on Sessions entered in the
+			%Project Object
 			[status paths]   = system(['/common/apps/bin/dicq -t --series --exam=' self.trio_name]);
 			paths            = strsplit(paths,'\n');%split paths            
             [status result]  = system(['/common/apps/bin/dicq --series --exam=' self.trio_name]);
@@ -51,7 +64,7 @@ classdef Subject < ProjectMR
             n = 0;
             for f = self.trio_folders{1}(:)'
                 n = n +1;
-                dest             = sprintf('%sdata%ssub%03d/run%03d/mrt/',self.path_project,filesep,self.id,n)
+                dest             = sprintf('%ssub%03d/run%03d/mrt/',self.path_project,self.id,n)
                 if exist(dest) == 0
 					mkdir(dest)
 				end
@@ -59,8 +72,7 @@ classdef Subject < ProjectMR
             	if a ~= 0
 					keyboard
 				end
-			end
-            
+            end           
         end
             
         function out = getPMF(self)
