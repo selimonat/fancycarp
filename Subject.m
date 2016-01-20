@@ -20,7 +20,7 @@ classdef Subject < Project
                 end
                 s.csp = s.paradigm{2}.stim.cs_plus;
                 s.csn = s.paradigm{2}.stim.cs_neg;
-%                 s.scr = SCR(s);
+                s.scr = SCR(s);
                 try
                  s.pmf = s.getPMF;
                 end
@@ -31,6 +31,25 @@ classdef Subject < Project
     end
     
     methods
+        function GetHR(self)
+            
+        end
+        function GetDicom(self)                                    
+            [status paths]   = system(['/common/apps/bin/dicq -t --folders --exam=' ExperimentID ]);
+            paths            = strsplit(paths,'\n');%split paths            
+            [status result]  = system(['/common/apps/bin/dicq --series --exam=' ExperimentID]);
+            %% save the desired runs to disk
+            n = 0;
+            for f = self.trio_folders
+                n = n +1;
+                sprintf('Executing:\n cp -vr %s ~/Desktop',paths{f});
+                [a b]            = system(sprintf('echo cp -vr %s %s%ssub%03d/mrt/run%03d',paths{f},self.path_project,filesep,self.id,n));
+            end
+            
+        end
+            
+            
+        end
         function out = getPMF(self)
             load(sprintf('%smidlevel%sweibull%sdata.mat',Project.path_project,filesep,filesep));
             out = data(self.id);
@@ -41,8 +60,7 @@ classdef Subject < Project
             %4/ CS- after
             out.subject_alpha = mean(out.params1(1:2,1),1);
             out.subject_beta  = mean(out.params1(1:2,2),1);
-        end
-        
+        end        
         function pmfplot(self)
             plotpath = sprintf('%s%sp05%sfigures%sfearcloud_FitPMFs_RE.fig',self.path,filesep,filesep,filesep);
             if exist(plotpath)
@@ -50,8 +68,7 @@ classdef Subject < Project
             else
                 fprintf('no figure found!')
             end
-        end
-                   
+        end                   
         function p         = load_paradigm(self,nrun)
             %HAST TO GO TO THE PROJECT ACTUALLY TOGETHER WITH
             %CONDTION_>COLOR DESCRIPTION
