@@ -1,6 +1,9 @@
-classdef Subject < Project
+classdef Subject < ProjectMR
     properties (Hidden)
         paradigm
+		trio_name    =[];
+		trio_folder  =[];
+        default_run  = 1;
     end
     properties (SetAccess = private)
         id
@@ -14,16 +17,21 @@ classdef Subject < Project
         function s = Subject(id)%constructor
             s.id              = id;
             s.path            = s.pathfinder(s.id,[]);
-            if exist(s.path)
+			s.trio_name 	  = s.trio_names{s.id};
+            s.trio_folder 	  = s.trio_folders{s.id};
+			if exist(s.path)
                 for nrun = 1:5
                     s.paradigm{nrun} = s.load_paradigm(nrun);
                 end
-                s.csp = s.paradigm{2}.stim.cs_plus;
-                s.csn = s.paradigm{2}.stim.cs_neg;
-%                 s.scr = SCR(s);
+                s.csp = s.paradigm{s.default_run}.stim.cs_plus;
+                s.csn = s.paradigm{s.default_run}.stim.cs_neg;
+                s.scr = SCR(s);
                 try
-                 s.pmf = s.getPMF;
+                    s.pmf = s.getPMF;
                 end
+%                 try
+%                     s.bold = BOLD(s);
+%                 end
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path)
             end
@@ -31,6 +39,67 @@ classdef Subject < Project
     end
     
     methods
+        
+        function ConvertDicom(self)
+            %% dicom conversion
+            matlabbatch = [];
+            for nrun = 1:self.tRuns
+                files                                                    = cellstr(spm_select('FPListRec',self.path2data(self.id,nrun),'^MR'));
+                matlabbatch{nrun}.spm.util.import.dicom.data             = files;
+                matlabbatch{nrun}.spm.util.import.dicom.root             = 'flat';
+                matlabbatch{nrun}.spm.util.import.dicom.outdir           = {fileparts(self.path2data(self.id,nrun,'mrt'))};
+                matlabbatch{nrun}.spm.util.import.dicom.protfilter       = '.*';
+                matlabbatch{nrun}.spm.util.import.dicom.convopts.format  = 'nii';
+                matlabbatch{nrun}.spm.util.import.dicom.convopts.icedims = 0;
+            end
+            fprintf('Dicom conversion...\n');
+            spm_jobman('run', matlabbatch);
+            %% delete the dicom files
+            fprintf('Cleaning...\n');
+            for nrun = 1:self.tRuns
+                delete(sprintf('%smrt%sMR*',self.path2data(self.id,nrun),filesep));
+            end            
+            %% merge to 4D
+            fprintf('Merging...\n');
+            matlabbatch = [];
+            c           = 0;
+            for nrun = 1:self.tRuns
+                files = spm_select('FPListRec',self.path2data(self.id,nrun),'^fTRIO');
+                if ~isempty(files)
+                    c     = c + 1;
+                    matlabbatch{c}{1}.spm.util.cat.vols  = cellstr(files);
+                    matlabbatch{c}{1}.spm.util.cat.name  = 'data.nii';
+                    matlabbatch{c}{1}.spm.util.cat.dtype = 0;
+                end
+            end           
+            spm_jobman('run', matlabbatch{n});
+           
+        end
+        function GetDicom(self)            
+			%Will dump all the Dicoms based on Sessions entered in the
+			%Project Object
+			[status paths]   = system(['/common/apps/bin/dicq -t --series --exam=' self.trio_name]);
+			paths            = strsplit(paths,'\n');%split paths            
+            [status result]  = system(['/common/apps/bin/dicq --series --exam=' self.trio_name]);
+            result
+			fprintf('Will now dump the following series:\n');
+			fprintf('%i ',self.trio_folders{1}(:)')
+			fprintf('\n');
+			%% save the desired runs to disk
+            n = 0;
+            for f = self.trio_folders{1}(:)'
+                n = n +1;
+                dest             = sprintf('%ssub%03d/run%03d/mrt/',self.path_project,self.id,n)
+                if exist(dest) == 0
+					mkdir(dest)
+				end
+				[a b]            = system(sprintf('cp -vr %s/* %s',paths{f},dest));
+            	if a ~= 0
+					keyboard
+				end
+            end           
+        end
+            
         function out = getPMF(self)
             load(sprintf('%smidlevel%sweibull%sdata.mat',Project.path_project,filesep,filesep));
             out = data(self.id);
@@ -41,8 +110,7 @@ classdef Subject < Project
             %4/ CS- after
             out.subject_alpha = mean(out.params1(1:2,1),1);
             out.subject_beta  = mean(out.params1(1:2,2),1);
-        end
-        
+        end        
         function pmfplot(self)
             plotpath = sprintf('%s%sp05%sfigures%sfearcloud_FitPMFs_RE.fig',self.path,filesep,filesep,filesep);
             if exist(plotpath)
@@ -50,8 +118,7 @@ classdef Subject < Project
             else
                 fprintf('no figure found!')
             end
-        end
-                   
+        end                   
         function p         = load_paradigm(self,nrun)
             %HAST TO GO TO THE PROJECT ACTUALLY TOGETHER WITH
             %CONDTION_>COLOR DESCRIPTION
@@ -118,5 +185,12 @@ classdef Subject < Project
             out.x = conddummy(cond);
             out.ind = cutnum;
         end
+        
+        function [o]=tRuns(self)
+            %% returns the total number of runs in a folder
+            [~, d] = spm_select('FPList',self.path,'^run');
+            o      = size(d,1);
+        end
+        
     end
 end
