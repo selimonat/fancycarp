@@ -1,8 +1,6 @@
 classdef Subject < ProjectMR
     properties (Hidden)
         paradigm
-		trio_name    =[];
-		trio_folder  =[];
         default_run  = 1;
     end
     properties (SetAccess = private)
@@ -12,6 +10,8 @@ classdef Subject < ProjectMR
         csn
         scr    
         pmf
+		trio_name    =[];
+		trio_folder  =[];
     end
     methods
         function s = Subject(id)%constructor
@@ -77,27 +77,36 @@ classdef Subject < ProjectMR
         end
         function GetDicom(self)            
 			%Will dump all the Dicoms based on Sessions entered in the
-			%Project Object
+			%Project Object. trio_folders are folders in the dicom server, trio2run dictates in which run these folders should be dumped.
+			fprintf('Making a dicom query, sometimes this might take longer...\n')
 			[status paths]   = system(['/common/apps/bin/dicq -t --series --exam=' self.trio_name]);
 			paths            = strsplit(paths,'\n');%split paths            
             [status result]  = system(['/common/apps/bin/dicq --series --exam=' self.trio_name]);
-            result
+            fprintf('This is what I found for you:\n')
+			result
 			fprintf('Will now dump the following series:\n');
-			fprintf('%i ',self.trio_folders{1}(:)')
+			fprintf('Series %i ---> \n',self.trio_folder);
+			fprintf('to these runs:\n'); 
+			fprintf('run%03d <--- \n',self.trio2run{self.id})
 			fprintf('\n');
 			%% save the desired runs to disk
             n = 0;
-            for f = self.trio_folders{1}(:)'
-                n = n +1;
-                dest             = sprintf('%ssub%03d/run%03d/mrt/',self.path_project,self.id,n)
+            for f = self.trio_folder(:)'
+                n 				 = n +1;
+                dest             = sprintf('%ssub%03d/run%03d/mrt/',self.path_project,self.id,self.trio2run{self.id}(n))
                 if exist(dest) == 0
+					fprintf('The folder %s doesn''t exist yet, will create it...\n',dest)
 					mkdir(dest)
 				end
+				fprintf('Calling system''s COPY function to dump the data...\n')
 				[a b]            = system(sprintf('cp -vr %s/* %s',paths{f},dest));
-            	if a ~= 0
+            	a = 0;
+				if a ~= 0
+					fprintf('There was a problem while dumping...\n');
 					keyboard
 				end
-            end           
+            end
+			fprintf('Happily finished dumping...\n');
         end
             
         function out = getPMF(self)
