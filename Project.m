@@ -3,15 +3,17 @@ classdef Project < handle
         colors            = [ [0 0 0];circshift( hsv(8), [3 0] );[.8 0 0];[.8 0 0]];
         line              = {'-' '-' '-' '-' '-' '-' '-' '-' '-' '.' '.'};
         symbol            = {'.' '.' '.' '.' '.' '.' '.' '.' '.' 'p' 's'};
-        marker_size       = {10 10 10 10 10 10 10 10 10 10 10};
+        marker_size       = {20 20 20 20 20 20 20 20 20 20 20};
         line_width        = {2  2  2  2  2  2  2  2  2  1  1};
         condition_indices = {1000 45 90 135 180 225 270 315 360 1001 1002};
         screen_resolution = [1200 1600];
         PixelPerDegree    = 37;
     end
     properties (Hidden,Constant)
-%         path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sdata%s',homedir,filesep,filesep,filesep,filesep)
-        path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sBDNF%s',homedir,filesep,filesep,filesep,filesep)
+        path_project      = sprintf('%s%sDocuments%sBehavioralExperiments%sfearcloud%s',homedir,filesep,filesep,filesep,filesep)
+%         path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sBDNF%s',homedir,filesep,filesep,filesep,filesep);
+%         scr_blocknames    = {'test_rating' 'test' 'cond_rating' 'cond' 'base_rating' 'base' };
+        scr_blocknames    = {'test_rating' 'test' 'cond_rating' 'cond' 'base_rating' 'base' };
         path_stimuli      = sprintf('%sstimuli%s',Project.path_project,filesep);
         ETMaskpath        = sprintf('%smidlevel%ssubjmasks%sETmask.mat',Project.path_project,filesep,filesep)
         condition_labels  = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
@@ -21,6 +23,7 @@ classdef Project < handle
         BDNF              = [2 1 1 1 2 1 2 1 2 2   1  1  1  2 1  1  2  2  2  2  1  1  1  2  1  1  1  1  1  1  1  2  2  2  2  2  2  2  2  2  2  1  1  1  1   1 2  1  1  2  1  1  2  1  1  2  1  1  1  2  2  1  1  1  1  1  2  2];
         subjects_bdnf     = [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68];
         gender            = [ones(40,1); ones(40,1)*2];
+        
     end
     
     methods
@@ -87,6 +90,12 @@ classdef Project < handle
             a = load(sprintf('%smidlevel%ssubjmasks%s%smask.mat',self.path_project,filesep,filesep,varargin{1}));
             dummy = fieldnames(a);
             out   = a.(dummy{1});
+        end
+        
+        function [o]=tRuns(self)
+            %% returns the total number of runs in a folder
+            [~, d] = spm_select('FPList',s.path,'^run');
+            o      = length(d);
         end
                 
     end

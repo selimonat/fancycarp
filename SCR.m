@@ -4,7 +4,7 @@ classdef SCR < handle
         default_run = 4;%at which run the scr data is located.
     end
     properties (Hidden)
-        ledalab_defaults      = {'open', 'mat', 'downsample', 5,'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1};
+        ledalab_defaults      = {'open', 'mat','downsample', 5, 'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1};%
         hdr
         markers
         block2phase
@@ -78,7 +78,7 @@ classdef SCR < handle
                     scr.BlockBorders_time  = scr.time(scr.BlockBorders_index);
                     tblock                 = length(i);
                     % give names to blocks (end to start)
-                    block_names          = {'test_rating' 'test' 'cond_rating' 'cond' 'base_rating' 'base' };
+                    block_names            = s.scr_blocknames;%inherited from the Project
                     %append UCS calibration blocks as much as necessary
                     while length(block_names) ~= tblock
                         block_names      = [block_names {sprintf('calibration%02d',tblock - length(block_names))}];
@@ -187,17 +187,18 @@ classdef SCR < handle
         function plot(self)
             %% plot different event channels
             
-            figure;clf;
-            set(gcf,'position',[1 309  1920  497]);
+            hhfigure;            
             % plot the SCR
-            plot(self.time./1000,self.y,'color','k','linewidth',1);
-            axis tight;
+            plot(self.time./1000,self.y,'color','k','linewidth',1);            
             hold on;
             % mark stimulus onsets
             level = mean(self.y);
             for n = 1:length(self.event_name)
                 i  = self.event(:,n);
                 plot(self.time(i)./1000,self.y(i), self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} );
+                if ~isempty(self.phasic)
+                    plot(self.time(i)./1000,self.phasic(i), self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} )
+                end
             end
             
             %% phase transitions as lines
@@ -215,9 +216,9 @@ classdef SCR < handle
             ylabel('scr');
             box off;
             legend boxoff
+            axis tight;
         end
-        function plot_decomposition(self)
-            hhfigure;
+        function plot_decomposition(self)            
             self.plot
             hold on;
             plot(self.time./1000,self.phasic,'k');
@@ -242,8 +243,7 @@ classdef SCR < handle
             if isempty(self.data);self.data=self.y;end
             self.data         = diff(self.data);
             self.data(end+1)  = self.data(end);
-        end
-        
+        end       
         function self = tonic_lowpass(self)
             %computes the low-pass version of the signal supposed to
             %represent the tonic response.
@@ -252,8 +252,7 @@ classdef SCR < handle
             Hd           = design(d, 'ellip');
             self.tonic   = filtfilt(Hd.sosMatrix,Hd.ScaleValues,self.data);
             self.phasic  = self.data - self.tonic;
-        end
-        
+        end        
         function xcorr(self,block)
             %%
             self.data = [];
@@ -445,14 +444,7 @@ classdef SCR < handle
             self.model.fit_tonic    = self.tonic;
             self.model.r2           = corr2(self.model.fit, self.data);
             self.model.r2_phasic    = corr2(self.phasic   , FIR*self.model.betas);
-        end
-        function plot_bateman(self)
-            %%
-            self.smooth('sgolay');
-            self.tonic_tfals;
-            %%
-            
-        end
+        end     
         function plot_model(self)
             
             self.plot;
@@ -521,13 +513,13 @@ classdef SCR < handle
                 Ledalab({filename},self.ledalab_defaults{:});
             end
             leda         = load(filename_results);
-            self.phasic  = leda.analysis.phasicData;
-            self.tonic   = leda.analysis.tonicData;
+            % before assigning tonic and phasic values upsample the data to
+            % original sampling rate so that we can use normally the
+            % plotting methods.
+            self.phasic  = interp1(leda.data.time.data,leda.analysis.driver,self.time./1000);
+            self.tonic   = interp1(leda.data.time.data,leda.analysis.tonicData,self.time./1000);
             self.ledalab = leda.analysis.split_driver;
-        end
-        function plot_ledalab(self)
-            plot(self.ledalab.x(:,1),self.ledalab.mean(:,1:9))
-        end
+        end        
         function plot_tuning_ledalab(self,varargin)
             if nargin > 1
                 conds = varargin{1};
