@@ -10,10 +10,15 @@ classdef Project < handle
         PixelPerDegree    = 37;
     end
     properties (Hidden,Constant)
+<<<<<<< HEAD
         path_project      = sprintf('%s%sDocuments%sBehavioralExperiments%sfearcloud%s',homedir,filesep,filesep,filesep,filesep)
 %         path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sBDNF%s',homedir,filesep,filesep,filesep,filesep);
 %         scr_blocknames    = {'test_rating' 'test' 'cond_rating' 'cond' 'base_rating' 'base' };
         scr_blocknames    = {'test_rating' 'test' 'cond_rating' 'cond' 'base_rating' 'base' };
+=======
+        path_project      = sprintf('%sDocuments%sExperiments%sFearCloud_Eyelab%sdata%s',homedir,filesep,filesep,filesep,filesep)
+%         path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sBDNF%s',homedir,filesep,filesep,filesep,filesep)
+>>>>>>> 1f04181a0d5c251bfd75983c79bf79845598a25e
         path_stimuli      = sprintf('%sstimuli%s',Project.path_project,filesep);
         ETMaskpath        = sprintf('%smidlevel%ssubjmasks%sETmask.mat',Project.path_project,filesep,filesep)
         condition_labels  = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
