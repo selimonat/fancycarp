@@ -25,8 +25,8 @@ classdef Tuning < handle
             tuning.ids = data.ids;
             for x  = unique(tuning.x(:)')
                 i             = tuning.x == x;
-                tuning.y_mean = [tuning.y_mean mean(tuning.y(i))];
-                tuning.y_std  = [tuning.y_std  std(tuning.y(i))];
+                tuning.y_mean = [tuning.y_mean mean(tuning.y(i))];%Group mean
+                tuning.y_std  = [tuning.y_std  std(tuning.y(i))];% Group std
             end
         end
         
@@ -193,6 +193,7 @@ classdef Tuning < handle
                 drawnow;
                 grid on;                      
             end
+            %pause
         end
         
         function [params]=RoughEstimator(self,x,y,fun,L,U)
