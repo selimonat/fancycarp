@@ -183,7 +183,7 @@ classdef Fixmat < Project
             obj.dendro_leafOrder   = optimalleaforder(obj.dendro_tree,obj.dendro_D);            
         end
         
-        function [branch_id]=dendrogram(obj,k,data)
+        function [branch_id,pmat]=dendrogram(obj,k,data)
             %will plot fixmaps as a dendrogram. VARARGIN limits the number
             %of leafs, use 0 to have as many leafs as number of fixmaps
             
@@ -195,8 +195,10 @@ classdef Fixmat < Project
             %plot the dendro
             figure(101);                        
             [H,T,order]    = dendrogram(obj.dendro_tree,k); 
-            [~,~,order0]   = dendrogram(obj.dendro_tree,0,'colorthreshold',obj.dendro_tree(end-k+2,3),'reorder',obj.dendro_leafOrder);
+            [H2,~,order0]   = dendrogram(obj.dendro_tree,0,'colorthreshold',obj.dendro_tree(end-k+2,3),'reorder',obj.dendro_leafOrder);
             title('optimal leaforder')
+            set(H2,'LineWidth',2);
+            axis off
             branch_id = T;
             % plot the single subject fixation maps
             figure;
@@ -208,7 +210,7 @@ classdef Fixmat < Project
             grid on
             subplotChangeSize(gca,.15,.25);
             % plot cluster averages        
-            figure;
+            figure(2);
             tcluster = max(T(:));
             c = 0;
             for ncluster = unique(T(order0),'stable')'
@@ -229,21 +231,24 @@ classdef Fixmat < Project
                 N(ncluster) = sum(~isnan(data(T == ncluster)));
                 m(ncluster) = nanmean(data(T == ncluster));
                 s(ncluster) = nanstd(data(T == ncluster))./sqrt(N(ncluster));
-                text(c,m(ncluster)+s(ncluster)*1.3, sprintf('(N=%03d)\n',N(ncluster)));
+                text(c-0.1,m(ncluster)+s(ncluster)*1.1, sprintf('(N = %03d)\n',N(ncluster)));
                 hold on;
             end
-            errorbar(1:tcluster,m(clusterord),s(clusterord));
+            errorbar(1:tcluster,m(clusterord),s(clusterord),'LineWidth',2);
             %
             subplot(3,tcluster,(k+1:k*2)+k)
             for ncluster1 = unique(T(order0),'stable')'
                 for ncluster2 = unique(T(order0),'stable')'
                     [h p stats] = ttest2(data(T == ncluster1),data(T == ncluster2));
                     tmat(ncluster1,ncluster2) = -log10(p);
+                    pmat(ncluster1,ncluster2) = p;
                 end               
             end
             imagesc(tmat);
-            set(gca,'XTickLabel',clusterord,'YTickLabel',clusterord)
+            set(gca,'XTick',1:tcluster,'XTickLabel',clusterord,'YTick',1:tcluster,'YTickLabel',clusterord)
             colorbar
+            axis square
+            fprintf('t-test p = %g. \n',10.^-max(tmat))
         end
       
         function plotband(obj,varargin)%varargin can reorder the subjmaps
@@ -322,7 +327,7 @@ classdef Fixmat < Project
                 axis off;
                 try
                 t     = sprintf('%s%d/',obj.map_titles{nc}{:});                
-                title(t,'interpreter','none');
+%                 title(t,'interpreter','none');
                 end
             end
             %             thincolorbar('vert');
@@ -403,11 +408,11 @@ classdef Fixmat < Project
 %             axis image;
 %             colorbar
         end
-        function out = corr(obj)
+        function [out pval] = corr(obj)
             %plots the corrmat between maps             
 %             figure(2);clf
 %             set(gcf,'position',[1104         152         337         299])            
-            out = corr(obj.vectorize_maps);
+            [out pval] = corr(obj.vectorize_maps);
 %             imagesc(out);
 %             axis image;
 %             colorbar
