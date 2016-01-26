@@ -10,8 +10,8 @@ classdef Project < handle
         PixelPerDegree    = 37;
     end
     properties (Hidden,Constant)
-%         path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sdata%s',homedir,filesep,filesep,filesep,filesep)
-        path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sBDNF%s',homedir,filesep,filesep,filesep,filesep)
+        path_project      = sprintf('%sDocuments%sExperiments%sFearCloud_Eyelab%sdata%s',homedir,filesep,filesep,filesep,filesep)
+%         path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sBDNF%s',homedir,filesep,filesep,filesep,filesep)
         path_stimuli      = sprintf('%sstimuli%s',Project.path_project,filesep);
         ETMaskpath        = sprintf('%smidlevel%ssubjmasks%sETmask.mat',Project.path_project,filesep,filesep)
         condition_labels  = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
