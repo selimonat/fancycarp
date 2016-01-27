@@ -12,9 +12,10 @@ classdef SubjectMR < ProjectMR
         pmf
 		trio_name    =[];
 		trio_folder  =[];
+        
     end
     methods
-        function s = Subject(id)%constructor
+        function s = SubjectMR(id)%constructor
             s.id              = id;
             s.path            = s.pathfinder(s.id,[]);
 			s.trio_name 	  = s.trio_names{s.id};
@@ -120,7 +121,7 @@ classdef SubjectMR < ProjectMR
 			fprintf('Happily finished dumping...\n');
         end
         function Realign(self) 
-            %%
+            % Will realign all runs using spm batch.
             matlabbatch = [];
             for nrun  = 1:self.tRuns
                 file = sprintf('%smrt%sdata.nii',self.path2data(self.id,nrun),filesep);
@@ -145,27 +146,40 @@ classdef SubjectMR < ProjectMR
         function out = Log(self,run)
             %loads and plots the Log, here you can put the old experiment
             %plotter.
-            p     = load(self.path2data(self.id,run,'stimulation'));
-            p     = p.p;
-            out   = p.out.log;
+            
+            out        = self.paradigm{run}.out.log;
             %sort things according to time rather than order of being
             %logged
-            [~,i] = sort(out(:,1),'ascend');
-            out   = out(i,:);            
-            %
+            [~,i]      = sort(out(:,1),'ascend');
+            out        = out(i,:);            
+            % delete all the events that are after the last scanning..
+            scan_times = out(out(:,2) == 0,1);
+            i          = out(:,1) > max(scan_times);
+            out(i,:)   = [];            
+        end
+        function LogPlot(self,nrun)
+            L = self.Log(nrun);
+            tevents = size(L,1);
             figure;
-            plot(p.out.log(1:p.var.event_count,1) - p.out.log(1,1),p.out.log(1:p.var.event_count,2),'o','markersize',10);        
+            plot(L(1:tevents,1) - L(1,1),L(1:tevents,2),'o','markersize',10);        
             ylim([-2 8]);
             set(gca,'ytick',[-2:8],'yticklabel',{'Rating On','Text','Pulse','Tracker+','Cross+','Stim+','CrossMov','UCS','Stim-','Key+','Tracker-'});
             grid on
             drawnow;
         end
         function o = MotionParameters(self,run)
-            o = load(sprintf('%smrt/rp_data.txt',self.path2data(self.id,run)));            
+            %will load the realignment parameters.
+            filename = sprintf('%smrt/rp_data.txt',self.path2data(self.id,run));
+            if exist(filename)                
+                o = load(filename);            
+            else
+                fprintf('File:\n %s doesn''t exist.\n Most likely realignment is not yet done.\n');
+            end
         end
         
         function [scanunit]=StimTime2ScanUnit(self,run)
-            %will return stim onsets in units of scan.            
+            %will return stim onsets in units of scan. Usefull for first
+            %level.
             
             L          = self.Log(run);
             scan_times = L(L(:,2) == 0,1);%find all scan events            
@@ -183,6 +197,82 @@ classdef SubjectMR < ProjectMR
             end
         end
         
+        function out = spm_dir(self,run)
+            %returns the path to spm folder for run RUN.
+            out = sprintf('%smrt/spm/',self.pathfinder(self.id,1));
+        end
+        
+        function out = spm_path(self,run)
+            %returns the path to spm folder for run RUN.
+            out = sprintf('%smrt/spm/SPM.mat',self.pathfinder(self.id,1));
+        end
+        
+        function [t]=total_volumes(self,run)            
+            % will tell you how many volumes are in a 4D image.
+            bla = spm_vol_nifti(self.mrt_data(run),1);%simply read the first images header
+            t   = bla.private.dat.dim(4);
+        end
+        
+        function out = mrt_data(self,nrun)
+            % simply returns the path to the mrt data.
+            out = sprintf('%smrt/data.nii',self.pathfinder(self.id,nrun));
+        end
+        
+        function out = mrt_data_expanded(self,nrun)
+            %returns list of filenames of a 4D nii file using comma
+            %separated convention (needed for First levels)
+            
+            out = spm_select('ExtFPList',fileparts(self.mrt_data(nrun)),'^rdata.nii');
+        end
+        
+        function FirstLevel(self,nrun,model_num)
+            %run the model MODEL_NUM for data in NRUN.
+            %NRUN can be a vector, but then care has to be taken that
+            %model_num is correctly set for different runs.
+                
+            
+            spm_dir = sprintf('%s/model%02d/',self.spm_dir,model_num);
+            spm_path= sprintf('%s/model%02d/SPM.mat',self.spm_dir,model_num);
+            
+            if ~exist(self.spm_path);mkdir(spm_dir);end
+            
+            matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
+            matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
+            matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
+            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
+            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
+            
+            for session = nrun
+                %load files using ...,1, ....,2 format
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));                                
+                %load the onsets
+                dummy                                                   = load(sprintf('%sdesign/model%02d.mat',self.path2data(self.id,session),model_num));
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
+                %load nuissance parameters                
+                nuis                                                    = self.MotionParameters(nrun);
+                nuis                                                    = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
+                for nNuis = 1:size(nuis,2)
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).name  = mat2str(nNuis);
+                end
+                %
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi               = {''};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi_reg           = {''};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = 128;
+            end
+            matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
+            matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs                  = [0 0];
+            matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
+            matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
+            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
+            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
+            %estimation
+            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {spm_path};
+            matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
+            spm_jobman('run', matlabbatch);            
+        end
         
         function out = getPMF(self)
             load(sprintf('%smidlevel%sweibull%sdata.mat',Project.path_project,filesep,filesep));

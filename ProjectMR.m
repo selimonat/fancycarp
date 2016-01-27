@@ -6,7 +6,7 @@ classdef ProjectMR < handle
     end
     properties (Constant)
         path_project       = sprintf('%s%sDesktop%sfearamy/',homedir,filesep,filesep);        
-        subjects           = [1];
+        subjects           = [1 2];
         TR                 = 0.99;
     end
     
@@ -14,16 +14,8 @@ classdef ProjectMR < handle
     end
     
     methods        
-        function stim = find_stim(self,varargin)
-            %will return the path to the Nth (varargin) stimulus. If not
-            %specified the average stim will be returned.                       
-            if ~isempty(varargin)
-                stim = sprintf('%s%02d.bmp',Project.path_stimuli,n);            
-            else
-                stim = sprintf('%save.bmp',Project.path_stimuli);
-            end
-        end                
-        function [data_path]=pathfinder(self,subject,run)
+        
+        function [data_path]= pathfinder(self,subject,run)
             %gets the path
             %Example: s.pathfinder(s.id,[]) => will return the path to
             %subject
@@ -43,7 +35,7 @@ classdef ProjectMR < handle
             end
             data_path(end+1)         = filesep;
         end        
-        function path2data = path2data(self,subject,run,varargin)
+        function path2data  = path2data(self,subject,run,varargin)
             % s.path2data(53,4) will return the path to the subject's phase 4
             % s.path2data(53,4,'eye') return the path to the eye data file at the
             % 4th phase.
@@ -56,6 +48,7 @@ classdef ProjectMR < handle
             if length(varargin) == 2
                 path2data = regexprep(path2data,'mat',varargin{2});
             end
-        end                               
+        end                                       
+        
     end    
 end
