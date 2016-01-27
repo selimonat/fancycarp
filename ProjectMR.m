@@ -1,8 +1,9 @@
 classdef ProjectMR < handle
     properties (Hidden, Constant)
-        trio_names         = { 'TRIO-17370' 'TRIO_17399' };
-        trio_folders       = {   [1:22]   [6 7 8] };
-        trio2run           = {   [1:22]   [1 1 1] };
+        trio_sessions       = { 'TRIO-17370' 'TRIO_17399' };
+        dicom_folders       = {   [1:22]   [6 7 8] };
+        dicom2run           = {   [1:22]   [1 1 1] };
+        trio_ids            = { 'V13132' 'V9434'};
     end
     properties (Constant)
         path_project       = sprintf('%s%sDesktop%sfearamy/',homedir,filesep,filesep);        
@@ -14,7 +15,21 @@ classdef ProjectMR < handle
     end
     
     methods        
-        
+        function DicomDownload(self,source,destination)
+            
+            %downloads data from the dicom dicom server
+            if exist(destination) == 0
+                fprintf('The folder %s doesn''t exist yet, will create it...\n',destination)
+                mkdir(destination)
+            end
+            fprintf('Calling system''s COPY function to dump the data...\n')
+            a            = system(sprintf('cp -vr %s/* %s',source,destination));
+            a = 0;
+            if a ~= 0
+                fprintf('There was a problem while dumping...\n');
+                keyboard
+            end
+        end
         function [data_path]= pathfinder(self,subject,run)
             %gets the path
             %Example: s.pathfinder(s.id,[]) => will return the path to

@@ -1,7 +1,8 @@
 classdef SubjectMR < ProjectMR
     properties (Hidden)
         paradigm
-        default_run  = 1;
+        default_run   = 1;
+        dicom_folder  = [];
     end
     properties (SetAccess = private)
         id
@@ -10,16 +11,17 @@ classdef SubjectMR < ProjectMR
         csn
         scr    
         pmf
-		trio_name    =[];
-		trio_folder  =[];
-        
+		trio_session  = [];
+        trio_id       = [];
     end
     methods
         function s = SubjectMR(id)%constructor
             s.id              = id;
             s.path            = s.pathfinder(s.id,[]);
-			s.trio_name 	  = s.trio_names{s.id};
-            s.trio_folder 	  = s.trio_folders{s.id};
+			s.trio_session 	  = s.trio_sessions{s.id};
+            s.dicom_folder 	  = s.dicom_folders{s.id};
+            s.trio_id         = s.trio_ids{s.id};
+            
 			if exist(s.path)
                 for nrun = 1:5
                     s.paradigm{nrun} = s.load_paradigm(nrun);
@@ -40,21 +42,59 @@ classdef SubjectMR < ProjectMR
     end
     
     methods
-        
+        function GetLatestHR(self)
+            %will download the latest HR for this subject to default hr
+            %path.
+            
+            %target location for the hr
+            hr_target = self.hr_path;
+            %create it if necess.
+            if exist(hr_target) == 0
+                mkdir(hr_target)
+            end
+            self.DicomDownload(self.GetDicomHRpath,self.hr_path);
+        end
+        function [HRPath]=GetDicomHRpath(self)
+            % finds the dicom path to the latest HR measurement for this
+            % subject.
+            [status2 DicqOutputFull] = system(sprintf('/common/apps/bin/dicq --verbose  --series --patient=%s --folders',self.trio_id));
+            %take the latest anatomical scan.
+            [status2 HRLine] = system(sprintf('/common/apps/bin/dicq --verbose  --series --patient=%s --folders | grep mprage | tail -n 1',self.trio_id));
+            %
+            HRPath = [];
+            if ~isempty(HRLine);
+                HRPath = regexp(HRLine,'/common\S*','match');
+                HRPath = HRPath{1};
+                %HRPath = GetDicomPath(HRLine);
+                fprintf('All recorded HR data:\n')
+                fprintf(DicqOutputFull);
+                fprintf('The latest one recorded HR data:\n')
+                fprintf(HRLine);               
+            else
+                fprintf('There is no HR data found for this subject.\n Here is the output of the Dicq:\n');
+                fprintf(DicqOutputFull);
+                keyboard
+            end
+            
+        end
         function ConvertDicom(self)
             %% dicom conversion. ATTENTION: dicoms will be deleted
             % and the converted files will be merged to a 4d file nifti
             % file. This file will be named data.nii.
             %             
             matlabbatch = [];
-            for nrun = 1:self.tRuns
+            count = 0;
+            for nrun = 0:self.tRuns
                 files                                                    = cellstr(spm_select('FPListRec',self.path2data(self.id,nrun),'^MR'));
-                matlabbatch{nrun}.spm.util.import.dicom.data             = files;
-                matlabbatch{nrun}.spm.util.import.dicom.root             = 'flat';
-                matlabbatch{nrun}.spm.util.import.dicom.outdir           = {fileparts(self.path2data(self.id,nrun,'mrt'))};
-                matlabbatch{nrun}.spm.util.import.dicom.protfilter       = '.*';
-                matlabbatch{nrun}.spm.util.import.dicom.convopts.format  = 'nii';
-                matlabbatch{nrun}.spm.util.import.dicom.convopts.icedims = 0;
+                if ~isempty(files)%only create a batch if there is ^MR files.
+                count = count +1;
+                matlabbatch{count}.spm.util.import.dicom.data             = files;
+                matlabbatch{count}.spm.util.import.dicom.root             = 'flat';
+                matlabbatch{count}.spm.util.import.dicom.outdir           = {fileparts(self.path2data(self.id,nrun,'mrt'))};
+                matlabbatch{count}.spm.util.import.dicom.protfilter       = '.*';
+                matlabbatch{count}.spm.util.import.dicom.convopts.format  = 'nii';
+                matlabbatch{count}.spm.util.import.dicom.convopts.icedims = 0;
+                end
             end
             fprintf('Dicom conversion s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));            
             spm_jobman('run', matlabbatch);
@@ -104,19 +144,11 @@ classdef SubjectMR < ProjectMR
 			%% save the desired runs to disk
             n = 0;
             for f = self.trio_folder(:)'
-                n 				 = n +1;
-                dest             = sprintf('%ssub%03d/run%03d/mrt/',self.path_project,self.id,self.trio2run{self.id}(n))
-                if exist(dest) == 0
-					fprintf('The folder %s doesn''t exist yet, will create it...\n',dest)
-					mkdir(dest)
-				end
-				fprintf('Calling system''s COPY function to dump the data...\n')
-				[a b]            = system(sprintf('cp -vr %s/* %s',paths{f},dest));
-            	a = 0;
-				if a ~= 0
-					fprintf('There was a problem while dumping...\n');
-					keyboard
-				end
+                %
+                n 				 = n+1;
+                dest             = sprintf('%ssub%03d/run%03d/mrt/',self.path_project,self.id,self.trio2run{self.id}(n));
+                source           = paths{f};                
+                self.DicomDownload(source,dest);   
             end
 			fprintf('Happily finished dumping...\n');
         end
@@ -205,6 +237,11 @@ classdef SubjectMR < ProjectMR
         function out = spm_path(self,run)
             %returns the path to spm folder for run RUN.
             out = sprintf('%smrt/spm/SPM.mat',self.pathfinder(self.id,1));
+        end
+        
+        function out = hr_path(self)
+            out = sprintf('%smrt/',self.pathfinder(self.id,0));
+            
         end
         
         function [t]=total_volumes(self,run)            
