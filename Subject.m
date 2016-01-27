@@ -41,7 +41,10 @@ classdef Subject < ProjectMR
     methods
         
         function ConvertDicom(self)
-            %% dicom conversion
+            %% dicom conversion. ATTENTION: dicoms will be deleted
+            % and the converted files will be merged to a 4d file nifti
+            % file. This file will be named data.nii.
+            %             
             matlabbatch = [];
             for nrun = 1:self.tRuns
                 files                                                    = cellstr(spm_select('FPListRec',self.path2data(self.id,nrun),'^MR'));
@@ -52,28 +55,36 @@ classdef Subject < ProjectMR
                 matlabbatch{nrun}.spm.util.import.dicom.convopts.format  = 'nii';
                 matlabbatch{nrun}.spm.util.import.dicom.convopts.icedims = 0;
             end
-            fprintf('Dicom conversion...\n');
+            fprintf('Dicom conversion s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));            
             spm_jobman('run', matlabbatch);
-            %% delete the dicom files
-            fprintf('Cleaning...\n');
+            fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
+            %% delete the dicom files            
+            fprintf('Cleaning s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));
             for nrun = 1:self.tRuns
                 delete(sprintf('%smrt%sMR*',self.path2data(self.id,nrun),filesep));
             end            
+            fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
             %% merge to 4D
-            fprintf('Merging...\n');
+            fprintf('Merging s#%i...(%s)\n',self.id,datestr(now,'hh:mm:ss'));
             matlabbatch = [];
             c           = 0;
             for nrun = 1:self.tRuns
                 files = spm_select('FPListRec',self.path2data(self.id,nrun),'^fTRIO');
                 if ~isempty(files)
                     c     = c + 1;
-                    matlabbatch{c}{1}.spm.util.cat.vols  = cellstr(files);
-                    matlabbatch{c}{1}.spm.util.cat.name  = 'data.nii';
-                    matlabbatch{c}{1}.spm.util.cat.dtype = 0;
+                    matlabbatch{c}.spm.util.cat.vols  = cellstr(files);
+                    matlabbatch{c}.spm.util.cat.name  = 'data.nii';
+                    matlabbatch{c}.spm.util.cat.dtype = 0;
                 end
             end           
-            spm_jobman('run', matlabbatch{n});
-           
+            spm_jobman('run', matlabbatch);
+            fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
+            %% delete the 3d fTRIO files            
+            fprintf('Deleting the fTRIO images s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));
+            for nrun = 1:self.tRuns
+                delete(sprintf('%smrt%sfTRIO_*',self.path2data(self.id,nrun),filesep));
+            end            
+            fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
         end
         function GetDicom(self)            
 			%Will dump all the Dicoms based on Sessions entered in the
@@ -108,7 +119,63 @@ classdef Subject < ProjectMR
             end
 			fprintf('Happily finished dumping...\n');
         end
-            
+        function Realign(self) 
+            %%
+            matlabbatch = [];
+            for nrun  = 1:self.tRuns
+                file = sprintf('%smrt%sdata.nii',self.path2data(self.id,nrun),filesep);
+            end
+            matlabbatch{1}.spm.spatial.realign.estwrite.data             = {cellstr(file)};
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.sep     = 4;
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.fwhm    = 5;
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.rtm     = 1;
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.interp  = 2;
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.wrap    = [0 0 0];
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.weight  = '';
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.which   = [2 1];
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.interp  = 4;
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.wrap    = [0 0 0];
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.mask    = 1;
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.prefix  = 'r';
+            fprintf('Realigning s#%i...(%s)\n',self.id,datestr(now,'hh:mm:ss'));
+            spm_jobman('run',matlabbatch);
+            fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
+        end
+        function out = Log(self,run)
+            %loads and plots the Log, here you can put the old experiment
+            %plotter.
+            p     = load(self.path2data(self.id,run,'stimulation'));
+            p     = p.p;
+            out   = p.out.log;
+            %sort things according to time rather than order of being
+            %logged
+            [~,i] = sort(out(:,1),'ascend');
+            out   = out(i,:);            
+            %
+            figure;
+            plot(p.out.log(1:p.var.event_count,1) - p.out.log(1,1),p.out.log(1:p.var.event_count,2),'o','markersize',10);        
+            ylim([-2 8]);
+            set(gca,'ytick',[-2:8],'yticklabel',{'Rating On','Text','Pulse','Tracker+','Cross+','Stim+','CrossMov','UCS','Stim-','Key+','Tracker-'});
+            grid on
+            drawnow;
+        end
+        function o = MotionParameters(self,run)
+            o = load(sprintf('%smrt/rp_data.txt',self.path2data(self.id,run)));            
+        end
+        
+        function StimTime2ScanUnit(self,run)
+            %will transform stimulus onset times to units of number of
+            %scans.
+            keyboard
+            L          = self.Log(run);
+            scan_times = log(L(:,2) == 0,1);%find all scan events
+            for nstim = find(L(:,2)==3)';%run stim by stim
+                onset    = L(nstim,1);
+                d        = scan_times - onset;
+                d(find(d > 0,1))
+            end
+        end
         function out = getPMF(self)
             load(sprintf('%smidlevel%sweibull%sdata.mat',Project.path_project,filesep,filesep));
             out = data(self.id);
@@ -193,12 +260,13 @@ classdef Subject < ProjectMR
             out.y = self.scr.fear_tuning;
             out.x = conddummy(cond);
             out.ind = cutnum;
-        end
-        
+        end        
         function [o]=tRuns(self)
             %% returns the total number of runs in a folder
-            [~, d] = spm_select('FPList',self.path,'^run');
-            o      = size(d,1);
+            a      = dir(self.path);
+            %include all runs except run000
+            o      = cellfun( @(x) ~isempty(x), regexp({a(:).name},'run[0-9][0-9][0-9]')).*cellfun( @(x) isempty(x), regexp({a(:).name},'run000'));
+            o      = sum(o);
         end
         
     end

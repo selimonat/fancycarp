@@ -7,6 +7,7 @@ classdef ProjectMR < handle
     properties (Constant)
         path_project       = sprintf('%s%sDesktop%sfearamy/',homedir,filesep,filesep);        
         subjects           = [1];
+        TR                 = 0.99;
     end
     
     methods        
