@@ -224,15 +224,65 @@ classdef SubjectMR < ProjectMR
             
             out = spm_select('ExtFPList',fileparts(self.mrt_data(nrun)),'^rdata.nii');
         end
-        
-        function FirstLevel(self,nrun,model_num)
+        function FitFIR(self,nrun,model_num)
             %run the model MODEL_NUM for data in NRUN.
             %NRUN can be a vector, but then care has to be taken that
             %model_num is correctly set for different runs.
                 
             
-            spm_dir = sprintf('%s/model%02d/',self.spm_dir,model_num);
-            spm_path= sprintf('%s/model%02d/SPM.mat',self.spm_dir,model_num);
+            spm_dir = sprintf('%s/model_fir_%02d/',self.spm_dir,model_num);
+            spm_path= sprintf('%s/model_fir_%02d/SPM.mat',self.spm_dir,model_num);
+            
+            if ~exist(self.spm_path);mkdir(spm_dir);end
+            
+            matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
+            matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
+            matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
+            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
+            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
+            
+            for session = nrun
+                %load files using ...,1, ....,2 format
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));                                
+                %load the onsets
+                dummy                                                   = load(sprintf('%sdesign/model%02d.mat',self.path2data(self.id,session),model_num));
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
+                %load nuissance parameters                
+                nuis                                                    = self.MotionParameters(nrun);
+                nuis                                                    = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
+                for nNuis = 1:size(nuis,2)
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).name  = mat2str(nNuis);
+                end
+                %
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi               = {''};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi_reg           = {''};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = 128;
+            end
+            matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
+            matlabbatch{1}.spm.stats.fmri_spec.bases.fir.length                  = self.TR*15;
+            matlabbatch{1}.spm.stats.fmri_spec.bases.fir.order                   = 10;
+            matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
+            matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
+            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
+            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
+            %estimation
+            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {spm_path};
+            matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
+            spm_jobman('run', matlabbatch);            
+        end
+        
+        
+        function FitHRF(self,nrun,model_num)
+            %run the model MODEL_NUM for data in NRUN.
+            %NRUN can be a vector, but then care has to be taken that
+            %model_num is correctly set for different runs.
+                
+            
+            spm_dir = sprintf('%s/model_chrf_%02d/',self.spm_dir,model_num);
+            spm_path= sprintf('%s/model_chrf_%02d/SPM.mat',self.spm_dir,model_num);
             
             if ~exist(self.spm_path);mkdir(spm_dir);end
             
