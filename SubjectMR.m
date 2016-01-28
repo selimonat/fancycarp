@@ -47,12 +47,12 @@ classdef SubjectMR < ProjectMR
             %path.
             
             %target location for the hr
-            hr_target = self.hr_path;
+            hr_target = self.hr_dir;
             %create it if necess.
             if exist(hr_target) == 0
                 mkdir(hr_target)
             end
-            self.DicomDownload(self.GetDicomHRpath,self.hr_path);
+            self.DicomDownload(self.GetDicomHRpath,self.hr_dir);
         end
         function [HRPath]=GetDicomHRpath(self)
             % finds the dicom path to the latest HR measurement for this
@@ -101,7 +101,7 @@ classdef SubjectMR < ProjectMR
             fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
             %% delete the dicom files            
             fprintf('Cleaning s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));
-            for nrun = 1:self.tRuns
+            for nrun = 0:self.tRuns
                 delete(sprintf('%smrt%sMR*',self.path2data(self.id,nrun),filesep));
             end            
             fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
@@ -110,7 +110,7 @@ classdef SubjectMR < ProjectMR
             matlabbatch = [];
             c           = 0;
             for nrun = 1:self.tRuns
-                files = spm_select('FPListRec',self.path2data(self.id,nrun),'^fTRIO');
+                files = spm_select('FPListRec',self.path2data(self.id,nrun),'^fTRIO')
                 if ~isempty(files)
                     c     = c + 1;
                     matlabbatch{c}.spm.util.cat.vols  = cellstr(files);
@@ -118,7 +118,9 @@ classdef SubjectMR < ProjectMR
                     matlabbatch{c}.spm.util.cat.dtype = 0;
                 end
             end           
-            spm_jobman('run', matlabbatch);
+            if ~isempty(matlabbatch)
+                spm_jobman('run', matlabbatch);
+            end
             fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
             %% delete the 3d fTRIO files            
             fprintf('Deleting the fTRIO images s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));
@@ -174,6 +176,28 @@ classdef SubjectMR < ProjectMR
             fprintf('Realigning s#%i...(%s)\n',self.id,datestr(now,'hh:mm:ss'));
             spm_jobman('run',matlabbatch);
             fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
+        end
+        function Coreg_Anat2Functional(self)
+            %rigid-body wiggles around the anatomical to the mean EPI from
+            %the realignment procedure.
+            mean_file =sprintf('%smrt%smeandata.nii',self.path2data(self.id,1),filesep);%is mean_file always saved to the same place?            
+            if exist(mean_file) > 0
+                matlabbatch{1}.spm.spatial.coreg.estwrite.ref                = { mean_file };%the one that stays constant
+                matlabbatch{1}.spm.spatial.coreg.estwrite.source             = { self.hr_path };%anatomical one.
+                matlabbatch{1}.spm.spatial.coreg.estwrite.other              = {''};
+                matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.cost_fun  = 'nmi';
+                matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.sep       = [4 2];
+                matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.tol       = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];
+                matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.fwhm      = [7 7];
+                %
+                matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.interp    = 6;
+                matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.wrap      = [0 0 0];
+                matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.mask      = 0;
+                matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.prefix    = 'r';
+                spm_jobman('run',matlabbatch);
+            else
+                fprintf('I think you need to realign first, the file:\n %s \n is not yet computed...\n',mean_file);
+            end
         end
         function out = Log(self,run)
             %loads and plots the Log, here you can put the old experiment
@@ -239,9 +263,14 @@ classdef SubjectMR < ProjectMR
             out = sprintf('%smrt/spm/SPM.mat',self.pathfinder(self.id,1));
         end
         
+        function out = hr_dir(self)
+            %the directory where hr is located
+            out = sprintf('%smrt/',self.pathfinder(self.id,0));            
+        end
+        
         function out = hr_path(self)
-            out = sprintf('%smrt/',self.pathfinder(self.id,0));
-            
+            %path to the hr volume            
+            out = spm_select('ExtFPList',self.hr_dir,'^sTRIO.*.nii$');
         end
         
         function [t]=total_volumes(self,run)            
