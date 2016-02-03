@@ -1,4 +1,4 @@
-classdef Subject < ProjectMR
+classdef Subject < Project
     properties (Hidden)
         paradigm
         default_run  = 1;
@@ -17,8 +17,6 @@ classdef Subject < ProjectMR
         function s = Subject(id)%constructor
             s.id              = id;
             s.path            = s.pathfinder(s.id,[]);
-			s.trio_name 	  = s.trio_names{s.id};
-            s.trio_folder 	  = s.trio_folders{s.id};
 			if exist(s.path)
                 for nrun = 1:5
                     s.paradigm{nrun} = s.load_paradigm(nrun);
@@ -29,9 +27,7 @@ classdef Subject < ProjectMR
                 try
                     s.pmf = s.getPMF;
                 end
-%                 try
-%                     s.bold = BOLD(s);
-%                 end
+
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path)
             end
