@@ -129,34 +129,48 @@ classdef Group < Project
                    (self.pmf.csp_before_alpha-self.pmf.csp_after_alpha)-(self.pmf.csn_before_alpha-self.pmf.csn_after_alpha),...
                    self.sigma_cond,...
                    self.sigma_test,...
-                   self.SI
+                   self.SI,...
                    self.SCR_ampl];
+               
+               try
+               if strcmp(self.tunings.rate{3}.singlesubject{1}.funname,'vonmisses_mobile')
+                   
+                   for s = 1:size(out,1)
+                       out(s,15) = self.tunings.rate{3}.singlesubject{s}.Est(3);
+                       out(s,16) = self.tunings.rate{4}.singlesubject{s}.Est(3);
+                   end
+                   out(:,14) = out(:,13) - out(:,12);
+                   labels = [labels(1:14) { 'mu_cond' 'mu_test'}];
+               end
+               end
         end
         
         function PlotRatingFit(self,subject)
             if ~isempty(self.tunings.rate)
+               
                 i    =  find(self.ids == subject);
-                x_HD = linspace(min(self.tunings.rate{3}.x(1,:)),max(self.tunings.rate{3}.x(1,:)),100);
+                ave  = mean(reshape(self.tunings.rate{3}.y(i,:),2,8));                                             
+                x    = mean(reshape(self.tunings.rate{3}.x(i,:),2,8));
+                x_HD = linspace(min(x),max(x),1000);
                 h    = figure(100);clf
-                
                 subplot(1,2,1)
-                title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings.rate{3}.singlesubject{i}.Likelihood,self.tunings.rate{3}.singlesubject{i}.pval));
+                title(sprintf('Sub: %i, Likelihood: %03g (p = %5.5g)',subject,self.tunings.rate{3}.singlesubject{i}.Likelihood,self.tunings.rate{3}.singlesubject{i}.pval));
+                hold on;               
                 plot(x_HD,self.tunings.rate{3}.singlesubject{i}.fitfun(x_HD,self.tunings.rate{3}.singlesubject{i}.Est),'ro','linewidth',3);
-                hold on;
-                plot(self.tunings.rate{3}.x(i,:),self.tunings.rate{3}.y(i,:), 'b','linewidth', 3);
+                plot(x,ave, 'b','linewidth', 3);
                 ylabel('Cond')
                 drawnow;
                 grid on;
                 
                 subplot(1,2,2)
-                title(sprintf('Likelihood: %03g (p = %5.5g)',self.tunings.rate{4}.singlesubject{i}.Likelihood,self.tunings.rate{4}.singlesubject{i}.pval));
-                plot(x_HD,self.tunings.rate{4}.singlesubject{i}.fitfun(x_HD,self.tunings.rate{4}.singlesubject{i}.Est),'ro','linewidth',3);
+                ave  = mean(reshape(self.tunings.rate{4}.y(i,:),2,8));  
+                title(sprintf('CSP: %i, Likelihood: %03g (p = %5.5g)',self.subject{i}.csp,self.tunings.rate{4}.singlesubject{i}.Likelihood,self.tunings.rate{4}.singlesubject{i}.pval));
                 hold on;
-                plot(self.tunings.rate{3}.x(i,:),self.tunings.rate{4}.y(i,:), 'b','linewidth', 3);
+                plot(x_HD,self.tunings.rate{4}.singlesubject{i}.fitfun(x_HD,self.tunings.rate{4}.singlesubject{i}.Est),'ro','linewidth',3);
+               
+                 plot(x,ave, 'b','linewidth', 3);
                 ylabel('Test')
-                EqualizeSubPlotYlim(h);
-                s = supertitle(sprintf('Rating Fits Subject %03d',subject),1);
-                set(s,'FontSize',14);
+                EqualizeSubPlotYlim(h);               
                 drawnow;
                 grid on;
             else
