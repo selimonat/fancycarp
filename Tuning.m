@@ -111,8 +111,8 @@ classdef Tuning < handle
                 result.funname= 'cosine';
             elseif funtype == 8
                 result.fitfun = @(x,p) self.VonMises(x,p(1),p(2),p(3),p(4));%amp,kappa,centerX,offset
-                L             = [ -range(y(:))     0.1        min(x)   min(y(:))-std(y)   eps ];
-                U             = [ range(y(:))      17  max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
+                L             = [ eps             0.1        min(x)   min(y(:))-std(y)   eps ];
+                U             = [ range(y(:))      15        max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
                 %                 L      = [ eps                   0.1   eps     -pi   eps ];
                 %                 U      = [ min(10,range(y)*1.1)  20   2*pi   pi   10];
                 result.dof    = 3;
@@ -121,7 +121,7 @@ classdef Tuning < handle
             %% set the objective function
             result.likelihoodfun  = @(params) sum(-log( normpdf( y - result.fitfun( x,params(1:end-1)) , 0,params(end)) ));
             
-            %% Initial estimation of the parameters
+            %% Initial estimation of the parameters  
             %if gabor or gaussian, make a grid-estimatation
             if funtype > 1
                 Init = self.RoughEstimator(x,y,result.fitfun,L(1:end-1),U(1:end-1));%[7.1053 15.5556 1.0382];
@@ -193,7 +193,7 @@ classdef Tuning < handle
                 drawnow;
                 grid on;                      
             end
-            %pause
+%            pause
         end
         
         function [params]=RoughEstimator(self,x,y,fun,L,U)
