@@ -11,6 +11,7 @@ classdef SubjectMR < ProjectMR
         csn
         scr    
         pmf
+        alpha
 		trio_session  = [];
         trio_id       = [];
     end
@@ -32,8 +33,8 @@ classdef SubjectMR < ProjectMR
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
                 s.scr = SCR(s);
                 try
-                    dummy = s.fitPMF;
-                    s.pmf = dummy.params;
+                    s.pmf = s.fitPMF;
+                    s.alpha = s.pmf.params(:,1);
                 end
 %                 try
 %                     s.bold = BOLD(s);
@@ -414,14 +415,11 @@ classdef SubjectMR < ProjectMR
             if exist(self.path2data(self.id,2,'pmf')) && isempty(varargin)
                 
                 load(self.path2data(self.id,2,'pmf'));
-                ('PMF Fit found and loaded successfully, will just plot it...')
+                fprintf('PMF Fit found and loaded successfully...')
                 
-            else
-                if ~isempty(varargin)
-                    fprintf('Forcefit detected.. will now fit it again...\n')
-                elseif ~exist(self.path2data(self.id,2,'pmf'))
-                    fprintf('No Fit found yet, will fit it now...\n')
-                end
+            elseif ~isempty(varargin) || ~exist(self.path2data(self.id,2,'pmf'))
+                fprintf('Fitting PMF...\n')
+                self.pmf = self.getPMFraw;
                 
                 % define a search grid
                 searchGrid.alpha = linspace(0,100,100);    %structure defining grid to
@@ -478,21 +476,31 @@ classdef SubjectMR < ProjectMR
                 end
                 save(self.path2data(self.id,2,'pmf'),'out')
             end
-            
-            figure
-            tchain = size(out.params,1);
-            %plot the Fit
-            for chain = 1:tchain
-                subplot(tchain,1,chain)
-                StimLevelsFine = [min(out.xlevels):(max(out.xlevels)- ...
-                    min(out.xlevels))./1000:max(out.xlevels)];
-                Fit = out.PF(out.params(chain,:),StimLevelsFine);
-                plot(out.xlevels,out.PropCorrectData(chain,:),'k.','Markersize',40);
-                set(gca,'Fontsize',12);
-                hold on;
-                plot(StimLevelsFine,Fit,'g-','Linewidth',3);
-                legend('data point','Fit')
-                title(sprintf('estimated alpha = %g, LL = %g',out.params(chain,1),out.LL(chain)));
+        end
+        function plotPMF(self)
+            try
+                figure
+                tchain = size(self.pmf.params,1);
+                %plot the Fit
+                for chain = 1:tchain
+                    subplot(tchain,1,chain)
+                    StimLevelsFine = [min(self.pmf.xlevels):(max(self.pmf.xlevels)- ...
+                        min(self.pmf.xlevels))./1000:max(self.pmf.xlevels)];
+                    Fit = self.pmf.PF(self.pmf.params(chain,:),StimLevelsFine);
+                    plot(self.pmf.xlevels,self.pmf.PropCorrectData(chain,:),'k.','Markersize',40);
+                    set(gca,'Fontsize',12);
+                    hold on;
+                    plot(StimLevelsFine,Fit,'g-','Linewidth',3);
+                    legend('data point','Fit')
+                end
+                subplot(2,1,1)
+                title(sprintf('Sub %d, CSP, estimated alpha = %g, LL = %g',self.id,self.pmf.params(1,1),self.pmf.LL(1)));
+                subplot(2,1,2)
+                title(sprintf('CSN, estimated alpha = %g, LL = %g',self.pmf.params(2,1),self.pmf.LL(2)));
+                
+            catch
+                plotPMFraw
+                title('No fit file found, showing raw data instead')
             end
             
         end
