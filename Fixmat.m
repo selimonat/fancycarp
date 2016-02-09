@@ -183,7 +183,7 @@ classdef Fixmat < Project
             obj.dendro_leafOrder   = optimalleaforder(obj.dendro_tree,obj.dendro_D);            
         end
         
-        function [branch_id,pmat]=dendrogram(obj,k,data)
+        function [branch_id,order0,pmat]=dendrogram(obj,k,data)
             %will plot fixmaps as a dendrogram. VARARGIN limits the number
             %of leafs, use 0 to have as many leafs as number of fixmaps
             
@@ -193,7 +193,7 @@ classdef Fixmat < Project
             
             % plotting business
             %plot the dendro
-            figure(101);                        
+            figure;                        
             [H,T,order]    = dendrogram(obj.dendro_tree,k); 
             [H2,~,order0]   = dendrogram(obj.dendro_tree,0,'colorthreshold',obj.dendro_tree(end-k+2,3),'reorder',obj.dendro_leafOrder);
             title('optimal leaforder')
@@ -210,7 +210,7 @@ classdef Fixmat < Project
             grid on
             subplotChangeSize(gca,.15,.25);
             % plot cluster averages        
-            figure(2);
+            figure;
             tcluster = max(T(:));
             c = 0;
             for ncluster = unique(T(order0),'stable')'
