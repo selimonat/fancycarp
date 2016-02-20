@@ -112,7 +112,7 @@ classdef Fixmat < Project
             %% round coordinates to pixels
             obj.x = round(obj.x);
             obj.y = round(obj.y);
-            obj.realcond = unique(obj.deltacsp(~ismember(obj.deltacsp,[500 1000 3000])));
+            obj.realcond = unique(obj.deltacsp(~ismember(obj.deltacsp,[500 1000 3000]))); %500 UCS, 1000 Odd, 3000 Null
         end
         function UpdateSelection(obj,varargin)
             %takes VARARGIN pairs to update the selection vektor            
@@ -163,6 +163,14 @@ classdef Fixmat < Project
                 axis square;colorbar
                 set(gca,'fontsize',15)
                 axis off
+            end
+        end
+        function out = entropy(obj)
+           
+            obj.maps = obj.maps + eps;
+            out = nan(size(obj.maps,3),1);
+            for n = 1:size(obj.maps,3)
+                out(:,n) = -sum(obj.maps(:,:,n).*log2(obj.maps(:,:,n)));
             end
         end
         function getsubmaps(obj)
