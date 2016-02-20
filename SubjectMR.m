@@ -11,6 +11,7 @@ classdef SubjectMR < ProjectMR
         csn
         scr    
         pmf
+        alpha
 		trio_session  = [];
         trio_id       = [];
     end
@@ -32,8 +33,7 @@ classdef SubjectMR < ProjectMR
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
                 s.scr = SCR(s);
                 try
-                    dummy = s.fitPMF;
-                    s.pmf = dummy.params;
+                    s.pmf = s.getPMF;
                 end
 %                 try
 %                     s.bold = BOLD(s);
@@ -393,41 +393,27 @@ classdef SubjectMR < ProjectMR
             spm_jobman('run', matlabbatch);            
         end
         
-        function out = getPMFraw(self)
+        function out = getPMF(self)
             dummy = load(self.path2data(self.id,2,'stimulation'));
             out = dummy.p.psi;
         end
         
-        function plotPMFraw(self)
-            figure
-            tchain = size(self.pmf.presentation.x,2);
-            for sub = 1:tchain
-                subplot(2,1,sub)
-            x = self.pmf.presentation.uniquex;
-            y = nanmean(self.pmf.log.xrounded(:,:,sub),2);
-            e = nanstd(self.pmf.log.xrounded(:,:,sub),0,2);
-            errorbar(x,y,e,'k.','MarkerSize',20)
-            end
-        end 
         function [out] = fitPMF(self,varargin)
             
             if exist(self.path2data(self.id,2,'pmf')) && isempty(varargin)
                 
                 load(self.path2data(self.id,2,'pmf'));
-                ('PMF Fit found and loaded successfully, will just plot it...')
+                fprintf('PMF Fit found and loaded successfully...\n')
                 
-            else
-                if ~isempty(varargin)
-                    fprintf('Forcefit detected.. will now fit it again...\n')
-                elseif ~exist(self.path2data(self.id,2,'pmf'))
-                    fprintf('No Fit found yet, will fit it now...\n')
-                end
+            elseif ~isempty(varargin) || ~exist(self.path2data(self.id,2,'pmf'))
+                fprintf('Fitting PMF...\n')
+                self.pmf = self.getPMF;
                 
                 % define a search grid
-                searchGrid.alpha = linspace(0,100,100);    %structure defining grid to
+                searchGrid.alpha = linspace(0,100,10);    %structure defining grid to
                 searchGrid.beta  = 10.^[-1:0.1:1];         %search for initial values
-                searchGrid.gamma = linspace(0,0.5,100);
-                searchGrid.lambda = linspace(0,0.1,100);
+                searchGrid.gamma = linspace(0,0.5,10);
+                searchGrid.lambda = linspace(0,0.1,10);
                 paramsFree = [1 1 1 1];
                 PF         = @PAL_Weibull;
                 %prepare some variables
@@ -435,6 +421,7 @@ classdef SubjectMR < ProjectMR
                 xlevels  = unique(abs(self.pmf.presentation.uniquex));
                 NumPos   = NaN(length(xlevels),tchain);
                 OutOfNum = NaN(length(xlevels),tchain);
+                sd       = NaN(length(xlevels),tchain); 
                 %first collapse the two directions (pos/neg differences from
                 %csp)
                 
@@ -451,6 +438,8 @@ classdef SubjectMR < ProjectMR
                         collecttrials = collecttrials(:);
                         NumPos(cl,chain)   = sum(collecttrials);% number of "different" responses
                         OutOfNum(cl,chain) = length(collecttrials);%number of presentations at that level
+                        sd(cl,chain)      = (OutOfNum(cl,chain)*NumPos(cl,chain)/OutOfNum(cl,chain)...
+                            *(1-NumPos(cl,chain)/OutOfNum(cl,chain)))./OutOfNum(cl,chain);%var of binomial distr. (np(1-p))
                     end
                     %fit the function using PAL
                     %%
@@ -462,7 +451,7 @@ classdef SubjectMR < ProjectMR
                     options.TolFun      = -10.^3;
                     
                     [paramsValues LL exitflag output] = PAL_PFML_Fit(xlevels, ...
-                        NumPos(:,chain), OutOfNum(:,chain), searchGrid, paramsFree, PF);
+                        NumPos(:,chain), OutOfNum(:,chain), searchGrid, paramsFree, PF,'lapseLimits',[0 .5],'guessLimits',[0 .5]);
                     fprintf('%s . \n',output.message )
                     fprintf('\n')
                     
@@ -470,6 +459,7 @@ classdef SubjectMR < ProjectMR
                     out.NumPos(chain,:) = NumPos(:,chain);
                     out.OutOfNum(chain,:) = OutOfNum(:,chain);
                     out.PropCorrectData(chain,:) = NumPos(:,chain)./OutOfNum(:,chain);
+                    out.sd(chain,:) = sd(:,chain);
                     out.params(chain,:) = paramsValues;
                     out.LL(chain,:) = LL;
                     out.exitflag(chain,:) = exitflag;
@@ -478,21 +468,38 @@ classdef SubjectMR < ProjectMR
                 end
                 save(self.path2data(self.id,2,'pmf'),'out')
             end
-            
-            figure
-            tchain = size(out.params,1);
-            %plot the Fit
-            for chain = 1:tchain
-                subplot(tchain,1,chain)
-                StimLevelsFine = [min(out.xlevels):(max(out.xlevels)- ...
-                    min(out.xlevels))./1000:max(out.xlevels)];
-                Fit = out.PF(out.params(chain,:),StimLevelsFine);
-                plot(out.xlevels,out.PropCorrectData(chain,:),'k.','Markersize',40);
-                set(gca,'Fontsize',12);
-                hold on;
-                plot(StimLevelsFine,Fit,'g-','Linewidth',3);
-                legend('data point','Fit')
-                title(sprintf('estimated alpha = %g, LL = %g',out.params(chain,1),out.LL(chain)));
+        end
+        function plotPMF(self)
+            try 
+                figure
+                colorid = [5 9];
+                out = self.fitPMF;
+                tchain  = size(self.pmf.presentation.x,2);
+                xlevels = unique(abs(self.pmf.presentation.uniquex));
+                StimLevelsFine = [min(xlevels):(max(xlevels)- ...
+                        min(xlevels))./1000:max(xlevels)];
+                
+                %plot the Fit
+                for chain = 1:tchain
+                    subplot(tchain,1,chain)
+                    Fit = out.PF(out.params(chain,:),StimLevelsFine);
+                    errorbar(xlevels,out.PropCorrectData(chain,:),out.sd(chain,:),'k.','Markersize',40);
+                    set(gca,'Fontsize',12);
+                    hold on;
+                    plot(StimLevelsFine,Fit,'-','Linewidth',3,'color',self.colors(colorid(chain),:));
+                    legend('data point','Fit','location','southeast');
+                    legend boxoff
+                    box off
+                    xlabel('Delta Degree');
+                    ylabel('p(diff)');
+                end
+                subplot(tchain,1,1)
+                title(sprintf('Sub %d, CSP, estimated alpha = %g, LL = %g',self.id,out.params(1,1),out.LL(1)));
+                subplot(tchain,1,2)
+                title(sprintf('CSN, estimated alpha = %g, LL = %g',out.params(2,1),out.LL(2)));
+                
+            catch
+                fprintf('No plot possible.\n')
             end
             
         end
