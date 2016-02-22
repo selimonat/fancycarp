@@ -516,15 +516,16 @@ classdef SCR < handle
             % before assigning tonic and phasic values upsample the data to
             % original sampling rate so that we can use normally the
             % plotting methods.
-            self.phasic  = interp1(leda.data.time.data,leda.analysis.driver,self.time./1000);
-            self.tonic   = interp1(leda.data.time.data,leda.analysis.tonicData,self.time./1000);
+            self.phasic  = interp1(leda.data.time.data,leda.analysis.driver,(self.time-self.time(1))./1000);
+            self.tonic   = interp1(leda.data.time.data,leda.analysis.tonicData,(self.time-self.time(1))./1000);
             self.ledalab = leda.analysis.split_driver;
         end        
         function plot_tuning_ledalab(self,varargin)
             if nargin > 1
                 conds = varargin{1};
             else
-                conds = 1:11;
+               
+                conds = 1:(length(find(sum(self.event)~=0))-2);
             end
             %will return average SCR values for conditions CONDS
             %(optional).
@@ -538,6 +539,7 @@ classdef SCR < handle
                 self.run_ledalab;%first do it
                 self.plot_tuning_ledalab(conds);%and call yourself.
             end
+            bar(self.fear_tuning)
         end
         function ML_fit(self)
             

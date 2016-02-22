@@ -36,6 +36,7 @@ classdef Group < Project
             end
         end        
         %
+       
         function ModelRatings(self,run,funtype)
             %create a tuning object and fits FUNTYPE to it.
             self.tunings.rate{run} = Tuning(self.Ratings(run));%create a tuning object for the RUN for ratings.
@@ -73,7 +74,17 @@ classdef Group < Project
                 self.sigma_test = [self.sigma_test; self.tunings.rate{4}.singlesubject{s}.Est(:,2)];
             end
         end
-       
+        function [ratings,ratings_sd] = getRatings(self,phases)
+            for ph = phases(:)';
+                xc=0;
+                for x  = unique(self.Ratings(ph).x(:)')
+                    xc=xc+1;
+                    i             = self.Ratings(ph).x(1,:) == x;
+                    ratings(:,xc,ph)      = mean(self.Ratings(ph).y(:,i),2);
+                    ratings_sd(:,xc,ph)   = std(self.Ratings(ph).y(:,i),0,2);
+                end
+            end
+        end
         %%
         function getPMF(self)
             c = 0;
@@ -173,6 +184,7 @@ classdef Group < Project
                 EqualizeSubPlotYlim(h);               
                 drawnow;
                 grid on;
+                pause
             else
                 fprintf('No tuning object found here yet...\n');
             end
@@ -207,34 +219,37 @@ classdef Group < Project
             %%
             f=figure;
             subplot(1,2,1);
-            h = bar(self.tunings.rate{3}.x(1,:),self.tunings.rate{3}.y_mean);SetFearGenBarColors(h);
+            h = bar(unique(self.tunings.rate{3}.x(1,:)),self.tunings.rate{3}.y_mean);SetFearGenBarColors(h);
             hold on;
-            errorbar(self.tunings.rate{3}.x(1,:),self.tunings.rate{3}.y_mean,self.tunings.rate{3}.y_std./sqrt(length(self.ids)),'k.');
+            errorbar(unique(self.tunings.rate{3}.x(1,:)),self.tunings.rate{3}.y_mean,self.tunings.rate{3}.y_std./sqrt(length(self.ids)),'k.','LineWidth',2);
             xlim([-160 200]);
             box off
             set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
             x = linspace(self.tunings.rate{3}.x(1,1),self.tunings.rate{3}.x(1,end),100);
-            plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:2))) ,'k--','linewidth',1);
+%             plot(x ,  self.tunings.rate{3}.groupfit.fitfun( x,self.tunings.rate{3}.groupfit.Est(:,1:end-1)) ,'k--','linewidth',2);
+            plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
             hold off
-            set(gca,'fontsize',14);
+%             set(gca,'fontsize',14);
             axis square
             t=title('Conditioning');set(t,'FontSize',14);
             %
             subplot(1,2,2);
-            h = bar(self.tunings.rate{4}.x(1,:),self.tunings.rate{4}.y_mean);SetFearGenBarColors(h);hold on;
-            errorbar(self.tunings.rate{4}.x(1,:),self.tunings.rate{4}.y_mean,self.tunings.rate{4}.y_std./sqrt(length(self.ids)),'k.');
+            h = bar(unique(self.tunings.rate{4}.x(1,:)),self.tunings.rate{4}.y_mean);SetFearGenBarColors(h);hold on;
+            errorbar(unique(self.tunings.rate{4}.x(1,:)),self.tunings.rate{4}.y_mean,self.tunings.rate{4}.y_std./sqrt(length(self.ids)),'k.','LineWidth',2);
             EqualizeSubPlotYlim(gcf);
             box off
             xlim([-160 200]);
             set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
             x = linspace(self.tunings.rate{4}.x(1,1),self.tunings.rate{4}.x(1,end),100);
-            plot(x ,  self.tunings.rate{4}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{4}.params(:,1:2))) ,'k','linewidth',1);
+            plot(x ,  self.tunings.rate{4}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{4}.params(:,1:end-1))) ,'k','linewidth',1);
+%             plot(x ,  self.tunings.rate{4}.groupfit.fitfun( x,self.tunings.rate{4}.groupfit.Est(:,1:end-1)) ,'k','linewidth',2);
             x = linspace(self.tunings.rate{3}.x(1,1),self.tunings.rate{3}.x(1,end),100);
-            plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:2))) ,'k--','linewidth',1);
-            set(gca,'fontsize',14);
+% %            plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
+%             plot(x , self.tunings.rate{3}.groupfit.fitfun( x,self.tunings.rate{3}.groupfit.Est(:,1:end-1)) ,'k--','linewidth',2);
+%             set(gca,'fontsize',14);
             axis square
             t=title('Test');set(t,'FontSize',14);
-            annotation(f,'textbox',[0.78 0.65 0.1 0.1],'String',['SI = ' num2str(mean(self.SI))],'FitBoxToText','off','LineStyle','none');
+            annotation(f,'textbox',[0.78 0.65 0.1 0.1],'String',['SI = ' num2str(nanmean(self.SI))],'FitBoxToText','off','LineStyle','none');
             hold off
         end
         %%
