@@ -3,11 +3,12 @@ classdef ProjectMR < handle
         trio_sessions       = { 'TRIO-17370' 'TRIO_17399' };
         dicom_folders       = {   [1:22]   [6 7 8] };
         dicom2run           = {   [1:22]   [1 1 1] };
-        trio_ids            = { 'V13132' 'V9434'};
+        trio_ids            = { 'V13132' 'V9434'};        
+        subjects           = [1 2];
+        colors            = [ [0 0 0];circshift( hsv(8), [3 0] );[.8 0 0];[.8 0 0]]
     end
     properties (Constant)
-        path_project       = sprintf('%s%sDesktop%sfearamy/',homedir,filesep,filesep);        
-        subjects           = [1 2];
+        path_project       = sprintf('%sprojects%sfearamy%sdata',filesep,filesep,filesep);
         TR                 = 0.99;
     end
     
