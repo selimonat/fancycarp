@@ -49,15 +49,14 @@ classdef Group < Project
         end
         function getSCRtunings(self,run,funtype)
             self.ModelSCR(run,funtype);
-            self.SCR_ampl = self.tunings.scr.params(:,1);
         end
         
-        function [out] = getSCRmeans(phase)
+        function [out] = getSCRmeans(self,phase)
             for n = 1:length(self.ids)
                     ind = self.subject{n}.scr.findphase(phase);
                     self.subject{n}.scr.cut(ind);
                     self.subject{n}.scr.run_ledalab;
-                    out(:,:,n) = self.subject{n}.scr.ledalab.mean(1:800,1:8);
+                    out(n,:) = mean(self.subject{n}.scr.ledalab.mean(1:800,:));
             end
         end
            
@@ -69,7 +68,13 @@ classdef Group < Project
             self.sigma_cond = [];
             self.sigma_test = [];
             for s = 1:length(self.subject)
-                self.SI         = [self.SI; self.tunings.rate{3}.singlesubject{s}.Est(:,2) - self.tunings.rate{4}.singlesubject{s}.Est(:,2)];%take the diff of sigma parameters.
+                if funtype==3
+                    self.SI         = [self.SI; self.tunings.rate{3}.singlesubject{s}.Est(:,2) - self.tunings.rate{4}.singlesubject{s}.Est(:,2)];%take the diff of sigma parameters.
+                elseif funtype == 8
+                    self.SI         = [self.SI; self.tunings.rate{4}.singlesubject{s}.Est(:,2) - self.tunings.rate{3}.singlesubject{s}.Est(:,2)];%take the diff of sigma parameters.
+                else
+                    self.SI = [];
+                end
                 self.sigma_cond = [self.sigma_cond; self.tunings.rate{3}.singlesubject{s}.Est(:,2)];
                 self.sigma_test = [self.sigma_test; self.tunings.rate{4}.singlesubject{s}.Est(:,2)];
             end
@@ -126,7 +131,7 @@ classdef Group < Project
                       'rating_test' ... 
                       'SI'...
                       'SCR ampl'};
-                  
+                 
             out = [self.pmf.csp_before_alpha,...
                    self.pmf.csp_after_alpha,...              
                    self.pmf.csn_before_alpha,...
@@ -142,7 +147,7 @@ classdef Group < Project
                    self.sigma_test,...
                    self.SI,...
                    self.SCR_ampl];
-               
+            
                try
                if strcmp(self.tunings.rate{3}.singlesubject{1}.funname,'vonmisses_mobile')
                    
@@ -215,7 +220,7 @@ classdef Group < Project
                 hold off;
             end
         end
-        function PlotRatingResults(self)
+        function PlotRatingResults(self)%plots conditioning and test, in the usual bar colors. With GroupFit Gauss/Mises Curve visible
             %%
             f=figure;
             subplot(1,2,1);
@@ -226,8 +231,8 @@ classdef Group < Project
             box off
             set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
             x = linspace(self.tunings.rate{3}.x(1,1),self.tunings.rate{3}.x(1,end),100);
-%             plot(x ,  self.tunings.rate{3}.groupfit.fitfun( x,self.tunings.rate{3}.groupfit.Est(:,1:end-1)) ,'k--','linewidth',2);
-            plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
+            plot(x ,  self.tunings.rate{3}.groupfit.fitfun( x,self.tunings.rate{3}.groupfit.Est(:,1:end-1)) ,'k--','linewidth',2);
+%             plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
             hold off
 %             set(gca,'fontsize',14);
             axis square
@@ -241,10 +246,10 @@ classdef Group < Project
             xlim([-160 200]);
             set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
             x = linspace(self.tunings.rate{4}.x(1,1),self.tunings.rate{4}.x(1,end),100);
-            plot(x ,  self.tunings.rate{4}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{4}.params(:,1:end-1))) ,'k','linewidth',1);
-%             plot(x ,  self.tunings.rate{4}.groupfit.fitfun( x,self.tunings.rate{4}.groupfit.Est(:,1:end-1)) ,'k','linewidth',2);
+%             plot(x ,  self.tunings.rate{4}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{4}.params(:,1:end-1))) ,'k','linewidth',1);
+            plot(x ,  self.tunings.rate{4}.groupfit.fitfun( x,self.tunings.rate{4}.groupfit.Est(:,1:end-1)) ,'k','linewidth',2);
             x = linspace(self.tunings.rate{3}.x(1,1),self.tunings.rate{3}.x(1,end),100);
-% %            plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
+% % %            plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
 %             plot(x , self.tunings.rate{3}.groupfit.fitfun( x,self.tunings.rate{3}.groupfit.Est(:,1:end-1)) ,'k--','linewidth',2);
 %             set(gca,'fontsize',14);
             axis square
