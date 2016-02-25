@@ -1,6 +1,6 @@
 classdef Group < Project
     properties (Hidden,Constant)
-        mean_correction = 1;%decides if mean correction should be applied
+        mean_correction = 0;%decides if mean correction should be applied
         align_tunings   = 1;%should ratings be aligned to CS+ face
     end
     properties
@@ -160,7 +160,22 @@ classdef Group < Project
                end
                end
         end
-        
+        function [out labels] = misesMat(self)
+            labels = {'rating_cond' ...
+                'rating_test' ...
+                'SI'...
+                'Mu_cond'...
+                'Mu_test'};
+            for s = 1:length(self.ids)
+                mu_cond(s) = self.tunings.rate{3}.singlesubject{s}.Est(3);
+                mu_test(s) = self.tunings.rate{4}.singlesubject{s}.Est(3);
+            end
+            out = [self.sigma_cond,...
+                self.sigma_test,...
+                self.SI,...
+                mu_cond,...
+                mu_test];
+        end
         function PlotRatingFit(self,subject)
             if ~isempty(self.tunings.rate)
                
@@ -262,12 +277,14 @@ classdef Group < Project
             %will collect the ratings from single subjects 
             scr.y = [];
             scr.x = [];
+            scr.ids = [];
             for s = 1:length(self.subject)
                 if ~isempty(self.subject{s})
-                    dummy = self.subject{s}.GetSubSCR(run);
+                  dummy = self.subject{s}.GetSubSCR(run);
                     if ~isempty(dummy)
                         scr.y   = [scr.y; dummy.y];
                         scr.x   = [scr.x; dummy.x];
+                        scr.ids = [scr.ids; self.ids(s)];
                     end
                 end
             end
