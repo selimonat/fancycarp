@@ -169,9 +169,14 @@ classdef Fixmat < Project
            
             obj.maps = obj.maps + eps;
             out = nan(size(obj.maps,3),1);
-            for n = 1:size(obj.maps,3)
-                out(:,n) = -sum(obj.maps(:,:,n).*log2(obj.maps(:,:,n)));
-            end
+            maps = obj.vectorize_maps;
+            out = -diag(maps'*log2(maps));
+            %normalize by maximal entropy possible
+            map0 = repmat(1/length(maps),[length(maps) 1]);
+            entr0  = -diag(map0'*log2(map0));
+            out = out./entr0;
+            
+            
         end
         function getsubmaps(obj)
             v = [];
