@@ -45,7 +45,7 @@ classdef Group < Project
         function ModelSCR(self,run,funtype)
             %create a tuning object and fits FUNTYPE to it.
             self.tunings.scr = Tuning(self.getSCRs(run));%create a tuning object for the RUN for SCRS.
-            self.tunings.scr.SingleSubjectFit(funtype);%call fit method from the tuning object
+%             self.tunings.scr.SingleSubjectFit(funtype);%call fit method from the tuning object
         end
         function getSCRtunings(self,run,funtype)
             self.ModelSCR(run,funtype);
@@ -173,8 +173,8 @@ classdef Group < Project
             out = [self.sigma_cond,...
                 self.sigma_test,...
                 self.SI,...
-                mu_cond,...
-                mu_test];
+                mu_cond',...
+                mu_test'];
         end
         function PlotRatingFit(self,subject)
             if ~isempty(self.tunings.rate)
