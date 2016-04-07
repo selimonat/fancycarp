@@ -1,7 +1,7 @@
 classdef Subject < Project
     properties (Hidden)
         paradigm
-        default_run  = 1;
+        default_run  = 2;
     end
     properties (SetAccess = private)
         id
