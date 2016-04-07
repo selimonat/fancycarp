@@ -59,7 +59,10 @@ classdef Group < Project
                     out(n,:) = mean(self.subject{n}.scr.ledalab.mean(1:800,:));
             end
         end
-           
+        function [out] = loadmises(self)
+            a = load(sprintf('%smidlevel%smisesmat.mat',self.path_project,filesep));
+            out = a.misesmat(self.ids,:);
+        end
         function getSI(self,funtype)
             %fits FUNTYPE to behavioral ratings and computes Sharpening
             %Index.
@@ -131,7 +134,6 @@ classdef Group < Project
                       'rating_test' ... 
                       'SI'...
                       'SCR ampl'};
-                 
             out = [self.pmf.csp_before_alpha,...
                    self.pmf.csp_after_alpha,...              
                    self.pmf.csn_before_alpha,...
