@@ -12,10 +12,12 @@ classdef Fixmat < Project
          binsize             = 25;
          linkage_method      = 'average';
          linkage_metric      = 'correlation';
+         similarity_metric   = 'correlation';         
          dendro_tree         = [];%results of linkage analysis will be stored here.
          dendro_D            = [];
          dendro_leafOrder    = [];
          maps%current maps;
+         mds%mds results
     end
    
     properties (Hidden,SetAccess = private)
@@ -173,10 +175,96 @@ classdef Fixmat < Project
                 out(:,n) = -sum(obj.maps(:,:,n).*log2(obj.maps(:,:,n)));
             end
         end
-        function getsubmaps(obj)
+        
+        function mds_run(obj,subjects,phase)
+            %will run an MDS analysis on subjects
+            mds_dim = 2;
+            if mds_dim == 2
+                initial_positions = [cosd(double(obj.realcond));sind(double(obj.realcond))]';
+                initial_positions = reshape(zscore(initial_positions(:)),size(initial_positions));%shifts and scale all coordinates to have same center and scale
+            else
+                initial_positions = [];
+            end
+            mds = [];
+            sc  = 0;
+            for ns   = subjects(:)'
+                sc          = sc +1;
+                %
+                c = 0;
+                for cond = unique(obj.realcond)
+                    c    = c+1;
+                    v{c} = {'subject' ns 'deltacsp' cond 'phase' phase};
+                end
+                obj.getmaps(v{:});                            
+                vecmaps     = obj.vectorize_maps;
+                %
+                vecmaps     = vecmaps - repmat(mean(vecmaps,2),1,size(vecmaps,2));
+%                 S           = squareform(pdist(vecmaps',obj.similarity_metric));
+                S           = squareform(pdist(vecmaps','correlation'));
+               coor        = mdscale(S,mds_dim,'criterion','metricstress');%,'start',initial_positions);
+%                 coor        = cmdscale(S,mds_dim);
+%                 coor        = zscore(coor(:));%shifts and scale all coordinates to have same center and scale
+                mds(:,sc)   = coor(:); %set to (im,2) for 2-dimensional scaling.
+            end
+            %now we procrustes-align
+            E_mean      = mean(mds,2);
+            E_mean      = reshape(mean(mds,2),size(E_mean,1)./mds_dim,mds_dim);
+            mds_aligned = [];
+            for ns = 1:size(mds,2)
+                coor              = mds(:,ns);
+                coor              = reshape(coor,size(coor,1)./mds_dim,mds_dim)
+                [d z transform]   = procrustes(E_mean,coor,'Reflection',false);
+                mds_aligned(:,ns) = z(:);
+            end
+            obj.mds = mds_aligned;
+        end
+        function mds_plot(obj)
+                        
+            x = obj.mds(1:8,:);
+            y = obj.mds(9:end,:);
+            plot(mean(x,2),mean(y,2),'r--');
+            hold on;
+            plot(mean(x,2),mean(y,2),'ro');
+            
+%             for node = 1:size(x,1)
+%                 error_ellipse([x(node,:) ;y(node,:)]','color',Project.colors(node+1,:),'linewidth',1.5);                                                
+%             end
+            hold off
+            
+            
+            
+        end
+        
+        function getcondmaps(obj,varargin)
+            %will return maps for different conditions
+            if nargin > 1
+                subjects = varargin{1};
+            else
+                subjects = unique(obj.subject);
+                
+            end
+            %will get single subject maps
             v = [];
             c = 0;
-            for sub=unique(obj.subject)
+            for cond = unique(obj.realcond)
+                c    = c+1;
+                v{c} = {'subject' subjects 'deltacsp' cond};
+            end
+            obj.getmaps(v{:});            
+        end
+        
+        function getsubmaps(obj,varargin)
+            %will return all subjects' maps. VARARGIN cd contain specific
+            %subjects, otherwise all are returned.
+            if nargin > 1
+                subjects = varargin{1};
+            else
+                subjects = unique(obj.subject);
+            end
+            %will get single subject maps
+            v = [];
+            c = 0;
+            for sub = subjects
                 c    = c+1;
                 v{c} = {'subject' sub 'deltacsp' obj.realcond};
             end
