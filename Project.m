@@ -1,62 +1,38 @@
-classdef Project < handle
+classdef ProjectMR < handle
     properties (Hidden, Constant)
-        colors            = [ [0 0 0];circshift( hsv(8), [3 0] );[.8 0 0];[.8 0 0]];
-        line              = {'-' '-' '-' '-' '-' '-' '-' '-' '-' '.' '.'};
-        symbol            = {'.' '.' '.' '.' '.' '.' '.' '.' '.' 'p' 's'};
-        marker_size       = {20 20 20 20 20 20 20 20 20 20 20};
-        line_width        = {2  2  2  2  2  2  2  2  2  1  1};
-        condition_indices = {1000 45 90 135 180 225 270 315 360 1001 1002};
-        screen_resolution = [1200 1600];
-        PixelPerDegree    = 37;
+        trio_sessions       = {  'TRIO_17399' 'TRIO_17429' 'TRIO_17455' 'TRIO_17468' 'TRIO_17476' 'TRIO_17477' 'TRIO_17478' 'TRIO_17479' 'TRIO_17480' 'TRIO_17481' 'TRIO_17482' 'TRIO_17483' 'TRIO_17484' 'TRIO_17485' 'TRIO_17486' 'TRIO_17487' 'TRIO_17488' 'TRIO_17514' 'TRIO_17515' 'TRIO_17516' 'TRIO_17517' 'TRIO_17519' 'TRIO_17520' 'TRIO_17521' 'TRIO_17522' 'TRIO_17523' 'TRIO_17524' 'TRIO_17525' 'TRIO_17526' 'TRIO_17527' 'TRIO_17557' 'TRIO_17558' 'TRIO_17559' 'TRIO_17560' 'TRIO_17561' 'TRIO_17562' 'TRIO_17563' 'TRIO_17564' 'TRIO_17565' 'TRIO_17566' 'TRIO_17567' 'TRIO_17568' 'TRIO_17569' 'TRIO_17570' 'TRIO_17571' 'TRIO_17572'};
+        dicom_folders       = {   [6 7 8]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [3 4 5]       [3 4 5]        [3 4 5]     [3 4 5]      [3 4 5]     [3 4 5]      [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [3 4 5]     [3 4 5]    };
+        dicom2run           = {   [1:22]   [1 1 1] [1]};
     end
-    properties (Hidden,Constant)
-       
-%         path_project        = '/Users/onat/Documents/BehavioralExperiments/fearcloud/';
-%         path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sBDNF%s',homedir,filesep,filesep,filesep,filesep);
-        path_project      = sprintf('%s%sDocuments%sExperiments%sFearCloud_Eyelab%sdata%s',homedir,filesep,filesep,filesep,filesep,filesep)
-        scr_blocknames    = {'test_rating' 'test' 'cond_rating' 'cond' 'base_rating' 'base' };
-
-        path_stimuli      = sprintf('%sstimuli%s',Project.path_project,filesep);
-        ETMaskpath        = sprintf('%smidlevel%ssubjmasks%sETmask.mat',Project.path_project,filesep,filesep)
-        condition_labels  = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
-        plot_style
-        subjects_600      = [27,37:40,42:65];
-        subjects_1500     = [6:26,28,30:36];        
-        BDNF              = [2 1 1 1 2 1 2 1 2 2   1  1  1  2 1  1  2  2  2  2  1  1  1  2  1  1  1  1  1  1  1  2  2    2  2  2  2  2  2     2  1  1  1  1  1  2  1  1  2  1  1  2   1  1  2  1  1  1  2  2  1  1  1  1  1  2  2  2  2  1  2  1  2  1  1  2  1  2  2  2  2];
-        subjects_bdnf     = [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33   35 36 37 38 39 40   41 42 43 44 45 46 47 48 49  50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81  82];
-        BDNFcsp           = [1 1 2 3 2 4 3 5 4  5 6   7  8  6  1  2  7 8  2  8  1  2   3  1  4  5  6  7  8  5 4  5  2    3   4  6  5  6  1    3  3  7  1  5  2  7  6  4   8  8  3  1  4  7  1  1  5  2  5  2  4  6  6  8  8  6  4  3  7  2  5  3  2  5  6  2  7  8  6  4   7]; 
-        gender            = [ones(39,1); ones(42,1)*2];
-        
+    properties (Constant)
+        path_project       = '/projects/fearamy/data/';       
+        TR                 = 0.99;
     end
     
-    methods
-        function stim = find_stim(self,varargin)
-            %will return the path to the Nth (varargin) stimulus. If not
-            %specified the average stim will be returned.                       
-            if ~isempty(varargin)
-                stim = sprintf('%s%02d.bmp',Project.path_stimuli,n);            
-            else
-                stim = sprintf('%save.bmp',Project.path_stimuli);
+    methods        
+    end
+    
+    methods        
+        function DicomDownload(self,source,destination)
+            
+            %downloads data from the dicom dicom server
+            if exist(destination) == 0
+                fprintf('The folder %s doesn''t exist yet, will create it...\n',destination)
+                mkdir(destination)
+            end
+            fprintf('Calling system''s COPY function to dump the data...\n')
+            a            = system(sprintf('cp -vr %s/* %s',source,destination));
+            a = 0;
+            if a ~= 0
+                fprintf('There was a problem while dumping...\n');
+                keyboard
             end
         end
-        function ls = get.plot_style()
-            %produce a cell array of string for each condition that specifies plotting
-            %attributes.
-            for ncond = [1:11];
-                ls(Project.condition_indices{ncond}).line        = {{'line',  Project.line{ncond}}};
-                ls(Project.condition_indices{ncond}).color       = {{'color', Project.colors(ncond,:)}};
-                ls(Project.condition_indices{ncond}).symbol      = {{'marker',Project.symbol{ncond}}};
-                ls(Project.condition_indices{ncond}).marker_size = {{'markersize',Project.marker_size{ncond}}};
-                ls(Project.condition_indices{ncond}).line_width = {{'linewidth',Project.line_width{ncond}}};
-            end
-        end
-        
-        function [data_path]=pathfinder(self,subject,run)
+        function [data_path]= pathfinder(self,subject,run)
             %gets the path
             %Example: s.pathfinder(s.id,[]) => will return the path to
             %subject
-            % empty [] above can be replaced with any phase number.
-            %             
+            % empty [] above can be replaced with any phase number.            
             data_path = self.path_project;
             for no = [subject run]
                 file_list        = dir(data_path);
@@ -71,9 +47,8 @@ classdef Project < handle
                 end
             end
             data_path(end+1)         = filesep;
-        end
-        
-        function path2data = path2data(self,subject,run,varargin)
+        end        
+        function path2data  = path2data(self,subject,run,varargin)
             % s.path2data(53,4) will return the path to the subject's phase 4
             % s.path2data(53,4,'eye') return the path to the eye data file at the
             % 4th phase.
@@ -87,20 +62,24 @@ classdef Project < handle
                 path2data = regexprep(path2data,'mat',varargin{2});
             end
         end
-        
-        function out = getMask(self,varargin)
-            %varargin is ET_feargen, ET_discr, SCR, PMF,RATE          
-            a = load(sprintf('%smidlevel%ssubjmasks%s%smask.mat',self.path_project,filesep,filesep,varargin{1}));
-            dummy = fieldnames(a);
-            out   = a.(dummy{1});
+        function p         = load_paradigm(self,subject,nrun)
+           
+            filename = self.path2data(subject,nrun,'stimulation');
+            p = [];
+            if exist(filename)
+                p = load(filename);
+                p = p.p;
+                %transform id to labels
+                if isfield(p,'presentation')
+                    %                 p.presentation.stim_label = self.condition_labels(p.presentation.cond_id+1);
+                    p.presentation.dist(p.presentation.dist < 500)   = p.presentation.dist(p.presentation.dist < 500) + 180;
+                    p.presentation.dist(p.presentation.dist == 500)  = 1001;%ucs
+                    p.presentation.dist(p.presentation.dist == 1000) = 1002;%odd
+                    p.presentation.dist(isnan(p.presentation.dist))  = 1000;%null
+                end
+            end
         end
-        
-        function [o]=tRuns(self)
-            %% returns the total number of runs in a folder
-            [~, d] = spm_select('FPList',s.path,'^run');
-            o      = length(d);
-        end
-                
-    end
-    
+          
+
+    end    
 end
