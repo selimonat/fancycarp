@@ -14,7 +14,6 @@ classdef Subject < Project
         pmf
         alpha
         trio_session  = [];
-        trio_id       = [];
     end
     methods
         function s = Subject(id)%constructor
@@ -45,7 +44,7 @@ classdef Subject < Project
     end
     
     methods %(mri, preprocessing)
-        function GetLatestHR(self)
+        function DumpHR(self)
             %will download the latest HR for this subject to default hr
             %path.
             
@@ -60,7 +59,8 @@ classdef Subject < Project
         function [HRPath]=GetDicomHRpath(self)
             % finds the dicom path to the latest HR measurement for this
             % subject.
-            [status2 DicqOutputFull] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exan=%s --folders',self.trio_session));
+            
+            [status2 DicqOutputFull] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders',self.trio_session));
             %take the latest anatomical scan.
             [status2 HRLine] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders | grep mprage | tail -n 1',self.trio_session));
             %
@@ -69,9 +69,10 @@ classdef Subject < Project
                 HRPath = regexp(HRLine,'/common\S*','match');
                 HRPath = HRPath{1};
                 %HRPath = GetDicomPath(HRLine);
-                fprintf('All recorded HR data:\n')
+                fprintf('Dicom Server returns:\n=====\n')
                 fprintf(DicqOutputFull);
-                fprintf('The latest one recorded HR data:\n')
+                fprintf('=====\n');
+                fprintf('The latest recorded HR data:\n')
                 fprintf(HRLine);
             else
                 fprintf('There is no HR data found for this subject.\n Here is the output of the Dicq:\n');
@@ -100,38 +101,43 @@ classdef Subject < Project
                     matlabbatch{count}.spm.util.import.dicom.convopts.icedims = 0;
                 end
             end
-            fprintf('Dicom conversion s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));
-            spm_jobman('run', matlabbatch);
-            fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
-            %% delete the dicom files
-            fprintf('Cleaning s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));
-            for nrun = 0:self.tRuns
-                delete(sprintf('%smrt%sMR*',self.path2data(self.id,nrun),filesep));
-            end
-            fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
-            %% merge to 4D
-            fprintf('Merging s#%i...(%s)\n',self.id,datestr(now,'hh:mm:ss'));
-            matlabbatch = [];
-            c           = 0;
-            for nrun = 1:self.tRuns
-                files = spm_select('FPListRec',self.path2data(self.id,nrun),'^fTRIO')
-                if ~isempty(files)
-                    c     = c + 1;
-                    matlabbatch{c}.spm.util.cat.vols  = cellstr(files);
-                    matlabbatch{c}.spm.util.cat.name  = 'data.nii';
-                    matlabbatch{c}.spm.util.cat.dtype = 0;
-                end
-            end
             if ~isempty(matlabbatch)
+                fprintf('Dicom conversion s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));
                 spm_jobman('run', matlabbatch);
+                fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
+                
+                %% delete the dicom files
+                fprintf('Cleaning s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));
+                for nrun = 0:self.tRuns
+                    delete(sprintf('%smrt%sMR*',self.path2data(self.id,nrun),filesep));
+                end
+                fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
+                %% merge to 4D
+                fprintf('Merging s#%i...(%s)\n',self.id,datestr(now,'hh:mm:ss'));
+                matlabbatch = [];
+                c           = 0;
+                for nrun = 0:self.tRuns
+                    files = spm_select('FPListRec',self.path2data(self.id,nrun),'^[f,s]TRIO');
+                    if ~isempty(files)
+                        c     = c + 1;
+                        matlabbatch{c}.spm.util.cat.vols  = cellstr(files);
+                        matlabbatch{c}.spm.util.cat.name  = 'data.nii';
+                        matlabbatch{c}.spm.util.cat.dtype = 0;
+                    end
+                end
+                if ~isempty(matlabbatch)
+                    spm_jobman('run', matlabbatch);
+                end
+                fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
+                %% delete the 3d fTRIO files
+                fprintf('Deleting all 3D images s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));
+                for nrun = 1:length(matlabbatch)
+                    delete(matlabbatch{nrun}.spm.util.cat.vols{1});
+                end
+                fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
+            else
+                fprintf('No dicom files found for %i\n',self.id)
             end
-            fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
-            %% delete the 3d fTRIO files
-            fprintf('Deleting the fTRIO images s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));
-            for nrun = 1:self.tRuns
-                delete(sprintf('%smrt%sfTRIO_*',self.path2data(self.id,nrun),filesep));
-            end
-            fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
         end
         function GetDicom(self)
             %Will dump all the Dicoms based on Sessions entered in the

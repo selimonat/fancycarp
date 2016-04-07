@@ -21,11 +21,14 @@ classdef Project < handle
                 mkdir(destination)
             end
             fprintf('Calling system''s COPY function to dump the data...\n')
-            a            = system(sprintf('cp -vr %s/* %s',source,destination));
+            tic
+            a            = system(sprintf('cp -r %s/* %s',source,destination));            
             a = 0;
             if a ~= 0
                 fprintf('There was a problem while dumping...\n');
                 keyboard
+            else
+                fprintf('COPY finished in %g seconds\n',toc)
             end
         end
         function [data_path]= pathfinder(self,subject,run)
