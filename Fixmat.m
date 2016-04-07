@@ -171,9 +171,14 @@ classdef Fixmat < Project
            
             obj.maps = obj.maps + eps;
             out = nan(size(obj.maps,3),1);
-            for n = 1:size(obj.maps,3)
-                out(:,n) = -sum(obj.maps(:,:,n).*log2(obj.maps(:,:,n)));
-            end
+            maps = obj.vectorize_maps;
+            out = -diag(maps'*log2(maps));
+            %normalize by maximal entropy possible
+            map0 = repmat(1/length(maps),[length(maps) 1]);
+            entr0  = -diag(map0'*log2(map0));
+            out = out./entr0;
+            
+            
         end
         
         function mds_run(obj,subjects,phase)
@@ -279,7 +284,7 @@ classdef Fixmat < Project
             obj.dendro_leafOrder   = optimalleaforder(obj.dendro_tree,obj.dendro_D);            
         end
         
-        function [branch_id,order0,pmat]=dendrogram(obj,k,data)
+        function [branch_id,order0,pmat]=dendrogram(obj,k,varargin)
             %will plot fixmaps as a dendrogram. VARARGIN limits the number
             %of leafs, use 0 to have as many leafs as number of fixmaps
             
@@ -305,46 +310,50 @@ classdef Fixmat < Project
             set(gca,'xtick',0:size(maps,1):max(xlim)-1,'ytick',[],'xticklabel',[],'xcolor','r');
             grid on
             subplotChangeSize(gca,.15,.25);
-            % plot cluster averages        
-            figure;
-            tcluster = max(T(:));
-            c = 0;
-            for ncluster = unique(T(order0),'stable')'
-                c = c + 1;
-                subplot(3,tcluster,c)
-                imagesc(mean(obj.maps(:,:,T == ncluster),3))
-                axis image
-                axis off;
-                title(sprintf('(N  = %03d)\n',sum(T==ncluster)));
+            if ~isempty(varargin)
+                data = varargin;
+                data = data{:};
+                % plot cluster averages
+                figure;
+                tcluster = max(T(:));
+                c = 0;
+                for ncluster = unique(T(order0),'stable')'
+                    c = c + 1;
+                    subplot(3,tcluster,c)
+                    imagesc(mean(obj.maps(:,:,T == ncluster),3))
+                    axis image
+                    axis off;
+                    title(sprintf('(N  = %03d)\n',sum(T==ncluster)));
+                end
+                %
+                %plot the data vector for each cluster also
+                subplot(3,tcluster,k+1:k*2)
+                clusterord = unique(T(order0),'stable')';
+                c=0;
+                for ncluster = clusterord
+                    c=c+1;
+                    N(ncluster) = sum(~isnan(data(T == ncluster)));
+                    m(ncluster) = nanmean(data(T == ncluster));
+                    s(ncluster) = nanstd(data(T == ncluster))./sqrt(N(ncluster));
+                    text(c-0.1,m(ncluster)+s(ncluster)*1.1, sprintf('(N = %03d)\n',N(ncluster)));
+                    hold on;
+                end
+                errorbar(1:tcluster,m(clusterord),s(clusterord),'LineWidth',2);
+                %
+                subplot(3,tcluster,(k+1:k*2)+k)
+                for ncluster1 = unique(T(order0),'stable')'
+                    for ncluster2 = unique(T(order0),'stable')'
+                        [h p stats] = ttest2(data(T == ncluster1),data(T == ncluster2));
+                        tmat(ncluster1,ncluster2) = -log10(p);
+                        pmat(ncluster1,ncluster2) = p;
+                    end
+                end
+                imagesc(tmat);
+                set(gca,'XTick',1:tcluster,'XTickLabel',clusterord,'YTick',1:tcluster,'YTickLabel',clusterord)
+                colorbar
+                axis square
+                fprintf('t-test p = %g. \n',10.^-max(tmat))
             end
-            %
-            %plot the data vector for each cluster also
-            subplot(3,tcluster,k+1:k*2)
-            clusterord = unique(T(order0),'stable')';
-            c=0;
-            for ncluster = clusterord
-                c=c+1;
-                N(ncluster) = sum(~isnan(data(T == ncluster)));
-                m(ncluster) = nanmean(data(T == ncluster));
-                s(ncluster) = nanstd(data(T == ncluster))./sqrt(N(ncluster));
-                text(c-0.1,m(ncluster)+s(ncluster)*1.1, sprintf('(N = %03d)\n',N(ncluster)));
-                hold on;
-            end
-            errorbar(1:tcluster,m(clusterord),s(clusterord),'LineWidth',2);
-            %
-            subplot(3,tcluster,(k+1:k*2)+k)
-            for ncluster1 = unique(T(order0),'stable')'
-                for ncluster2 = unique(T(order0),'stable')'
-                    [h p stats] = ttest2(data(T == ncluster1),data(T == ncluster2));
-                    tmat(ncluster1,ncluster2) = -log10(p);
-                    pmat(ncluster1,ncluster2) = p;
-                end               
-            end
-            imagesc(tmat);
-            set(gca,'XTick',1:tcluster,'XTickLabel',clusterord,'YTick',1:tcluster,'YTickLabel',clusterord)
-            colorbar
-            axis square
-            fprintf('t-test p = %g. \n',10.^-max(tmat))
         end
       
         function plotband(obj,varargin)%varargin can reorder the subjmaps
@@ -422,8 +431,8 @@ classdef Fixmat < Project
                 axis image;
                 axis off;
                 try
-                t     = sprintf('%s%d/',obj.map_titles{nc}{:});                
-%                 title(t,'interpreter','none');
+                t     = sprintf('%s%d/',obj.map_titles{nc}{1:2});                
+                title(t,'interpreter','none');
                 end
             end
             %             thincolorbar('vert');
