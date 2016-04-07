@@ -1,4 +1,5 @@
-classdef SubjectMR < ProjectMR
+classdef Subject < Project
+    
     properties (Hidden)
         paradigm
         default_run   = 1;
@@ -16,7 +17,7 @@ classdef SubjectMR < ProjectMR
         trio_id       = [];
     end
     methods
-        function s = SubjectMR(id)%constructor
+        function s = Subject(id)%constructor
             s.id              = id;
             s.path            = s.pathfinder(s.id,[]);
             try
