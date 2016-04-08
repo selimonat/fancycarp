@@ -2,8 +2,10 @@ classdef Subject < Project
     
     properties (Hidden)
         paradigm
-        default_run   = 1;
-        dicom_folder  = [];
+        default_run       = 1;   
+        dicom_serie_id    = [];
+        dicom_folders     = [];
+        dicom_target_run  = [];
     end
     properties (SetAccess = private)
         id
@@ -19,9 +21,10 @@ classdef Subject < Project
         function s = Subject(id)%constructor
             s.id              = id;
             s.path            = s.pathfinder(s.id,[]);
+            s.dicom_serie_id  = s.dicom_serie_selector{s.id};
+            s.dicom_target_run= s.dicom2run{s.id};
             try
                 s.trio_session 	  = s.trio_sessions{s.id};
-                s.dicom_folder 	  = s.dicom_folders{s.id};
             end
             
             if exist(s.path)
@@ -102,18 +105,18 @@ classdef Subject < Project
                 end
             end
             if ~isempty(matlabbatch)
-                fprintf('Dicom conversion s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));
+                fprintf('Dicom conversion s#%i... (%s)\n',self.id,self.gettime);
                 spm_jobman('run', matlabbatch);
                 fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
                 
                 %% delete the dicom files
-                fprintf('Cleaning s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));
+                fprintf('Cleaning s#%i... (%s)\n',self.id,self.gettime);
                 for nrun = 0:self.tRuns
                     delete(sprintf('%smrt%sMR*',self.path2data(self.id,nrun),filesep));
                 end
-                fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
+                fprintf('Finished... (%s)\n',self.gettime);
                 %% merge to 4D
-                fprintf('Merging s#%i...(%s)\n',self.id,datestr(now,'hh:mm:ss'));
+                fprintf('Merging s#%i...(%s)\n',self.id,self.gettime);
                 matlabbatch = [];
                 c           = 0;
                 for nrun = 0:self.tRuns
@@ -128,41 +131,40 @@ classdef Subject < Project
                 if ~isempty(matlabbatch)
                     spm_jobman('run', matlabbatch);
                 end
-                fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
+                fprintf('Finished... (%s)\n',self.gettime);
                 %% delete the 3d fTRIO files
-                fprintf('Deleting all 3D images s#%i... (%s)\n',self.id,datestr(now,'hh:mm:ss'));
+                fprintf('Deleting all 3D images s#%i... (%s)\n',self.id,self.gettime);
                 for nrun = 1:length(matlabbatch)
                     delete(matlabbatch{nrun}.spm.util.cat.vols{1});
                 end
-                fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
+                fprintf('Finished... (%s)\n',self.gettime);
             else
                 fprintf('No dicom files found for %i\n',self.id)
             end
         end
-        function GetDicom(self)
+        function DumpFunctional(self)
             %Will dump all the Dicoms based on Sessions entered in the
             %Project Object. trio_folders are folders in the dicom server, trio2run dictates in which run these folders should be dumped.
-            fprintf('Making a dicom query, sometimes this might take longer...\n')
-            [status paths]   = system(['/common/apps/bin/dicq -t --series --exam=' self.trio_name]);
-            paths            = strsplit(paths,'\n');%split paths
-            [status result]  = system(['/common/apps/bin/dicq --series --exam=' self.trio_name]);
-            fprintf('This is what I found for you:\n')
-            result
-            fprintf('Will now dump the following series:\n');
-            fprintf('Series %i ---> \n',self.trio_folder);
-            fprintf('to these runs:\n');
-            fprintf('run%03d <--- \n',self.trio2run{self.id})
-            fprintf('\n');
+            
+            %spit out some info for sanity checks
+            self.dicomserver_request;
+            fprintf('You told me to download the following series: ');
+            fprintf('%i,',self.dicom_serie_id);
+            fprintf('\nDouble check if everything is fine.\n')
+            
+            paths             = self.dicomserver_paths;
+            self.dicom_folders = paths(self.dicom_serie_id);
+            fprintf('Will now dump series (%s)\n',self.gettime);            
+            
             %% save the desired runs to disk
             n = 0;
-            for f = self.trio_folder(:)'
+            for source = self.dicom_folders(:)'
                 %
                 n 				 = n+1;
-                dest             = sprintf('%ssub%03d/run%03d/mrt/',self.path_project,self.id,self.trio2run{self.id}(n));
-                source           = paths{f};
-                self.DicomDownload(source,dest);
+                dest             = sprintf('%ssub%03d/run%03d/mrt/',self.path_project,self.id,self.dicom_target_run(n));                
+                self.DicomDownload(source{1},dest);
             end
-            fprintf('Happily finished dumping...\n');
+            fprintf('Happily finished dumping...%s\n',self.gettime);
         end
         function Realign(self)
             % Will realign all runs using spm batch.
@@ -266,9 +268,21 @@ classdef Subject < Project
         end        
         function out = mrt_path_expanded(self,nrun)
             %returns list of filenames of a 4D nii file using comma
-            %separated convention (needed for First levels)
-            
+            %separated convention (needed for First levels)            
             out = spm_select('ExtFPList',fileparts(self.mrt_data(nrun)),'^rdata.nii');
+        end
+        function [result]=dicomserver_request(self)
+            %will make a normal dicom request. use this to see the state of
+            %folders
+            fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.gettime);
+            [status result]  = system(['/common/apps/bin/dicq --series --exam=' self.trio_session]);
+            fprintf('This is what I found for you:\n');
+            result
+        end
+        function [paths]=dicomserver_paths(self)
+            fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.gettime)
+            [status paths]   = system(['/common/apps/bin/dicq -t --series --exam=' self.trio_session]);
+            paths            = strsplit(paths,'\n');%split paths            
         end
     end
     methods %(fmri analysis)
