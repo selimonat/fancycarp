@@ -7,37 +7,37 @@ classdef Subject < Project
         dicom_folders     = [];
         dicom_target_run  = [];
         total_run         = [];
+        pmf               = []; %raw results of the pmf
     end
     properties (SetAccess = private)
         id
         path
         csp
         csn
-        scr
-        pmf
-        alpha
+        scr        
+        pmf_parameters= [];
         trio_session  = [];
+        ratings       = [];
     end
+    %%
     methods
         function s = Subject(id)%constructor
-            s.id              = id;
-            s.path            = s.pathfinder(s.id,[]);
-            s.dicom_serie_id  = s.dicom_serie_selector{s.id};
-            s.dicom_target_run= s.dicom2run{s.id};
+            s.id               = id;
+            s.path             = s.pathfinder(s.id,[]);
+            s.dicom_serie_id   = s.dicom_serie_selector{s.id};
+            s.dicom_target_run = s.dicom2run{s.id};
             try
                 s.trio_session 	  = s.trio_sessions{s.id};
             end
             
             if exist(s.path)
-                for nrun = 1:5
+                for nrun = 1:s.total_run
                     s.paradigm{nrun} = s.load_paradigm(nrun);
                 end
                 s.csp = s.paradigm{s.default_run}.stim.cs_plus;
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
-                s.scr = SCR(s);
-                try
-                    s.pmf = s.getPMF;
-                end
+                s.scr = SCR(s);                
+                
                 %                 try
                 %                     s.bold = BOLD(s);
                 %                 end
@@ -48,9 +48,13 @@ classdef Subject < Project
     end
     
     methods %(Getters)
-        function DumpHR(self)
+        
+        function dump_hr(self)
             %will download the latest HR for this subject to default hr
             %path.
+            %
+            %
+            %
             
             %target location for the hr
             hr_target = self.hr_dir;
@@ -76,7 +80,7 @@ classdef Subject < Project
                 end
             end
         end 
-        function DumpFunctional(self)
+        function dump_functional(self)
             %Will dump all DICOMS based on Sessions entered in the
             %Project Object. trio_folders are folders in the dicom server,
             %trio2run dictates in which run these folders should be dumped.
@@ -102,48 +106,41 @@ classdef Subject < Project
             end
             fprintf('Happily finished dumping...%s\n',self.gettime);
         end
-        function rating = GetRating(self,run,align)
-            %align optional, default = 1;
-            if nargin < 3
-                align = 1;
-            end
-            % s is a subject instance
-            rating = [];
-            if ~isempty(self.paradigm{run})
+        function rating = get.ratings(self)
+            %returns the CS+-aligned ratings for all the runs
+            run = 1;
+            if ~isempty(self.paradigm{run});
                 rating.y      = self.paradigm{run}.out.rating';
-                if align
-                    rating.y  = circshift(rating.y,[1 4-self.csp ]);
-                end
+                rating.y      = circshift(rating.y,[1 4-self.csp ]);
                 rating.x      = repmat([-135:45:180],size(self.paradigm{run}.out.rating,2),1);
                 rating.i      = repmat(run          ,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
                 rating.y_mean = mean(rating.y);
             else
-                fprintf('no rating present for this subject and run (%d) \n',run);
+                fprintf('No rating present for this subject and run (%d) \n',nr);
             end
+            
         end
         function out    = GetSubSCR(self,run,cond)
             if nargin < 3
                 cond=1:8;
             end
-            conddummy=[-135:45:180 500 1000 3000];
+            conddummy = [-135:45:180 500 1000 3000];
             % s is a subject instance
-            out = [];
-            cutnum = self.scr.findphase(run);
+            out       = [];
+            cutnum    = self.scr.findphase(run);
             self.scr.cut(cutnum);
             self.scr.run_ledalab;
             self.scr.plot_tuning_ledalab(cond);
-            out.y = self.scr.fear_tuning;
-            out.x = conddummy(cond);
-            out.ind = cutnum;
-        end
+            out.y     = self.scr.fear_tuning;
+            out.x     = conddummy(cond);
+            out.ind   = cutnum;
+        end        
         function [o]    = get.total_run(self)
             %% returns the total number of runs in a folder (except run000)
-            a      = dir(self.path);
-            %include all runs except run000
-            o      = cellfun( @(x) ~isempty(x), regexp({a(:).name},'run[0-9][0-9][0-9]')).*cellfun( @(x) isempty(x), regexp({a(:).name},'run000'));
-            o      = sum(o);
+            o      = length(dir(self.path))-2;            
         end
-        function out    = GetLog(self,run)
+        
+        function out    = get_log(self,run)
             %loads and plots the Log, here you can put the old experiment
             %plotter.
             
@@ -154,14 +151,18 @@ classdef Subject < Project
             out        = out(i,:);
             % delete all the events that are after the last scanning..
             scan_times = out(out(:,2) == 0,1);
-            i          = out(:,1) > max(scan_times);
-            %out(i,:)   = [];
+            i          = out(:,1) > max(scan_times);            
         end
-        function out    = getPMF(self)
-            dummy = load(self.path2data(2,'stimulation'));
-            out = dummy.p.psi;
+        function out    = get.pmf(self)
+            %will load the raw pmf data.
+            dummy    = load(self.path2data(2,'stimulation'));
+            out      = dummy.p.psi;
         end 
-        
+        function out    = get.pmf_parameters(self)
+            %returns the parameters of the pmf fit (condition x parameter);
+            out = self.fit_pmf;
+            out = cat(3,out.params(1,:),out.params(2,:));
+        end 
     end
     
     methods %(mri, preprocessing))      
@@ -467,41 +468,33 @@ classdef Subject < Project
             spm_jobman('run', matlabbatch);
         end
     end
-    methods %(plotters)
-        function LogPlot(self,nrun)
-            L = self.GetLog(nrun);
-            tevents = size(L,1);
-            figure;
-            plot(L(1:tevents,1) - L(1,1),L(1:tevents,2),'o','markersize',10);
-            ylim([-2 8]);
-            set(gca,'ytick',[-2:8],'yticklabel',{'Rating On','Text','Pulse','Tracker+','Cross+','Stim+','CrossMov','UCS','Stim-','Key+','Tracker-'});
-            grid on
-            drawnow;
-        end       
-        function [out] = fitPMF(self,varargin)
-            
-            if exist(self.path2data(2,'pmf')) && isempty(varargin)
+    methods %analysis
+        function [out] = fit_pmf(self,varargin)
+            %will load the pmf fit (saved in runXXX/pmf) if computed other
+            %wise will read the raw pmf data (saved in runXXX/stimulation)
+            %and compute a fit.            
                 
+            if exist(self.path2data(2,'pmf')) && isempty(varargin)
+                %load directly or 
                 load(self.path2data(2,'pmf'));
                 fprintf('PMF Fit found and loaded successfully...\n')
                 
             elseif ~isempty(varargin) || ~exist(self.path2data(2,'pmf'))
-                fprintf('Fitting PMF...\n')
-                self.pmf = self.getPMF;
-                
+                %compute and save it.
+                fprintf('Fitting PMF...\n')                                
                 % define a search grid
-                searchGrid.alpha = linspace(0,100,10);    %structure defining grid to
-                searchGrid.beta  = 10.^[-1:0.1:1];         %search for initial values
-                searchGrid.gamma = linspace(0,0.5,10);
+                searchGrid.alpha  = linspace(0,100,10);    %structure defining grid to
+                searchGrid.beta   = 10.^[-1:0.1:1];         %search for initial values
+                searchGrid.gamma  = linspace(0,0.5,10);
                 searchGrid.lambda = linspace(0,0.1,10);
-                paramsFree = [1 1 1 1];
-                PF         = @PAL_Weibull;
+                paramsFree        = [1 1 1 1];
+                PF                = @PAL_Weibull;
                 %prepare some variables
-                tchain   = size(self.pmf.log.xrounded,3);
-                xlevels  = unique(abs(self.pmf.presentation.uniquex));
-                NumPos   = NaN(length(xlevels),tchain);
-                OutOfNum = NaN(length(xlevels),tchain);
-                sd       = NaN(length(xlevels),tchain);
+                tchain            = size(self.pmf.log.xrounded,3);
+                xlevels           = unique(abs(self.pmf.presentation.uniquex));
+                NumPos            = NaN(length(xlevels),tchain);
+                OutOfNum          = NaN(length(xlevels),tchain);
+                sd                = NaN(length(xlevels),tchain);
                 %first collapse the two directions (pos/neg differences from
                 %csp)
                 
@@ -510,15 +503,15 @@ classdef Subject < Project
                     %get responses, and resulting PMF from PAL algorithm
                     data = self.pmf.log.xrounded(:,:,chain);
                     rep  = self.pmf.presentation.rep;
-                    cl = 0;
+                    cl   = 0;
                     for l = xlevels(:)'
-                        cl = cl+1;
-                        ind = find(abs(self.pmf.presentation.uniquex) == l);
-                        collecttrials = data(ind,1:rep(ind(1)));
-                        collecttrials = collecttrials(:);
+                        cl                 = cl+1;
+                        ind                = find(abs(self.pmf.presentation.uniquex) == l);
+                        collecttrials      = data(ind,1:rep(ind(1)));
+                        collecttrials      = collecttrials(:);
                         NumPos(cl,chain)   = sum(collecttrials);% number of "different" responses
                         OutOfNum(cl,chain) = length(collecttrials);%number of presentations at that level
-                        sd(cl,chain)      = (OutOfNum(cl,chain)*NumPos(cl,chain)/OutOfNum(cl,chain)...
+                        sd(cl,chain)       = (OutOfNum(cl,chain)*NumPos(cl,chain)/OutOfNum(cl,chain)...
                             *(1-NumPos(cl,chain)/OutOfNum(cl,chain)))./OutOfNum(cl,chain);%var of binomial distr. (np(1-p))
                     end
                     %fit the function using PAL
@@ -534,54 +527,67 @@ classdef Subject < Project
                         NumPos(:,chain), OutOfNum(:,chain), searchGrid, paramsFree, PF,'lapseLimits',[0 .5],'guessLimits',[0 .5]);
                     fprintf('%s . \n',output.message )
                     fprintf('\n')
-                    
-                    
-                    out.NumPos(chain,:) = NumPos(:,chain);
-                    out.OutOfNum(chain,:) = OutOfNum(:,chain);
+                                       
+                    out.NumPos(chain,:)          = NumPos(:,chain);
+                    out.OutOfNum(chain,:)        = OutOfNum(:,chain);
                     out.PropCorrectData(chain,:) = NumPos(:,chain)./OutOfNum(:,chain);
-                    out.sd(chain,:) = sd(:,chain);
-                    out.params(chain,:) = paramsValues;
-                    out.LL(chain,:) = LL;
-                    out.exitflag(chain,:) = exitflag;
-                    out.PF = PF;
-                    out.xlevels = xlevels;
+                    out.sd(chain,:)              = sd(:,chain);
+                    out.params(chain,:)          = paramsValues;
+                    out.LL(chain,:)              = LL;
+                    out.exitflag(chain,:)        = exitflag;
+                    out.PF                       = PF;
+                    out.xlevels                  = xlevels;
                 end
                 save(self.path2data(2,'pmf'),'out')
             end
         end
-        function plotPMF(self)
-            try
-                %figure
-                colorid = [5 9];
-                out = self.fitPMF;
-                tchain  = size(self.pmf.presentation.x,2);
-                xlevels = unique(abs(self.pmf.presentation.uniquex));
-                StimLevelsFine = [min(xlevels):(max(xlevels)- ...
-                    min(xlevels))./1000:max(xlevels)];
-                
-                %plot the Fit
-                for chain = 1:tchain
-                    subplot(tchain,1,chain)
-                    Fit = out.PF(out.params(chain,:),StimLevelsFine);
-                    errorbar(xlevels,out.PropCorrectData(chain,:),out.sd(chain,:),'k.','Markersize',40);
-                    set(gca,'Fontsize',12);
-                    hold on;
-                    plot(StimLevelsFine,Fit,'-','Linewidth',3);
-                    legend('data point','Fit','location','southeast');
-                    legend boxoff
-                    box off
-                    xlabel('Delta Degree');
-                    ylabel('p(diff)');
-                end
-                subplot(tchain,1,1)
-                title(sprintf('Sub %d, CSP, estimated alpha = %g, LL = %g',self.id,out.params(1,1),out.LL(1)));
-                subplot(tchain,1,2)
-                title(sprintf('CSN, estimated alpha = %g, LL = %g',out.params(2,1),out.LL(2)));
-                
-            catch
-                fprintf('No plot possible.\n')
-            end
+    end
+    methods %(plotters)
+        function plot_log(self,nrun)
+            %will plot the events that are logged during the experiment.
+            L       = self.get_log(nrun);
+            tevents = size(L,1);
+            figure;
+            plot(L(1:tevents,1) - L(1,1),L(1:tevents,2),'o','markersize',10);
+            ylim([-2 8]);
+            set(gca,'ytick',[-2:8],'yticklabel',{'Rating On','Text','Pulse','Tracker+','Cross+','Stim+','CrossMov','UCS','Stim-','Key+','Tracker-'});
+            grid on
+            drawnow;
+        end       
+        function plot_pmf(self)
             
+            try
+                addpath(self.palamedes_path);
+            catch
+                fprintf('Add Palamedes to your path.\n')
+                return
+            end
+            %figure            
+            out            = self.fitPMF;
+            tchain         = size(self.pmf.presentation.x,2);
+            xlevels        = unique(abs(self.pmf.presentation.uniquex));
+            StimLevelsFine = [min(xlevels):(max(xlevels) - min(xlevels))./1000:max(xlevels)];
+            
+            %plot the Fit
+            for chain = 1:tchain
+                subplot(tchain,1,chain)
+                Fit = out.PF(out.params(chain,:),StimLevelsFine);
+                errorbar(xlevels,out.PropCorrectData(chain,:),out.sd(chain,:),'k.','Markersize',40);
+                set(gca,'Fontsize',12);
+                hold on;
+                plot(StimLevelsFine,Fit,'-','Linewidth',3);
+                legend('data point','Fit','location','southeast');
+                legend boxoff
+                box off
+                xlabel('Delta Degree');
+                ylabel('p(diff)');
+            end
+            %
+            subplot(tchain,1,1)
+            title(sprintf('Sub %d, CSP, estimated alpha = %g, LL = %g',self.id,out.params(1,1),out.LL(1)));
+            subplot(tchain,1,2)
+            title(sprintf('CSN, estimated alpha = %g, LL = %g',out.params(2,1),out.LL(2)));
         end
+        
     end
 end
