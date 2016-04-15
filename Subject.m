@@ -6,6 +6,7 @@ classdef Subject < Project
         dicom_serie_id    = [];
         dicom_folders     = [];
         dicom_target_run  = [];
+        total_run         = [];
     end
     properties (SetAccess = private)
         id
@@ -29,7 +30,7 @@ classdef Subject < Project
             
             if exist(s.path)
                 for nrun = 1:5
-                    s.paradigm{nrun} = s.load_paradigm(s.id,nrun);
+                    s.paradigm{nrun} = s.load_paradigm(nrun);
                 end
                 s.csp = s.paradigm{s.default_run}.stim.cs_plus;
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
@@ -46,7 +47,7 @@ classdef Subject < Project
         end
     end
     
-    methods %(mri, preprocessing)
+    methods %(Getters)
         function DumpHR(self)
             %will download the latest HR for this subject to default hr
             %path.
@@ -59,92 +60,27 @@ classdef Subject < Project
             end
             self.DicomDownload(self.GetDicomHRpath,self.hr_dir);
         end
-        function [HRPath]=GetDicomHRpath(self)
-            % finds the dicom path to the latest HR measurement for this
-            % subject.
-            
-            [status2 DicqOutputFull] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders',self.trio_session));
-            %take the latest anatomical scan.
-            [status2 HRLine] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders | grep mprage | tail -n 1',self.trio_session));
-            %
-            HRPath = [];
-            if ~isempty(HRLine);
-                HRPath = regexp(HRLine,'/common\S*','match');
-                HRPath = HRPath{1};
-                %HRPath = GetDicomPath(HRLine);
-                fprintf('Dicom Server returns:\n=====\n')
-                fprintf(DicqOutputFull);
-                fprintf('=====\n');
-                fprintf('The latest recorded HR data:\n')
-                fprintf(HRLine);
-            else
-                fprintf('There is no HR data found for this subject.\n Here is the output of the Dicq:\n');
-                fprintf(DicqOutputFull);
-                keyboard
-            end
-            
-        end
-        function ConvertDicom(self)
-            %% dicom conversion. ATTENTION: dicoms will be deleted
-            % and the converted files will be merged to a 4d file nifti
-            % file. This file will be named data.nii.
-            %
-            matlabbatch = [];
-            count = 0;
-            for nrun = 0:self.tRuns
-                files                                                    = cellstr(spm_select('FPListRec',self.path2data(self.id,nrun),'^MR'));
-                fprintf('Run#%d found %d dicom files.\n',nrun,length(files{1}))
-                if ~isempty(files{1})%only create a batch if there is ^MR files.
-                    count = count +1;
-                    matlabbatch{count}.spm.util.import.dicom.data             = files;
-                    matlabbatch{count}.spm.util.import.dicom.root             = 'flat';
-                    matlabbatch{count}.spm.util.import.dicom.outdir           = {fileparts(self.path2data(self.id,nrun,'mrt'))};
-                    matlabbatch{count}.spm.util.import.dicom.protfilter       = '.*';
-                    matlabbatch{count}.spm.util.import.dicom.convopts.format  = 'nii';
-                    matlabbatch{count}.spm.util.import.dicom.convopts.icedims = 0;
+        function p          = load_paradigm(self,nrun)
+            filename = self.path2data(nrun,'stimulation');
+            p = [];
+            if exist(filename)
+                p = load(filename);
+                p = p.p;
+                %transform id to labels
+                if isfield(p,'presentation')
+                    %                 p.presentation.stim_label = self.condition_labels(p.presentation.cond_id+1);
+                    p.presentation.dist(p.presentation.dist < 500)   = p.presentation.dist(p.presentation.dist < 500) + 180;
+                    p.presentation.dist(p.presentation.dist == 500)  = 1001;%ucs
+                    p.presentation.dist(p.presentation.dist == 1000) = 1002;%odd
+                    p.presentation.dist(isnan(p.presentation.dist))  = 1000;%null
                 end
             end
-            if ~isempty(matlabbatch)
-                fprintf('Dicom conversion s#%i... (%s)\n',self.id,self.gettime);
-                spm_jobman('run', matlabbatch);
-                fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
-                
-                %% delete the dicom files
-                fprintf('Cleaning s#%i... (%s)\n',self.id,self.gettime);
-                for nrun = 0:self.tRuns
-                    delete(sprintf('%smrt%sMR*',self.path2data(self.id,nrun),filesep));
-                end
-                fprintf('Finished... (%s)\n',self.gettime);
-                %% merge to 4D
-                fprintf('Merging s#%i...(%s)\n',self.id,self.gettime);
-                matlabbatch = [];
-                c           = 0;
-                for nrun = 0:self.tRuns
-                    files = spm_select('FPListRec',self.path2data(self.id,nrun),'^[f,s]TRIO');
-                    if ~isempty(files)
-                        c     = c + 1;
-                        matlabbatch{c}.spm.util.cat.vols  = cellstr(files);
-                        matlabbatch{c}.spm.util.cat.name  = 'data.nii';
-                        matlabbatch{c}.spm.util.cat.dtype = 0;
-                    end
-                end
-                if ~isempty(matlabbatch)
-                    spm_jobman('run', matlabbatch);
-                end
-                fprintf('Finished... (%s)\n',self.gettime);
-                %% delete the 3d fTRIO files
-                fprintf('Deleting all 3D images s#%i... (%s)\n',self.id,self.gettime);
-                for nrun = 1:length(matlabbatch)
-                    delete(matlabbatch{nrun}.spm.util.cat.vols{1});
-                end
-                fprintf('Finished... (%s)\n',self.gettime);
-            else
-                fprintf('No dicom files found for %i\n',self.id)
-            end
-        end
+        end 
         function DumpFunctional(self)
-            %Will dump all the Dicoms based on Sessions entered in the
-            %Project Object. trio_folders are folders in the dicom server, trio2run dictates in which run these folders should be dumped.
+            %Will dump all DICOMS based on Sessions entered in the
+            %Project Object. trio_folders are folders in the dicom server,
+            %trio2run dictates in which run these folders should be dumped.
+            %
             
             %spit out some info for sanity checks
             self.dicomserver_request;
@@ -152,8 +88,8 @@ classdef Subject < Project
             fprintf('%i,',self.dicom_serie_id);
             fprintf('\nDouble check if everything is fine.\n')
             
-            paths             = self.dicomserver_paths;
-            self.dicom_folders = paths(self.dicom_serie_id);
+            paths               = self.dicomserver_paths;
+            self.dicom_folders  = paths(self.dicom_serie_id);
             fprintf('Will now dump series (%s)\n',self.gettime);            
             
             %% save the desired runs to disk
@@ -166,11 +102,132 @@ classdef Subject < Project
             end
             fprintf('Happily finished dumping...%s\n',self.gettime);
         end
+        function rating = GetRating(self,run,align)
+            %align optional, default = 1;
+            if nargin < 3
+                align = 1;
+            end
+            % s is a subject instance
+            rating = [];
+            if ~isempty(self.paradigm{run})
+                rating.y      = self.paradigm{run}.out.rating';
+                if align
+                    rating.y  = circshift(rating.y,[1 4-self.csp ]);
+                end
+                rating.x      = repmat([-135:45:180],size(self.paradigm{run}.out.rating,2),1);
+                rating.i      = repmat(run          ,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
+                rating.y_mean = mean(rating.y);
+            else
+                fprintf('no rating present for this subject and run (%d) \n',run);
+            end
+        end
+        function out    = GetSubSCR(self,run,cond)
+            if nargin < 3
+                cond=1:8;
+            end
+            conddummy=[-135:45:180 500 1000 3000];
+            % s is a subject instance
+            out = [];
+            cutnum = self.scr.findphase(run);
+            self.scr.cut(cutnum);
+            self.scr.run_ledalab;
+            self.scr.plot_tuning_ledalab(cond);
+            out.y = self.scr.fear_tuning;
+            out.x = conddummy(cond);
+            out.ind = cutnum;
+        end
+        function [o]    = get.total_run(self)
+            %% returns the total number of runs in a folder (except run000)
+            a      = dir(self.path);
+            %include all runs except run000
+            o      = cellfun( @(x) ~isempty(x), regexp({a(:).name},'run[0-9][0-9][0-9]')).*cellfun( @(x) isempty(x), regexp({a(:).name},'run000'));
+            o      = sum(o);
+        end
+        function out    = GetLog(self,run)
+            %loads and plots the Log, here you can put the old experiment
+            %plotter.
+            
+            out        = self.paradigm{run}.out.log;
+            %sort things according to time rather than order of being
+            %logged
+            [~,i]      = sort(out(:,1),'ascend');
+            out        = out(i,:);
+            % delete all the events that are after the last scanning..
+            scan_times = out(out(:,2) == 0,1);
+            i          = out(:,1) > max(scan_times);
+            %out(i,:)   = [];
+        end
+        function out    = getPMF(self)
+            dummy = load(self.path2data(2,'stimulation'));
+            out = dummy.p.psi;
+        end 
+        
+    end
+    
+    methods %(mri, preprocessing))      
+        function ConvertDicom(self)
+            %% dicom conversion. ATTENTION: dicoms will be deleted
+            % and the converted files will be merged to a 4d file nifti
+            % file. This file will be named data.nii.
+            %
+            matlabbatch = [];
+            count = 0;
+            for nrun = 0:self.tRuns
+                files                                                    = spm_select('FPListRec',self.path2data(nrun),'^MR');
+                fprintf('Run#%d found %d dicom files.\n',nrun,length(files))
+                if ~isempty(files)%only create a batch if there is ^MR files.
+                    count = count +1;
+                    matlabbatch{count}.spm.util.import.dicom.data             = cellstr(files);
+                    matlabbatch{count}.spm.util.import.dicom.root             = 'flat';
+                    matlabbatch{count}.spm.util.import.dicom.outdir           = {fileparts(self.path2data(nrun,'mrt'))};
+                    matlabbatch{count}.spm.util.import.dicom.protfilter       = '.*';
+                    matlabbatch{count}.spm.util.import.dicom.convopts.format  = 'nii';
+                    matlabbatch{count}.spm.util.import.dicom.convopts.icedims = 0;
+                end
+            end
+            %don't continue if there is nothing to do...
+            if ~isempty(matlabbatch)
+                fprintf('Dicom conversion s#%i... (%s)\n',self.id,self.gettime);
+                self.RunSPMJob(matlabbatch);
+                fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));                                                                
+                %% delete the 3d fTRIO files                
+                fprintf('Deleting all 3D and DICOM images s#%i... (%s)\n',self.id,self.gettime);
+                for nrun = 1:length(matlabbatch)
+                    delete(sprintf('%smrt%sMR*',self.path2data(nrun),filesep));
+                    delete( matlabbatch{nrun}.spm.util.cat.vols{:} );
+                end
+                fprintf('Finished... (%s)\n',self.gettime);
+            else
+                fprintf('No dicom files found for %i\n',self.id)
+            end
+        end
+        function MergeTo4D(self)
+            %will create data.nii consisting of all the [f,s]TRIO images
+            %merged to 4D.
+            
+            %% merge to 4D
+            fprintf('Merging s#%i...(%s)\n',self.id,self.gettime);
+            matlabbatch = [];
+            c           = 0;
+            for nrun = 0:self.tRuns
+                files = spm_select('FPListRec',self.path2data(nrun),'^[f,s]TRIO');
+                if ~isempty(files)
+                    c                                 = c + 1;
+                    matlabbatch{c}.spm.util.cat.vols  = cellstr(files);
+                    matlabbatch{c}.spm.util.cat.name  = 'data.nii';
+                    matlabbatch{c}.spm.util.cat.dtype = 0;
+                end
+            end
+            if ~isempty(matlabbatch)
+                self.RunSPMJob(matlabbatch);
+            end
+            fprintf('Finished... (%s)\n',self.gettime);
+        end        
         function Realign(self)
             % Will realign all runs using spm batch.
             matlabbatch = [];
             for nrun  = 1:self.tRuns
-                file = sprintf('%smrt%sdata.nii',self.path2data(self.id,nrun),filesep);
+                file = sprintf('%smrt%sdata.nii',self.path2data(nrun),filesep);
             end
             matlabbatch{1}.spm.spatial.realign.estwrite.data             = {cellstr(file)};
             matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
@@ -192,7 +249,7 @@ classdef Subject < Project
         function Coreg_Anat2Functional(self)
             %rigid-body wiggles around the anatomical to the mean EPI from
             %the realignment procedure.
-            mean_file =sprintf('%smrt%smeandata.nii',self.path2data(self.id,1),filesep);%is mean_file always saved to the same place?
+            mean_file =sprintf('%smrt%smeandata.nii',self.path2data(1),filesep);%is mean_file always saved to the same place?
             if exist(mean_file) > 0
                 matlabbatch{1}.spm.spatial.coreg.estwrite.ref                = { mean_file };%the one that stays constant
                 matlabbatch{1}.spm.spatial.coreg.estwrite.source             = { self.hr_path };%anatomical one.
@@ -213,7 +270,7 @@ classdef Subject < Project
         end        
         function o = MotionParameters(self,run)
             %will load the realignment parameters.
-            filename = sprintf('%smrt/rp_data.txt',self.path2data(self.id,run));
+            filename = sprintf('%smrt/rp_data.txt',self.path2data(run));
             if exist(filename)
                 o = load(filename);
             else
@@ -241,49 +298,75 @@ classdef Subject < Project
         end
     end
     methods %fmri path_tools
-        function out = spm_dir(self)
+        function out        = spm_dir(self)
             %returns subject's path to spm folder for run RUN.
             out = sprintf('%smrt/spm/',self.pathfinder(self.id,1));
         end        
-        function out = spm_path(self)
+        function out        = spm_path(self)
             %returns the path to spm folder for run RUN.
             out = sprintf('%smrt/spm/SPM.mat',self.pathfinder(self.id,1));
         end        
-        function out = hr_dir(self)
+        function out        = hr_dir(self)
             %the directory where hr is located
             out = sprintf('%smrt/',self.pathfinder(self.id,0));
         end        
-        function out = hr_path(self)
+        function out        = hr_path(self)
             %path to the hr volume
             out = spm_select('ExtFPList',self.hr_dir,'^sTRIO.*.nii$');
         end        
-        function [t] = total_volumes(self,run)
+        function [t]        = total_volumes(self,run)
             % will tell you how many volumes are in a 4D image.
             bla = spm_vol_nifti(self.mrt_data(run),1);%simply read the first images header
             t   = bla.private.dat.dim(4);
         end        
-        function out = mrt_path(self,nrun)
+        function out        = mrt_path(self,nrun)
             % simply returns the path to the mrt data.
             out = sprintf('%smrt/data.nii',self.pathfinder(self.id,1));
         end        
-        function out = mrt_path_expanded(self,nrun)
+        function out        = mrt_path_expanded(self,nrun)
             %returns list of filenames of a 4D nii file using comma
             %separated convention (needed for First levels)            
             out = spm_select('ExtFPList',fileparts(self.mrt_data(nrun)),'^rdata.nii');
         end
-        function [result]=dicomserver_request(self)
-            %will make a normal dicom request. use this to see the state of
-            %folders
-            fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.gettime);
-            [status result]  = system(['/common/apps/bin/dicq --series --exam=' self.trio_session]);
-            fprintf('This is what I found for you:\n');
-            result
+        function [HRPath]   = GetDicomHRpath(self)
+            % finds the dicom path to the latest HR measurement for this
+            % subject.
+            
+            [status2 DicqOutputFull] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders',self.trio_session));
+            %take the latest anatomical scan.
+            [status2 HRLine] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders | grep mprage | tail -n 1',self.trio_session));
+            %
+            HRPath = [];
+            if ~isempty(HRLine);
+                HRPath = regexp(HRLine,'/common\S*','match');
+                HRPath = HRPath{1};
+                %HRPath = GetDicomPath(HRLine);
+                fprintf('Dicom Server returns:\n=====\n')
+                fprintf(DicqOutputFull);
+                fprintf('=====\n');
+                fprintf('The latest recorded HR data:\n')
+                fprintf(HRLine);
+            else
+                fprintf('There is no HR data found for this subject.\n Here is the output of the Dicq:\n');
+                fprintf(DicqOutputFull);
+                
+            end
+            
         end
-        function [paths]=dicomserver_paths(self)
-            fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.gettime)
-            [status paths]   = system(['/common/apps/bin/dicq -t --series --exam=' self.trio_session]);
-            paths            = strsplit(paths,'\n');%split paths            
-        end
+        function path2data  = path2data(self,run,varargin)
+            % s.path2data(53,4) will return the path to the subject's phase 4
+            % s.path2data(53,4,'eye') return the path to the eye data file at the
+            % 4th phase.
+            
+            %will return the path to phase/data_type/
+            path2data = self.pathfinder(self.id , run);
+            if length(varargin) >= 1
+                path2data = sprintf('%s%s%sdata.mat',path2data,varargin{1},filesep);
+            end
+            if length(varargin) == 2
+                path2data = regexprep(path2data,'mat',varargin{2});
+            end
+        end       
     end
     methods %(fmri analysis)
         function FitFIR(self,nrun,model_num)
@@ -307,7 +390,7 @@ classdef Subject < Project
                 %load files using ...,1, ....,2 format
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));
                 %load the onsets
-                dummy                                                   = load(sprintf('%sdesign/model%02d.mat',self.path2data(self.id,session),model_num));
+                dummy                                                   = load(sprintf('%sdesign/model%02d.mat',self.path2data(session),model_num));
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
                 %load nuissance parameters
@@ -356,7 +439,7 @@ classdef Subject < Project
                 %load files using ...,1, ....,2 format
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));
                 %load the onsets
-                dummy                                                   = load(sprintf('%sdesign/model%02d.mat',self.path2data(self.id,session),model_num));
+                dummy                                                   = load(sprintf('%sdesign/model%02d.mat',self.path2data(session),model_num));
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
                 %load nuissance parameters
@@ -384,23 +467,9 @@ classdef Subject < Project
             spm_jobman('run', matlabbatch);
         end
     end
-    methods
-        function out = Log(self,run)
-            %loads and plots the Log, here you can put the old experiment
-            %plotter.
-            
-            out        = self.paradigm{run}.out.log;
-            %sort things according to time rather than order of being
-            %logged
-            [~,i]      = sort(out(:,1),'ascend');
-            out        = out(i,:);
-            % delete all the events that are after the last scanning..
-            scan_times = out(out(:,2) == 0,1);
-            i          = out(:,1) > max(scan_times);
-            %out(i,:)   = [];
-        end
+    methods %(plotters)
         function LogPlot(self,nrun)
-            L = self.Log(nrun);
+            L = self.GetLog(nrun);
             tevents = size(L,1);
             figure;
             plot(L(1:tevents,1) - L(1,1),L(1:tevents,2),'o','markersize',10);
@@ -408,20 +477,15 @@ classdef Subject < Project
             set(gca,'ytick',[-2:8],'yticklabel',{'Rating On','Text','Pulse','Tracker+','Cross+','Stim+','CrossMov','UCS','Stim-','Key+','Tracker-'});
             grid on
             drawnow;
-        end
-        function out = getPMF(self)
-            dummy = load(self.path2data(self.id,2,'stimulation'));
-            out = dummy.p.psi;
-        end
-        
+        end       
         function [out] = fitPMF(self,varargin)
             
-            if exist(self.path2data(self.id,2,'pmf')) && isempty(varargin)
+            if exist(self.path2data(2,'pmf')) && isempty(varargin)
                 
-                load(self.path2data(self.id,2,'pmf'));
+                load(self.path2data(2,'pmf'));
                 fprintf('PMF Fit found and loaded successfully...\n')
                 
-            elseif ~isempty(varargin) || ~exist(self.path2data(self.id,2,'pmf'))
+            elseif ~isempty(varargin) || ~exist(self.path2data(2,'pmf'))
                 fprintf('Fitting PMF...\n')
                 self.pmf = self.getPMF;
                 
@@ -482,7 +546,7 @@ classdef Subject < Project
                     out.PF = PF;
                     out.xlevels = xlevels;
                 end
-                save(self.path2data(self.id,2,'pmf'),'out')
+                save(self.path2data(2,'pmf'),'out')
             end
         end
         function plotPMF(self)
@@ -519,63 +583,5 @@ classdef Subject < Project
             end
             
         end
-        
-        
-        function degree    = stimulus2degree(self,stim_id)
-            %will transform condition indices to distances in degrees from
-            %the csp face. stim_id is a cell array. This is a subject
-            %method as it depends on the subject specific CSP face.
-            
-            ind_valid     = find(cellfun(@(x) ~isempty(x),regexp(stim_id,'[0-9]')));
-            degree        = stim_id;
-            for i = ind_valid(:)'
-                degree{i} = mat2str(MinimumAngle( 0 , (stim_id{i}-self.csp)*45 ));
-            end
-        end
-        function color     = condition2color(self,cond_id)
-            cond_id/45+4;
-        end
-        function rating    = GetRating(self,run,align)
-            %align optional, default = 1;
-            if nargin < 3
-                align = 1;
-            end
-            % s is a subject instance
-            rating = [];
-            if ~isempty(self.paradigm{run})
-                rating.y      = self.paradigm{run}.out.rating';
-                if align
-                    rating.y  = circshift(rating.y,[1 4-self.csp ]);
-                end
-                rating.x      = repmat([-135:45:180],size(self.paradigm{run}.out.rating,2),1);
-                rating.i      = repmat(run          ,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
-                rating.y_mean = mean(rating.y);
-            else
-                fprintf('no rating present for this subject and run (%d) \n',run);
-            end
-        end
-        function out    = GetSubSCR(self,run,cond)
-            if nargin < 3
-                cond=1:8;
-            end
-            conddummy=[-135:45:180 500 1000 3000];
-            % s is a subject instance
-            out = [];
-            cutnum = self.scr.findphase(run);
-            self.scr.cut(cutnum);
-            self.scr.run_ledalab;
-            self.scr.plot_tuning_ledalab(cond);
-            out.y = self.scr.fear_tuning;
-            out.x = conddummy(cond);
-            out.ind = cutnum;
-        end
-        function [o]=tRuns(self)
-            %% returns the total number of runs in a folder
-            a      = dir(self.path);
-            %include all runs except run000
-            o      = cellfun( @(x) ~isempty(x), regexp({a(:).name},'run[0-9][0-9][0-9]')).*cellfun( @(x) isempty(x), regexp({a(:).name},'run000'));
-            o      = sum(o);
-        end
-        
     end
 end
