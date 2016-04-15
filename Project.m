@@ -7,17 +7,18 @@ classdef Project < handle
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
         dicom2run             = repmat({[1 1 1]},1,length(Project.dicom_serie_selector));
-        colors                = [ [0 0 0];circshift(hsv(8),[3 0]);[.8 0 0];[.8 0 0]];
+        colors                = [ [0 0 0]; 0.0784 0.3284 1.0000;0.5784    0.0784    1.0000;1.0000    0.0784    0.8284;1.0000    0.0784    0.0784;1.0000    0.8284    0.0784;0.5784    1.0000    0.0784;0.0784    1.0000    0.3284;0.0784    1.0000    1.0000;0.0784    0.0784    0.0784;0.5784    0.5784    0.5784  ;[.8 0 0];[.8 0 0]];
         line                  = {'-' '-' '-' '-' '-' '-' '-' '-' '-' '.' '.'};
         symbol                = {'.' '.' '.' '.' '.' '.' '.' '.' '.' 'p' 's'};
         total_subject         = [];
         palamedes_path        = '/Users/onat/Documents/Code/Matlab/palamedes1_8_0/Palamedes/';
+        font_style             = {'fontsize' 12};
     end
     properties (Constant)
         path_project       = '/projects/fearamy/data/';
         path_stimuli       = '';
         condition_labels   = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
-        TR                 = 0.99;
+        TR                 = 0.99;        
     end
     
     methods
@@ -103,9 +104,7 @@ classdef Project < handle
                 end
             end
             data_path(end+1)         = filesep;
-        end
-        
-              
+        end                    
         function degree    = stimulus2degree(self,stim_id)
             %will transform condition indices to distances in degrees from
             %the csp face. stim_id is a cell array. 
@@ -115,13 +114,7 @@ classdef Project < handle
             for i = ind_valid(:)'
                 degree{i} = mat2str(MinimumAngle( 0 , (stim_id{i}-self.csp)*45 ));
             end
-        end
-        function out = get.total_subject()
-           %returns the number of total subject in the project folder
-            out = length(Project.trio_sessions);
-        end
-        
-        
+        end                        
     end
     methods(Static)
         function t          = gettime
@@ -141,9 +134,13 @@ classdef Project < handle
             delete(gcp);
         end                        
         
-        function color     = condition2color(cond_id)
-            %returns the color associated to a condition
-            color = cond_id/45+4;
+        function set_feargen_colors(h,color_ind);
+            %if H is a handle of a barplot, it will colorize it with
+            %typical feargen colors.            
+            h     = get(h,'children');
+            tbar  = length(get(h,'YData'));
+            set(h,'CData', repmat(1:tbar,1,tbar/tbar),'edgecolor','none');
+            colormap(Project.colors(color_ind,:));                        
         end
         
     end

@@ -8,6 +8,7 @@ classdef Subject < Project
         dicom_target_run  = [];
         total_run         = [];
         pmf               = []; %raw results of the pmf
+        pmf_variablenames = {'alpha_chain01','beta_chain01','gamma_chain01','lapse_chain01','alpha_chain02','beta_chain02','gamma_chain02','lapse_chain02'}
     end
     properties (SetAccess = private)
         id
@@ -160,8 +161,9 @@ classdef Subject < Project
         end 
         function out    = get.pmf_parameters(self)
             %returns the parameters of the pmf fit (condition x parameter);
-            out = self.fit_pmf;
-            out = cat(3,out.params(1,:),out.params(2,:));
+            out      = self.fit_pmf;
+            out      = [out.params(1,:),out.params(2,:)];
+            out      = array2table([out self.id ],'variablenames',[self.pmf_variablenames 'subject_id']);
         end 
     end
     
@@ -477,9 +479,10 @@ classdef Subject < Project
             if exist(self.path2data(2,'pmf')) && isempty(varargin)
                 %load directly or 
                 load(self.path2data(2,'pmf'));
-                fprintf('PMF Fit found and loaded successfully...\n')
+%                 fprintf('PMF Fit found and loaded successfully for subject %i...\n',self.id);
                 
             elseif ~isempty(varargin) || ~exist(self.path2data(2,'pmf'))
+                addpath('/Users/onat/Documents/Code/Matlab/palamedes1_8_0/Palamedes/');
                 %compute and save it.
                 fprintf('Fitting PMF...\n')                                
                 % define a search grid
@@ -499,7 +502,7 @@ classdef Subject < Project
                 %csp)
                 
                 for chain = 1:tchain
-                    fprintf('Starting to fit chain %g...',chain)
+                    fprintf('Starting to fit chain %g...\n',chain)
                     %get responses, and resulting PMF from PAL algorithm
                     data = self.pmf.log.xrounded(:,:,chain);
                     rep  = self.pmf.presentation.rep;
@@ -525,9 +528,7 @@ classdef Subject < Project
                     
                     [paramsValues LL exitflag output] = PAL_PFML_Fit(xlevels, ...
                         NumPos(:,chain), OutOfNum(:,chain), searchGrid, paramsFree, PF,'lapseLimits',[0 .5],'guessLimits',[0 .5]);
-                    fprintf('%s . \n',output.message )
-                    fprintf('\n')
-                                       
+                    fprintf('%s.\n',output.message );
                     out.NumPos(chain,:)          = NumPos(:,chain);
                     out.OutOfNum(chain,:)        = OutOfNum(:,chain);
                     out.PropCorrectData(chain,:) = NumPos(:,chain)./OutOfNum(:,chain);
@@ -563,19 +564,20 @@ classdef Subject < Project
                 return
             end
             %figure            
-            out            = self.fitPMF;
+            out            = self.fit_pmf;
             tchain         = size(self.pmf.presentation.x,2);
             xlevels        = unique(abs(self.pmf.presentation.uniquex));
             StimLevelsFine = [min(xlevels):(max(xlevels) - min(xlevels))./1000:max(xlevels)];
             
             %plot the Fit
+            ccc = rand(1,3);
             for chain = 1:tchain
                 subplot(tchain,1,chain)
                 Fit = out.PF(out.params(chain,:),StimLevelsFine);
                 errorbar(xlevels,out.PropCorrectData(chain,:),out.sd(chain,:),'k.','Markersize',40);
                 set(gca,'Fontsize',12);
                 hold on;
-                plot(StimLevelsFine,Fit,'-','Linewidth',3);
+                plot(StimLevelsFine,Fit,'-','Linewidth',3,'color',ccc);
                 legend('data point','Fit','location','southeast');
                 legend boxoff
                 box off
@@ -584,9 +586,9 @@ classdef Subject < Project
             end
             %
             subplot(tchain,1,1)
-            title(sprintf('Sub %d, CSP, estimated alpha = %g, LL = %g',self.id,out.params(1,1),out.LL(1)));
+            title(sprintf('Sub %d, CSP (%d), estimated alpha = %g, LL = %g',self.id,self.csp, out.params(1,1),out.LL(1)));
             subplot(tchain,1,2)
-            title(sprintf('CSN, estimated alpha = %g, LL = %g',out.params(2,1),out.LL(2)));
+            title(sprintf('CSN (%d), estimated alpha = %g, LL = %g',self.csn,out.params(2,1),out.LL(2)));
         end
         
     end

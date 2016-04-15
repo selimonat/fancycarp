@@ -6,7 +6,10 @@ classdef Group < Project
     properties
         subject
         ids
-        pmf
+        csps
+        table_pmf
+        raw_ratings
+        total_subjects
         tunings
         SI        
         sigma_cond
@@ -23,25 +26,101 @@ classdef Group < Project
                 c                = c+1;
                 dummy            = Subject(s);
                 group.subject{c} = dummy;
-                group.ids        = subjects;
-                try
-                group.getPMF;
-                end
+                group.ids        = subjects;                
             end
         end
-        function csps = getcsp(self)
-            csps = [];
+        %%
+        function out = get.raw_ratings(self)            
+            %returns ratings as a matrix in fields x and y.
+            out.y = [];
+            out.x = [];
+            for s = self.subject                                
+                out.y = [out.y ;s{1}.ratings.y_mean(:)'];
+                out.x = [out.x ;s{1}.ratings.x(1,:)];
+            end                        
+        end
+        %%
+        function out = get.table_pmf(self)            
+            %returns pmf parameters as a table
+            out = [];
+            for s = self.subject                
+                out = [out ;s{1}.pmf_parameters];
+            end            
+        end
+        %%
+        function csps = get.csps(self)   
+            %returns the csp face for all the group
             for s = 1:length(self.subject)
-                csps = [csps self.subject{s}.csp];
+                csps(s) = self.subject{s}.csp;
             end
-        end        
-        %
-       
+        end   
+        %% 
+        function out = get.total_subjects(self)
+            out = length(self.ids);
+        end
+        %%
+        function plot_ratings(self)
+            [y x]  =  GetSubplotNumber(self.total_subjects);
+            for ns = 1:self.total_subjects
+                subplot(y,x,ns);
+                self.feargen_plot(self.raw_ratings.y(ns,:));
+                box off;
+                title(sprintf('s: %d, cs+: %d',self.ids(ns),self.subject{ns}.csp),self.font_style{:}); 
+            end
+            EqualizeSubPlotYlim(gcf);
+            supertitle(self.path_project,1);
+        end
+        
+        function feargen_plot(self,data)
+            h = bar(data,1);            
+            self.set_feargen_colors(h,2:9);
+            set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'},'xgrid','on',self.font_style{:});
+            axis tight;
+        end
+        
         function ModelRatings(self,run,funtype)
             %create a tuning object and fits FUNTYPE to it.
             self.tunings.rate{run} = Tuning(self.Ratings(run));%create a tuning object for the RUN for ratings.
             self.tunings.rate{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
         end
+        
+         function [ratings,ratings_sd] = getRatings(self,phases)
+            for ph = phases(:)';
+                xc=0;
+                for x  = unique(self.Ratings(ph).x(:)')
+                    xc=xc+1;
+                    i             = self.Ratings(ph).x(1,:) == x;
+                    ratings(:,xc,ph)      = mean(self.Ratings(ph).y(:,i),2);
+                    ratings_sd(:,xc,ph)   = std(self.Ratings(ph).y(:,i),0,2);
+                end
+            end
+         end
+        
+         function [rating] = Ratings(self,run)
+            %will collect the ratings from single subjects 
+            rating.y   = [];
+            rating.x   = [];
+            rating.ids = [];
+            c = 0;
+            for s = 1:length(self.subject)
+                if ~isempty(self.subject{s})
+                    dummy = self.subject{s}.GetRating(run,self.align_tunings);
+                    if ~isempty(dummy)
+                        c = c+1;
+                        if self.mean_correction
+                            dummy.y_mean = dummy.y_mean-mean(dummy.y_mean);
+                            dummy.y      = dummy.y - mean(dummy.y(:));
+                        end
+                        rating.y   = [rating.y ; dummy.y(:)'];
+                        rating.x   = [rating.x ; dummy.x(:)'];
+                        rating.ids  = [rating.ids; self.ids(s)];
+                    end
+                end
+            end
+        end
+         
+         
+        %%
         function ModelSCR(self,run,funtype)
             %create a tuning object and fits FUNTYPE to it.
             self.tunings.scr = Tuning(self.getSCRs(run));%create a tuning object for the RUN for SCRS.
@@ -63,52 +142,9 @@ classdef Group < Project
             a = load(sprintf('%smidlevel%smisesmat.mat',self.path_project,filesep));
             out = a.misesmat(self.ids,:);
         end
-        function getSI(self,funtype)
-            %fits FUNTYPE to behavioral ratings and computes Sharpening
-            %Index.
-            self.ModelRatings(3,funtype);
-            self.ModelRatings(4,funtype);
-            self.sigma_cond = [];
-            self.sigma_test = [];
-            for s = 1:length(self.subject)
-                if funtype==3
-                    self.SI         = [self.SI; self.tunings.rate{3}.singlesubject{s}.Est(:,2) - self.tunings.rate{4}.singlesubject{s}.Est(:,2)];%take the diff of sigma parameters.
-                elseif funtype == 8
-                    self.SI         = [self.SI; self.tunings.rate{4}.singlesubject{s}.Est(:,2) - self.tunings.rate{3}.singlesubject{s}.Est(:,2)];%take the diff of sigma parameters.
-                else
-                    self.SI = [];
-                end
-                self.sigma_cond = [self.sigma_cond; self.tunings.rate{3}.singlesubject{s}.Est(:,2)];
-                self.sigma_test = [self.sigma_test; self.tunings.rate{4}.singlesubject{s}.Est(:,2)];
-            end
-        end
-        function [ratings,ratings_sd] = getRatings(self,phases)
-            for ph = phases(:)';
-                xc=0;
-                for x  = unique(self.Ratings(ph).x(:)')
-                    xc=xc+1;
-                    i             = self.Ratings(ph).x(1,:) == x;
-                    ratings(:,xc,ph)      = mean(self.Ratings(ph).y(:,i),2);
-                    ratings_sd(:,xc,ph)   = std(self.Ratings(ph).y(:,i),0,2);
-                end
-            end
-        end
-        %%
-        function getPMF(self)
-            c = 0;
-            for s = 1:length(self.subject)
-                c = c + 1;
-                self.pmf.csp_before_alpha(c,1) = self.subject{s}.pmf.params1(1,1);
-                self.pmf.csp_after_alpha(c,1)  = self.subject{s}.pmf.params1(3,1);
-                self.pmf.csp_before_beta(c,1)  = self.subject{s}.pmf.params1(1,2);
-                self.pmf.csp_after_beta(c,1)   = self.subject{s}.pmf.params1(3,2);
-                %
-                self.pmf.csn_before_alpha(c,1) = self.subject{s}.pmf.params1(2,1);
-                self.pmf.csn_after_alpha(c,1)  = self.subject{s}.pmf.params1(4,1);
-                self.pmf.csn_before_beta(c,1)  = self.subject{s}.pmf.params1(2,2);
-                self.pmf.csn_after_beta(c,1)   = self.subject{s}.pmf.params1(4,2);
-            end
-        end
+       
+       
+
        
         function plotPMFbars(self)
             means     = reshape(mean(self.pmf.params1(:,1,:),3),2,2);%compute the mean
@@ -179,6 +215,8 @@ classdef Group < Project
                 mu_test'];
         end
         function PlotRatingFit(self,subject)
+            
+            
             if ~isempty(self.tunings.rate)
                
                 i    =  find(self.ids == subject);
@@ -275,7 +313,7 @@ classdef Group < Project
             hold off
         end
         %%
-        function [scr] = getSCRs(self,run)
+        function [scr]    = getSCRs(self,run)
             %will collect the ratings from single subjects 
             scr.y = [];
             scr.x = [];
@@ -291,28 +329,7 @@ classdef Group < Project
                 end
             end
         end
-        function [rating] = Ratings(self,run)
-            %will collect the ratings from single subjects 
-            rating.y  = [];
-            rating.x  = [];
-            rating.ids = [];
-            c = 0;
-            for s = 1:length(self.subject)
-                if ~isempty(self.subject{s})
-                    dummy = self.subject{s}.GetRating(run,self.align_tunings);
-                    if ~isempty(dummy)
-                        c = c+1;
-                        if self.mean_correction
-                            dummy.y_mean = dummy.y_mean-mean(dummy.y_mean);
-                            dummy.y      = dummy.y - mean(dummy.y(:));
-                        end
-                        rating.y   = [rating.y ; dummy.y(:)'];
-                        rating.x   = [rating.x ; dummy.x(:)'];
-                        rating.ids  = [rating.ids; self.ids(s)];
-                    end
-                end
-            end
-        end
+        
         
     end
 end
