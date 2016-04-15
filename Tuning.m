@@ -1,6 +1,6 @@
 classdef Tuning < handle
     properties (Hidden)
-        visualization = 0;%visualization of fit results
+        visualization = 1;%visualization of fit results
         gridsize      = 20;%resolution per parameter for initial estimation.
         options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
     end
@@ -10,6 +10,7 @@ classdef Tuning < handle
         y      =[];
         ids    =[];
         y_mean = [];
+        y_median = [];
         y_std  = [];
         groupfit
         singlesubject
@@ -26,6 +27,7 @@ classdef Tuning < handle
             for x  = unique(tuning.x(:)')
                 i             = tuning.x == x;
                 tuning.y_mean = [tuning.y_mean mean(tuning.y(i))];%Group mean
+                tuning.y_median = [tuning.y_median median(tuning.y(i))];%Group mean
                 tuning.y_std  = [tuning.y_std  std(tuning.y(i))];% Group std
             end
         end
@@ -104,9 +106,9 @@ classdef Tuning < handle
                 result.dof    = 6;
                 result.funname= 'gabor';
             elseif funtype == 7
-                result.fitfun = @(x,p) p(1)*cos(x*p(2)) + p(3);%amp std freq baseline
-                L           = [ -range(y)*2  1  -range(y)*2    .01    ];
-                U           = [  range(y)*2  4   range(y)*2 std(y(:)+rand(length(y),1).*eps)*2 ];
+                result.fitfun = @(x,p) p(1)*cos(x*p(2)+p(3)) + p(4);%amp std freq baseline
+                L           = [ -range(y)*2  0.5  0      -range(y)*2    .01    ];
+                U           = [  range(y)*2  4    2*pi    range(y)*2 std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
                 result.funname= 'cosine';
             elseif funtype == 8
