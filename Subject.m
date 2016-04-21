@@ -429,8 +429,7 @@ classdef Subject < Project
         function out        = hr_dir(self)
             %the directory where hr is located
             out = sprintf('%smrt/',self.pathfinder(self.id,0));
-        end        
-        
+        end                        
         function [t]        = total_volumes(self,run)
             % will tell you how many volumes are in a 4D image.
             bla = spm_vol_nifti(self.mrt_data(run),1);%simply read the first images header
@@ -438,13 +437,23 @@ classdef Subject < Project
         end        
         function out        = mrt_path(self,nrun)
             % simply returns the path to the mrt data.
-            out = sprintf('%smrt/data.nii',self.pathfinder(self.id,1));
-        end        
-        function out        = mrt_path_expanded(self,nrun)
-            %returns list of filenames of a 4D nii file using comma
-            %separated convention (needed for First levels)            
-            out = spm_select('ExtFPList',fileparts(self.mrt_data(nrun)),'^rdata.nii');
-        end
+            if nargin == 2
+                out = sprintf('%smrt/data.nii',self.pathfinder(self.id,nrun));                
+            else
+                fprintf('Need to give an input...\n')
+                return
+            end
+        end                
+        function out        = mrt_dir(self,nrun)
+            % simply returns the path to the mrt data.
+            
+            if nargin == 2                
+                out = sprintf('%smrt',self.pathfinder(self.id,nrun));                
+            else
+                fprintf('Need to give an input...\n')
+                return
+            end
+        end                
         function [HRPath]   = GetDicomHRpath(self)
             % finds the dicom path to the latest HR measurement for this
             % subject.
