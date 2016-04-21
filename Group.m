@@ -75,19 +75,29 @@ classdef Group < Project
         end        
         %%
         function model_ratings(self,run,funtype)
-            %create a tuning object and fits FUNTYPE to it.
-            self.tunings.rate{run} = Tuning(self.ratings(run));%create a tuning object for the RUN for ratings.
-            self.tunings.rate{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
+            %will fit to ratings from RUN the FUNTYPE and cache the result
+            %in the midlevel folder.
+            keyboard
+            filename               = sprintf('%smidlevel/Tunings_Run_%03d_FunType_%03d_N%s.mat',self.path_project,run,funtype,sprintf('%s\b\b',sprintf('%ito',self.ids([1 end]))));
+            if exist(filename) == 0
+                %create a tuning object and fits FUNTYPE to it.
+                self.tunings.rate{run} = Tuning(self.ratings(run));%create a tuning object for the RUN for ratings.
+                self.tunings.rate{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
+                rate = self.tunings.rate;
+                save(filename,'rate');
+            else
+                fprintf('Will load the tuning parameters from the cache:\n%s',filename);
+                self.tunings = load(filename);
+            end
         end               
-         %%
+        %%
         function feargen_plot(self,data)
             %elementary function to make feargen plots
             h = bar(data,1);            
             self.set_feargen_colors(h,2:9);
             set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'},'xgrid','on',self.font_style{:});
             axis tight;
-        end
-         
+        end         
         %%
         function ModelSCR(self,run,funtype)
             %create a tuning object and fits FUNTYPE to it.
@@ -106,11 +116,7 @@ classdef Group < Project
                     out(n,:) = mean(self.subject{n}.scr.ledalab.mean(1:800,:));
             end
         end
-        function [out] = loadmises(self)
-            a = load(sprintf('%smidlevel%smisesmat.mat',self.path_project,filesep));
-            out = a.misesmat(self.ids,:);
-        end
-       
+      
        
 
        
@@ -165,23 +171,7 @@ classdef Group < Project
                    labels = [labels(1:14) { 'mu_cond' 'mu_test'}];
                end
                end
-        end
-        function [out labels] = misesMat(self)
-            labels = {'rating_cond' ...
-                'rating_test' ...
-                'SI'...
-                'Mu_cond'...
-                'Mu_test'};
-            for s = 1:length(self.ids)
-                mu_cond(s) = self.tunings.rate{3}.singlesubject{s}.Est(3);
-                mu_test(s) = self.tunings.rate{4}.singlesubject{s}.Est(3);
-            end
-            out = [self.sigma_cond,...
-                self.sigma_test,...
-                self.SI,...
-                mu_cond',...
-                mu_test'];
-        end
+        end        
         function PlotRatingFit(self,subject)
             
             
