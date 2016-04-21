@@ -1,5 +1,16 @@
 classdef Project < handle
-    %% please ensure that smrREADER, SPM12, Palamedes are in your path.
+    % This is the PROJECT object that many of the other objects will
+    % be a child of. Here enters all the project specific data (e.g. the
+    % subject ids) and methods (for e.g. getting paths from the dicom
+    % server).
+    % 
+    % To start with, trio_sessions should be entered manually for your
+    % experiment. Later these variables will be used by different methods
+    % in the SUBJECT object to transfer data from the dicom server. 
+    %
+    % Feel free to improve this help section.
+    %
+    % please ensure that smrREADER, SPM12, Palamedes are in your path.
     
     properties (Hidden, Constant)
         trio_sessions         = {  '' '' '' 'TRIO_17455' 'TRIO_17468' 'TRIO_17476' 'TRIO_17477' 'TRIO_17478' 'TRIO_17479' 'TRIO_17480' 'TRIO_17481' 'TRIO_17482' 'TRIO_17483' 'TRIO_17484' 'TRIO_17485' 'TRIO_17486' 'TRIO_17487' 'TRIO_17488' 'TRIO_17514' 'TRIO_17515' 'TRIO_17516' 'TRIO_17517'  'TRIO_17520' 'TRIO_17521' 'TRIO_17522' 'TRIO_17523' 'TRIO_17524' 'TRIO_17525' 'TRIO_17526' 'TRIO_17527' 'TRIO_17557' 'TRIO_17558' 'TRIO_17559' 'TRIO_17560'  'TRIO_17563' 'TRIO_17564' 'TRIO_17565' 'TRIO_17566' 'TRIO_17567' 'TRIO_17568' 'TRIO_17569' 'TRIO_17570' 'TRIO_17571' 'TRIO_17572'};
@@ -24,8 +35,7 @@ classdef Project < handle
     methods
     end
     
-    methods
-         
+    methods         
         function DU = SanityCheck(self,runs,varargin)
             %will run through subject folders and will plot their disk
             %space. Use a string in VARARGIN to focus only on a subfolder            
@@ -119,8 +129,7 @@ classdef Project < handle
     methods(Static)
         function t          = gettime
             t = datestr(now,'hh:mm:ss');
-        end
-        
+        end        
         function RunSPMJob(matlabbatch)
             %will run the spm matlabbatch using the parallel toolbox.
             fprintf('Will call spm_jobman in parallel with 4 cores...\n');
@@ -132,8 +141,7 @@ classdef Project < handle
                spm_jobman('run', matlabbatch(n)); 
             end
             delete(gcp);
-        end                        
-        
+        end                                
         function set_feargen_colors(h,color_ind);
             %if H is a handle of a barplot, it will colorize it with
             %typical feargen colors.            
@@ -141,8 +149,7 @@ classdef Project < handle
             tbar  = length(get(h,'YData'));
             set(h,'CData', repmat(1:tbar,1,tbar/tbar),'edgecolor','none');
             colormap(Project.colors(color_ind,:));                        
-        end
-        
+        end        
     end
     
 end
