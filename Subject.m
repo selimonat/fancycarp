@@ -205,7 +205,7 @@ classdef Subject < Project
             %
             matlabbatch = [];
             count = 0;
-            for nrun = 0:self.tRuns
+            for nrun = 0:self.total_run
                 files                                                    = spm_select('FPListRec',self.path2data(nrun),'^MR');
                 fprintf('Run#%d found %d dicom files.\n',nrun,length(files))
                 if ~isempty(files)%only create a batch if there is ^MR files.
