@@ -1,6 +1,6 @@
 classdef Tuning < handle
     properties (Hidden)
-        visualization = 0;%visualization of fit results
+        visualization = 1;%visualization of fit results
         gridsize      = 20;%resolution per parameter for initial estimation.
         options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
     end
@@ -147,12 +147,12 @@ classdef Tuning < handle
             end
             %% get the null fit
             null.fitfun     = @(x,p) repmat(p(1),length(x),1);
-            null.L          = [ min(y)  0];%mean sigma
-            null.U          = [ max(y)  2*std(y)];
+            null.L          = [ min(y)  max(std(y),0.001)];%mean sigma, don't allow sigma to be smaller than .001.
+            null.U          = [ max(y)  max(2*std(y),0.001)];
             null.Init       = Init;
             null.funny      = @(params) sum(-log( normpdf( y - null.fitfun( x, params(1:end-1)) , 0,params(end)) ));
             y               = y + rand(size(y))*eps;
-            [null.Est, result.null_Likelihood, null.ExitFlag]  = fmincon( null.funny, [mean(y) std(y)], [],[],[],[], null.L , null.U , [], self.options);
+            [null.Est, result.null_Likelihood, null.ExitFlag]  = fmincon( null.funny, [mean(y) max(std(y),.1)], [],[],[],[], null.L , null.U , [], self.options);
             %% Compute a residual
             %This is the RMS differences between the model and data points...
             result.residuals      = y-result.fitfun(x,result.Est);
