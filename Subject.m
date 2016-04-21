@@ -1,5 +1,16 @@
 classdef Subject < Project
-    
+    %   Getter Methods are used to get stuff e.g. ratings, epis, stimulation
+    %   log, behavioral data etc. It also implements downloading data from the
+    %   dicom server.
+    %
+    %   path_tools Methods are used to return the path to different data
+    %   types, not really interesting, used internally.
+    %
+    %   plotter Methods plot subject specific data.
+    %
+    %   fmri analysis methods contain first-level modelling.
+    %
+    % 
     properties (Hidden)
         paradigm
         default_run       = 1;   
@@ -50,22 +61,25 @@ classdef Subject < Project
         end
     end
     
-    methods %(Getters)
-        
+    methods %(Getters)        
         function dump_hr(self)
             %will download the latest HR for this subject to default hr
-            %path.
+            %path (which is run000)
             %
             %
             %
             
+            fprintf('Will now dump the latest HR (%s)\n',self.gettime);            
             %target location for the hr
             hr_target = self.hr_dir;
             %create it if necess.
             if exist(hr_target) == 0
                 mkdir(hr_target);
             end
-            self.DicomDownload(self.GetDicomHRpath,self.hr_dir);
+            self.DicomDownload(self.GetDicomHRpath,self.hr_dir);            
+            self.ConvertDicom;
+            fprintf('Now will create 4D Nifti files...%s\n',self.gettime);
+            self.MergeTo4D;
         end
         function p          = load_paradigm(self,nrun)
             filename = self.path2data(nrun,'stimulation');
@@ -106,8 +120,11 @@ classdef Subject < Project
                 n 				 = n+1;
                 dest             = sprintf('%ssub%03d/run%03d/mrt/',self.path_project,self.id,self.dicom_target_run(n));                
                 self.DicomDownload(source{1},dest);
-            end
-            fprintf('Happily finished dumping...%s\n',self.gettime);
+            end            
+            fprintf('Now will convert them to Nifti...%s\n',self.gettime);
+            self.ConvertDicom;
+            fprintf('Now will create 4D Nifti files...%s\n',self.gettime);
+            self.MergeTo4D;
         end
         function rating = get.ratings(self)
             %returns the CS+-aligned ratings for all the runs
@@ -117,7 +134,7 @@ classdef Subject < Project
                         rating(run).y      = self.paradigm{run}.out.rating';
                         rating(run).y      = circshift(rating.y,[1 4-self.csp ]);
                         rating(run).x      = repmat([-135:45:180],size(self.paradigm{run}.out.rating,2),1);
-                        rating(run).i      = repmat(run          ,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
+                        rating(run).ids    = repmat(self.id,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
                         rating(run).y_mean = mean(rating.y);
                     else
                         fprintf('No rating present for this subject and run (%d) \n',nr);
@@ -143,8 +160,7 @@ classdef Subject < Project
         function [o]    = get.total_run(self)
             %% returns the total number of runs in a folder (except run000)
             o      = length(dir(self.path))-3;%exclude the directories .., ., and run000
-        end
-        
+        end        
         function out    = get_log(self,run)
             %loads and plots the Log, here you can put the old experiment
             %plotter.
@@ -168,7 +184,17 @@ classdef Subject < Project
             out      = self.fit_pmf;
             out      = [out.params(1,:),out.params(2,:)];
             out      = array2table([out self.id ],'variablenames',[self.pmf_variablenames 'subject_id']);
-        end 
+        end         
+        function o      = GetMotionParameters(self,run)
+            %will load the realignment parameters, of course you have to
+            %realign the EPIs first.
+            filename = sprintf('%smrt/rp_data.txt',self.path2data(run));
+            if exist(filename)
+                o = load(filename);
+            else
+                fprintf('File:\n %s doesn''t exist.\n Most likely realignment is not yet done.\n');
+            end            
+        end
     end
     
     methods %(mri, preprocessing))      
@@ -212,7 +238,7 @@ classdef Subject < Project
             %will create data.nii consisting of all the [f,s]TRIO images
             %merged to 4D.
             
-            %% merge to 4D
+            % merge to 4D
             fprintf('Merging s#%i...(%s)\n',self.id,self.gettime);
             matlabbatch = [];
             c           = 0;
@@ -229,61 +255,148 @@ classdef Subject < Project
                 self.RunSPMJob(matlabbatch);
             end
             fprintf('Finished... (%s)\n',self.gettime);
-        end        
-        function Realign(self)
-            % Will realign all runs using spm batch.
-            matlabbatch = [];
-            for nrun  = 1:self.tRuns
-                file = sprintf('%smrt%sdata.nii',self.path2data(nrun),filesep);
-            end
-            matlabbatch{1}.spm.spatial.realign.estwrite.data             = {cellstr(file)};
-            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
-            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.sep     = 4;
-            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.fwhm    = 5;
-            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.rtm     = 1;
-            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.interp  = 2;
-            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.wrap    = [0 0 0];
-            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.weight  = '';
-            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.which   = [2 1];
-            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.interp  = 4;
-            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.wrap    = [0 0 0];
-            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.mask    = 1;
-            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.prefix  = 'r';
-            fprintf('Realigning s#%i...(%s)\n',self.id,datestr(now,'hh:mm:ss'));
-            spm_jobman('run',matlabbatch);
-            fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
+        end      
+        
+        function segment(Self)
+            avg_mprage = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^avg.*\.nii']);
+            matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(avg_mprage);
+            matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
+            matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
+            matlabbatch{1}.spm.spatial.preproc.channel.write = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm = {[tpm_dir 'TPM.nii,1']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).ngaus = 1;
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).native = [1 1];
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm = {[tpm_dir 'TPM.nii,2']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).ngaus = 1;
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).native = [1 1];
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm = {[tpm_dir 'TPM.nii,3']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).ngaus = 2;
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).native = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm = {[tpm_dir 'TPM.nii,4']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).ngaus = 3;
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).native = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm = {[tpm_dir 'TPM.nii,5']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).ngaus = 4;
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).native = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm = {[tpm_dir 'TPM.nii,6']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).ngaus = 2;
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).native = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.warp.mrf = 1;
+            matlabbatch{1}.spm.spatial.preproc.warp.cleanup = 1;
+            matlabbatch{1}.spm.spatial.preproc.warp.reg = [0 0.001 0.5 0.05 0.2];
+            matlabbatch{1}.spm.spatial.preproc.warp.affreg = 'mni';
+            matlabbatch{1}.spm.spatial.preproc.warp.fwhm = 0;
+            matlabbatch{1}.spm.spatial.preproc.warp.samp = 3;
+            matlabbatch{1}.spm.spatial.preproc.warp.write = [0 0];
+            spm_jobman('run', matlabbatch);
         end
-        function Coreg_Anat2Functional(self)
-            %rigid-body wiggles around the anatomical to the mean EPI from
-            %the realignment procedure.
-            mean_file =sprintf('%smrt%smeandata.nii',self.path2data(1),filesep);%is mean_file always saved to the same place?
-            if exist(mean_file) > 0
-                matlabbatch{1}.spm.spatial.coreg.estwrite.ref                = { mean_file };%the one that stays constant
-                matlabbatch{1}.spm.spatial.coreg.estwrite.source             = { self.hr_path };%anatomical one.
-                matlabbatch{1}.spm.spatial.coreg.estwrite.other              = {''};
-                matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.cost_fun  = 'nmi';
-                matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.sep       = [4 2];
-                matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.tol       = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];
-                matlabbatch{1}.spm.spatial.coreg.estwrite.eoptions.fwhm      = [7 7];
-                %
-                matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.interp    = 6;
-                matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.wrap      = [0 0 0];
-                matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.mask      = 0;
-                matlabbatch{1}.spm.spatial.coreg.estwrite.roptions.prefix    = 'r';
-                spm_jobman('run',matlabbatch);
-            else
-                fprintf('I think you need to realign first, the file:\n %s \n is not yet computed...\n',mean_file);
-            end
-        end        
-        function o = MotionParameters(self,run)
-            %will load the realignment parameters.
-            filename = sprintf('%smrt/rp_data.txt',self.path2data(run));
-            if exist(filename)
-                o = load(filename);
-            else
-                fprintf('File:\n %s doesn''t exist.\n Most likely realignment is not yet done.\n');
-            end
-        end        
+        
+        function SkullStrip(self)
+             clear matlabbatch;
+            avg_mprage = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^avg.*\.nii']);
+            avg_c1 = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^c1avg.*\.nii']);
+            avg_c2 = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^c2avg.*\.nii']);
+            Vfnames               = strvcat(avg_mprage,avg_c1,avg_c2);
+            matlabbatch{1}.spm.util.imcalc.input            = cellstr(Vfnames);
+            matlabbatch{1}.spm.util.imcalc.output           = skullstrip;
+            matlabbatch{1}.spm.util.imcalc.outdir           = {[base_dir filesep volunteer filesep 'FU0\MPRAGE']};
+            matlabbatch{1}.spm.util.imcalc.expression       = 'i1.*((i2+i3)>0.2)';
+            matlabbatch{1}.spm.util.imcalc.options.dmtx     = 0;
+            matlabbatch{1}.spm.util.imcalc.options.mask     = 0;
+            matlabbatch{1}.spm.util.imcalc.options.interp   = 1;
+            matlabbatch{1}.spm.util.imcalc.options.dtype    = 4;
+            spm_jobman('run', matlabbatch);
+        end
+        
+        function Dartel(self)
+            avg_rc1 = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^rc1avg.*\.nii']);
+            avg_rc2 = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^rc2avg.*\.nii']);
+            matlabbatch{1}.spm.tools.dartel.warp1.images = {{avg_rc1},{avg_rc2}}';
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.rform = 0;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).its = 3;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).rparam = [4 2 1e-06];
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).K = 0;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).template = {'C:\Users\buechel\Documents\MATLAB\spm12\toolbox\cat12\templates_1.50mm\Template_1_IXI555_MNI152.nii'};
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).its = 3;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).rparam = [2 1 1e-06];
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).K = 0;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).template = {'C:\Users\buechel\Documents\MATLAB\spm12\toolbox\cat12\templates_1.50mm\Template_2_IXI555_MNI152.nii'};
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).its = 3;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).rparam = [1 0.5 1e-06];
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).K = 1;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).template = {'C:\Users\buechel\Documents\MATLAB\spm12\toolbox\cat12\templates_1.50mm\Template_3_IXI555_MNI152.nii'};
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).its = 3;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).rparam = [0.5 0.25 1e-06];
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).K = 2;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).template = {'C:\Users\buechel\Documents\MATLAB\spm12\toolbox\cat12\templates_1.50mm\Template_4_IXI555_MNI152.nii'};
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).its = 3;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).rparam = [0.25 0.125 1e-06];
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).K = 4;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).template = {'C:\Users\buechel\Documents\MATLAB\spm12\toolbox\cat12\templates_1.50mm\Template_5_IXI555_MNI152.nii'};
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).its = 3;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).rparam = [0.25 0.125 1e-06];
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).K = 6;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).template = {'C:\Users\buechel\Documents\MATLAB\spm12\toolbox\cat12\templates_1.50mm\Template_6_IXI555_MNI152.nii'};
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.optim.lmreg = 0.01;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.optim.cyc = 3;
+            matlabbatch{1}.spm.tools.dartel.warp1.settings.optim.its = 3;
+            spm_jobman('run', matlabbatch);
+        end
+        
+        function Re_Coreg(self)
+            fu_0_mid = spm_select('ExtFPList',[base_dir filesep volunteer filesep 'FU0\MID'],get_name(epi_0{ff}),1:n_epis_fu0);
+            fu_2_mid = spm_select('ExtFPList',[base_dir filesep volunteer filesep 'FU2\MID'],get_name(epi_2{ff}),1:n_epis_fu2);
+            matlabbatch{1}.spm.spatial.realign.estwrite.data{1} = cellstr(fu_0_mid);
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.sep = 4;
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.fwhm = 5;
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.rtm = 1;
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.interp = 2;
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.wrap = [0 0 0];
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.weight = '';
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.which = [0 1];
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.interp = 4;
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.wrap = [0 0 0];
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.mask = 1;
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.prefix = 'r';
+            
+            matlabbatch{2} = matlabbatch{1};
+            matlabbatch{2}.spm.spatial.realign.estwrite.data{1} = cellstr(fu_2_mid);            
+
+            %%coregister to skullstrip
+            s_strip = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^' skullstrip]);
+            mean_img_0 = [base_dir filesep volunteer filesep 'FU0\MID\mean' get_name(epi_0{ff})];
+            mean_img_2 = [base_dir filesep volunteer filesep 'FU2\MID\mean' get_name(epi_2{ff})];
+            matlabbatch{3}.spm.spatial.coreg.estimate.ref = cellstr(s_strip);
+            matlabbatch{3}.spm.spatial.coreg.estimate.source = cellstr(mean_img_0);
+            matlabbatch{3}.spm.spatial.coreg.estimate.other = cellstr(fu_0_mid);
+            matlabbatch{3}.spm.spatial.coreg.estimate.eoptions.cost_fun = 'nmi';
+            matlabbatch{3}.spm.spatial.coreg.estimate.eoptions.sep = [4 2];
+            matlabbatch{3}.spm.spatial.coreg.estimate.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];
+            matlabbatch{3}.spm.spatial.coreg.estimate.eoptions.fwhm = [7 7];
+            
+            matlabbatch{4} = matlabbatch{3};
+            matlabbatch{4}.spm.spatial.coreg.estimate.source = cellstr(mean_img_2);
+            matlabbatch{4}.spm.spatial.coreg.estimate.other = cellstr(fu_2_mid);
+
+            %%write images
+            matlabbatch{5}.spm.spatial.realign.write.data = cellstr(strvcat(fu_0_mid,fu_2_mid));
+            matlabbatch{5}.spm.spatial.realign.write.roptions.which = [2 1];
+            matlabbatch{5}.spm.spatial.realign.write.roptions.interp = 4;
+            matlabbatch{5}.spm.spatial.realign.write.roptions.wrap = [0 0 0];
+            matlabbatch{5}.spm.spatial.realign.write.roptions.mask = 1;
+            matlabbatch{5}.spm.spatial.realign.write.roptions.prefix = 'r';
+            spm_jobman('run', matlabbatch);
+        end
+        
+          
+        
         function [scanunit]=StimTime2ScanUnit(self,run)
             %will return stim onsets in units of scan. Usefull for first
             %level.
@@ -317,10 +430,7 @@ classdef Subject < Project
             %the directory where hr is located
             out = sprintf('%smrt/',self.pathfinder(self.id,0));
         end        
-        function out        = hr_path(self)
-            %path to the hr volume
-            out = spm_select('ExtFPList',self.hr_dir,'^sTRIO.*.nii$');
-        end        
+        
         function [t]        = total_volumes(self,run)
             % will tell you how many volumes are in a 4D image.
             bla = spm_vol_nifti(self.mrt_data(run),1);%simply read the first images header
@@ -365,6 +475,10 @@ classdef Subject < Project
             % s.path2data(53,4,'eye') return the path to the eye data file at the
             % 4th phase.
             
+            if nargin < 2
+                fprintf('you have to have at least one input for me...\n');
+                return
+            end
             %will return the path to phase/data_type/
             path2data = self.pathfinder(self.id , run);
             if length(varargin) >= 1
@@ -593,7 +707,6 @@ classdef Subject < Project
             title(sprintf('Sub %d, CSP (%d), estimated alpha = %g, LL = %g',self.id,self.csp, out.params(1,1),out.LL(1)));
             subplot(tchain,1,2)
             title(sprintf('CSN (%d), estimated alpha = %g, LL = %g',self.csn,out.params(2,1),out.LL(2)));
-        end
-        
+        end        
     end
 end
