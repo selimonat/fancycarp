@@ -76,8 +76,7 @@ classdef Group < Project
         %%
         function model_ratings(self,run,funtype)
             %will fit to ratings from RUN the FUNTYPE and cache the result
-            %in the midlevel folder.
-            keyboard
+            %in the midlevel folder.            
             filename               = sprintf('%smidlevel/Tunings_Run_%03d_FunType_%03d_N%s.mat',self.path_project,run,funtype,sprintf('%s\b\b',sprintf('%ito',self.ids([1 end]))));
             if exist(filename) == 0
                 %create a tuning object and fits FUNTYPE to it.
