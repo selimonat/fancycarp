@@ -6,13 +6,13 @@ classdef Tuning < handle
     end
     %tuning object, can contain any kind of fear-tuning SCR, rating etc.
     properties
-        x =[];
-        y      =[];
-        ids    =[];
+        x      = [];
+        y      = [];
+        ids    = [];
         y_mean = [];
         y_std  = [];
         groupfit
-        singlesubject
+        singlesubject_data
         params;
         pval
     end
@@ -43,8 +43,11 @@ classdef Tuning < handle
         function FitGetParam(self)
             self.params = NaN(length(self.singlesubject),size(self.singlesubject{1}.Est,2));
             for unit = 1:length(self.singlesubject)
-                self.params(unit,:) = self.singlesubject{unit}.Est;
-                self.pval(unit)     = self.singlesubject{unit}.pval;
+                self.params(unit,:)   = self.singlesubject{unit}.Est;
+                self.ExitFlag(unit,1) = self.singlesubject{unit}.ExitFlag;
+                self.pval(unit,1)     = self.singlesubject{unit}.pval;
+                self.x(unit,:)        = self.singlesubject{unit}.x;  
+                self.fit(unit,:)      = self.singlesubject{unit}.fit;
             end
         end
         
