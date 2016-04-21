@@ -3,6 +3,7 @@ classdef Tuning < handle
         visualization = 1;%visualization of fit results
         gridsize      = 20;%resolution per parameter for initial estimation.
         options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
+        singlesubject_data = [];%will contain the fit results for individual subjects
     end
     %tuning object, can contain any kind of fear-tuning SCR, rating etc.
     properties
@@ -11,10 +12,10 @@ classdef Tuning < handle
         ids    = [];
         y_mean = [];
         y_std  = [];
-        groupfit
-        singlesubject_data
+        groupfit        
         params;
-        pval
+        pval;
+        fit_results;
     end
     
     methods
@@ -35,19 +36,19 @@ classdef Tuning < handle
             ts = size(self.x,1);
             for ns = 1:ts
                 fprintf('Fitting subject %03d of %03d, id: %03d\n',ns,ts,self.ids(ns));
-                self.singlesubject{ns} = self.Fit(self.x(ns,:),self.y(ns,:),funtype);
+                self.singlesubject_data{ns} = self.Fit(self.x(ns,:),self.y(ns,:),funtype);
             end
             self.FitGetParam;
         end
         
         function FitGetParam(self)
-            self.params = NaN(length(self.singlesubject),size(self.singlesubject{1}.Est,2));
-            for unit = 1:length(self.singlesubject)
-                self.params(unit,:)   = self.singlesubject{unit}.Est;
-                self.ExitFlag(unit,1) = self.singlesubject{unit}.ExitFlag;
-                self.pval(unit,1)     = self.singlesubject{unit}.pval;
-                self.x(unit,:)        = self.singlesubject{unit}.x;  
-                self.fit(unit,:)      = self.singlesubject{unit}.fit;
+            self.params = NaN(length(self.singlesubject_data),size(self.singlesubject_data{1}.Est,2));
+            for unit = 1:length(self.singlesubject_data)
+                self.fit_results.params(unit,:)   = self.singlesubject_data{unit}.Est;
+                self.fit_results.ExitFlag(unit,1) = self.singlesubject_data{unit}.ExitFlag;
+                self.fit_results.pval(unit,1)     = self.singlesubject_data{unit}.pval;
+                self.fit_results.x(unit,:)        = self.singlesubject_data{unit}.x;  
+                self.fit_results.y_fitted(unit,:) = self.singlesubject_data{unit}.fit;
             end
         end
         
@@ -55,8 +56,7 @@ classdef Tuning < handle
             %pools different subjects and fit FUNTYPE
             self.groupfit = self.Fit(self.x(:),self.y(:),funtype);
             %
-        end
-        
+        end        
         function result = Fit(self,x,y,funtype)
             %Fits FUNTYPE to a tuning defined in x and y
             
