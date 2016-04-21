@@ -8,7 +8,7 @@ classdef Group < Project
         ids
         csps
         table_pmf
-        raw_ratings
+        ratings
         total_subjects
         tunings
         SI        
@@ -18,6 +18,7 @@ classdef Group < Project
     end
     
     methods
+        
         %%
         function group = Group(subjects)
             c = 0;
@@ -30,16 +31,19 @@ classdef Group < Project
             end
         end
         %%
-        function out = get.raw_ratings(self)            
-            %returns ratings as a matrix in fields x and y.
-            out.y = [];
-            out.x = [];
-            for s = self.subject                                
-                out.y = [out.y ;s{1}.ratings.y_mean(:)'];
-                out.x = [out.x ;s{1}.ratings.x(1,:)];
-            end                        
+        function out = get.ratings(self)                        
+            %will collect group ratings as ratings(nrun).y, ratings(nrun).x
+            %etc.            
+            out = self.subject{1}.ratings;
+            for s = 2:self.total_subjects
+                for fields = fieldnames(self.subject{s}.ratings)'
+                    newdimen = ndims(self.subject{s}.ratings.(fields{1}));%find the dimensionality of the rating field and add subjects to +1th
+                    newdimen = newdimen+1;
+                    out.(fields{1}) = cat(newdimen,out.(fields{1}),self.subject{s}.ratings.(fields{1}));
+                end
+            end
         end
-        %%
+        %%        
         function out = get.table_pmf(self)            
             %returns pmf parameters as a table
             out = [];
@@ -47,9 +51,10 @@ classdef Group < Project
                 out = [out ;s{1}.pmf_parameters];
             end            
         end
-        %%
+        %%        
         function csps = get.csps(self)   
-            %returns the csp face for all the group
+            %returns the csp face for all the group... In the future one
+            %could make a get_subject_field function
             for s = 1:length(self.subject)
                 csps(s) = self.subject{s}.csp;
             end
@@ -60,10 +65,11 @@ classdef Group < Project
         end
         %%
         function plot_ratings(self)
+            %%
             [y x]  =  GetSubplotNumber(self.total_subjects);
             for ns = 1:self.total_subjects
                 subplot(y,x,ns);
-                self.feargen_plot(self.raw_ratings.y(ns,:));
+                self.feargen_plot(self.ratings.y_mean(1,:,ns));
                 box off;
                 title(sprintf('s: %d, cs+: %d',self.ids(ns),self.subject{ns}.csp),self.font_style{:}); 
             end
@@ -72,6 +78,7 @@ classdef Group < Project
         end
         
         function feargen_plot(self,data)
+            %elementary function to make feargen plots
             h = bar(data,1);            
             self.set_feargen_colors(h,2:9);
             set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'},'xgrid','on',self.font_style{:});
