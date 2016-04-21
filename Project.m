@@ -8,6 +8,10 @@ classdef Project < handle
     % experiment. Later these variables will be used by different methods
     % in the SUBJECT object to transfer data from the dicom server. 
     %
+    % Once you data is nicely loaded into the subject/run/ structure,
+    % SanityCheck method comes very handy to ensure that your project
+    % folders have all the size they should be.
+    %
     % Feel free to improve this help section.
     %
     % please ensure that smrREADER, SPM12, Palamedes are in your path.
@@ -39,8 +43,9 @@ classdef Project < handle
         function DU = SanityCheck(self,runs,varargin)
             %will run through subject folders and will plot their disk
             %space. Use a string in VARARGIN to focus only on a subfolder            
-            DU = nan(self.total_subject,length(runs));
-            for ns = 1:self.total_subject
+            total_subjects = length(Project.trio_sessions);
+            DU = nan(total_subjects,length(runs));
+            for ns = 1:total_subjects
                 for nr = runs                    
                     fprintf('Requesting folder size for subject %03d and run %03d\n',ns,nr);
                     fullpath = fullfile(self.pathfinder(ns,nr),varargin{:});
@@ -124,7 +129,7 @@ classdef Project < handle
             for i = ind_valid(:)'
                 degree{i} = mat2str(MinimumAngle( 0 , (stim_id{i}-self.csp)*45 ));
             end
-        end                        
+        end        
     end
     methods(Static)
         function t          = gettime
@@ -150,6 +155,5 @@ classdef Project < handle
             set(h,'CData', repmat(1:tbar,1,tbar/tbar),'edgecolor','none');
             colormap(Project.colors(color_ind,:));                        
         end        
-    end
-    
+    end    
 end
