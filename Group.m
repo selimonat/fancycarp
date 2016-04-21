@@ -32,14 +32,11 @@ classdef Group < Project
         end
         %%
         function out = get.ratings(self)                        
-            %will collect group ratings as ratings(nrun).y, ratings(nrun).x
-            %etc.            
-            out = self.subject{1}.ratings;
-            for s = 2:self.total_subjects
+            %will collect group ratings as a matrix in out(run).y,
+            %out(run).x etc.
+            for s = 1:self.total_subjects
                 for fields = fieldnames(self.subject{s}.ratings)'
-                    newdimen = ndims(self.subject{s}.ratings.(fields{1}));%find the dimensionality of the rating field and add subjects to +1th
-                    newdimen = newdimen+1;
-                    out.(fields{1}) = cat(newdimen,out.(fields{1}),self.subject{s}.ratings.(fields{1}));
+                    out.(fields{1})(:,s) = self.subject{s}.ratings.(fields{1})(:);
                 end
             end
         end
@@ -77,6 +74,14 @@ classdef Group < Project
             supertitle(self.path_project,1);
         end
         
+        %%
+        function ModelRatings(self,run,funtype)
+            %create a tuning object and fits FUNTYPE to it.
+            self.tunings.rate{run} = Tuning(self.Ratings(run));%create a tuning object for the RUN for ratings.
+            self.tunings.rate{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
+        end
+               
+         %%
         function feargen_plot(self,data)
             %elementary function to make feargen plots
             h = bar(data,1);            
@@ -84,48 +89,6 @@ classdef Group < Project
             set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'},'xgrid','on',self.font_style{:});
             axis tight;
         end
-        
-        function ModelRatings(self,run,funtype)
-            %create a tuning object and fits FUNTYPE to it.
-            self.tunings.rate{run} = Tuning(self.Ratings(run));%create a tuning object for the RUN for ratings.
-            self.tunings.rate{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
-        end
-        
-         function [ratings,ratings_sd] = getRatings(self,phases)
-            for ph = phases(:)';
-                xc=0;
-                for x  = unique(self.Ratings(ph).x(:)')
-                    xc=xc+1;
-                    i             = self.Ratings(ph).x(1,:) == x;
-                    ratings(:,xc,ph)      = mean(self.Ratings(ph).y(:,i),2);
-                    ratings_sd(:,xc,ph)   = std(self.Ratings(ph).y(:,i),0,2);
-                end
-            end
-         end
-        
-         function [rating] = Ratings(self,run)
-            %will collect the ratings from single subjects 
-            rating.y   = [];
-            rating.x   = [];
-            rating.ids = [];
-            c = 0;
-            for s = 1:length(self.subject)
-                if ~isempty(self.subject{s})
-                    dummy = self.subject{s}.GetRating(run,self.align_tunings);
-                    if ~isempty(dummy)
-                        c = c+1;
-                        if self.mean_correction
-                            dummy.y_mean = dummy.y_mean-mean(dummy.y_mean);
-                            dummy.y      = dummy.y - mean(dummy.y(:));
-                        end
-                        rating.y   = [rating.y ; dummy.y(:)'];
-                        rating.x   = [rating.x ; dummy.x(:)'];
-                        rating.ids  = [rating.ids; self.ids(s)];
-                    end
-                end
-            end
-        end
-         
          
         %%
         function ModelSCR(self,run,funtype)
