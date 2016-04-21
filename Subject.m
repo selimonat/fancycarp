@@ -6,7 +6,7 @@ classdef Subject < Project
         dicom_serie_id    = [];
         dicom_folders     = [];
         dicom_target_run  = [];
-        total_run         = [];
+        
         pmf               = []; %raw results of the pmf
         pmf_variablenames = {'alpha_chain01','beta_chain01','gamma_chain01','lapse_chain01','alpha_chain02','beta_chain02','gamma_chain02','lapse_chain02'}
     end
@@ -19,6 +19,7 @@ classdef Subject < Project
         pmf_parameters= [];
         trio_session  = [];
         ratings       = [];
+        total_run     = [];
     end
     %%
     methods
@@ -43,7 +44,8 @@ classdef Subject < Project
                 %                     s.bold = BOLD(s);
                 %                 end
             else
-                fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path)
+                fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path);
+                fprintf('Your path might also be wrong...\n');
             end
         end
     end
@@ -109,17 +111,19 @@ classdef Subject < Project
         end
         function rating = get.ratings(self)
             %returns the CS+-aligned ratings for all the runs
-            run = 1;
-            if ~isempty(self.paradigm{run});
-                rating.y      = self.paradigm{run}.out.rating';
-                rating.y      = circshift(rating.y,[1 4-self.csp ]);
-                rating.x      = repmat([-135:45:180],size(self.paradigm{run}.out.rating,2),1);
-                rating.i      = repmat(run          ,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
-                rating.y_mean = mean(rating.y);
-            else
-                fprintf('No rating present for this subject and run (%d) \n',nr);
+            for run = 1:self.total_run;%don't count the first run
+                if isfield(self.paradigm{run}.out,'rating')
+                    if ~isempty(self.paradigm{run});
+                        rating(run).y      = self.paradigm{run}.out.rating';
+                        rating(run).y      = circshift(rating.y,[1 4-self.csp ]);
+                        rating(run).x      = repmat([-135:45:180],size(self.paradigm{run}.out.rating,2),1);
+                        rating(run).i      = repmat(run          ,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
+                        rating(run).y_mean = mean(rating.y);
+                    else
+                        fprintf('No rating present for this subject and run (%d) \n',nr);
+                    end
+                end
             end
-            
         end
         function out    = GetSubSCR(self,run,cond)
             if nargin < 3
@@ -138,7 +142,7 @@ classdef Subject < Project
         end        
         function [o]    = get.total_run(self)
             %% returns the total number of runs in a folder (except run000)
-            o      = length(dir(self.path))-2;            
+            o      = length(dir(self.path))-3;%exclude the directories .., ., and run000
         end
         
         function out    = get_log(self,run)
