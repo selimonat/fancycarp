@@ -11,10 +11,7 @@ classdef Group < Project
         ratings
         total_subjects
         tunings
-        SI        
-        sigma_cond
-        sigma_test
-        SCR_ampl
+        fit_results
     end
     
     methods
@@ -77,17 +74,19 @@ classdef Group < Project
         function model_ratings(self,run,funtype)
             %will fit to ratings from RUN the FUNTYPE and cache the result
             %in the midlevel folder.            
+            T = [];%future tuning object
             filename               = sprintf('%smidlevel/Tunings_Run_%03d_FunType_%03d_N%s.mat',self.path_project,run,funtype,sprintf('%s\b\b',sprintf('%ito',self.ids([1 end]))));
             if exist(filename) == 0
                 %create a tuning object and fits FUNTYPE to it.
-                self.tunings.rate{run} = Tuning(self.ratings(run));%create a tuning object for the RUN for ratings.
-                self.tunings.rate{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
-                rate = self.tunings.rate;
-                save(filename,'rate');
+                T  = Tuning(self.ratings(run));%create a tuning object for the RUN for ratings.                
+                T.SingleSubjectFit(funtype);%call fit method from the tuning object                
+                save(filename,'T');
             else
-                fprintf('Will load the tuning parameters from the cache:\n%s',filename);
-                self.tunings = load(filename);
+                fprintf('Will load the tuning parameters from the cache:\n%s\n',filename);
+                load(filename);
             end
+            %get the relevant data from the tuning object            
+            self.fit_results = T.fit_results;
         end               
         %%
         function feargen_plot(self,data)
