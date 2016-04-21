@@ -36,7 +36,7 @@ classdef Group < Project
             %out(run).x etc.
             for s = 1:self.total_subjects
                 for fields = fieldnames(self.subject{s}.ratings)'
-                    out.(fields{1})(:,s) = self.subject{s}.ratings.(fields{1})(:);
+                    out.(fields{1})(s,:) = self.subject{s}.ratings.(fields{1})(:);
                 end
             end
         end
@@ -72,15 +72,13 @@ classdef Group < Project
             end
             EqualizeSubPlotYlim(gcf);
             supertitle(self.path_project,1);
-        end
-        
+        end        
         %%
-        function ModelRatings(self,run,funtype)
+        function model_ratings(self,run,funtype)
             %create a tuning object and fits FUNTYPE to it.
-            self.tunings.rate{run} = Tuning(self.Ratings(run));%create a tuning object for the RUN for ratings.
+            self.tunings.rate{run} = Tuning(self.ratings(run));%create a tuning object for the RUN for ratings.
             self.tunings.rate{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
-        end
-               
+        end               
          %%
         function feargen_plot(self,data)
             %elementary function to make feargen plots
