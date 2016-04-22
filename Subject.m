@@ -200,27 +200,27 @@ classdef Subject < Project
             matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
             matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
             matlabbatch{1}.spm.spatial.preproc.channel.write = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm = {[tpm_dir 'TPM.nii,1']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm = {[self.tpm_dir 'TPM.nii,1']};
             matlabbatch{1}.spm.spatial.preproc.tissue(1).ngaus = 1;
             matlabbatch{1}.spm.spatial.preproc.tissue(1).native = [1 1];
             matlabbatch{1}.spm.spatial.preproc.tissue(1).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm = {[tpm_dir 'TPM.nii,2']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm = {[self.tpm_dir 'TPM.nii,2']};
             matlabbatch{1}.spm.spatial.preproc.tissue(2).ngaus = 1;
             matlabbatch{1}.spm.spatial.preproc.tissue(2).native = [1 1];
             matlabbatch{1}.spm.spatial.preproc.tissue(2).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm = {[tpm_dir 'TPM.nii,3']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm = {[self.tpm_dir 'TPM.nii,3']};
             matlabbatch{1}.spm.spatial.preproc.tissue(3).ngaus = 2;
             matlabbatch{1}.spm.spatial.preproc.tissue(3).native = [0 0];
             matlabbatch{1}.spm.spatial.preproc.tissue(3).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm = {[tpm_dir 'TPM.nii,4']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm = {[self.tpm_dir 'TPM.nii,4']};
             matlabbatch{1}.spm.spatial.preproc.tissue(4).ngaus = 3;
             matlabbatch{1}.spm.spatial.preproc.tissue(4).native = [0 0];
             matlabbatch{1}.spm.spatial.preproc.tissue(4).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm = {[tpm_dir 'TPM.nii,5']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm = {[self.tpm_dir 'TPM.nii,5']};
             matlabbatch{1}.spm.spatial.preproc.tissue(5).ngaus = 4;
             matlabbatch{1}.spm.spatial.preproc.tissue(5).native = [0 0];
             matlabbatch{1}.spm.spatial.preproc.tissue(5).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm = {[tpm_dir 'TPM.nii,6']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm = {[self.tpm_dir 'TPM.nii,6']};
             matlabbatch{1}.spm.spatial.preproc.tissue(6).ngaus = 2;
             matlabbatch{1}.spm.spatial.preproc.tissue(6).native = [0 0];
             matlabbatch{1}.spm.spatial.preproc.tissue(6).warped = [0 0];
@@ -358,6 +358,10 @@ classdef Subject < Project
         end
     end
     methods %fmri path_tools
+        function [out] = tpm_dir(self)
+            %path to the TPM images, needed by segment.
+            out = sprintf('%stpm/',self.spm_path);
+        end
         function out        = spm_dir(self)
             %returns subject's path to spm folder for run RUN.
             out = sprintf('%smrt/spm/',self.pathfinder(self.id,1));
@@ -442,105 +446,7 @@ classdef Subject < Project
             end
         end       
     end
-    methods %(fmri analysis)
-        function FitFIR(self,nrun,model_num)
-            %run the model MODEL_NUM for data in NRUN.
-            %NRUN can be a vector, but then care has to be taken that
-            %model_num is correctly set for different runs.
-            
-            
-            spm_dir = sprintf('%s/model_fir_%02d/',self.spm_dir,model_num);
-            spm_path= sprintf('%s/model_fir_%02d/SPM.mat',self.spm_dir,model_num);
-            
-            if ~exist(self.spm_path);mkdir(spm_dir);end
-            
-            matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
-            matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
-            matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
-            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
-            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
-            
-            for session = nrun
-                %load files using ...,1, ....,2 format
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));
-                %load the onsets
-                dummy                                                   = load(sprintf('%sdesign/model%02d.mat',self.path2data(session),model_num));
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
-                %load nuissance parameters
-                nuis                                                    = self.MotionParameters(nrun);
-                nuis                                                    = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
-                for nNuis = 1:size(nuis,2)
-                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
-                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).name  = mat2str(nNuis);
-                end
-                %
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi               = {''};
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi_reg           = {''};
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = 128;
-            end
-            matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
-            matlabbatch{1}.spm.stats.fmri_spec.bases.fir.length                  = self.TR*15;
-            matlabbatch{1}.spm.stats.fmri_spec.bases.fir.order                   = 10;
-            matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
-            matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
-            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
-            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
-            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
-            %estimation
-            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {spm_path};
-            matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
-            spm_jobman('run', matlabbatch);
-        end
-        function FitHRF(self,nrun,model_num)
-            %run the model MODEL_NUM for data in NRUN.
-            %NRUN can be a vector, but then care has to be taken that
-            %model_num is correctly set for different runs.
-            
-            
-            spm_dir = sprintf('%s/model_chrf_%02d/',self.spm_dir,model_num);
-            spm_path= sprintf('%s/model_chrf_%02d/SPM.mat',self.spm_dir,model_num);
-            
-            if ~exist(self.spm_path);mkdir(spm_dir);end
-            
-            matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
-            matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
-            matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
-            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
-            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
-            
-            for session = nrun
-                %load files using ...,1, ....,2 format
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));
-                %load the onsets
-                dummy                                                   = load(sprintf('%sdesign/model%02d.mat',self.path2data(session),model_num));
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
-                %load nuissance parameters
-                nuis                                                    = self.MotionParameters(nrun);
-                nuis                                                    = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
-                for nNuis = 1:size(nuis,2)
-                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
-                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).name  = mat2str(nNuis);
-                end
-                %
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi               = {''};
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi_reg           = {''};
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = 128;
-            end
-            matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
-            matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs                  = [0 0];
-            matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
-            matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
-            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
-            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
-            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
-            %estimation
-            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {spm_path};
-            matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
-            spm_jobman('run', matlabbatch);
-        end
-    end
+   
     methods %analysis
         function [out] = fit_pmf(self,varargin)
             %will load the pmf fit (saved in runXXX/pmf) if computed other
@@ -661,5 +567,104 @@ classdef Subject < Project
             subplot(tchain,1,2)
             title(sprintf('CSN (%d), estimated alpha = %g, LL = %g',self.csn,out.params(2,1),out.LL(2)));
         end        
+    end
+     methods %(fmri analysis)
+        function FitFIR(self,nrun,model_num)
+            %run the model MODEL_NUM for data in NRUN.
+            %NRUN can be a vector, but then care has to be taken that
+            %model_num is correctly set for different runs.
+            
+            
+            spm_dir = sprintf('%s/model_fir_%02d/',self.spm_dir,model_num);
+            spm_path= sprintf('%s/model_fir_%02d/SPM.mat',self.spm_dir,model_num);
+            
+            if ~exist(self.spm_path);mkdir(spm_dir);end
+            
+            matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
+            matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
+            matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
+            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
+            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
+            
+            for session = nrun
+                %load files using ...,1, ....,2 format
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));
+                %load the onsets
+                dummy                                                   = load(sprintf('%sdesign/model%02d.mat',self.path2data(session),model_num));
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
+                %load nuissance parameters
+                nuis                                                    = self.MotionParameters(nrun);
+                nuis                                                    = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
+                for nNuis = 1:size(nuis,2)
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).name  = mat2str(nNuis);
+                end
+                %
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi               = {''};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi_reg           = {''};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = 128;
+            end
+            matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
+            matlabbatch{1}.spm.stats.fmri_spec.bases.fir.length                  = self.TR*15;
+            matlabbatch{1}.spm.stats.fmri_spec.bases.fir.order                   = 10;
+            matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
+            matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
+            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
+            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
+            %estimation
+            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {spm_path};
+            matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
+            spm_jobman('run', matlabbatch);
+        end
+        function FitHRF(self,nrun,model_num)
+            %run the model MODEL_NUM for data in NRUN.
+            %NRUN can be a vector, but then care has to be taken that
+            %model_num is correctly set for different runs.
+            
+            
+            spm_dir = sprintf('%s/model_chrf_%02d/',self.spm_dir,model_num);
+            spm_path= sprintf('%s/model_chrf_%02d/SPM.mat',self.spm_dir,model_num);
+            
+            if ~exist(self.spm_path);mkdir(spm_dir);end
+            
+            matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
+            matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
+            matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
+            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
+            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
+            
+            for session = nrun
+                %load files using ...,1, ....,2 format
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));
+                %load the onsets
+                dummy                                                   = load(sprintf('%sdesign/model%02d.mat',self.path2data(session),model_num));
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
+                %load nuissance parameters
+                nuis                                                    = self.MotionParameters(nrun);
+                nuis                                                    = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
+                for nNuis = 1:size(nuis,2)
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).name  = mat2str(nNuis);
+                end
+                %
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi               = {''};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi_reg           = {''};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = 128;
+            end
+            matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
+            matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs                  = [0 0];
+            matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
+            matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
+            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
+            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
+            %estimation
+            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {spm_path};
+            matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
+            spm_jobman('run', matlabbatch);
+        end
     end
 end
