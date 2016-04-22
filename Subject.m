@@ -194,9 +194,9 @@ classdef Subject < Project
     
     methods %(mri, preprocessing))      
         
-        function segment(Self)
+        function segment(self)
             avg_mprage = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^avg.*\.nii']);
-            matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(avg_mprage);
+            matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(self.path );
             matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
             matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
             matlabbatch{1}.spm.spatial.preproc.channel.write = [0 0];
@@ -366,6 +366,10 @@ classdef Subject < Project
         function out        = hr_dir(self)
             %the directory where hr is located
             out = sprintf('%smrt/',self.pathfinder(self.id,0));
+        end
+        function out        = hr_path(self)
+            %the directory where hr is located
+            out = sprintf('%smrt/data.nii',self.pathfinder(self.id,0));
         end                        
         function [t]        = total_volumes(self,run)
             % will tell you how many volumes are in a 4D image.
