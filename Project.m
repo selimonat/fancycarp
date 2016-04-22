@@ -102,7 +102,7 @@ classdef Project < handle
             %start with conversion
             if self.ConvertDicom(destination);
                 %finally merge 3D stuff to 4D and rename it data.nii.
-                self.MergeTo4D(destination);
+                 self.MergeTo4D(destination);
             end
         end
         function MergeTo4D(self,destination)
@@ -192,6 +192,10 @@ classdef Project < handle
             end
             data_path(end+1)         = filesep;
         end
+        function [out]      = dartel_templates(self,n)
+            %returns the path to Nth Dartel template                        
+            out = fullfile(self.spm_path,'toolbox','vbm','vbm12','templates_1.50mm',sprintf('Template_%i_IXI555_MNI152.nii',n) );            
+        end
     end
     methods(Static)
         function t          = gettime
@@ -217,6 +221,10 @@ classdef Project < handle
                 fprintf('Running SPM jobman %i...\n',n);
                 spm_jobman('run', matlabbatch(n));
             end            
+        end        
+        function [out]      = tpm_dir(self)
+            %path to the TPM images, needed by segment.            
+            out = sprintf('%stpm/',self.spm_path);
         end        
     end
     methods %project specific methods

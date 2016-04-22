@@ -195,6 +195,8 @@ classdef Subject < Project
     methods %(mri, preprocessing))      
         
         function segment(self)
+            %take run000/mrt/data.nii and produces {r}c{1,2}data.nii and
+            %data_seg8.mat files.
             
             matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(self.hr_path);
             matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
@@ -236,57 +238,65 @@ classdef Subject < Project
         end
         
         function SkullStrip(self)
+            %needs results of segment, will produce a skullstripped version
+            %of hr.
             
-            avg_mprage = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^avg.*\.nii']);
-            avg_c1 = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^c1avg.*\.nii']);
-            avg_c2 = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^c2avg.*\.nii']);
-            
-            
-            Vfnames               = strvcat(avg_mprage,avg_c1,avg_c2);
-            matlabbatch{1}.spm.util.imcalc.input            = cellstr(Vfnames);
-            matlabbatch{1}.spm.util.imcalc.output           = skullstrip;
-            matlabbatch{1}.spm.util.imcalc.outdir           = {[base_dir filesep volunteer filesep 'FU0\MPRAGE']};
-            matlabbatch{1}.spm.util.imcalc.expression       = 'i1.*((i2+i3)>0.2)';
-            matlabbatch{1}.spm.util.imcalc.options.dmtx     = 0;
-            matlabbatch{1}.spm.util.imcalc.options.mask     = 0;
-            matlabbatch{1}.spm.util.imcalc.options.interp   = 1;
-            matlabbatch{1}.spm.util.imcalc.options.dtype    = 4;
-            spm_jobman('run', matlabbatch);
+            c1         = regexprep(self.hr_path,'mrt/data','mrt/c1data');
+            c2         = regexprep(self.hr_path,'mrt/data','mrt/c2data');    
+            skullstrip = regexprep(self.hr_path,'mrt/data','mrt/data_skullstrip');    
+                        
+            if exist(c1) && exist(c2)
+                matlabbatch{1}.spm.util.imcalc.input            = {self.hr_path,c1,c2};
+                matlabbatch{1}.spm.util.imcalc.output           = skullstrip;
+                matlabbatch{1}.spm.util.imcalc.outdir           = {self.hr_dir};
+                matlabbatch{1}.spm.util.imcalc.expression       = 'i1.*((i2+i3)>0.2)';
+                matlabbatch{1}.spm.util.imcalc.options.dmtx     = 0;
+                matlabbatch{1}.spm.util.imcalc.options.mask     = 0;
+                matlabbatch{1}.spm.util.imcalc.options.interp   = 1;
+                matlabbatch{1}.spm.util.imcalc.options.dtype    = 4;
+                self.RunSPMJob(matlabbatch);
+            else
+                fprintf('Need to run segment first...\n')
+            end
         end
         
         function Dartel(self)
-            avg_rc1 = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^rc1avg.*\.nii']);
-            avg_rc2 = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^rc2avg.*\.nii']);
-            matlabbatch{1}.spm.tools.dartel.warp1.images = {{avg_rc1},{avg_rc2}}';
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.rform = 0;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).its = 3;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).rparam = [4 2 1e-06];
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).K = 0;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).template = {'C:\Users\buechel\Documents\MATLAB\spm12\toolbox\cat12\templates_1.50mm\Template_1_IXI555_MNI152.nii'};
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).its = 3;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).rparam = [2 1 1e-06];
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).K = 0;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).template = {'C:\Users\buechel\Documents\MATLAB\spm12\toolbox\cat12\templates_1.50mm\Template_2_IXI555_MNI152.nii'};
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).its = 3;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).rparam = [1 0.5 1e-06];
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).K = 1;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).template = {'C:\Users\buechel\Documents\MATLAB\spm12\toolbox\cat12\templates_1.50mm\Template_3_IXI555_MNI152.nii'};
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).its = 3;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).rparam = [0.5 0.25 1e-06];
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).K = 2;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).template = {'C:\Users\buechel\Documents\MATLAB\spm12\toolbox\cat12\templates_1.50mm\Template_4_IXI555_MNI152.nii'};
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).its = 3;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).rparam = [0.25 0.125 1e-06];
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).K = 4;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).template = {'C:\Users\buechel\Documents\MATLAB\spm12\toolbox\cat12\templates_1.50mm\Template_5_IXI555_MNI152.nii'};
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).its = 3;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).rparam = [0.25 0.125 1e-06];
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).K = 6;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).template = {'C:\Users\buechel\Documents\MATLAB\spm12\toolbox\cat12\templates_1.50mm\Template_6_IXI555_MNI152.nii'};
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.optim.lmreg = 0.01;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.optim.cyc = 3;
-            matlabbatch{1}.spm.tools.dartel.warp1.settings.optim.its = 3;
-            spm_jobman('run', matlabbatch);
+            rc1         = regexprep(self.hr_path,'mrt/data','mrt/rc1data');
+            rc2         = regexprep(self.hr_path,'mrt/data','mrt/rc2data');
+            if exist(rc1) && exist(rc2)
+                matlabbatch{1}.spm.tools.dartel.warp1.images = {{rc1},{rc2}}';
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.rform = 0;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).its = 3;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).rparam = [4 2 1e-06];
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).K = 0;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).template = {self.dartel_templates(1)};
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).its = 3;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).rparam = [2 1 1e-06];
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).K = 0;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).template = {self.dartel_templates(2)};
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).its = 3;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).rparam = [1 0.5 1e-06];
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).K = 1;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).template = {self.dartel_templates(3)};
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).its = 3;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).rparam = [0.5 0.25 1e-06];
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).K = 2;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).template = {self.dartel_templates(4)};
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).its = 3;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).rparam = [0.25 0.125 1e-06];
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).K = 4;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).template = {self.dartel_templates(5)};
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).its = 3;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).rparam = [0.25 0.125 1e-06];
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).K = 6;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).template = {self.dartel_templates(6)};
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.optim.lmreg = 0.01;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.optim.cyc = 3;
+                matlabbatch{1}.spm.tools.dartel.warp1.settings.optim.its = 3;
+                self.RunSPMJob(matlabbatch);
+            else
+                fprintf('Need to run segment first...\n')
+            end
         end
         
         function Re_Coreg(self)
@@ -357,11 +367,8 @@ classdef Subject < Project
             end
         end
     end
-    methods %fmri path_tools
-        function [out] = tpm_dir(self)
-            %path to the TPM images, needed by segment.
-            out = sprintf('%stpm/',self.spm_path);
-        end
+    methods %fmri path_tools which are related to the subject
+                
         function out        = spm_dir(self)
             %returns subject's path to spm folder for run RUN.
             out = sprintf('%smrt/spm/',self.pathfinder(self.id,1));
