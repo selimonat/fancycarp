@@ -76,7 +76,7 @@ classdef Subject < Project
             if exist(hr_target) == 0
                 mkdir(hr_target);
             end
-            self.DicomDownload(self.GetDicomHRpath,self.hr_dir);
+%             self.DicomDownload(self.GetDicomHRpath,self.hr_dir);
             self.DicomTo4D(self.hr_dir);
         end
         function p          = load_paradigm(self,nrun)
@@ -195,8 +195,8 @@ classdef Subject < Project
     methods %(mri, preprocessing))      
         
         function segment(self)
-            avg_mprage = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^avg.*\.nii']);
-            matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(self.path );
+            
+            matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(self.hr_path);
             matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
             matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
             matlabbatch{1}.spm.spatial.preproc.channel.write = [0 0];
@@ -231,14 +231,17 @@ classdef Subject < Project
             matlabbatch{1}.spm.spatial.preproc.warp.fwhm = 0;
             matlabbatch{1}.spm.spatial.preproc.warp.samp = 3;
             matlabbatch{1}.spm.spatial.preproc.warp.write = [0 0];
-            spm_jobman('run', matlabbatch);
+            %
+            self.RunSPMJob(matlabbatch);
         end
         
         function SkullStrip(self)
-             clear matlabbatch;
+            
             avg_mprage = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^avg.*\.nii']);
             avg_c1 = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^c1avg.*\.nii']);
             avg_c2 = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^c2avg.*\.nii']);
+            
+            
             Vfnames               = strvcat(avg_mprage,avg_c1,avg_c2);
             matlabbatch{1}.spm.util.imcalc.input            = cellstr(Vfnames);
             matlabbatch{1}.spm.util.imcalc.output           = skullstrip;

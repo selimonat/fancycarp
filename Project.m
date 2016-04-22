@@ -100,14 +100,16 @@ classdef Project < handle
             %A wrapper over conversion and merging functions.
             
             %start with conversion
-            self.ConvertDicom(destination);
-            %finally merge 3D stuff to 4D and rename it data.nii.
-            self.MergeTo4D(destination);
+            if self.ConvertDicom(destination);
+                %finally merge 3D stuff to 4D and rename it data.nii.
+                self.MergeTo4D(destination);
+            end
         end
         function MergeTo4D(self,destination)
             %will create data.nii consisting of all the [f,s]TRIO images
             %merged to 4D. the final name will be called data.nii.
             % merge to 4D
+            
             matlabbatch = [];
             files       = spm_select('FPListRec',destination,'^[f,s]TRIO');
             fprintf('MergeTo4D:\nMerging (%s):\n%s\n',self.gettime,files);
@@ -125,38 +127,39 @@ classdef Project < handle
             files = cellstr(files);
             delete(files{:});
         end
-        function ConvertDicom(self,destination)
-            %% dicom conversion. ATTENTION: dicoms will be deleted
+        function success    = ConvertDicom(self,destination)
+            % dicom conversion. ATTENTION: dicoms will be deleted
             % and the converted. Assumes all files that start with MR are
             % dicoms.
             %
+            success =0;
             matlabbatch = [];
-            files       = spm_select('FPListRec',destination,'^MR');
-            fprintf('ConvertDicom:\nFound %i files...\n',size(files,1));
-            if ~isempty(files)%only create a batch if there is ^MR files.
+            files       = spm_select('FPListRec',destination,'^MR');            
+            if ~isempty(files)
+                fprintf('ConvertDicom:\nFound %i files...\n',size(files,1));
+                
                 matlabbatch{1}.spm.util.import.dicom.data             = cellstr(files);
                 matlabbatch{1}.spm.util.import.dicom.root             = 'flat';
                 matlabbatch{1}.spm.util.import.dicom.outdir           = {destination};
                 matlabbatch{1}.spm.util.import.dicom.protfilter       = '.*';
                 matlabbatch{1}.spm.util.import.dicom.convopts.format  = 'nii';
                 matlabbatch{1}.spm.util.import.dicom.convopts.icedims = 0;
-            end
-            %don't continue if there is nothing to do...
-            if ~isempty(matlabbatch)
+                               
                 fprintf('Dicom conversion s#%i... (%s)\n',self.id,self.gettime);
                 self.RunSPMJob(matlabbatch);
                 fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
                 % delete dicom files
-                fprintf('Deleting DICOM images in (%s)\n%s\n',self.gettime,destination);                
+                fprintf('Deleting DICOM images in (%s)\n%s\n',self.gettime,destination);
                 files = cellstr(files);
                 delete(files{:});
                 fprintf('Finished... (%s)\n',self.gettime);
+                success = 1;
             else
-                fprintf('No dicom files found for %i\n',self.id)
+                fprintf('No dicom files found for %i\n',self.id)                
+                fprintf('No file found...\n')
             end
-        end
-        
-        function [result]=dicomserver_request(self)
+        end        
+        function [result]   = dicomserver_request(self)
             %will make a normal dicom request. use this to see the state of
             %folders
             fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.gettime);
@@ -164,7 +167,7 @@ classdef Project < handle
             fprintf('This is what I found for you:\n');
             result
         end
-        function [paths]=dicomserver_paths(self)
+        function [paths]    = dicomserver_paths(self)
             fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.gettime)
             [status paths]   = system(['/common/apps/bin/dicq -t --series --exam=' self.trio_session]);
             paths            = strsplit(paths,'\n');%split paths
