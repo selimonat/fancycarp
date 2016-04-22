@@ -120,7 +120,7 @@ classdef Project < handle
             
             matlabbatch = [];
             files       = spm_select('FPListRec',destination,'^[f,s]TRIO');
-            fprintf('MergeTo4D:\nMerging (%s):\n%s\n',self.gettime,files);
+            fprintf('MergeTo4D:\nMerging (%s):\n',self.gettime);
             if ~isempty(files)
                 matlabbatch{1}.spm.util.cat.vols  = cellstr(files);
                 matlabbatch{1}.spm.util.cat.name  = 'data.nii';
