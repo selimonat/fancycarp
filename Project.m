@@ -179,7 +179,7 @@ classdef Project < handle
             data_path = self.path_project;
             for no = [subject run]
                 file_list        = dir(data_path);
-                i                = regexp({file_list(:).name},sprintf('[0,a-Z]%d$',no));
+                i                = regexp({file_list(:).name},sprintf('[0,a-Z]%d$',no));%find all folders which starts with
                 i                = find(cellfun(@(bla) ~isempty(bla), i  ));
                 if ~isempty(i)
                     folder       = getfield(file_list(i),'name');
@@ -194,6 +194,18 @@ classdef Project < handle
         function [out]      = dartel_templates(self,n)
             %returns the path to Nth Dartel template                        
             out = fullfile(self.spm_path,'toolbox','vbm','vbm12','templates_1.50mm',sprintf('Template_%i_IXI555_MNI152.nii',n) );            
+        end
+        function CreateFolderHierarchy(self)
+            for ns = 1:length(self.trio_sessions)
+                for nr = 1:length(self.dicom2run{1})
+                    for nf = 1:length(self.data_folders)                        
+                        path2subject = sprintf('%s/sub%03d/run%03d/%s',self.path_project,ns,nr,self.data_folders{nf});
+                        if ~isempty(self.trio_sessions{ns})
+                            a = fullfile(path2subject);
+                        end
+                    end
+                end
+            end
         end
     end
     methods(Static)

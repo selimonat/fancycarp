@@ -311,25 +311,25 @@ classdef Subject < Project
                                     
             if exist(self.epi_path(run))
                 
-                mean_epi    = regexprep( s.epi_path(run),'data','meandata');
+                mean_epi    = regexprep( self.epi_path(run),'mtr/data','mrt/meandata');
                 
                 %double-pass realign EPIs and reslice the mean image only.
-                matlabbatch{1}.spm.spatial.realign.estwrite.data{1} = cellstr(self.epi_path(run));
-                matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
-                matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.sep = 4;
-                matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.fwhm = 5;
-                matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.rtm = 1;%double pass
-                matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.interp = 2;
-                matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.wrap = [0 0 0];
-                matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.weight = '';
-                matlabbatch{1}.spm.spatial.realign.estwrite.roptions.which = [0 1];%reslice only the mean image.
-                matlabbatch{1}.spm.spatial.realign.estwrite.roptions.interp = 4;
-                matlabbatch{1}.spm.spatial.realign.estwrite.roptions.wrap = [0 0 0];
-                matlabbatch{1}.spm.spatial.realign.estwrite.roptions.mask = 1;
-                matlabbatch{1}.spm.spatial.realign.estwrite.roptions.prefix = 'r';
+%                 matlabbatch{1}.spm.spatial.realign.estwrite.data{1} = cellstr(self.epi_path(run));
+%                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
+%                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.sep = 4;
+%                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.fwhm = 5;
+%                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.rtm = 1;%double pass
+%                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.interp = 2;
+%                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.wrap = [0 0 0];
+%                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.weight = '';
+%                 matlabbatch{1}.spm.spatial.realign.estwrite.roptions.which = [0 1];%reslice only the mean image.
+%                 matlabbatch{1}.spm.spatial.realign.estwrite.roptions.interp = 4;
+%                 matlabbatch{1}.spm.spatial.realign.estwrite.roptions.wrap = [0 0 0];
+%                 matlabbatch{1}.spm.spatial.realign.estwrite.roptions.mask = 1;
+%                 matlabbatch{1}.spm.spatial.realign.estwrite.roptions.prefix = 'r';
                 
                 %%coregister to skullstrip (only the affine matrix is modified)
-                matlabbatch{2}.spm.spatial.coreg.estimate.ref    = cellstr(self.skull_strip);
+                matlabbatch{2}.spm.spatial.coreg.estimate.ref    = cellstr(self.skullstrip);
                 matlabbatch{2}.spm.spatial.coreg.estimate.source = cellstr(mean_epi);
                 matlabbatch{2}.spm.spatial.coreg.estimate.other  = cellstr(self.epi_path(run));
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.cost_fun = 'nmi';
@@ -344,7 +344,8 @@ classdef Subject < Project
                 matlabbatch{3}.spm.spatial.realign.write.roptions.wrap   = [0 0 0];
                 matlabbatch{3}.spm.spatial.realign.write.roptions.mask   = 1;
                 matlabbatch{3}.spm.spatial.realign.write.roptions.prefix = 'r';
-                self.RunSPMJob(matlabbatch);
+                self.RunSPMJob(matlabbatch(2));
+                self.RunSPMJob(matlabbatch(3));
             else
                 fprintf('EPI is not here...\n')
             end
