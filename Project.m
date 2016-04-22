@@ -44,9 +44,11 @@ classdef Project < handle
         font_style            = {'fontsize' 12};        
     end    
     methods
-        function DU = SanityCheck(self,runs,varargin)
+        function DU = SanityCheck(self,runs,measure,varargin)
             %will run through subject folders and will plot their disk
-            %space. Use a string in VARARGIN to focus only on a subfolder
+            %space. Use a string in VARARGIN to focus only on a subfolder.
+            %MEASURE has to be 'size' or 'amount', for disk usage and
+            %number of files, respectively.
             total_subjects = length(Project.trio_sessions);
             DU = nan(total_subjects,length(runs));
             for ns = 1:total_subjects
@@ -54,7 +56,14 @@ classdef Project < handle
                     fprintf('Requesting folder size for subject %03d and run %03d\n',ns,nr);
                     fullpath = fullfile(self.pathfinder(ns,nr),varargin{:});
                     if exist(fullpath)
-                        [a b]       = system(sprintf('/usr/bin/du -cd0 %s | grep -e total | grep -oh -e [0-9]*',fullpath));
+                        if strcmp(measure,'size')
+                            [a b]       = system(sprintf('/usr/bin/du -cd0 %s | grep -e total | grep -oh -e [0-9]*',fullpath));
+                        elseif strcmp(measure,'amount')
+                            [a b]       = system(sprintf('/usr/bin/find %s | wc -l',fullpath));
+                        else
+                            fprint('Please enter a valid MEASURE...\n');
+                            return
+                        end
                         DU(ns,nr+1) = str2double(b)./1024;
                     else
                         fprintf('Folder doesn''t exist: %s\n',fullpath);
@@ -154,8 +163,7 @@ classdef Project < handle
                 fprintf('Finished... (%s)\n',self.gettime);
                 success = 1;
             else
-                fprintf('No dicom files found for %i\n',self.id)                
-                fprintf('No file found...\n')
+                fprintf('No dicom files found for %i\n',self.id);
             end
         end        
         function [result]   = dicomserver_request(self)
