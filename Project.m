@@ -34,16 +34,15 @@ classdef Project < handle
         spm_path              = '/Users/onat/Documents/Code/Matlab/spm12/';
         TR                    = 0.99;        
         path_stimuli          = '';%optional in case you have methods that needs stimuli...
+        total_subject         
     end
-    properties (Constant) %project specific properties        
+    properties (Constant,Hidden) %project specific properties        
         condition_labels      = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
         colors                = [ [0 0 0]; 0.0784 0.3284 1.0000;0.5784    0.0784    1.0000;1.0000    0.0784    0.8284;1.0000    0.0784    0.0784;1.0000    0.8284    0.0784;0.5784    1.0000    0.0784;0.0784    1.0000    0.3284;0.0784    1.0000    1.0000;0.0784    0.0784    0.0784;0.5784    0.5784    0.5784  ;[.8 0 0];[.8 0 0]];
         line                  = {'-' '-' '-' '-' '-' '-' '-' '-' '-' '.' '.'};
-        symbol                = {'.' '.' '.' '.' '.' '.' '.' '.' '.' 'p' 's'};
-        total_subject         = [];
+        symbol                = {'.' '.' '.' '.' '.' '.' '.' '.' '.' 'p' 's'};        
         font_style            = {'fontsize' 12};        
-    end
-    
+    end    
     methods
         function DU = SanityCheck(self,runs,varargin)
             %will run through subject folders and will plot their disk
