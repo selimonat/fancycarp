@@ -3,10 +3,14 @@ classdef Project < handle
     % be a child of. Here enters all the project specific data (e.g. the
     % subject ids) and methods (for e.g. getting paths from the dicom
     % server).
-    % 
+    %
     % To start with, trio_sessions should be entered manually for your
     % experiment. Later these variables will be used by different methods
-    % in the SUBJECT object to transfer data from the dicom server. 
+    % in the SUBJECT object to transfer data from the dicom server.
+    %
+    % To create the standard project structure you will need to call the
+    % CreateFolderHierarchy method. Based on dicom2run, trio_sessions,
+    % data_folders properties, the hierarchy will be created.
     %
     % Once you data is nicely loaded into the subject/run/ structure,
     % SanityCheck method comes very handy to ensure that your project
@@ -22,6 +26,7 @@ classdef Project < handle
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
         dicom2run             = repmat({[1 1 1]},1,length(Project.dicom_serie_selector));
+        data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};%
         colors                = [ [0 0 0]; 0.0784 0.3284 1.0000;0.5784    0.0784    1.0000;1.0000    0.0784    0.8284;1.0000    0.0784    0.0784;1.0000    0.8284    0.0784;0.5784    1.0000    0.0784;0.0784    1.0000    0.3284;0.0784    1.0000    1.0000;0.0784    0.0784    0.0784;0.5784    0.5784    0.5784  ;[.8 0 0];[.8 0 0]];
         line                  = {'-' '-' '-' '-' '-' '-' '-' '-' '-' '.' '.'};
         symbol                = {'.' '.' '.' '.' '.' '.' '.' '.' '.' 'p' 's'};
@@ -33,20 +38,20 @@ classdef Project < handle
         path_project       = '/projects/fearamy/data/';
         path_stimuli       = '';
         condition_labels   = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
-        TR                 = 0.99;        
+        TR                 = 0.99;
     end
     
     methods
     end
     
-    methods         
+    methods
         function DU = SanityCheck(self,runs,varargin)
             %will run through subject folders and will plot their disk
-            %space. Use a string in VARARGIN to focus only on a subfolder            
+            %space. Use a string in VARARGIN to focus only on a subfolder
             total_subjects = length(Project.trio_sessions);
             DU = nan(total_subjects,length(runs));
             for ns = 1:total_subjects
-                for nr = runs                    
+                for nr = runs
                     fprintf('Requesting folder size for subject %03d and run %03d\n',ns,nr);
                     fullpath = fullfile(self.pathfinder(ns,nr),varargin{:});
                     if exist(fullpath)
@@ -64,29 +69,93 @@ classdef Project < handle
                 subplot(3,1,n)
                 bar(DU(:,n));ylabel('MB');xlabel('Subjects');box off
                 title(sprintf('Subfolder %s\n Run: %03d',varargin{:},nr))
-            end            
+            end
             
         end
         function DicomDownload(self,source,destination)
+            % Will download all the dicoms, convert them and merge them to
+            % 4D.
+            
             fprintf('%s:\n','DicomDownload');
             %downloads data from the dicom dicom server
             if exist(destination) == 0
                 fprintf('The folder %s doesn''t exist yet, will create it...\n',destination)
                 mkdir(destination)
-            end            
+            end
             if ~isempty(source) & ~isempty(destination)%both paths should not be empty.
                 fprintf('Calling system''s COPY function to dump the data...%s\nsource:%s\ndestination:%s\n',self.gettime,source,destination)
                 a            = system(sprintf('cp -r %s/* %s',source,destination));
                 if a ~= 0
-                    fprintf('There was a problem while dumping...\n');
+                    fprintf('There was a problem while dumping...try to debug it now\n');
                     keyboard
                 else
                     fprintf('COPY finished successully %s\n',self.gettime)
                 end
             else
                 fprintf('Either source or destination is empty\n');
+                return
+            end            
+        end
+        function DicomTo4D(self,destination)
+            %A wrapper over conversion and merging functions.
+            
+            %start with conversion
+            self.ConvertDicom(destination);
+            %finally merge 3D stuff to 4D and rename it data.nii.
+            self.MergeTo4D(destination);
+        end
+        function MergeTo4D(self,destination)
+            %will create data.nii consisting of all the [f,s]TRIO images
+            %merged to 4D. the final name will be called data.nii.
+            % merge to 4D
+            matlabbatch = [];
+            files       = spm_select('FPListRec',destination,'^[f,s]TRIO');
+            fprintf('MergeTo4D:\nMerging (%s):\n%s\n',self.gettime,files);
+            if ~isempty(files)
+                matlabbatch{1}.spm.util.cat.vols  = cellstr(files);
+                matlabbatch{1}.spm.util.cat.name  = 'data.nii';
+                matlabbatch{1}.spm.util.cat.dtype = 0;
+            end
+            
+            if ~isempty(matlabbatch)
+                self.RunSPMJob(matlabbatch);
+            end
+            fprintf('Finished... (%s)\n',self.gettime);
+            fprintf('Deleting 3D images in (%s)\n%s\n',self.gettime,destination);
+            files = cellstr(files);
+            delete(files{:});
+        end
+        function ConvertDicom(self,destination)
+            %% dicom conversion. ATTENTION: dicoms will be deleted
+            % and the converted. Assumes all files that start with MR are
+            % dicoms.
+            %
+            matlabbatch = [];
+            files       = spm_select('FPListRec',destination,'^MR');
+            fprintf('ConvertDicom:\nFound %i files...\n',size(files,1));
+            if ~isempty(files)%only create a batch if there is ^MR files.
+                matlabbatch{1}.spm.util.import.dicom.data             = cellstr(files);
+                matlabbatch{1}.spm.util.import.dicom.root             = 'flat';
+                matlabbatch{1}.spm.util.import.dicom.outdir           = {destination};
+                matlabbatch{1}.spm.util.import.dicom.protfilter       = '.*';
+                matlabbatch{1}.spm.util.import.dicom.convopts.format  = 'nii';
+                matlabbatch{1}.spm.util.import.dicom.convopts.icedims = 0;
+            end
+            %don't continue if there is nothing to do...
+            if ~isempty(matlabbatch)
+                fprintf('Dicom conversion s#%i... (%s)\n',self.id,self.gettime);
+                self.RunSPMJob(matlabbatch);
+                fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
+                % delete dicom files
+                fprintf('Deleting DICOM images in (%s)\n%s\n',self.gettime,destination);                
+                files = cellstr(files);
+                delete(files{:});
+                fprintf('Finished... (%s)\n',self.gettime);
+            else
+                fprintf('No dicom files found for %i\n',self.id)
             end
         end
+        
         function [result]=dicomserver_request(self)
             %will make a normal dicom request. use this to see the state of
             %folders
@@ -98,7 +167,7 @@ classdef Project < handle
         function [paths]=dicomserver_paths(self)
             fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.gettime)
             [status paths]   = system(['/common/apps/bin/dicq -t --series --exam=' self.trio_session]);
-            paths            = strsplit(paths,'\n');%split paths            
+            paths            = strsplit(paths,'\n');%split paths
         end
         function [data_path]= pathfinder(self,subject,run)
             %gets the path
@@ -119,41 +188,52 @@ classdef Project < handle
                 end
             end
             data_path(end+1)         = filesep;
-        end                    
-        function degree    = stimulus2degree(self,stim_id)
-            %will transform condition indices to distances in degrees from
-            %the csp face. stim_id is a cell array. 
-            
-            ind_valid     = find(cellfun(@(x) ~isempty(x),regexp(stim_id,'[0-9]')));
-            degree        = stim_id;
-            for i = ind_valid(:)'
-                degree{i} = mat2str(MinimumAngle( 0 , (stim_id{i}-self.csp)*45 ));
-            end
-        end        
+        end
     end
     methods(Static)
         function t          = gettime
             t = datestr(now,'hh:mm:ss');
-        end        
-        function RunSPMJob(matlabbatch)
+        end
+        function RunSPMJob_inParallel(matlabbatch)
             %will run the spm matlabbatch using the parallel toolbox.
             fprintf('Will call spm_jobman in parallel with 4 cores...\n');
             if isempty(gcp)
                 parpool(4);
             end
             parfor n = 1:length(matlabbatch)
-               fprintf('Running SPM jobman %i...\n',n);
-               spm_jobman('run', matlabbatch(n)); 
+                fprintf('Running SPM jobman %i...\n',n);
+                spm_jobman('run', matlabbatch(n));
             end
             delete(gcp);
-        end                                
+        end
+        function RunSPMJob(matlabbatch)
+            %will run the spm matlabbatch using the parallel toolbox.
+            fprintf('Will call spm_jobman...\n');
+           
+            for n = 1:length(matlabbatch)
+                fprintf('Running SPM jobman %i...\n',n);
+                spm_jobman('run', matlabbatch(n));
+            end            
+        end        
+    end
+    methods %project specific methods
+        function degree    = stimulus2degree(self,stim_id)
+            %will transform condition indices to distances in degrees from
+            %the csp face. stim_id is a cell array.
+            
+            ind_valid     = find(cellfun(@(x) ~isempty(x),regexp(stim_id,'[0-9]')));
+            degree        = stim_id;
+            for i = ind_valid(:)'
+                degree{i} = mat2str(MinimumAngle( 0 , (stim_id{i}-self.csp)*45 ));
+            end
+        end
         function set_feargen_colors(h,color_ind);
             %if H is a handle of a barplot, it will colorize it with
-            %typical feargen colors.            
+            %typical feargen colors.
             h     = get(h,'children');
             tbar  = length(get(h,'YData'));
             set(h,'CData', repmat(1:tbar,1,tbar/tbar),'edgecolor','none');
-            colormap(Project.colors(color_ind,:));                        
-        end        
-    end    
+            colormap(Project.colors(color_ind,:));
+        end
+    end
 end

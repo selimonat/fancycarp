@@ -35,6 +35,7 @@ classdef Subject < Project
     %%
     methods
         function s = Subject(id)%constructor
+            fprintf('Subject Constructor for id:%i is called:\n',id);
             s.id               = id;
             s.path             = s.pathfinder(s.id,[]);
             s.dicom_serie_id   = s.dicom_serie_selector{s.id};
@@ -49,8 +50,7 @@ classdef Subject < Project
                 end
                 s.csp = s.paradigm{s.default_run}.stim.cs_plus;
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
-                s.scr = SCR(s);                
-                
+                s.scr = SCR(s);                       
                 %                 try
                 %                     s.bold = BOLD(s);
                 %                 end
@@ -69,17 +69,15 @@ classdef Subject < Project
             %
             %
             
-            fprintf('Will now dump the latest HR (%s)\n',self.gettime);            
+            fprintf('dump_hr:\nWill now dump the latest HR (%s)\n',self.gettime);            
             %target location for the hr
             hr_target = self.hr_dir;
             %create it if necess.
             if exist(hr_target) == 0
                 mkdir(hr_target);
             end
-            self.DicomDownload(self.GetDicomHRpath,self.hr_dir);            
-            self.ConvertDicom;
-            fprintf('Now will create 4D Nifti files...%s\n',self.gettime);
-            self.MergeTo4D;
+            self.DicomDownload(self.GetDicomHRpath,self.hr_dir);
+            self.DicomTo4D(self.hr_dir);
         end
         function p          = load_paradigm(self,nrun)
             filename = self.path2data(nrun,'stimulation');
@@ -119,12 +117,9 @@ classdef Subject < Project
                 %
                 n 				 = n+1;
                 dest             = sprintf('%ssub%03d/run%03d/mrt/',self.path_project,self.id,self.dicom_target_run(n));                
-                self.DicomDownload(source{1},dest);
-            end            
-            fprintf('Now will convert them to Nifti...%s\n',self.gettime);
-            self.ConvertDicom;
-            fprintf('Now will create 4D Nifti files...%s\n',self.gettime);
-            self.MergeTo4D;
+                %self.DicomDownload(source{1},dest);
+            end
+            self.DicomTo4D(dest);
         end
         function rating = get.ratings(self)
             %returns the CS+-aligned ratings for all the runs
@@ -198,64 +193,6 @@ classdef Subject < Project
     end
     
     methods %(mri, preprocessing))      
-        function ConvertDicom(self)
-            %% dicom conversion. ATTENTION: dicoms will be deleted
-            % and the converted files will be merged to a 4d file nifti
-            % file. This file will be named data.nii.
-            %
-            matlabbatch = [];
-            count = 0;
-            for nrun = 0:self.total_run
-                files                                                    = spm_select('FPListRec',self.path2data(nrun),'^MR');
-                fprintf('Run#%d found %d dicom files.\n',nrun,length(files))
-                if ~isempty(files)%only create a batch if there is ^MR files.
-                    count = count +1;
-                    matlabbatch{count}.spm.util.import.dicom.data             = cellstr(files);
-                    matlabbatch{count}.spm.util.import.dicom.root             = 'flat';
-                    matlabbatch{count}.spm.util.import.dicom.outdir           = {fileparts(self.path2data(nrun,'mrt'))};
-                    matlabbatch{count}.spm.util.import.dicom.protfilter       = '.*';
-                    matlabbatch{count}.spm.util.import.dicom.convopts.format  = 'nii';
-                    matlabbatch{count}.spm.util.import.dicom.convopts.icedims = 0;
-                end
-            end
-            %don't continue if there is nothing to do...
-            if ~isempty(matlabbatch)
-                fprintf('Dicom conversion s#%i... (%s)\n',self.id,self.gettime);
-                self.RunSPMJob(matlabbatch);
-                fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));                                                                
-                %% delete the 3d fTRIO files                
-                fprintf('Deleting all 3D and DICOM images s#%i... (%s)\n',self.id,self.gettime);
-                for nrun = 1:length(matlabbatch)
-                    delete(sprintf('%smrt%sMR*',self.path2data(nrun),filesep));
-                    delete( matlabbatch{nrun}.spm.util.cat.vols{:} );
-                end
-                fprintf('Finished... (%s)\n',self.gettime);
-            else
-                fprintf('No dicom files found for %i\n',self.id)
-            end
-        end
-        function MergeTo4D(self)
-            %will create data.nii consisting of all the [f,s]TRIO images
-            %merged to 4D.
-            
-            % merge to 4D
-            fprintf('Merging s#%i...(%s)\n',self.id,self.gettime);
-            matlabbatch = [];
-            c           = 0;
-            for nrun = 0:self.tRuns
-                files = spm_select('FPListRec',self.path2data(nrun),'^[f,s]TRIO');
-                if ~isempty(files)
-                    c                                 = c + 1;
-                    matlabbatch{c}.spm.util.cat.vols  = cellstr(files);
-                    matlabbatch{c}.spm.util.cat.name  = 'data.nii';
-                    matlabbatch{c}.spm.util.cat.dtype = 0;
-                end
-            end
-            if ~isempty(matlabbatch)
-                self.RunSPMJob(matlabbatch);
-            end
-            fprintf('Finished... (%s)\n',self.gettime);
-        end      
         
         function segment(Self)
             avg_mprage = spm_select('FPList',[base_dir filesep volunteer filesep 'FU0\MPRAGE'],['^avg.*\.nii']);
