@@ -21,27 +21,28 @@ classdef Project < handle
     % please ensure that smrREADER, SPM12, Palamedes are in your path.
     
     properties (Hidden, Constant)
+        %All these properties MUST BE CORRECT and adapted to one owns
+        %project
+        
         trio_sessions         = {  '' '' '' 'TRIO_17455' 'TRIO_17468' 'TRIO_17476' 'TRIO_17477' 'TRIO_17478' 'TRIO_17479' 'TRIO_17480' 'TRIO_17481' 'TRIO_17482' 'TRIO_17483' 'TRIO_17484' 'TRIO_17485' 'TRIO_17486' 'TRIO_17487' 'TRIO_17488' 'TRIO_17514' 'TRIO_17515' 'TRIO_17516' 'TRIO_17517'  'TRIO_17520' 'TRIO_17521' 'TRIO_17522' 'TRIO_17523' 'TRIO_17524' 'TRIO_17525' 'TRIO_17526' 'TRIO_17527' 'TRIO_17557' 'TRIO_17558' 'TRIO_17559' 'TRIO_17560'  'TRIO_17563' 'TRIO_17564' 'TRIO_17565' 'TRIO_17566' 'TRIO_17567' 'TRIO_17568' 'TRIO_17569' 'TRIO_17570' 'TRIO_17571' 'TRIO_17572'};
         dicom_serie_selector  = {  [] [] []   [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [5 6 7]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]       [3 4 5]      [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]      [3 4 5]    };
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
         dicom2run             = repmat({[1 1 1]},1,length(Project.dicom_serie_selector));
-        data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};%
+        data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};%        
+        palamedes_path        = '/Users/onat/Documents/Code/Matlab/palamedes1_8_0/Palamedes/';
+        spm_path              = '/Users/onat/Documents/Code/Matlab/spm12/';  
+        TR                    = 0.99;
+        path_project          = '/projects/fearamy/data/';
+        path_stimuli          = '';%optional
+    end
+    properties (Constant) %project specific properties        
+        condition_labels      = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
         colors                = [ [0 0 0]; 0.0784 0.3284 1.0000;0.5784    0.0784    1.0000;1.0000    0.0784    0.8284;1.0000    0.0784    0.0784;1.0000    0.8284    0.0784;0.5784    1.0000    0.0784;0.0784    1.0000    0.3284;0.0784    1.0000    1.0000;0.0784    0.0784    0.0784;0.5784    0.5784    0.5784  ;[.8 0 0];[.8 0 0]];
         line                  = {'-' '-' '-' '-' '-' '-' '-' '-' '-' '.' '.'};
         symbol                = {'.' '.' '.' '.' '.' '.' '.' '.' '.' 'p' 's'};
         total_subject         = [];
-        palamedes_path        = '/Users/onat/Documents/Code/Matlab/palamedes1_8_0/Palamedes/';
-        font_style             = {'fontsize' 12};
-    end
-    properties (Constant)
-        path_project       = '/projects/fearamy/data/';
-        path_stimuli       = '';
-        condition_labels   = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
-        TR                 = 0.99;
-    end
-    
-    methods
+        font_style            = {'fontsize' 12};        
     end
     
     methods
