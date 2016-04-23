@@ -18,16 +18,16 @@ classdef Subject < Project
             s.id              = id;
             s.path            = s.pathfinder(s.id,[]);
 			if exist(s.path)
-                for nrun = 1:5
+                runs = dir(s.path);
+                a    = regexp({runs.name},'run[0-9][0-9][0-9]','match');
+                a    = a(cellfun(@(x) ~isempty(x),a));%take all non empty entries;
+                for runs = a;
+                    nrun             = regexp(a{1}{1},'[0-9][0-9][0-9]','match');
+                    nrun             = str2num(nrun{1});
                     s.paradigm{nrun} = s.load_paradigm(nrun);
                 end
-                s.csp = s.paradigm{s.default_run}.stim.cs_plus;
-                s.csn = s.paradigm{s.default_run}.stim.cs_neg;
-                s.scr = SCR(s);
-                try
-                    s.pmf = s.getPMF;
-                end
-
+                s.csp = s.paradigm{end}.stim.cs_plus;
+                s.csn = s.paradigm{end}.stim.cs_neg;                                
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path)
             end
@@ -198,15 +198,7 @@ classdef Subject < Project
             p = [];
             if exist(filename)
                 p = load(filename);
-                p = p.p;
-                %transform id to labels
-                if isfield(p,'presentation')
-                    %                 p.presentation.stim_label = self.condition_labels(p.presentation.cond_id+1);
-                    p.presentation.dist(p.presentation.dist < 500)   = p.presentation.dist(p.presentation.dist < 500) + 180;
-                    p.presentation.dist(p.presentation.dist == 500)  = 1001;%ucs
-                    p.presentation.dist(p.presentation.dist == 1000) = 1002;%odd
-                    p.presentation.dist(isnan(p.presentation.dist))  = 1000;%null
-                end
+                p = p.p;                
             end
         end
         function degree    = stimulus2degree(self,stim_id)

@@ -13,7 +13,8 @@ classdef Project < handle
        
 %         path_project        = '/Users/onat/Documents/BehavioralExperiments/fearcloud/';
 %         path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sBDNF%s',homedir,filesep,filesep,filesep,filesep);
-        path_project      = sprintf('%s%sDocuments%sExperiments%sFearCloud_Eyelab%sdata%s',homedir,filesep,filesep,filesep,filesep,filesep)
+%         path_project      = sprintf('%s%sDocuments%sExperiments%sFearCloud_Eyelab%sdata%s',homedir,filesep,filesep,filesep,filesep,filesep)
+        path_project      = '/Volumes/feargen2/project_allratings/data/';
         scr_blocknames    = {'test_rating' 'test' 'cond_rating' 'cond' 'base_rating' 'base' };
 
         path_stimuli      = sprintf('%sstimuli%s',Project.path_project,filesep);
@@ -60,7 +61,7 @@ classdef Project < handle
             data_path = self.path_project;
             for no = [subject run]
                 file_list        = dir(data_path);
-                i                = regexp({file_list(:).name},sprintf('[0,a-Z]%d$',no));
+                i                = regexp({file_list(:).name},sprintf('%03d$',no));
                 i                = find(cellfun(@(bla) ~isempty(bla), i  ));
                 if ~isempty(i)
                     folder       = getfield(file_list(i),'name');
