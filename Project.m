@@ -23,7 +23,7 @@ classdef Project < handle
     properties (Hidden, Constant)
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
-        path_project          = '/projects/fearamy/data/';
+        path_project          = '/Volumes/feargen2/project_allratings/data/';
         trio_sessions         = {  '' '' '' 'TRIO_17455' 'TRIO_17468' 'TRIO_17476' 'TRIO_17477' 'TRIO_17478' 'TRIO_17479' 'TRIO_17480' 'TRIO_17481' 'TRIO_17482' 'TRIO_17483' 'TRIO_17484' 'TRIO_17485' 'TRIO_17486' 'TRIO_17487' 'TRIO_17488' 'TRIO_17514' 'TRIO_17515' 'TRIO_17516' 'TRIO_17517'  'TRIO_17520' 'TRIO_17521' 'TRIO_17522' 'TRIO_17523' 'TRIO_17524' 'TRIO_17525' 'TRIO_17526' 'TRIO_17527' 'TRIO_17557' 'TRIO_17558' 'TRIO_17559' 'TRIO_17560'  'TRIO_17563' 'TRIO_17564' 'TRIO_17565' 'TRIO_17566' 'TRIO_17567' 'TRIO_17568' 'TRIO_17569' 'TRIO_17570' 'TRIO_17571' 'TRIO_17572'};
         dicom_serie_selector  = {  [] [] []   [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [5 6 7]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]       [3 4 5]      [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]      [3 4 5]    };
         %this is necessary to tell matlab which series corresponds to which
@@ -184,11 +184,11 @@ classdef Project < handle
             %gets the path
             %Example: s.pathfinder(s.id,[]) => will return the path to
             %subject
-            % empty [] above can be replaced with any phase number.
+            % empty [] above can be replaced with any phase number.            
             data_path = self.path_project;
             for no = [subject run]
                 file_list        = dir(data_path);
-                i                = regexp({file_list(:).name},sprintf('[0,a-Z]%d$',no));%find all folders which starts with
+                i                = regexp({file_list(:).name},sprintf('%d$',no));
                 i                = find(cellfun(@(bla) ~isempty(bla), i  ));
                 if ~isempty(i)
                     folder       = getfield(file_list(i),'name');
@@ -254,9 +254,9 @@ classdef Project < handle
                 degree{i} = mat2str(MinimumAngle( 0 , (stim_id{i}-self.csp)*45 ));
             end
         end
-        function set_feargen_colors(h,color_ind);
+        function set_feargen_colors(self,h,color_ind);
             %if H is a handle of a barplot, it will colorize it with
-            %typical feargen colors.
+            %typical feargen colors.            
             h     = get(h,'children');
             tbar  = length(get(h,'YData'));
             set(h,'CData', repmat(1:tbar,1,tbar/tbar),'edgecolor','none');
