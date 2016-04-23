@@ -472,7 +472,7 @@ classdef Subject < Project
 %                 fprintf('PMF Fit found and loaded successfully for subject %i...\n',self.id);
                 
             elseif ~isempty(varargin) || ~exist(self.path2data(2,'pmf'))
-                addpath('/Users/onat/Documents/Code/Matlab/palamedes1_8_0/Palamedes/');
+                addpath(self.palamedes_path);
                 %compute and save it.
                 fprintf('Fitting PMF...\n')                                
                 % define a search grid

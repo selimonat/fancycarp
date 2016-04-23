@@ -30,8 +30,8 @@ classdef Project < handle
         %run (i.e. it doesn't always corresponds to different runs)
         dicom2run             = repmat({[1 1 1]},1,length(Project.dicom_serie_selector));
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};
-        palamedes_path        = '/Users/onat/Documents/Code/Matlab/palamedes1_8_0/Palamedes/';
-        spm_path              = '/Users/onat/Documents/Code/Matlab/spm12/';
+        palamedes_path        = '~/Documents/Code/Matlab/palamedes1_8_0/Palamedes/';
+        spm_path              = '~/Documents/Code/Matlab/spm12/';
         TR                    = 0.99;        
         path_stimuli          = '';%optional in case you have methods that needs stimuli...
         total_subject         
@@ -58,13 +58,14 @@ classdef Project < handle
                     if exist(fullpath)
                         if strcmp(measure,'size')
                             [a b]       = system(sprintf('/usr/bin/du -cd0 %s | grep -e total | grep -oh -e [0-9]*',fullpath));
+                             DU(ns,nr+1)= str2double(b)./1024;
                         elseif strcmp(measure,'amount')
                             [a b]       = system(sprintf('/usr/bin/find %s | wc -l',fullpath));
+                            DU(ns,nr+1) = str2double(b);
                         else
                             fprint('Please enter a valid MEASURE...\n');
                             return
                         end
-                        DU(ns,nr+1) = str2double(b)./1024;
                     else
                         fprintf('Folder doesn''t exist: %s\n',fullpath);
                     end
@@ -75,7 +76,7 @@ classdef Project < handle
             for nr = runs
                 n = n + 1;
                 subplot(3,1,n)
-                bar(DU(:,n));ylabel('MB');xlabel('Subjects');box off
+                bar(DU(:,n));ylabel('MB or #');xlabel('Subjects');box off
                 title(sprintf('Subfolder %s\n Run: %03d',varargin{:},nr))
             end
             
