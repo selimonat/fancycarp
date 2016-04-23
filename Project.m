@@ -30,11 +30,11 @@ classdef Project < handle
         %run (i.e. it doesn't always corresponds to different runs)
         dicom2run             = repmat({[1 1 1]},1,length(Project.dicom_serie_selector));
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};
-        palamedes_path        = '~/Documents/Code/Matlab/palamedes1_8_0/Palamedes/';
-        spm_path              = '~/Documents/Code/Matlab/spm12/';
+        palamedes_path        = '/home/onat/Documents/Code/Matlab/palamedes1_8_0/Palamedes/';
+        spm_path              = '/home/onat/Documents/Code/Matlab/spm12/';
+        tpm_dir               = sprintf('%stpm/',Project.spm_path); %path to the TPM images, needed by segment.       
         TR                    = 0.99;        
-        path_stimuli          = '';%optional in case you have methods that needs stimuli...
-        total_subject         
+        path_stimuli          = '';%optional in case you have methods that needs stimuli...        
     end
     properties (Constant,Hidden) %project specific properties        
         condition_labels      = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
@@ -241,11 +241,7 @@ classdef Project < handle
                 fprintf('Running SPM jobman %i...\n',n);
                 spm_jobman('run', matlabbatch(n));
             end            
-        end        
-        function [out]      = tpm_dir(self)
-            %path to the TPM images, needed by segment.            
-            out = sprintf('%stpm/',self.spm_path);
-        end        
+        end                
     end
     methods %project specific methods
         function degree    = stimulus2degree(self,stim_id)
