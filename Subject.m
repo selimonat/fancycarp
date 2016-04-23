@@ -194,12 +194,13 @@ classdef Subject < Project
     
     methods %(mri, preprocessing))      
         
-        function preprocess_hr(self)
+        function preprocess_pipeline(self,run)
             %meta method to run all the required steps for hr
             %preprocessing.
             self.segment;
             self.SkullStrip;
             self.Dartel;
+            self.Re_Coreg(run);
         end
         function segment(self)
             %take run000/mrt/data.nii and produces {r}c{1,2}data.nii and
@@ -303,8 +304,7 @@ classdef Subject < Project
             else
                 fprintf('Need to run segment first...\n')
             end
-        end
-        
+        end        
         function Re_Coreg(self,run)
             %will realign and coregister. Right now it cannot deal with
             %multiple runs simultaneously.
@@ -314,19 +314,19 @@ classdef Subject < Project
                 mean_epi    = regexprep( self.epi_path(run),'mtr/data','mrt/meandata');
                 
                 %double-pass realign EPIs and reslice the mean image only.
-%                 matlabbatch{1}.spm.spatial.realign.estwrite.data{1} = cellstr(self.epi_path(run));
-%                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
-%                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.sep = 4;
-%                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.fwhm = 5;
-%                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.rtm = 1;%double pass
-%                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.interp = 2;
-%                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.wrap = [0 0 0];
-%                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.weight = '';
-%                 matlabbatch{1}.spm.spatial.realign.estwrite.roptions.which = [0 1];%reslice only the mean image.
-%                 matlabbatch{1}.spm.spatial.realign.estwrite.roptions.interp = 4;
-%                 matlabbatch{1}.spm.spatial.realign.estwrite.roptions.wrap = [0 0 0];
-%                 matlabbatch{1}.spm.spatial.realign.estwrite.roptions.mask = 1;
-%                 matlabbatch{1}.spm.spatial.realign.estwrite.roptions.prefix = 'r';
+                matlabbatch{1}.spm.spatial.realign.estwrite.data{1} = cellstr(self.epi_path(run));
+                matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
+                matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.sep = 4;
+                matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.fwhm = 5;
+                matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.rtm = 1;%double pass
+                matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.interp = 2;
+                matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.wrap = [0 0 0];
+                matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.weight = '';
+                matlabbatch{1}.spm.spatial.realign.estwrite.roptions.which = [0 1];%reslice only the mean image.
+                matlabbatch{1}.spm.spatial.realign.estwrite.roptions.interp = 4;
+                matlabbatch{1}.spm.spatial.realign.estwrite.roptions.wrap = [0 0 0];
+                matlabbatch{1}.spm.spatial.realign.estwrite.roptions.mask = 1;
+                matlabbatch{1}.spm.spatial.realign.estwrite.roptions.prefix = 'r';
                 
                 %%coregister to skullstrip (only the affine matrix is modified)
                 matlabbatch{2}.spm.spatial.coreg.estimate.ref    = cellstr(self.skullstrip);
