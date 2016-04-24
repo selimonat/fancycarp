@@ -31,16 +31,17 @@ classdef Group < Project
         %%
         function out = get.ratings(self)                        
             %will collect group ratings as a matrix in out(run).y,
-            %out(run).x etc.
+            %out(run).x etc. This format is directly feedable to a Tuning
+            %object.
             for nrun = 1:3
                 for s = 1:self.total_subjects
                     for fields = fieldnames(self.subject{s}.ratings)'
-                        R = mean(self.subject{s}.ratings(self.default_run).(fields{1}),1);
-                        if ~isempty(R)
-                            out(nrun).(fields{1})(s,:) = R;
-                        else
-                            out(nrun).(fields{1})(s,:) = NaN;
+                        R         = nan(1,16);                        
+                        this_data = self.subject{s}.ratings(nrun).(fields{1})(:)';                        
+                        if ~isempty(this_data)
+                           R(1:length(this_data)) = this_data;
                         end
+                        out(nrun).(fields{1})(s,:) = R;                        
                     end
                 end
             end
