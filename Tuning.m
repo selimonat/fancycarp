@@ -36,7 +36,8 @@ classdef Tuning < handle
             ts = size(self.x,1);
             for ns = 1:ts
                 fprintf('Fitting subject %03d of %03d, id: %03d\n',ns,ts,self.ids(ns));
-                self.singlesubject_data{ns} = self.Fit(self.x(ns,:),self.y(ns,:),funtype);
+                i = ~isnan(self.x(ns,:));%exclude possible nans;
+                self.singlesubject_data{ns} = self.Fit(self.x(ns,i),self.y(ns,i),funtype);
             end
             self.FitGetParam;
         end
