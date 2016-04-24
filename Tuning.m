@@ -37,19 +37,37 @@ classdef Tuning < handle
             for ns = 1:ts
                 fprintf('Fitting subject %03d of %03d, id: %03d\n',ns,ts,self.ids(ns));
                 i = ~isnan(self.x(ns,:));%exclude possible nans;
-                self.singlesubject_data{ns} = self.Fit(self.x(ns,i),self.y(ns,i),funtype);
+                if sum(i) ~= 0
+                    self.singlesubject_data{ns} = self.Fit(self.x(ns,i),self.y(ns,i),funtype);
+                else
+                    self.singlesubject_data{ns}  = NaN;
+                end
             end
             self.FitGetParam;
         end
         
         function FitGetParam(self)
-            self.params = NaN(length(self.singlesubject_data),size(self.singlesubject_data{1}.Est,2));
+            %will collect all the fitted parameters into a nice matrix;
+            
+            %first init            
+            tsub = length(self.singlesubject_data);
+            self.fit_results.params       = NaN(tsub,size(self.singlesubject_data{1}.Est,2));
+            self.fit_results.ExitFlag     = NaN(tsub,1);
+            self.fit_results.pval         = NaN(tsub,1);
+            self.fit_results.x            = NaN(tsub,length(self.singlesubject_data{1}.x));
+            self.fit_results.y_fitted     = NaN(tsub,length(self.singlesubject_data{1}.fit));
+            self.fit_results.ss_residuals = NaN(tsub,length(self.singlesubject_data{1}.ss_residuals));
+            %then collect
             for unit = 1:length(self.singlesubject_data)
-                self.fit_results.params(unit,:)   = self.singlesubject_data{unit}.Est;
-                self.fit_results.ExitFlag(unit,1) = self.singlesubject_data{unit}.ExitFlag;
-                self.fit_results.pval(unit,1)     = self.singlesubject_data{unit}.pval;
-                self.fit_results.x(unit,:)        = self.singlesubject_data{unit}.x;  
-                self.fit_results.y_fitted(unit,:) = self.singlesubject_data{unit}.fit;
+                if isstruct(self.singlesubject_data{unit});
+                    self.fit_results.params(unit,:)       = self.singlesubject_data{unit}.Est;
+                    self.fit_results.ExitFlag(unit,1)     = self.singlesubject_data{unit}.ExitFlag;
+                    self.fit_results.pval(unit,1)         = self.singlesubject_data{unit}.pval;
+                    self.fit_results.x(unit,:)            = self.singlesubject_data{unit}.x(:)';
+                    self.fit_results.y_fitted(unit,:)     = self.singlesubject_data{unit}.fit(:)';
+                    self.fit_results.ss_residuals(unit,:) = self.singlesubject_data{unit}.ss_residuals(:)';
+                    
+                end
             end
         end
         
