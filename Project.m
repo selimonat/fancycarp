@@ -119,26 +119,17 @@ classdef Project < handle
             %merged to 4D. the final name will be called data.nii.
             % merge to 4D
             
-            matlabbatch = [];
             files       = spm_select('FPListRec',destination,'^[f,s]TRIO');
             fprintf('MergeTo4D:\nMerging (%s):\n',self.gettime);
-            if ~isempty(files)
-                matlabbatch{1}.spm.util.cat.vols  = cellstr(files);
-                matlabbatch{1}.spm.util.cat.name  = 'data.nii';
-                matlabbatch{1}.spm.util.cat.dtype = 0;
-            end
-            
-            if ~isempty(matlabbatch)
-                self.RunSPMJob(matlabbatch);
-            end
+            spm_file_merge(spm_vol(files),sprintf('%sdata.nii',destination));           
             fprintf('Finished... (%s)\n',self.gettime);
             fprintf('Deleting 3D images in (%s)\n%s\n',self.gettime,destination);
             files = cellstr(files);
-            delete(files{:});
+            %delete(files{:});
         end
         function success    = ConvertDicom(self,destination)
-            % dicom conversion. ATTENTION: dicoms will be deleted
-            % and the converted. Assumes all files that start with MR are
+            % dicom conversion. ATTENTION: dicoms will be converted and
+            % then deleted. Assumes all files that start with MR are
             % dicoms.
             %
             success =0;

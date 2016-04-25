@@ -11,6 +11,7 @@ classdef Subject < Project
     %   fmri analysis methods contain first-level modelling.
     %
     % 
+    
     properties (Hidden)
         paradigm
         default_run       = 1;   
@@ -66,17 +67,15 @@ classdef Subject < Project
             %will download the latest HR for this subject to default hr
             %path (which is run000)
             %
-            %
-            %
+        
             
             fprintf('dump_hr:\nWill now dump the latest HR (%s)\n',self.gettime);            
-            %target location for the hr
-            hr_target = self.hr_dir;
+            %target location for the hr: self.hr_dir;            
             %create it if necess.
-            if exist(hr_target) == 0
-                mkdir(hr_target);
+            if exist(self.hr_dir) == 0
+                mkdir(self.hr_dir);
             end
-%             self.DicomDownload(self.GetDicomHRpath,self.hr_dir);
+            self.DicomDownload(self.GetDicomHRpath,self.hr_dir);
             self.DicomTo4D(self.hr_dir);
         end
         function p          = load_paradigm(self,nrun)
@@ -97,8 +96,9 @@ classdef Subject < Project
         end 
         function dump_functional(self)
             %Will dump all DICOMS based on Sessions entered in the
-            %Project Object. trio_folders are folders in the dicom server,
-            %trio2run dictates in which run these folders should be dumped.
+            %Project object. trio_folders are folders in the dicom server,
+            %trio2run dictates in which run these folders should be dumped
+            %to.
             %
             
             %spit out some info for sanity checks
@@ -118,8 +118,9 @@ classdef Subject < Project
                 n 				 = n+1;
                 dest             = self.epi_dir(self.dicom_target_run(n));                
                 self.DicomDownload(source{1},dest);
+                self.DicomTo4D(dest);
             end
-            self.DicomTo4D(dest);
+            
         end
         function rating = get.ratings(self)
             %returns the CS+-aligned ratings for all the runs
