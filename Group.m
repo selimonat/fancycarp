@@ -35,11 +35,11 @@ classdef Group < Project
             %object.
             for nrun = 1:3
                 for s = 1:self.total_subjects
-                    for fields = fieldnames(self.subject{s}.ratings)'
-                        R         = nan(1,16);                        
+                    for fields = fieldnames(self.subject{s}.ratings)'                        
+                        R         = nan(1,16);
                         this_data = self.subject{s}.ratings(nrun).(fields{1})(:)';
-                        if ~isempty(this_data)
-                           R(1:length(this_data)) = this_data;                        
+                        if ~isempty(this_data);
+                           R(1:length(this_data)) = this_data;
                         end
                         out(nrun).(fields{1})(s,:) = R;                        
                     end
@@ -95,8 +95,9 @@ classdef Group < Project
             %elementary function to make feargen plots
             h = bar(data,1);            
             self.set_feargen_colors(h,2:9);
-            set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'},'xgrid','on',self.font_style{:});
+            set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'},'xgrid','on',self.font_style{:},'ygrid','on');            
             axis tight;
+            box off
         end         
         %%                
         function PlotRatingFit(self,subject)

@@ -14,6 +14,7 @@ classdef Subject < Project
     properties (Hidden)
         paradigm
         default_run   = 3;
+        align_ratings = 1;
     end
     properties (SetAccess = private)
         id
@@ -59,10 +60,12 @@ classdef Subject < Project
             for run = 1:3
                 if ~isempty(self.paradigm{run})                    
                     rating(run).y      = self.paradigm{run}.out.rating';
-                    rating(run).y      = circshift(rating(run).y,[1 4-self.csp ]);
+                    if self.align_ratings
+                        rating(run).y      = circshift(rating(run).y,[1 4-self.csp ]);%center it to CS+
+                    end
                     rating(run).x      = repmat([-135:45:180],size(self.paradigm{run}.out.rating,2),1);
                     rating(run).ids    = repmat(self.id,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
-                    rating(run).y_mean = mean(rating(run).y,1);               
+                    rating(run).y_mean = mean(rating(run).y,1);                    
                 end                
             end
         end
