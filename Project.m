@@ -125,7 +125,7 @@ classdef Project < handle
             fprintf('Finished... (%s)\n',self.gettime);
             fprintf('Deleting 3D images in (%s)\n%s\n',self.gettime,destination);
             files = cellstr(files);
-            %delete(files{:});
+            delete(files{:});
         end
         function success    = ConvertDicom(self,destination)
             % dicom conversion. ATTENTION: dicoms will be converted and

@@ -315,7 +315,7 @@ classdef Subject < Project
                 mean_epi    = regexprep( self.epi_path(run),'mtr/data','mrt/meandata');
                 
                 %double-pass realign EPIs and reslice the mean image only.
-                matlabbatch{1}.spm.spatial.realign.estwrite.data{1} = cellstr(self.epi_path(run));
+                matlabbatch{1}.spm.spatial.realign.estwrite.data{1} = cellstr(spm_select('expand',self.epi_path(run)));
                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.sep = 4;
                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.fwhm = 5;
@@ -332,7 +332,7 @@ classdef Subject < Project
                 %%coregister to skullstrip (only the affine matrix is modified)
                 matlabbatch{2}.spm.spatial.coreg.estimate.ref    = cellstr(self.skullstrip);
                 matlabbatch{2}.spm.spatial.coreg.estimate.source = cellstr(mean_epi);
-                matlabbatch{2}.spm.spatial.coreg.estimate.other  = cellstr(self.epi_path(run));
+                matlabbatch{2}.spm.spatial.coreg.estimate.other  = cellstr(spm_select('expand',self.epi_path(run)));
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.cost_fun = 'nmi';
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.sep = [4 2];
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];
@@ -345,13 +345,13 @@ classdef Subject < Project
                 matlabbatch{3}.spm.spatial.realign.write.roptions.wrap   = [0 0 0];
                 matlabbatch{3}.spm.spatial.realign.write.roptions.mask   = 1;
                 matlabbatch{3}.spm.spatial.realign.write.roptions.prefix = 'r';
+                %self.RunSPMJob(matlabbatch(1));
                 self.RunSPMJob(matlabbatch(2));
                 self.RunSPMJob(matlabbatch(3));
             else
                 fprintf('EPI is not here...\n')
             end
-        end
-            
+        end            
         function [scanunit]=StimTime2ScanUnit(self,run)
             %will return stim onsets in units of scan. Usefull for first
             %level.
