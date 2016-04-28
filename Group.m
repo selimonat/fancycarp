@@ -35,13 +35,12 @@ classdef Group < Project
             %object.
             for nrun = 1:3
                 for s = 1:self.total_subjects
-                    for fields = fieldnames(self.subject{s}.ratings)'                        
-                        R         = nan(1,16);
-                        this_data = self.subject{s}.ratings(nrun).(fields{1})(:)';
+                    for fields = fieldnames(self.subject{s}.ratings)'                         
+                        this_data = mean(self.subject{s}.ratings(nrun).(fields{1}));
                         if ~isempty(this_data);
-                           R(1:length(this_data)) = this_data;
+                           R = this_data;
                         end
-                        out(nrun).(fields{1})(s,:) = R;                        
+                        out(nrun).(fields{1})(s,:) = R./sum(R);
                     end
                 end
             end
