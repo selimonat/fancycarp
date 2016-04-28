@@ -36,9 +36,7 @@ classdef Group < Project
             for nrun = 1:3
                 for s = 1:self.total_subjects
                     for fields = fieldnames(self.subject{s}.ratings)'                         
-                        this_data                  = mean(self.subject{s}.ratings(nrun).(fields{1}),1);
-                        out(nrun).(fields{1})(s,:) = this_data./10;
-                        
+                        out(nrun).(fields{1})(s,:)  = mean(self.subject{s}.ratings(nrun).(fields{1}),1);                        
                     end
                 end
             end
