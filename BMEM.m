@@ -120,28 +120,26 @@ classdef BMEM < handle
     
     %% Methods for the probabilistic machinery.
     methods
-        function out           = p_given_f(self,location)
+        function out = p_given_f(self,location)
             %p(p|f) the perceptual likelihood function
             out = [];
             c = 0;
             for l = location(:)'
                 c        = c + 1;
-                out(:,c) = Tuning.VonMises(self.x,1,self.param_kappa_perceptual,l,0);
+                out(:,c) = self.VonMises(self.param_kappa_perceptual,l);
             end
         end
-        function out           = csp1_given_face(self)
+        function out = csp1_given_face(self)
             %p(CS+ = 1 | face) the active generalization component.
-            dummy        = Tuning.VonMises(self.x,self.param_amp_csp,self.param_kappa_csp,0,0);
-            out          = repmat(dummy,size(self.subjects,1),1);
+            out = self.VonMises(self.param_kappa_csp,0);            
         end
         function out = get.f(self)
-            %p(f) returns prior on faces
-            current_subject        = self.current_subject;
-            location               = (3.5-self.csp(current_subject))*45;
-            location2              = (7.5-self.csp(current_subject))*45;
-            if strcmp(self.prior_function,'vonmises')
-                dummy                 = Tuning.VonMises(self.x,1,self.param_kappa_prior,location,0);
-                dummy                 = dummy + Tuning.VonMises(self.x,1,self.param_kappa_prior,location2,0);;
+            %p(f) returns prior on faces            
+            location               = (3.5-self.csp(self.current_subject))*45;
+            location2              = (7.5-self.csp(self.current_subject))*45;
+            if strcmp(self.prior_function,'vonmises')                
+                dummy                 = self.VonMises(self.param_kappa_prior,location);            
+                dummy                 = dummy + self.VonMises(self.param_kappa_prior,location2);            
             else
                 dummy                 = ones(1,8);
             end
@@ -160,9 +158,14 @@ classdef BMEM < handle
             %p(p,f | csp = 1);
             out = sum(self.p_given_f(self.x)*diag(self.f_given_csp1),2);
         end
+        
+        function out = VonMises(self,kappa,mu)
+            %VM probability density function
+            out    =  exp(kappa*cos(deg2rad(self.x-mu)));
+            out    =  out./sum(out(:));
+        end
     end
-    
-    
+        
     %% Basic Parameter optimization methods
     methods
         function find_params(self,varargin)
@@ -231,4 +234,5 @@ classdef BMEM < handle
             out                   = mean(( current_fit - data ).^2);
         end
     end
+    
 end
