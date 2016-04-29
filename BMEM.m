@@ -3,9 +3,20 @@ classdef BMEM < handle
     properties (Constant)        
         options          = optimset('Display','off','maxfunevals',10000,'tolX',10^-16,'tolfun',10^-16,'MaxIter',10000,'Algorithm','interior-point');        
     end
+    properties (Hidden)
+        params 
+        current_subject  = 1;
+        current_data;
+        current_fit
+        current_model 
+        current_fit_estimates   = [];
+        current_fit_mse         = [];
+        current_fit_exitFlag    = [];
+        current_fit_r           =[];
+        current_initial         = [];
+    end
     properties
-        x                = linspace(-135,180,8);
-        phase            = 3;%Which experimental phase
+        x                = linspace(-135,180,8);        
         prior_function   = 'vonmises'
         param_kappa_csp        = 1;        
         param_kappa_prior      = 1;
@@ -16,24 +27,12 @@ classdef BMEM < handle
         csp              = [];
         p_f_given_csp1   = [];
         f_given_csp1     = [];
-        f                = [];
-        %p_given_f        = [];%p(p|f); perceptual likelihood
-        model
-        group
-        current_subject = 1;
-        current_data;
-        current_fit
-        current_model 
+        f                = [];        
+        model                
         fit_quality_NonExpVar   %non explained variance.
         fit_quality_r   = [];     
     end
-    properties (Hidden)
-        
-        fit_estimates   = [];
-        fit_mse         = [];
-        fit_exitFlag    = [];
-    end
-    
+ 
     methods
         function bmem = BMEM(G)
             %creates a Bayesian Magnet Effect Model object
@@ -63,52 +62,61 @@ classdef BMEM < handle
     %% methods to run different models across all subjects
     methods 
         function fit_ss(self,nfuns)            
-            %Will run different models specified in NFUNS and return the
-            %unexplained variance in EXPVARIANCE. All models 
+            %Will run models specified in NFUNS and return the fit quality.
+            %Relies on self.find_params.
+            % NFUN:
+            % 1: BMEM model            
+            % 2: vM model
+            % 3: Gaussian Model
             
             for nfun = nfuns(:)'
                 self.current_model = nfun;
-                for run = 3
+                for run = 1:3
                     for ns = 1:length(self.subjects)          
                         fprintf('Fun:%i, Run:%i, Sub:%i\n',nfun,run,ns);
                         self.current_data   = self.ratings(run).y(ns,:);
+                        self.current_subject = ns;
                         if ~any(isnan(self.current_data))
                             self.find_params;
                             %
-                            self.fit_quality_NonExpVar(ns,run,nfun) = self.fit_mse;
-                            self.fit_quality_r(ns,run,nfun)         = corr2(self.current_data(:),self.current_fit(:));
+                            self.fit_quality_NonExpVar(ns,run,nfun) = self.current_fit_mse;
+                            self.fit_quality_r(ns,run,nfun)         = self.current_fit_r;                            
                             %
-                            self.plot_subject;pause                            
+                            self.current_fit_r;
+%                             self.plot_subject;pause
+                        else
+                            self.fit_quality_NonExpVar(ns,run,nfun) = NaN;
+                            self.fit_quality_r(ns,run,nfun)         = NaN;
                         end
                     end
                 end
             end
         end
         
-        function fitBMEM_ConstantPrior(self)
-            %This function is an expansion of fitBMEM to the group level
-            %using the same prior function for everybody.
-            self.phase = 3;
-            run = self.phase;
-            param_mask = [1 0 0];%keep prior constant, last param is prior.
-            kappa_counter = 0;
-            for param_kappa_prior      = 0%linspace(.0001,25,50)                
-                kappa_counter          = kappa_counter + 1;
-                self.param_kappa_prior = param_kappa_prior;
-                for ns = 1:length(self.subjects)
-                    fprintf('kappa :%3.4g, Subject:%i\n',param_kappa_prior,ns);
-                    self.current_subject                        = ns;
-                    self.find_params(param_mask);
-                    data                                        = self.group.ratings(run).y_mean(ns,1:8);
-                    fit                                         = self.p_f_given_csp1;
-                    self.fit_quality_NonExpVar(ns,run,10)       = nanmean((data(:) -fit(:)).^2);%
-                    self.fit_quality_r(ns,run,10+kappa_counter) = corr2(data(:),fit(:));
-                    self.plot_subject;
-                end                
-                plot(squeeze(nanmean(self.fit_quality_r(:,3,10:end))));
-                drawnow;
-            end
-        end
+% % %         function fitBMEM_ConstantPrior(self)
+% % %             %This function is an expansion of fitBMEM to the group level
+% % %             %using the same prior function for everybody.
+% % %             self.phase = 3;
+% % %             run = self.phase;
+% % %             param_mask = [1 0 0];%keep prior constant, last param is prior.
+% % %             kappa_counter = 0;
+% % %             for param_kappa_prior      = 0%linspace(.0001,25,50)                
+% % %                 kappa_counter          = kappa_counter + 1;
+% % %                 self.param_kappa_prior = param_kappa_prior;
+% % %                 for ns = 1:length(self.subjects)
+% % %                     fprintf('kappa :%3.4g, Subject:%i\n',param_kappa_prior,ns);
+% % %                     self.current_subject                        = ns;
+% % %                     self.find_params(param_mask);
+% % %                     data                                        = self.group.ratings(run).y_mean(ns,1:8);
+% % %                     fit                                         = self.p_f_given_csp1;
+% % %                     self.fit_quality_NonExpVar(ns,run,10)       = nanmean((data(:) -fit(:)).^2);%
+% % %                     self.fit_quality_r(ns,run,10+kappa_counter) = corr2(data(:),fit(:));
+% % %                     self.plot_subject;
+% % %                 end                
+% % %                 plot(squeeze(nanmean(self.fit_quality_r(:,3,10:end))));
+% % %                 drawnow;
+% % %             end
+% % %         end
     end
     
     %% Methods for the probabilistic machinery.
@@ -131,12 +139,12 @@ classdef BMEM < handle
             location               = (3.5-self.csp(self.current_subject))*45;
             location2              = (7.5-self.csp(self.current_subject))*45;
             if strcmp(self.prior_function,'vonmises')                
-                dummy                 = self.VonMises(self.param_kappa_prior,location);            
-                dummy                 = dummy + self.VonMises(self.param_kappa_prior,location2);            
+                dummy              = self.VonMises(self.param_kappa_prior,location);            
+                dummy              = dummy + self.VonMises(self.param_kappa_prior,location2);            
             else
-                dummy                 = ones(1,8);
+                dummy              = ones(1,8);
             end
-            out                       = dummy./sum(dummy(:));
+            out                    = dummy./sum(dummy(:));
         end
         function out = csp1_f(self)
             %p(csp = 1,face)
@@ -161,66 +169,95 @@ classdef BMEM < handle
         
     %% Basic Parameter optimization methods
     methods
-        function find_params(self,method,varargin)
+        function find_params(self,varargin)
             %Matlab's gradient descent to find free parameters optimizing
             %the self.cost_function. Before calling the cost function here
             %we organize initial values and lower/upper bounds.
+            
+            % organize initial values and bound constraints.
             if nargin == 2
                 free_vector = varargin{1};
             else
                 free_vector = [1 1 1];
             end
-            %default upper and lower bounds.
-            L       = [0  0  0];
-            U       = [25 25 25];
-            initial = [1 1 1];            
-            %            
-            L       = L.*free_vector+initial.*(~free_vector);
-            U       = U.*free_vector+initial.*(~free_vector);            
-            %                                    
-            dummy  = @(params) self.cost_function_ss(params);
+                        
+            % set upper and lower bounds for different models
+            if self.current_model    == 1%BMEM
+                L       = [0  0  0];
+                U       = [25 25 25];
+                self.current_initial = .1+rand(1,3)*10;
+                tparam = 3;
+            elseif self.current_model    == 2%vM
+                L       = [0  0  ];
+                U       = [25 180];
+                self.current_initial = .1+rand(1,2)*10;
+                tparam = 2;
+            elseif self.current_model    == 3%Gaussian
+                L       = [0  ];
+                U       = [25 ];
+                self.current_initial = .1+rand(1)*10;
+                tparam = 1;
+            end
+            L       = L.*free_vector(1:tparam)+self.current_initial.*(~free_vector(1:tparam));
+            U       = U.*free_vector(1:tparam)+self.current_initial.*(~free_vector(1:tparam));            
             
-            [self.fit_estimates, self.fit_mse, self.fit_exitFlag]  = ...
-                fmincon(dummy, initial, [],[],[],[],L,U,[],self.options);
+            % start with optimization            
+            dummy  = @(params) self.cost_function_ss(params);            
+            [self.current_fit_estimates, self.current_fit_mse, self.current_fit_exitFlag]  = ...
+                fmincon(dummy, self.current_initial, [],[],[],[],L,U,[],self.options);
+            %save the correlation
+            self.current_fit_r = corr2(self.current_data(:),self.current_fit(:));
             
-            %overwrite the current parameters depending on the model
+            %overwrite the current parameters depending on the fit results.
+            %We do that so that plot methods can plot something meaningful.
              if self.current_model    == 1                                
-                self.param_kappa_csp        = self.fit_estimates(1);
-                self.param_kappa_perceptual = self.fit_estimates(2);
-                self.param_kappa_prior      = self.fit_estimates(3);
-                
-            elseif self.current_model == 2
-                
-                self.param_kappa_csp        = self.fit_estimates(1);
-                self.param_mu               = self.fit_estimates(2);
-                
-            elseif self.current_model == 3
-                
-                self.param_kappa_csp        = self.fit_estimates(1);
-             end
+                self.param_kappa_csp        = self.current_fit_estimates(1);
+                self.param_kappa_perceptual = self.current_fit_estimates(2);
+                self.param_kappa_prior      = self.current_fit_estimates(3);                
+            elseif self.current_model == 2                
+                self.param_kappa_csp        = self.current_fit_estimates(1);
+                self.param_mu               = self.current_fit_estimates(2);                
+            elseif self.current_model == 3                
+                self.param_kappa_csp        = self.current_fit_estimates(1);
+            end
         end
         function plot_subject(self)
             %plots active generalization, prior, and BMEM feargen profiles
             %together with the real data.
             clf
-            subplot(2,2,1);
+            subplot(2,3,1);
             bar(self.csp1_given_face);
-            title('Active Generalization');
+            title(sprintf('Active Generalization\n(Kappa: (%3.4g) %3.4g)',self.current_initial(1),self.param_kappa_csp ));
+            box off;grid on
+            set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'})
             %
-            subplot(2,2,2);
+            subplot(2,3,2);
             bar(self.f);
-            title('Prior');
+            try
+                title(sprintf('Prior\n(Kappa: %3.4g %3.4g)',self.current_initial(2),self.param_kappa_prior));
+            end
+            box off;grid on
+            set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'})
             %
-            subplot(2,2,3);
-            bar(self.current_fit);
-            title('Model');
+            subplot(2,3,3);
+            bar(self.p_given_f(0))
+            try
+                title(sprintf('p(p|f)\n(Kappa: %3.4g %3.4g)',self.current_initial(3),self.param_kappa_perceptual));
+            end
+            box off;grid on;set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'})
             %
-            subplot(2,2,4);
+            subplot(2,3,4);
+            bar(self.current_fit);            
+            title(sprintf('Model\nr: %3.4g\n%s',self.current_fit_r,sprintf('%2.3g, ',self.current_fit_estimates)));
+            box off;grid on;set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'})
+            %
+            subplot(2,3,5);
             bar(self.current_data);
             title('Ratings Data');
+            box off;grid on;set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'})
             %
             EqualizeSubPlotYlim(gcf);
-            supertitle(sprintf('sub:%i, CS+:%i',self.current_subject,self.csp(self.current_subject)),1);            
+            supertitle(sprintf('sub:%i, CS+:%i',self.current_subject,self.csp(self.current_subject)),1,'fontsize',15);            
         end
         function out = cost_function_ss(self,params)
             %out = cost_function_ss(self,params); Single subject cost
@@ -243,7 +280,7 @@ classdef BMEM < handle
                 self.current_fit            = self.VonMises(self.param_kappa_csp,0);
             end            
             %MSE
-            out                             = mean(( self.current_fit(:) - self.current_data(:) ).^2);            
+            out                             = mean(( self.current_fit(:) - self.current_data(:) ).^2);                        
         end        
     end    
 end
