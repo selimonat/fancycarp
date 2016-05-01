@@ -5,7 +5,7 @@ classdef BMEM < handle
     end
     properties (Hidden)
         params;
-        gridsize      = 10;%resolution per parameter for initial estimation.
+        gridsize      = 20;%resolution per parameter for initial estimation.
         current_subject         = 1;
         current_data;
         current_fit;
@@ -15,6 +15,7 @@ classdef BMEM < handle
         current_fit_exitFlag    = [];
         current_fit_r           = [];
         current_initial         = [];
+        visualization           = 1;
     end
     properties
         x                      = linspace(-135,180,8);
@@ -57,7 +58,12 @@ classdef BMEM < handle
 %                         bmem.ratings(nrun).y(ns,:) = out;
                     end
                 end                
-            end            
+            end
+            %% reset figures if needed.
+            if bmem.visualization
+                figure(9);clf;
+                figure(10);clf;                
+            end
         end
     end
     %% methods to run different models across all subjects
@@ -69,7 +75,7 @@ classdef BMEM < handle
             % 1: BMEM model            
             % 2: vM model
             % 3: Gaussian Model
-            
+                        
             for nfun = nfuns(:)'
                 self.current_model = nfun;
                 for run = 1:3
@@ -84,7 +90,11 @@ classdef BMEM < handle
                             self.fit_quality_r(ns,run,nfun)         = self.current_fit_r;                            
                             %
                             self.current_fit_r;
-%                             self.plot_subject;pause
+                            if self.visualization
+                                self.plot_subject;
+                                self.plot_group(ns,run,nfun);
+                            end
+                            %pause                            
                         else
                             self.fit_quality_NonExpVar(ns,run,nfun) = NaN;
                             self.fit_quality_r(ns,run,nfun)         = NaN;
@@ -198,17 +208,16 @@ classdef BMEM < handle
                 L       = 0;%[kappa_csp]
                 U       = 25;
             end       
-            tparam               = length(L);
-            self.current_initial = L+rand(1,tparam).*U;%set the initial values
-            %now limit the L - U to the same value if the parameter is
-            %supposed to stay constant.
-            L                    = L(1:tparam).*free_vector(1:tparam)+self.current_initial(1:tparam).*(~free_vector(1:tparam));
-            U                    = U(1:tparam).*free_vector(1:tparam)+self.current_initial(1:tparam).*(~free_vector(1:tparam));           
-            
+            tparam               = length(L);           
+          
             % start with optimization            
             dummy  = @(params) self.cost_function_ss(params);       
             % roughtly estimate initial position
             self.current_initial = self.RoughEstimator(self.x,self.current_data,dummy,L,U);            
+            %now limit the L - U to the same value if the parameter is
+            %supposed to stay constant.
+            L                    = L(1:tparam).*free_vector(1:tparam)+self.current_initial(1:tparam).*(~free_vector(1:tparam));
+            U                    = U(1:tparam).*free_vector(1:tparam)+self.current_initial(1:tparam).*(~free_vector(1:tparam));           
             
             [self.current_fit_estimates, self.current_fit_mse, self.current_fit_exitFlag] = ...
                 fmincon(dummy, self.current_initial, [],[],[],[],L,U,[],self.options);
@@ -251,11 +260,24 @@ classdef BMEM < handle
             [m i]  = min(error);
             params = double(G(i,:));
         end
-        
+        function plot_group(self,ns,run,nfun)
+            figure(10);
+            subplot(1,3,run);
+            text(nfun+rand(1)-.5,self.fit_quality_r(ns,run,nfun),mat2str(self.subjects(ns)),'fontsize',10,'color',[(nfun-1)/3 0 1-(nfun-1)/3]);
+            ylim([-1 1]);
+            xlim([0 4]);
+            set(gca,'xgrid','on','xtick',linspace(1,4,4)-.5,'xticklabel',{'           fun1' '           fun2' '           fun3' ''})
+            title(sprintf('Phase: %i',run));
+            ylabel('r')
+            hold on;
+            box off;
+            drawnow;
+        end
         function plot_subject(self)
             %plots active generalization, prior, and BMEM feargen profiles
             %together with the real data.
-            clf
+            figure(9);
+            clf            
             subplot(2,3,1);
             bar(self.csp1_given_face);
             title(sprintf('Active Generalization\n(Kappa: (%3.4g) %3.4g)',self.current_initial(1),self.param_kappa_csp ));
@@ -288,7 +310,23 @@ classdef BMEM < handle
             box off;grid on;set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'});
             %
             EqualizeSubPlotYlim(gcf);
-            supertitle(sprintf('sub:%i, CS+:%i',self.current_subject,self.csp(self.current_subject)),1,'fontsize',15);            
+            supertitle(sprintf('sub:%i, CS+:%i',self.subjects(self.current_subject),self.csp(self.current_subject)),1,'fontsize',15);            
+        end
+        function plot_group_connected_lines(self)
+            %
+            figure(11);clf;
+            for nfun = 1:size(self.fit_quality_r,3);
+                subplot(1,3,nfun);
+                for ns = 1:size(self.fit_quality_r,1);                
+                   PlotTransparentLine([1:3]',[squeeze(self.fit_quality_r(ns,:,nfun))]',.25,[(nfun-1)/3 0 1-(nfun-1)/3],'linewidth',2)
+                end
+                ylim([-1 1]);
+                set(gca,'xtick',1:3,'xticklabel',{'1' '2' '3' },'ytick',[-1 0 1],'xgrid','on');
+                ylabel('r')
+                box off
+                title(sprintf('Fun:%i',nfun));
+            end
+            
         end
         function out = cost_function_ss(self,params)
             %out = cost_function_ss(self,params); Single subject cost
