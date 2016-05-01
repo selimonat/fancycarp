@@ -337,6 +337,7 @@ classdef BMEM < handle
             figure(11);clf;
             tfun   = size(self.fit_quality_r,3);
             tphase = size(self.fit_quality_r,2);
+            for nlab = 1:tfun;xlab{nlab} = sprintf('%s',self.phase_names{nlab}(1));end;
             for nfun = 1:tfun
                 subplot(1,tfun,nfun);
                 for ns = 1:size(self.fit_quality_r,1);                
@@ -347,10 +348,10 @@ classdef BMEM < handle
                 plot([1:tphase]',nanmedian(squeeze(self.fit_quality_r(:,:,nfun))),'.-','color',[(nfun-1)/tfun 0 1-(nfun-1)/tfun],'markersize',40,'linewidth',3)
                 hold off;   
                 ylim([-1 1]);
-                set(gca,'xtick',1:tfun,'xticklabel',strsplit(num2str(1:tfun)),'ytick',[-1 0 1],'xgrid','on');
+                set(gca,'xtick',1:tfun,'xticklabel',xlab,'ytick',[-1 0 1],'xgrid','on','fontsize',25);
                 ylabel('r')
                 box off
-                title(sprintf('Fun:%i',nfun));
+                title(sprintf('%s',self.fun_names{nfun}));
             end
             
         end
