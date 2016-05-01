@@ -16,6 +16,8 @@ classdef BMEM < handle
         current_fit_r           = [];
         current_initial         = [];
         visualization           = 1;
+        LB%lower and
+        UB%upper bounds for parameter estimates
     end
     properties
         x                      = linspace(-135,180,8);
@@ -83,13 +85,13 @@ classdef BMEM < handle
                         fprintf('Fun:%i, Run:%i, Sub:%i\n',nfun,run,ns);
                         self.current_data   = self.ratings(run).y(ns,:);
                         self.current_subject = ns;
-                        if ~any(isnan(self.current_data))                            
+                        if ~any(isnan(self.current_data))
+                            self.SetBoundary;
                             self.find_params([1 1 1]);                            
                             %
                             self.fit_quality_NonExpVar(ns,run,nfun) = self.current_fit_mse;
                             self.fit_quality_r(ns,run,nfun)         = self.current_fit_r;                            
-                            %
-                            self.current_fit_r;
+                            %                            
                             if self.visualization
                                 self.plot_subject;
                                 self.plot_group(ns,run,nfun);
@@ -104,11 +106,9 @@ classdef BMEM < handle
             end
         end
         function fit_constantprior(self)
-            %This function is an expansion of fitBMEM to the group level
-            %using the same prior function for everybody.
-            
-            self.current_model = 1;            
-            param_mask         = [ 1 1 0];%[csp perceptual prior]
+            %This function is an expansion of fit_ss to the group level
+            %using the same prior function for everybody.            
+            self.current_model = 1;                        
             for run = 1:3
                 kappa_counter      = 0;
                 for param_kappa_prior = linspace(.0001,25,100);
@@ -116,17 +116,22 @@ classdef BMEM < handle
                     kappa_counter          = kappa_counter +1;
                     self.param_kappa_prior = param_kappa_prior;
                     for ns = 1:length(self.subjects)
-                        self.current_subject                                     = ns;
-                        self.current_data                                        = self.ratings(run).y(ns,:);
+                        self.current_subject                                   = ns;
+                        self.current_data                                      = self.ratings(run).y(ns,:);
                         if ~any(isnan(self.current_data))
-                            %                            
-                            self.current_initial                                 = [.1+rand(1,3)*10 self.param_kappa_prior];
-                            self.find_params(param_mask);
                             %
-                            self.fit_quality_NonExpVar(ns,run,4+kappa_counter-1) = self.current_fit_mse;
-                            self.fit_quality_r(ns,run,4+kappa_counter-1)         = self.current_fit_r;
+                            self.SetBoundary;
+                            self.LB(3)                                         = param_kappa_prior;
+                            self.UB(3)                                         = param_kappa_prior;
+                            self.find_params([ 1 1 0]);%keep prior constant
+                            %
+                            self.fit_quality_NonExpVar(ns,run,3+kappa_counter) = self.current_fit_mse;
+                            self.fit_quality_r(ns,run,3+kappa_counter)         = self.current_fit_r;
                             
-%                             self.plot_subject;pause
+                            if self.visualization
+                                self.plot_subject;
+                                self.plot_group(ns,run,3+kappa_counter);
+                            end
                         else
                             self.fit_quality_NonExpVar(ns,run,4+kappa_counter-1) = NaN;
                             self.fit_quality_r(ns,run,4+kappa_counter-1)         = NaN;
@@ -195,32 +200,20 @@ classdef BMEM < handle
             %
             % Will find the best fit for the model specified in
             % CURRENT_MODEL, and update CURRENT_FIT_R, CURRENT_FIT_MSE,
-            % CURRENT_
-                                
-            % set upper and lower bounds for different models
-            if self.current_model        == 1%BMEM
-                L       = [0    2   0];%[kappa_csp kappa_perceptual kappa_prior]
-                U       = [25   2  25];
-            elseif self.current_model    == 2%vM
-                L       = [0  -135 ];%[kappa mu]
-                U       = [25  180 ];
-            elseif self.current_model    == 3%Immobile vM (i.e. Gaussian)
-                L       = 0;%[kappa_csp]
-                U       = 25;
-            end       
-            tparam               = length(L);           
-          
+            % CURRENT_                                        
+            tparam               = length(self.LB);                      
+            
             % start with optimization            
-            dummy  = @(params) self.cost_function_ss(params);       
+            dummy  = @(params) self.cost_function_ss(params);
             % roughtly estimate initial position
-            self.current_initial = self.RoughEstimator(self.x,self.current_data,dummy,L,U);            
+            self.current_initial = self.RoughEstimator(self.x,self.current_data,dummy,self.LB,self.UB);
             %now limit the L - U to the same value if the parameter is
             %supposed to stay constant.
-            L                    = L(1:tparam).*free_vector(1:tparam)+self.current_initial(1:tparam).*(~free_vector(1:tparam));
-            U                    = U(1:tparam).*free_vector(1:tparam)+self.current_initial(1:tparam).*(~free_vector(1:tparam));           
+            self.LB  = self.LB(1:tparam).*free_vector(1:tparam) + self.current_initial(1:tparam).*(~free_vector(1:tparam));
+            self.UB  = self.UB(1:tparam).*free_vector(1:tparam) + self.current_initial(1:tparam).*(~free_vector(1:tparam));                        
             
             [self.current_fit_estimates, self.current_fit_mse, self.current_fit_exitFlag] = ...
-                fmincon(dummy, self.current_initial, [],[],[],[],L,U,[],self.options);
+                fmincon(dummy, self.current_initial, [],[],[],[],self.LB,self.UB,[],self.options);
             
             %save the correlation
             self.current_fit_r = corr2(self.current_data(:),self.current_fit(:));
@@ -238,6 +231,19 @@ classdef BMEM < handle
                 self.param_kappa_csp        = self.current_fit_estimates(1);
              end
             %
+        end
+        function SetBoundary(self)
+            % set upper and lower bounds for different models
+            if self.current_model        == 1%BMEM
+                self.LB        = [0    0   0];%[kappa_csp kappa_perceptual kappa_prior]
+                self.UB        = [25   25  25];
+            elseif self.current_model    == 2%vM
+                self.LB        = [0  -135 ];%[kappa mu]
+                self.UB        = [25  180 ];
+            elseif self.current_model    == 3%Immobile vM (i.e. Gaussian)
+                self.LB        = 0;%[kappa_csp]
+                self.UB        = 25;
+            end       
         end
         function [params]=RoughEstimator(self,x,y,fun,L,U)
             %will roughly estimate free parameter values bounded between L
@@ -324,7 +330,7 @@ classdef BMEM < handle
                 end
                 %plot also the mean
                 hold on;
-                plot([1:tphase]',nanmean(squeeze(self.fit_quality_r(:,:,nfun))),'.-','color',[(nfun-1)/tfun 0 1-(nfun-1)/tfun],'markersize',40,'linewidth',3)
+                plot([1:tphase]',nanmedian(squeeze(self.fit_quality_r(:,:,nfun))),'.-','color',[(nfun-1)/tfun 0 1-(nfun-1)/tfun],'markersize',40,'linewidth',3)
                 hold off;   
                 ylim([-1 1]);
                 set(gca,'xtick',1:tfun,'xticklabel',strsplit(num2str(1:tfun)),'ytick',[-1 0 1],'xgrid','on');
