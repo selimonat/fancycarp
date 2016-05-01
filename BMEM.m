@@ -1,11 +1,11 @@
 classdef BMEM < handle
     %creates a Bayesian Magnet Effect Model object
     properties (Constant)        
-        options          = optimset('Display','off','maxfunevals',10000,'tolX',10^-16,'tolfun',10^-16,'MaxIter',10000,'Algorithm','interior-point');        
+        options          = optimset('Display','off','maxfunevals',100,'tolX',10^-3,'tolfun',10^-3,'MaxIter',100,'Algorithm','interior-point');        
     end
     properties (Hidden)
         params;
-        gridsize      = 20;%resolution per parameter for initial estimation.
+        gridsize      = 5;%resolution per parameter for initial estimation.
         current_subject         = 1;
         current_data;
         current_fit;
@@ -18,6 +18,8 @@ classdef BMEM < handle
         visualization           = 1;
         LB%lower and
         UB%upper bounds for parameter estimates
+        phase_names             = {'Baseline' 'Conditioning' 'Test'};
+        fun_names               = {'BMEM' 'vM' 'Gau'};
     end
     properties
         x                      = linspace(-135,180,8);
@@ -76,12 +78,12 @@ classdef BMEM < handle
             % NFUN:
             % 1: BMEM model            
             % 2: vM model
-            % 3: Gaussian Model
-                        
+            % 3: Gaussian Model                                    
+            
             for nfun = nfuns(:)'
                 self.current_model = nfun;
                 for run = 1:3
-                    for ns = 1:length(self.subjects)                                 
+                    for ns = 1:length(self.subjects)
                         fprintf('Fun:%i, Run:%i, Sub:%i\n',nfun,run,ns);
                         self.current_data   = self.ratings(run).y(ns,:);
                         self.current_subject = ns;
@@ -93,14 +95,16 @@ classdef BMEM < handle
                             self.fit_quality_r(ns,run,nfun)         = self.current_fit_r;                            
                             %                            
                             if self.visualization
-                                self.plot_subject;
-                                self.plot_group(ns,run,nfun);
+                                self.plot_subject;                               
                             end
                             %pause                            
                         else
                             self.fit_quality_NonExpVar(ns,run,nfun) = NaN;
                             self.fit_quality_r(ns,run,nfun)         = NaN;
-                        end
+                        end                        
+                    end
+                    if self.visualization
+                        self.plot_group;
                     end
                 end
             end
@@ -130,7 +134,7 @@ classdef BMEM < handle
                             
                             if self.visualization
                                 self.plot_subject;
-                                self.plot_group(ns,run,3+kappa_counter);
+                                self.plot_group;
                             end
                         else
                             self.fit_quality_NonExpVar(ns,run,4+kappa_counter-1) = NaN;
@@ -266,19 +270,29 @@ classdef BMEM < handle
             [m i]  = min(error);
             params = double(G(i,:));
         end
-        function plot_group(self,ns,run,nfun)
-            figure(10);
-            subplot(1,3,run);
-            text(nfun+rand(1)-.5,self.fit_quality_r(ns,run,nfun),mat2str(self.subjects(ns)),'fontsize',10,'color',[(nfun-1)/3 0 1-(nfun-1)/3]);
-            ylim([-1 1]);
-            xlim([0 4]);
-            set(gca,'xgrid','on','xtick',linspace(1,4,4)-.5,'xticklabel',{'           fun1' '           fun2' '           fun3' ''})
-            title(sprintf('Phase: %i',run));
-            ylabel('r')
-            hold on;
-            box off;
+        function plot_group(self)            
+            figure(10);clf
+            tfun    = size(self.fit_quality_r,3);
+            trun    = size(self.fit_quality_r,2);
+            for nlab = 1:tfun;xlab{nlab} = sprintf('                    %s',self.fun_names{nlab});end
+            for run = 1:trun;
+                subplot(1,trun,run);
+                for nfun = 1:tfun
+                    for ns = 1:self.current_subject
+                        text(nfun+rand(1).*.6-.5,self.fit_quality_r(ns,run,nfun),mat2str(self.subjects(ns)),'fontsize',9,'color',[(nfun-1)/tfun 0 1-(nfun-1)/tfun]);
+                        hold on;
+                    end
+                end
+                box off;
+                ylabel('r')
+                ylim([-1 1]);
+                xlim([0 tfun+1]);
+                set(gca,'xgrid','on','xtick',linspace(1,tfun,tfun)-.5,'xticklabel',xlab)
+                title(sprintf('Phase: %s',self.phase_names{run}));
+            end
             drawnow;
         end
+        
         function plot_subject(self)
             %plots active generalization, prior, and BMEM feargen profiles
             %together with the real data.
