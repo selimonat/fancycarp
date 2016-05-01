@@ -4,33 +4,34 @@ classdef BMEM < handle
         options          = optimset('Display','off','maxfunevals',10000,'tolX',10^-16,'tolfun',10^-16,'MaxIter',10000,'Algorithm','interior-point');        
     end
     properties (Hidden)
-        params 
-        current_subject  = 1;
+        params;
+        gridsize      = 10;%resolution per parameter for initial estimation.
+        current_subject         = 1;
         current_data;
-        current_fit
-        current_model 
+        current_fit;
+        current_model;
         current_fit_estimates   = [];
         current_fit_mse         = [];
         current_fit_exitFlag    = [];
-        current_fit_r           =[];
+        current_fit_r           = [];
         current_initial         = [];
     end
     properties
-        x                = linspace(-135,180,8);        
-        prior_function   = 'vonmises'
+        x                      = linspace(-135,180,8);
+        prior_function         = 'vonmises';
         param_kappa_csp        = 1;        
         param_kappa_prior      = 1;
         param_kappa_perceptual = 2;
         param_mu               = 0;
-        ratings          = [];
-        subjects         = [];
-        csp              = [];
-        p_f_given_csp1   = [];
-        f_given_csp1     = [];
-        f                = [];        
-        model                
-        fit_quality_NonExpVar   %non explained variance.
-        fit_quality_r   = [];     
+        ratings                = [];
+        subjects               = [];
+        csp                    = [];
+        p_f_given_csp1         = [];
+        f_given_csp1           = [];
+        f                      = [];        
+        model;
+        fit_quality_NonExpVar;   %non explained variance.
+        fit_quality_r          = [];     
     end
  
     methods
@@ -48,8 +49,8 @@ classdef BMEM < handle
             %please do that in the Group object and re-run the BMEM object.
             for nrun = 1:3
                 bmem.ratings(nrun).y = NaN(length(G.subject),8);
-                for ns = 1:length(G.subject)
-                    if ~isempty(G.subject{ns}.ratings(nrun).y)
+                for ns = 1:length(G.subject);
+                    if ~isempty(G.subject{ns}.ratings(nrun).y);
                         out                        = G.subject{ns}.ratings(nrun).y_mean;%extract it
                         out                        = (out-min(out));
                         bmem.ratings(nrun).y(ns,:) = out./sum(out);
@@ -72,13 +73,12 @@ classdef BMEM < handle
             for nfun = nfuns(:)'
                 self.current_model = nfun;
                 for run = 1:3
-                    for ns = 1:length(self.subjects)          
+                    for ns = 1:length(self.subjects)                                 
                         fprintf('Fun:%i, Run:%i, Sub:%i\n',nfun,run,ns);
                         self.current_data   = self.ratings(run).y(ns,:);
                         self.current_subject = ns;
-                        if ~any(isnan(self.current_data))
-                            self.current_initial                    = .1+rand(1,3)*10;%set the initial values
-                            self.find_params;                            
+                        if ~any(isnan(self.current_data))                            
+                            self.find_params([1 1 1]);                            
                             %
                             self.fit_quality_NonExpVar(ns,run,nfun) = self.current_fit_mse;
                             self.fit_quality_r(ns,run,nfun)         = self.current_fit_r;                            
@@ -99,9 +99,9 @@ classdef BMEM < handle
             
             self.current_model = 1;            
             param_mask         = [ 1 1 0];%[csp perceptual prior]
-            for run = 2
+            for run = 1:3
                 kappa_counter      = 0;
-                for param_kappa_prior = linspace(.0001,25,100)                    
+                for param_kappa_prior = linspace(.0001,25,100);
                     fprintf('kappa :%3.4g\n',param_kappa_prior);
                     kappa_counter          = kappa_counter +1;
                     self.param_kappa_prior = param_kappa_prior;
@@ -177,40 +177,42 @@ classdef BMEM < handle
         
     %% Basic Parameter optimization methods
     methods
-        function find_params(self,varargin)
-            %Matlab's gradient descent to find free parameters optimizing
-            %the self.cost_function. Before calling the cost function here
-            %we organize initial values and lower/upper bounds.
-            
-            % organize initial values and bound constraints.
-            if nargin == 2
-                free_vector = varargin{1};
-            else
-                free_vector = [1 1 1];
-            end
-                        
+        function find_params(self,free_vector)
+            % Matlab's gradient descent to find free parameters optimizing
+            % the self.cost_function. Before calling the cost function here
+            % we organize initial values and lower/upper bounds. FREE_VECTOR
+            % distinguishes variables from constants.
+            %
+            % Will find the best fit for the model specified in
+            % CURRENT_MODEL, and update CURRENT_FIT_R, CURRENT_FIT_MSE,
+            % CURRENT_
+                                
             % set upper and lower bounds for different models
-            if self.current_model    == 1%BMEM
-                L       = [0  2  0];
-                U       = [25 2 25];                
-                tparam = 3;
+            if self.current_model        == 1%BMEM
+                L       = [0    2   0];%[kappa_csp kappa_perceptual kappa_prior]
+                U       = [25   2  25];
             elseif self.current_model    == 2%vM
-                L       = [0  0  ];
-                U       = [25 180];                
-                tparam  = 2;
-            elseif self.current_model    == 3%Gaussian
-                L       = 0;
-                U       = 25;                
-                tparam  = 1;            
+                L       = [0  -135 ];%[kappa mu]
+                U       = [25  180 ];
+            elseif self.current_model    == 3%Immobile vM (i.e. Gaussian)
+                L       = 0;%[kappa_csp]
+                U       = 25;
             end       
+            tparam               = length(L);
+            self.current_initial = L+rand(1,tparam).*U;%set the initial values
+            %now limit the L - U to the same value if the parameter is
+            %supposed to stay constant.
             L                    = L(1:tparam).*free_vector(1:tparam)+self.current_initial(1:tparam).*(~free_vector(1:tparam));
-            U                    = U(1:tparam).*free_vector(1:tparam)+self.current_initial(1:tparam).*(~free_vector(1:tparam));
-            self.current_initial = self.current_initial(1:tparam);
+            U                    = U(1:tparam).*free_vector(1:tparam)+self.current_initial(1:tparam).*(~free_vector(1:tparam));           
             
             % start with optimization            
-            dummy  = @(params) self.cost_function_ss(params);            
-            [self.current_fit_estimates, self.current_fit_mse, self.current_fit_exitFlag]  = ...
+            dummy  = @(params) self.cost_function_ss(params);       
+            % roughtly estimate initial position
+            self.current_initial = self.RoughEstimator(self.x,self.current_data,dummy,L,U);            
+            
+            [self.current_fit_estimates, self.current_fit_mse, self.current_fit_exitFlag] = ...
                 fmincon(dummy, self.current_initial, [],[],[],[],L,U,[],self.options);
+            
             %save the correlation
             self.current_fit_r = corr2(self.current_data(:),self.current_fit(:));
             
@@ -225,8 +227,31 @@ classdef BMEM < handle
                 self.param_mu               = self.current_fit_estimates(2);                
             elseif self.current_model == 3                
                 self.param_kappa_csp        = self.current_fit_estimates(1);
-            end
+             end
+            %
         end
+        function [params]=RoughEstimator(self,x,y,fun,L,U)
+            %will roughly estimate free parameter values bounded between L
+            %and U for FUN and x values. Error is computed according to Y.        
+            %% get a grid                
+            tparam   = length(L);
+            for n = 1:tparam
+                grid_in{n} = linspace(L(n),U(n),self.gridsize);
+            end
+            G      = cell(1,tparam);
+            [G{:}] = ndgrid(grid_in{:});%generate a grid
+            G      = cat(tparam+1,G{:});%cell to matrix
+            G      = permute(G,[tparam+1 1:tparam]);%change dimension orders so that
+            G      = reshape(G,[tparam,self.gridsize^tparam])';%we can make Nx3 matrix with reshape
+            % compute the error for each parameter combination
+            error  = zeros(1,self.gridsize^tparam);
+            for npoint = 1:self.gridsize^tparam;
+                error(npoint) = fun(G(npoint,:));%residual error
+            end
+            [m i]  = min(error);
+            params = double(G(i,:));
+        end
+        
         function plot_subject(self)
             %plots active generalization, prior, and BMEM feargen profiles
             %together with the real data.
@@ -234,33 +259,33 @@ classdef BMEM < handle
             subplot(2,3,1);
             bar(self.csp1_given_face);
             title(sprintf('Active Generalization\n(Kappa: (%3.4g) %3.4g)',self.current_initial(1),self.param_kappa_csp ));
-            box off;grid on
-            set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'})
+            box off;grid on;
+            set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'});
             %
             subplot(2,3,2);
             bar(self.f);
             try
-                title(sprintf('Prior\n(Kappa: %3.4g %3.4g)',self.current_initial(2),self.param_kappa_prior));
+                title(sprintf('Prior\n(Kappa: (%3.4g) %3.4g)',self.current_initial(2),self.param_kappa_prior));
             end
-            box off;grid on
-            set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'})
+            box off;grid on;
+            set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'});
             %
             subplot(2,3,3);
-            bar(self.p_given_f(0))
+            bar(self.p_given_f(0));
             try
-                title(sprintf('p(p|f)\n(Kappa: %3.4g %3.4g)',self.current_initial(3),self.param_kappa_perceptual));
+                title(sprintf('p(p|f)\n(Kappa: (%3.4g) %3.4g)',self.current_initial(3),self.param_kappa_perceptual));
             end
-            box off;grid on;set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'})
+            box off;grid on;set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'});
             %
             subplot(2,3,4);
             bar(self.current_fit);            
-            title(sprintf('Model\nr: %3.4g\n%s',self.current_fit_r,sprintf('%2.3g, ',self.current_fit_estimates)));
-            box off;grid on;set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'})
+            title(sprintf('Model (#%i)\nr: %3.4g\nParams:%s',self.current_model,self.current_fit_r,sprintf('%2.3g, ',self.current_fit_estimates)));
+            box off;grid on;set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'});
             %
             subplot(2,3,5);
             bar(self.current_data);
             title('Ratings Data');
-            box off;grid on;set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'})
+            box off;grid on;set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'});
             %
             EqualizeSubPlotYlim(gcf);
             supertitle(sprintf('sub:%i, CS+:%i',self.current_subject,self.csp(self.current_subject)),1,'fontsize',15);            
@@ -268,6 +293,8 @@ classdef BMEM < handle
         function out = cost_function_ss(self,params)
             %out = cost_function_ss(self,params); Single subject cost
             %function for different models specified in self.current_model.
+            %First insert the param vector (as used by fmincon) to the
+            %object and then evaluate the model
             %
             % 
             
@@ -279,10 +306,13 @@ classdef BMEM < handle
                 self.current_fit            = self.p_f_given_csp1;                
             elseif self.current_model == 2
                 self.param_kappa_csp        = params(1);
-                self.param_mu               = params(2);
-                self.current_fit            = self.VonMises(self.param_kappa_csp,self.param_mu);                
+                self.param_kappa_perceptual = params(2);
+                self.param_kappa_prior      = NaN;
+                self.current_fit            = self.VonMises(self.param_kappa_csp,self.param_kappa_perceptual);                
             elseif self.current_model == 3
                 self.param_kappa_csp        = params(1);                
+                self.param_kappa_perceptual = NaN;
+                self.param_kappa_prior      = NaN;
                 self.current_fit            = self.VonMises(self.param_kappa_csp,0);
             end            
             %MSE
