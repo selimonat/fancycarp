@@ -77,7 +77,8 @@ classdef BMEM < handle
                         self.current_data   = self.ratings(run).y(ns,:);
                         self.current_subject = ns;
                         if ~any(isnan(self.current_data))
-                            self.find_params;
+                            self.current_initial                    = .1+rand(1,3)*10;%set the initial values
+                            self.find_params;                            
                             %
                             self.fit_quality_NonExpVar(ns,run,nfun) = self.current_fit_mse;
                             self.fit_quality_r(ns,run,nfun)         = self.current_fit_r;                            
@@ -92,31 +93,38 @@ classdef BMEM < handle
                 end
             end
         end
-        
-% % %         function fitBMEM_ConstantPrior(self)
-% % %             %This function is an expansion of fitBMEM to the group level
-% % %             %using the same prior function for everybody.
-% % %             self.phase = 3;
-% % %             run = self.phase;
-% % %             param_mask = [1 0 0];%keep prior constant, last param is prior.
-% % %             kappa_counter = 0;
-% % %             for param_kappa_prior      = 0%linspace(.0001,25,50)                
-% % %                 kappa_counter          = kappa_counter + 1;
-% % %                 self.param_kappa_prior = param_kappa_prior;
-% % %                 for ns = 1:length(self.subjects)
-% % %                     fprintf('kappa :%3.4g, Subject:%i\n',param_kappa_prior,ns);
-% % %                     self.current_subject                        = ns;
-% % %                     self.find_params(param_mask);
-% % %                     data                                        = self.group.ratings(run).y_mean(ns,1:8);
-% % %                     fit                                         = self.p_f_given_csp1;
-% % %                     self.fit_quality_NonExpVar(ns,run,10)       = nanmean((data(:) -fit(:)).^2);%
-% % %                     self.fit_quality_r(ns,run,10+kappa_counter) = corr2(data(:),fit(:));
-% % %                     self.plot_subject;
-% % %                 end                
-% % %                 plot(squeeze(nanmean(self.fit_quality_r(:,3,10:end))));
-% % %                 drawnow;
-% % %             end
-% % %         end
+        function fit_constantprior(self)
+            %This function is an expansion of fitBMEM to the group level
+            %using the same prior function for everybody.
+            
+            self.current_model = 1;            
+            param_mask         = [ 1 1 0];%[csp perceptual prior]
+            for run = 2
+                kappa_counter      = 0;
+                for param_kappa_prior = linspace(.0001,25,100)                    
+                    fprintf('kappa :%3.4g\n',param_kappa_prior);
+                    kappa_counter          = kappa_counter +1;
+                    self.param_kappa_prior = param_kappa_prior;
+                    for ns = 1:length(self.subjects)
+                        self.current_subject                                     = ns;
+                        self.current_data                                        = self.ratings(run).y(ns,:);
+                        if ~any(isnan(self.current_data))
+                            %                            
+                            self.current_initial                                 = [.1+rand(1,3)*10 self.param_kappa_prior];
+                            self.find_params(param_mask);
+                            %
+                            self.fit_quality_NonExpVar(ns,run,4+kappa_counter-1) = self.current_fit_mse;
+                            self.fit_quality_r(ns,run,4+kappa_counter-1)         = self.current_fit_r;
+                            
+%                             self.plot_subject;pause
+                        else
+                            self.fit_quality_NonExpVar(ns,run,4+kappa_counter-1) = NaN;
+                            self.fit_quality_r(ns,run,4+kappa_counter-1)         = NaN;
+                        end
+                    end
+                end
+            end
+        end
     end
     
     %% Methods for the probabilistic machinery.
@@ -183,23 +191,21 @@ classdef BMEM < handle
                         
             % set upper and lower bounds for different models
             if self.current_model    == 1%BMEM
-                L       = [0  0  0];
-                U       = [25 25 25];
-                self.current_initial = .1+rand(1,3)*10;
+                L       = [0  2  0];
+                U       = [25 2 25];                
                 tparam = 3;
             elseif self.current_model    == 2%vM
                 L       = [0  0  ];
-                U       = [25 180];
-                self.current_initial = .1+rand(1,2)*10;
-                tparam = 2;
+                U       = [25 180];                
+                tparam  = 2;
             elseif self.current_model    == 3%Gaussian
-                L       = [0  ];
-                U       = [25 ];
-                self.current_initial = .1+rand(1)*10;
-                tparam = 1;
-            end
-            L       = L.*free_vector(1:tparam)+self.current_initial.*(~free_vector(1:tparam));
-            U       = U.*free_vector(1:tparam)+self.current_initial.*(~free_vector(1:tparam));            
+                L       = 0;
+                U       = 25;                
+                tparam  = 1;            
+            end       
+            L                    = L(1:tparam).*free_vector(1:tparam)+self.current_initial(1:tparam).*(~free_vector(1:tparam));
+            U                    = U(1:tparam).*free_vector(1:tparam)+self.current_initial(1:tparam).*(~free_vector(1:tparam));
+            self.current_initial = self.current_initial(1:tparam);
             
             % start with optimization            
             dummy  = @(params) self.cost_function_ss(params);            
