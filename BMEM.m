@@ -315,17 +315,19 @@ classdef BMEM < handle
         function plot_group_connected_lines(self)
             %
             figure(11);clf;
-            for nfun = 1:size(self.fit_quality_r,3);
-                subplot(1,3,nfun);
+            tfun   = size(self.fit_quality_r,3);
+            tphase = size(self.fit_quality_r,2);
+            for nfun = 1:tfun
+                subplot(1,tfun,nfun);
                 for ns = 1:size(self.fit_quality_r,1);                
-                   PlotTransparentLine([1:3]',[squeeze(self.fit_quality_r(ns,:,nfun))]',.05,[(nfun-1)/3 0 1-(nfun-1)/3],'linewidth',2)
+                   PlotTransparentLine([1:tphase]',squeeze(self.fit_quality_r(ns,:,nfun))',.05,[(nfun-1)/tfun 0 1-(nfun-1)/tfun],'linewidth',2)
                 end
                 %plot also the mean
                 hold on;
-                plot([1:3]',nanmedian(squeeze(self.fit_quality_r(:,:,nfun))),'.-','color',[(nfun-1)/3 0 1-(nfun-1)/3],'markersize',40,'linewidth',3)
-                hold off;
+                plot([1:tphase]',nanmean(squeeze(self.fit_quality_r(:,:,nfun))),'.-','color',[(nfun-1)/tfun 0 1-(nfun-1)/tfun],'markersize',40,'linewidth',3)
+                hold off;   
                 ylim([-1 1]);
-                set(gca,'xtick',1:3,'xticklabel',{'1' '2' '3' },'ytick',[-1 0 1],'xgrid','on');
+                set(gca,'xtick',1:tfun,'xticklabel',strsplit(num2str(1:tfun)),'ytick',[-1 0 1],'xgrid','on');
                 ylabel('r')
                 box off
                 title(sprintf('Fun:%i',nfun));
