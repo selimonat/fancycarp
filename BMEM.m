@@ -163,10 +163,14 @@ classdef BMEM < handle
         function out = get.f(self)
             %p(f) returns prior on faces            
             location               = (3.5-self.csp(self.current_subject))*45;
-%             location2              = (7.5-self.csp(self.current_subject))*45;
-            if strcmp(self.prior_function,'vonmises')                
+            location2              = (7.5-self.csp(self.current_subject))*45;
+            if strcmp(self.prior_function,'double_category')                
                 dummy              = self.VonMises(self.param_kappa_prior,location);            
                 dummy              = dummy + self.VonMises(self.param_kappa_prior,location2);            
+            elseif strcmp(self.prior_function,'male')
+                dummy              = self.VonMises(self.param_kappa_prior,location);
+            elseif strcmp(self.prior_function,'female')
+                dummy              = self.VonMises(self.param_kappa_prior,location2);
             else
                 dummy              = ones(1,8);
             end
