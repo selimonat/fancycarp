@@ -1,11 +1,11 @@
 classdef BMEM < handle
     %creates a Bayesian Magnet Effect Model object
     properties (Constant)        
-        options          = optimset('Display','off','maxfunevals',100,'tolX',10^-3,'tolfun',10^-3,'MaxIter',100,'Algorithm','interior-point');        
+        options          = optimset('Display','off','maxfunevals',10000,'tolX',10^-9,'tolfun',10^-9,'MaxIter',10000,'Algorithm','interior-point');        
     end
     properties (Hidden)
         params;
-        gridsize      = 5;%resolution per parameter for initial estimation.
+        gridsize      = 20;%resolution per parameter for initial estimation.
         current_subject         = 1;
         current_data;
         current_fit;
@@ -115,7 +115,7 @@ classdef BMEM < handle
             self.current_model = 1;                        
             for run = 1:3
                 kappa_counter      = 0;
-                for param_kappa_prior = linspace(.0001,25,100);
+                for param_kappa_prior = linspace(.0001,25,16);
                     fprintf('kappa :%3.4g\n',param_kappa_prior);
                     kappa_counter          = kappa_counter +1;
                     self.param_kappa_prior = param_kappa_prior;
@@ -130,16 +130,15 @@ classdef BMEM < handle
                             self.find_params([ 1 1 0]);%keep prior constant
                             %
                             self.fit_quality_NonExpVar(ns,run,3+kappa_counter) = self.current_fit_mse;
-                            self.fit_quality_r(ns,run,3+kappa_counter)         = self.current_fit_r;
-                            
-                            if self.visualization
-                                self.plot_subject;
-                                self.plot_group;
-                            end
+                            self.fit_quality_r(ns,run,3+kappa_counter)         = self.current_fit_r;                                                        
                         else
                             self.fit_quality_NonExpVar(ns,run,4+kappa_counter-1) = NaN;
                             self.fit_quality_r(ns,run,4+kappa_counter-1)         = NaN;
                         end
+                    end
+                    if self.visualization
+                        self.plot_subject;
+                        self.plot_group;
                     end
                 end
             end
@@ -164,7 +163,7 @@ classdef BMEM < handle
         function out = get.f(self)
             %p(f) returns prior on faces            
             location               = (3.5-self.csp(self.current_subject))*45;
-            location2              = (7.5-self.csp(self.current_subject))*45;
+%             location2              = (7.5-self.csp(self.current_subject))*45;
             if strcmp(self.prior_function,'vonmises')                
                 dummy              = self.VonMises(self.param_kappa_prior,location);            
                 dummy              = dummy + self.VonMises(self.param_kappa_prior,location2);            
@@ -274,7 +273,7 @@ classdef BMEM < handle
             figure(10);clf
             tfun    = size(self.fit_quality_r,3);
             trun    = size(self.fit_quality_r,2);
-            for nlab = 1:tfun;xlab{nlab} = sprintf('                    %s',self.fun_names{nlab});end
+            for nlab = 1:tfun;try;xlab{nlab} = sprintf('                    %s',self.fun_names{nlab});catch;xlab{nlab}='';end;end
             for run = 1:trun;
                 subplot(1,trun,run);
                 for nfun = 1:tfun
@@ -337,9 +336,10 @@ classdef BMEM < handle
             figure(11);clf;
             tfun   = size(self.fit_quality_r,3);
             tphase = size(self.fit_quality_r,2);
-            for nlab = 1:tfun;xlab{nlab} = sprintf('%s',self.phase_names{nlab}(1));end;
+            spsize = GetSubplotNumber(tfun);
+            for nlab = 1:tfun;try;xlab{nlab} = sprintf('%s',self.phase_names{nlab}(1));end;end;
             for nfun = 1:tfun
-                subplot(1,tfun,nfun);
+                subplot(spsize,spsize,nfun);
                 for ns = 1:size(self.fit_quality_r,1);                
                    PlotTransparentLine([1:tphase]',squeeze(self.fit_quality_r(ns,:,nfun))',.05,[(nfun-1)/tfun 0 1-(nfun-1)/tfun],'linewidth',2)
                 end
@@ -351,7 +351,7 @@ classdef BMEM < handle
                 set(gca,'xtick',1:tfun,'xticklabel',xlab,'ytick',[-1 0 1],'xgrid','on','fontsize',25);
                 ylabel('r')
                 box off
-                title(sprintf('%s',self.fun_names{nfun}));
+                try;title(sprintf('%s',self.fun_names{nfun}));end
             end
             
         end
