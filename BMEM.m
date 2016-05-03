@@ -10,12 +10,13 @@ classdef BMEM < handle
         current_data;
         current_fit;
         current_model;
+        current_run;
         current_fit_estimates   = [];
         current_fit_mse         = [];
         current_fit_exitFlag    = [];
         current_fit_r           = [];
         current_initial         = [];
-        visualization           = 1;
+        visualization           = 0;
         LB%lower and
         UB%upper bounds for parameter estimates
         phase_names             = {'Baseline' 'Conditioning' 'Test'};
@@ -35,8 +36,7 @@ classdef BMEM < handle
         f_given_csp1           = [];
         f                      = [];        
         model;
-        fit_quality_NonExpVar;   %non explained variance.
-        fit_quality_r          = [];     
+        fit_quality;   %non explained variance.        
     end
  
     methods
@@ -83,24 +83,27 @@ classdef BMEM < handle
             for nfun = nfuns(:)'
                 self.current_model = nfun;
                 for run = 1:3
+                    self.current_run = run;
                     for ns = 1:length(self.subjects)
                         fprintf('Fun:%i, Run:%i, Sub:%i\n',nfun,run,ns);
                         self.current_data   = self.ratings(run).y(ns,:);
                         self.current_subject = ns;
                         if ~any(isnan(self.current_data))
                             self.SetBoundary;
-                            self.find_params([1 1 1]);                            
+                            self.find_params([1 1 1]);
                             %
-                            self.fit_quality_NonExpVar(ns,run,nfun) = self.current_fit_mse;
-                            self.fit_quality_r(ns,run,nfun)         = self.current_fit_r;                            
+                            self.fit_quality.NonExpVar(ns,run,nfun)         = self.current_fit_mse;
+                            self.fit_quality.r(ns,run,nfun)                 = self.current_fit_r;
+                            self.fit_quality.params{nfun}(:,ns,run)         = self.current_fit_estimates;
                             %                            
                             if self.visualization
                                 self.plot_subject;                               
                             end
                             %pause                            
                         else
-                            self.fit_quality_NonExpVar(ns,run,nfun) = NaN;
-                            self.fit_quality_r(ns,run,nfun)         = NaN;
+                            self.fit_quality.NonExpVar(ns,run,nfun) = NaN;
+                            self.fit_quality.r(ns,run,nfun)         = NaN;
+                            self.fit_quality.params{nfun}(:,ns,run)         = NaN;
                         end                        
                     end
                     if self.visualization
@@ -129,11 +132,13 @@ classdef BMEM < handle
                             self.UB(3)                                         = param_kappa_prior;
                             self.find_params([ 1 1 0]);%keep prior constant
                             %
-                            self.fit_quality_NonExpVar(ns,run,3+kappa_counter) = self.current_fit_mse;
-                            self.fit_quality_r(ns,run,3+kappa_counter)         = self.current_fit_r;                                                        
+                            self.fit_quality.NonExpVar(ns,run,3+kappa_counter) = self.current_fit_mse;
+                            self.fit_quality.r(ns,run,3+kappa_counter)         = self.current_fit_r;
+                            self.fit_quality.params{3+kappa_counter}(:,ns,run) = self.current_fit_estimates;
                         else
-                            self.fit_quality_NonExpVar(ns,run,4+kappa_counter-1) = NaN;
-                            self.fit_quality_r(ns,run,4+kappa_counter-1)         = NaN;
+                            self.fit_quality.NonExpVar(ns,run,3+kappa_counter) = NaN;
+                            self.fit_quality.r(ns,run,3+kappa_counter)         = NaN;
+                            self.fit_quality.params{3+kappa_counter}(:,ns,run) = NaN;
                         end
                     end
                     if self.visualization
@@ -208,10 +213,10 @@ classdef BMEM < handle
             % Will find the best fit for the model specified in
             % CURRENT_MODEL, and update CURRENT_FIT_R, CURRENT_FIT_MSE,
             % CURRENT_                                        
-            tparam               = length(self.LB);                      
+            tparam   = length(self.LB);                      
             
             % start with optimization            
-            dummy  = @(params) self.cost_function_ss(params);
+            dummy    = @(params) self.cost_function_ss(params);
             % roughtly estimate initial position
             self.current_initial = self.RoughEstimator(self.x,self.current_data,dummy,self.LB,self.UB);
             %now limit the L - U to the same value if the parameter is
@@ -230,10 +235,10 @@ classdef BMEM < handle
              if self.current_model    == 1                                
                 self.param_kappa_csp        = self.current_fit_estimates(1);
                 self.param_kappa_perceptual = self.current_fit_estimates(2);
-                self.param_kappa_prior      = self.current_fit_estimates(3);                
+                self.param_kappa_prior      = self.current_fit_estimates(3);
             elseif self.current_model == 2                
                 self.param_kappa_csp        = self.current_fit_estimates(1);
-                self.param_mu               = self.current_fit_estimates(2);                
+                self.param_mu               = self.current_fit_estimates(2);
             elseif self.current_model == 3                
                 self.param_kappa_csp        = self.current_fit_estimates(1);
              end
@@ -242,7 +247,7 @@ classdef BMEM < handle
         function SetBoundary(self)
             % set upper and lower bounds for different models
             if self.current_model        == 1%BMEM
-                self.LB        = [0    0   0];%[kappa_csp kappa_perceptual kappa_prior]
+                self.LB        = [0    25   0];%[kappa_csp kappa_perceptual kappa_prior]
                 self.UB        = [25   25  25];
             elseif self.current_model    == 2%vM
                 self.LB        = [0  -135 ];%[kappa mu]
@@ -275,14 +280,14 @@ classdef BMEM < handle
         end
         function plot_group(self)            
             figure(10);clf
-            tfun    = size(self.fit_quality_r,3);
-            trun    = size(self.fit_quality_r,2);
+            tfun    = size(self.fit_quality.r,3);
+            trun    = size(self.fit_quality.r,2);
             for nlab = 1:tfun;try;xlab{nlab} = sprintf('                    %s',self.fun_names{nlab});catch;xlab{nlab}='';end;end
             for run = 1:trun;
                 subplot(1,trun,run);
                 for nfun = 1:tfun
                     for ns = 1:self.current_subject
-                        text(nfun+rand(1).*.6-.5,self.fit_quality_r(ns,run,nfun),mat2str(self.subjects(ns)),'fontsize',9,'color',[(nfun-1)/tfun 0 1-(nfun-1)/tfun]);
+                        text(nfun+rand(1).*.6-.5,self.fit_quality.r(ns,run,nfun),mat2str(self.subjects(ns)),'fontsize',9,'color',[(nfun-1)/tfun 0 1-(nfun-1)/tfun]);
                         hold on;
                     end
                 end
@@ -338,18 +343,18 @@ classdef BMEM < handle
         function plot_group_connected_lines(self)
             %
             figure(11);clf;
-            tfun   = size(self.fit_quality_r,3);
-            tphase = size(self.fit_quality_r,2);
+            tfun   = size(self.fit_quality.r,3);
+            tphase = size(self.fit_quality.r,2);
             spsize = GetSubplotNumber(tfun);
             for nlab = 1:tfun;try;xlab{nlab} = sprintf('%s',self.phase_names{nlab}(1));end;end;
             for nfun = 1:tfun
                 subplot(spsize,spsize,nfun);
-                for ns = 1:size(self.fit_quality_r,1);                
-                   PlotTransparentLine([1:tphase]',squeeze(self.fit_quality_r(ns,:,nfun))',.05,[(nfun-1)/tfun 0 1-(nfun-1)/tfun],'linewidth',2)
+                for ns = 1:size(self.fit_quality.r,1);                
+                   PlotTransparentLine([1:tphase]',squeeze(self.fit_quality.r(ns,:,nfun))',.05,[(nfun-1)/tfun 0 1-(nfun-1)/tfun],'linewidth',2)
                 end
                 %plot also the mean
                 hold on;
-                plot([1:tphase]',nanmedian(squeeze(self.fit_quality_r(:,:,nfun))),'.-','color',[(nfun-1)/tfun 0 1-(nfun-1)/tfun],'markersize',40,'linewidth',3)
+                plot([1:tphase]',nanmedian(squeeze(self.fit_quality.r(:,:,nfun))),'.-','color',[(nfun-1)/tfun 0 1-(nfun-1)/tfun],'markersize',40,'linewidth',3)
                 hold off;   
                 ylim([-1 1]);
                 set(gca,'xtick',1:tfun,'xticklabel',xlab,'ytick',[-1 0 1],'xgrid','on','fontsize',25);
