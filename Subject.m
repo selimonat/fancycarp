@@ -49,8 +49,10 @@ classdef Subject < Project
                 for nrun = 1:s.total_run
                     s.paradigm{nrun} = s.load_paradigm(nrun);
                 end
+                try
                 s.csp = s.paradigm{s.default_run}.stim.cs_plus;
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
+                end
                 s.scr = SCR(s);                       
                 %                 try
                 %                     s.bold = BOLD(s);
@@ -345,13 +347,36 @@ classdef Subject < Project
                 matlabbatch{3}.spm.spatial.realign.write.roptions.wrap   = [0 0 0];
                 matlabbatch{3}.spm.spatial.realign.write.roptions.mask   = 1;
                 matlabbatch{3}.spm.spatial.realign.write.roptions.prefix = 'r';
-                %self.RunSPMJob(matlabbatch(1));
-                self.RunSPMJob(matlabbatch(2));
-                self.RunSPMJob(matlabbatch(3));
+                self.RunSPMJob(matlabbatch);
+   
             else
                 fprintf('EPI is not here...\n')
             end
         end            
+        function SegmentSurface(self)            
+            matlabbatch{1}.spm.tools.cat.estwrite.data = {self.hr_path};
+            matlabbatch{1}.spm.tools.cat.estwrite.nproc = 1;
+            matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm = {[self.tpm_dir 'TPM.nii']};
+            matlabbatch{1}.spm.tools.cat.estwrite.opts.affreg = 'mni';
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.APP = 1;
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.LASstr = 0.5;
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.gcutstr = 0.5;
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.cleanupstr = 0.5;
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.darteltpm = {sprintf('%stoolbox/cat12/templates_1.50mm/Template_1_IXI555_MNI152.nii',self.spm_path)};
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.vox = 1.5;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.surface = 1;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.native = 1;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.mod = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.dartel = 2;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.native = 1;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.mod = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.dartel = 2;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.bias.warped = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.jacobian.warped = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.warps = [1 1];
+            %
+            self.RunSPMJob(matlabbatch);
+        end
         function [scanunit]=StimTime2ScanUnit(self,run)
             %will return stim onsets in units of scan. Usefull for first
             %level.
