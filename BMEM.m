@@ -23,8 +23,8 @@ classdef BMEM < handle
         fun_names               = {'BMEM' 'vM' 'Gau'};
     end
     properties
-        x                      = linspace(-135,180,8);
-        prior_function         = 'vonmises';
+        x                      = linspace(-135,180,100);
+        prior_function         = 'male';
         param_kappa_csp        = 1;        
         param_kappa_prior      = 1;
         param_kappa_perceptual = 2;
@@ -44,24 +44,26 @@ classdef BMEM < handle
             %creates a Bayesian Magnet Effect Model object
             %G is simply a Group object
             %%
-            bmem.subjects       = G.ids;
-            bmem.csp            = G.csps;
-            %collect the ratings, this is just for convenience and
-            %performance. storing it indepedent of the group object makes
-            %accessing the ratings much faster. The main point is that
-            %ratings are collected as they are stored in the GROUP object.
-            %So if you want to apply a different normalization scheme,
-            %please do that in the Group object and re-run the BMEM object.
-            for nrun = 1:3
-                bmem.ratings(nrun).y = NaN(length(G.subject),8);
-                for ns = 1:length(G.subject);
-                    if ~isempty(G.subject{ns}.ratings(nrun).y);
-                        out                        = G.subject{ns}.ratings(nrun).y_mean;%extract it
-                        out                        = (out-min(out));
-                        bmem.ratings(nrun).y(ns,:) = out./sum(out);
-%                         bmem.ratings(nrun).y(ns,:) = out;
+            if nargin > 1
+                bmem.subjects       = G.ids;
+                bmem.csp            = G.csps;
+                %collect the ratings, this is just for convenience and
+                %performance. storing it indepedent of the group object makes
+                %accessing the ratings much faster. The main point is that
+                %ratings are collected as they are stored in the GROUP object.
+                %So if you want to apply a different normalization scheme,
+                %please do that in the Group object and re-run the BMEM object.
+                for nrun = 1:3
+                    bmem.ratings(nrun).y = NaN(length(G.subject),8);
+                    for ns = 1:length(G.subject);
+                        if ~isempty(G.subject{ns}.ratings(nrun).y);
+                            out                        = G.subject{ns}.ratings(nrun).y_mean;%extract it
+                            out                        = (out-min(out));
+                            bmem.ratings(nrun).y(ns,:) = out./sum(out);
+                            %                         bmem.ratings(nrun).y(ns,:) = out;
+                        end
                     end
-                end                
+                end
             end
             %% reset figures if needed.
             if bmem.visualization
@@ -177,7 +179,7 @@ classdef BMEM < handle
             elseif strcmp(self.prior_function,'female')
                 dummy              = self.VonMises(self.param_kappa_prior,location2);
             else
-                dummy              = ones(1,8);
+                dummy              = ones(1,length(self.x));
             end
             out                    = dummy./sum(dummy(:));
         end
@@ -191,7 +193,7 @@ classdef BMEM < handle
             out = out./sum(out,2);
         end
         function out = get.p_f_given_csp1(self)
-            %p(p,f | csp = 1);
+            %p(p,f | csp = 1);            
             out = sum(self.p_given_f(self.x)*diag(self.f_given_csp1),2);
         end
         
@@ -213,6 +215,7 @@ classdef BMEM < handle
             % Will find the best fit for the model specified in
             % CURRENT_MODEL, and update CURRENT_FIT_R, CURRENT_FIT_MSE,
             % CURRENT_                                        
+            keyboard
             tparam   = length(self.LB);                      
             
             % start with optimization            
@@ -247,7 +250,7 @@ classdef BMEM < handle
         function SetBoundary(self)
             % set upper and lower bounds for different models
             if self.current_model        == 1%BMEM
-                self.LB        = [0    25   0];%[kappa_csp kappa_perceptual kappa_prior]
+                self.LB        = [0    24.5   0];%[kappa_csp kappa_perceptual kappa_prior]
                 self.UB        = [25   25  25];
             elseif self.current_model    == 2%vM
                 self.LB        = [0  -135 ];%[kappa mu]
