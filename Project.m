@@ -90,25 +90,31 @@ classdef Project < handle
             % Will download all the dicoms, convert them and merge them to
             % 4D.
             
-            fprintf('%s:\n','DicomDownload');
-            %downloads data from the dicom dicom server
-            if exist(destination) == 0
-                fprintf('The folder %s doesn''t exist yet, will create it...\n',destination)
-                mkdir(destination)
-            end
-            if ~isempty(source) & ~isempty(destination)%both paths should not be empty.
-                fprintf('Calling system''s COPY function to dump the data...%s\nsource:%s\ndestination:%s\n',self.current_time,source,destination)
-                a            = system(sprintf('cp -r %s/* %s',source,destination));
-                if a ~= 0
-                    fprintf('There was a problem while dumping...try to debug it now\n');
-                    keyboard
+            if ~ismac & ~ispc
+                %proceeds with downloading data if we are NOT a mac not PC
+                
+                fprintf('%s:\n','DicomDownload');
+                %downloads data from the dicom dicom server
+                if exist(destination) == 0
+                    fprintf('The folder %s doesn''t exist yet, will create it...\n',destination)
+                    mkdir(destination)
+                end
+                if ~isempty(source) & ~isempty(destination)%both paths should not be empty.
+                    fprintf('Calling system''s COPY function to dump the data...%s\nsource:%s\ndestination:%s\n',self.current_time,source,destination)
+                    a            = system(sprintf('cp -r %s/* %s',source,destination));
+                    if a ~= 0
+                        fprintf('There was a problem while dumping...try to debug it now\n');
+                        keyboard
+                    else
+                        fprintf('COPY finished successully %s\n',self.current_time)
+                    end
                 else
-                    fprintf('COPY finished successully %s\n',self.current_time)
+                    fprintf('Either source or destination is empty\n');
+                    return
                 end
             else
-                fprintf('Either source or destination is empty\n');
-                return
-            end            
+                fprintf('To use DicomDownload method you have to use one of the institute''s linux boxes\n');
+            end
         end
         function DicomTo4D(self,destination)
             %A wrapper over conversion and merging functions.

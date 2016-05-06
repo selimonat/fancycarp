@@ -76,8 +76,8 @@ classdef Subject < Project
             %create it if necess.
             if exist(self.hr_dir) == 0
                 mkdir(self.hr_dir);
-            end
-%             self.DicomDownload(self.GetDicomHRpath,self.hr_dir);
+            end            
+            self.DicomDownload(self.GetDicomHRpath,self.hr_dir);            
             self.DicomTo4D(self.hr_dir);
         end
         function p          = load_paradigm(self,nrun)
@@ -118,8 +118,8 @@ classdef Subject < Project
             for source = self.dicom_folders(:)'
                 %
                 n 				 = n+1;
-                dest             = self.epi_dir(self.dicom_target_run(n));                
-%                 self.DicomDownload(source{1},dest);
+                dest             = self.epi_dir(self.dicom_target_run(n));                                
+                self.DicomDownload(source{1},dest);                
                 self.DicomTo4D(dest);
             end
             
