@@ -51,6 +51,7 @@ classdef Project < handle
             %number of files, respectively.
             total_subjects = length(Project.trio_sessions);
             DU = nan(total_subjects,length(runs));
+            warning('off','all');
             for ns = 1:total_subjects
                 for nr = runs
                     fprintf('Requesting folder size for subject %03d and run %03d\n',ns,nr);
@@ -69,17 +70,20 @@ classdef Project < handle
                     else
                         fprintf('Folder doesn''t exist: %s\n',fullpath);
                     end
-                end
+                end                
             end
             %%
-            n = 0;
-            for nr = runs
-                n = n + 1;
-                subplot(3,1,n)
-                bar(DU(:,n));ylabel('MB or #');xlabel('Subjects');box off
-                title(sprintf('Subfolder %s\n Run: %03d',varargin{:},nr))
+            if isempty(varargin)
+                varargin{1} = '*';
             end
-            
+            n = 0;
+            for nr = 1:self.total_run
+                n = n + 1;
+                subplot(self.total_run,1,n)
+                bar(DU(:,n));ylabel('MB or #');xlabel('Subjects');box off                
+                title(sprintf('Subfolder: %s\n Run: %i\n',varargin{1},nr))
+            end
+            warning('on','all');
         end
         function DicomDownload(self,source,destination)
             % Will download all the dicoms, convert them and merge them to
