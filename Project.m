@@ -31,7 +31,7 @@ classdef Project < handle
         dicom2run             = repmat({[1 1 1]},1,length(Project.dicom_serie_selector));
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};
         palamedes_path        = '/home/onat/Documents/Code/Matlab/palamedes1_8_0/Palamedes/';
-        spm_path              = '/home/onat/Documents/Code/Matlab/spm12/';
+        spm_path              = '/common/apps/spm12-6685/';
         tpm_dir               = sprintf('%stpm/',Project.spm_path); %path to the TPM images, needed by segment.       
         TR                    = 0.99;        
         path_stimuli          = '';%optional in case you have methods that needs stimuli...        
@@ -125,7 +125,7 @@ classdef Project < handle
             fprintf('Finished... (%s)\n',self.gettime);
             fprintf('Deleting 3D images in (%s)\n%s\n',self.gettime,destination);
             files = cellstr(files);
-            delete(files{:});
+            %delete(files{:});
         end
         function success    = ConvertDicom(self,destination)
             % dicom conversion. ATTENTION: dicoms will be converted and
@@ -177,8 +177,8 @@ classdef Project < handle
             %subject
             % empty [] above can be replaced with any phase number.
             data_path = self.path_project;
-            for no = [subject run]
-                file_list        = dir(data_path);
+            for no = [subject run]                
+                file_list        = dir(data_path);%next round of the forloop will update this
                 i                = regexp({file_list(:).name},sprintf('[0,a-Z]%d$',no));%find all folders which starts with
                 i                = find(cellfun(@(bla) ~isempty(bla), i  ));
                 if ~isempty(i)
@@ -187,7 +187,7 @@ classdef Project < handle
                 else
                     data_path    = [];
                     return
-                end
+                end                
             end
             data_path(end+1)         = filesep;
         end
@@ -196,12 +196,15 @@ classdef Project < handle
             out = fullfile(self.spm_path,'toolbox','vbm','vbm12','templates_1.50mm',sprintf('Template_%i_IXI555_MNI152.nii',n) );            
         end
         function CreateFolderHierarchy(self)
+            %Creates a folder hiearchy for a project. You must run this
+            %first to create an hiearchy and fill this with data.
             for ns = 1:length(self.trio_sessions)
-                for nr = 1:length(self.dicom2run{1})
+                for nr = 0:length(self.dicom2run{1})
                     for nf = 1:length(self.data_folders)                        
                         path2subject = sprintf('%s/sub%03d/run%03d/%s',self.path_project,ns,nr,self.data_folders{nf});
                         if ~isempty(self.trio_sessions{ns})
                             a = fullfile(path2subject);
+                            mkdir(a);
                         end
                     end
                 end
