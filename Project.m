@@ -37,6 +37,7 @@ classdef Project < handle
         path_stimuli          = '';%optional in case you have methods that needs stimuli...        
     end
     properties (Constant,Hidden) %project specific properties        
+        current_time
         condition_labels      = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
         colors                = [ [0 0 0]; 0.0784 0.3284 1.0000;0.5784    0.0784    1.0000;1.0000    0.0784    0.8284;1.0000    0.0784    0.0784;1.0000    0.8284    0.0784;0.5784    1.0000    0.0784;0.0784    1.0000    0.3284;0.0784    1.0000    1.0000;0.0784    0.0784    0.0784;0.5784    0.5784    0.5784  ;[.8 0 0];[.8 0 0]];
         line                  = {'-' '-' '-' '-' '-' '-' '-' '-' '-' '.' '.'};
@@ -96,13 +97,13 @@ classdef Project < handle
                 mkdir(destination)
             end
             if ~isempty(source) & ~isempty(destination)%both paths should not be empty.
-                fprintf('Calling system''s COPY function to dump the data...%s\nsource:%s\ndestination:%s\n',self.gettime,source,destination)
+                fprintf('Calling system''s COPY function to dump the data...%s\nsource:%s\ndestination:%s\n',self.current_time,source,destination)
                 a            = system(sprintf('cp -r %s/* %s',source,destination));
                 if a ~= 0
                     fprintf('There was a problem while dumping...try to debug it now\n');
                     keyboard
                 else
-                    fprintf('COPY finished successully %s\n',self.gettime)
+                    fprintf('COPY finished successully %s\n',self.current_time)
                 end
             else
                 fprintf('Either source or destination is empty\n');
@@ -124,10 +125,10 @@ classdef Project < handle
             % merge to 4D
             
             files       = spm_select('FPListRec',destination,'^[f,s]TRIO');
-            fprintf('MergeTo4D:\nMerging (%s):\n',self.gettime);
+            fprintf('MergeTo4D:\nMerging (%s):\n',self.current_time);
             spm_file_merge(spm_vol(files),sprintf('%sdata.nii',destination));           
-            fprintf('Finished... (%s)\n',self.gettime);
-            fprintf('Deleting 3D images in (%s)\n%s\n',self.gettime,destination);
+            fprintf('Finished... (%s)\n',self.current_time);
+            fprintf('Deleting 3D images in (%s)\n%s\n',self.current_time,destination);
             files = cellstr(files);
             %delete(files{:});
         end
@@ -149,14 +150,14 @@ classdef Project < handle
                 matlabbatch{1}.spm.util.import.dicom.convopts.format  = 'nii';
                 matlabbatch{1}.spm.util.import.dicom.convopts.icedims = 0;
                                
-                fprintf('Dicom conversion s#%i... (%s)\n',self.id,self.gettime);
+                fprintf('Dicom conversion s#%i... (%s)\n',self.id,self.current_time);
                 self.RunSPMJob(matlabbatch);
                 fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
                 % delete dicom files
-                fprintf('Deleting DICOM images in (%s)\n%s\n',self.gettime,destination);
+                fprintf('Deleting DICOM images in (%s)\n%s\n',self.current_time,destination);
                 files = cellstr(files);
                 delete(files{:});
-                fprintf('Finished... (%s)\n',self.gettime);
+                fprintf('Finished... (%s)\n',self.current_time);
                 success = 1;
             else
                 fprintf('No dicom files found for %i\n',self.id);
@@ -165,13 +166,13 @@ classdef Project < handle
         function [result]   = dicomserver_request(self)
             %will make a normal dicom request. use this to see the state of
             %folders
-            fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.gettime);
+            fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.current_time);
             [status result]  = system(['/common/apps/bin/dicq --series --exam=' self.trio_session]);
             fprintf('This is what I found for you:\n');
             result
         end
         function [paths]    = dicomserver_paths(self)
-            fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.gettime)
+            fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.current_time)
             [status paths]   = system(['/common/apps/bin/dicq -t --series --exam=' self.trio_session]);
             paths            = strsplit(paths,'\n');%split paths
         end
@@ -214,11 +215,12 @@ classdef Project < handle
                 end
             end
         end
-    end
-    methods(Static)
-        function t          = gettime
+        function t          = get.current_time(self)
             t = datestr(now,'hh:mm:ss');
         end
+    end
+    methods(Static)
+        
         function RunSPMJob_inParallel(matlabbatch)
             %will run the spm matlabbatch using the parallel toolbox.
             fprintf('Will call spm_jobman in parallel with 4 cores...\n');

@@ -71,13 +71,13 @@ classdef Subject < Project
             %
         
             
-            fprintf('dump_hr:\nWill now dump the latest HR (%s)\n',self.gettime);            
+            fprintf('dump_hr:\nWill now dump the latest HR (%s)\n',self.current_time);            
             %target location for the hr: self.hr_dir;            
             %create it if necess.
             if exist(self.hr_dir) == 0
                 mkdir(self.hr_dir);
             end
-            self.DicomDownload(self.GetDicomHRpath,self.hr_dir);
+%             self.DicomDownload(self.GetDicomHRpath,self.hr_dir);
             self.DicomTo4D(self.hr_dir);
         end
         function p          = load_paradigm(self,nrun)
@@ -111,7 +111,7 @@ classdef Subject < Project
             
             paths               = self.dicomserver_paths;
             self.dicom_folders  = paths(self.dicom_serie_id);
-            fprintf('Will now dump series (%s)\n',self.gettime);            
+            fprintf('Will now dump series (%s)\n',self.current_time);            
             
             %% save the desired runs to disk
             n = 0;
@@ -119,7 +119,7 @@ classdef Subject < Project
                 %
                 n 				 = n+1;
                 dest             = self.epi_dir(self.dicom_target_run(n));                
-                self.DicomDownload(source{1},dest);
+%                 self.DicomDownload(source{1},dest);
                 self.DicomTo4D(dest);
             end
             
@@ -314,7 +314,7 @@ classdef Subject < Project
                                     
             if exist(self.epi_path(run))
                 
-                mean_epi    = regexprep( self.epi_path(run),'mtr/data','mrt/meandata');
+                mean_epi    = regexprep( self.epi_path(run),'mrt/data','mrt/meandata');
                 
                 %double-pass realign EPIs and reslice the mean image only.
                 matlabbatch{1}.spm.spatial.realign.estwrite.data{1} = cellstr(spm_select('expand',self.epi_path(run)));
@@ -347,6 +347,7 @@ classdef Subject < Project
                 matlabbatch{3}.spm.spatial.realign.write.roptions.wrap   = [0 0 0];
                 matlabbatch{3}.spm.spatial.realign.write.roptions.mask   = 1;
                 matlabbatch{3}.spm.spatial.realign.write.roptions.prefix = 'r';
+                keyboard
                 self.RunSPMJob(matlabbatch);
    
             else
