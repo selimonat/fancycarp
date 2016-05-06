@@ -255,7 +255,7 @@ classdef Subject < Project
             c2         = regexprep(self.hr_path,'mrt/data','mrt/c2data');                
                         
             if exist(c1) && exist(c2)
-                matlabbatch{1}.spm.util.imcalc.input            = {self.hr_path,c1,c2};
+                matlabbatch{1}.spm.util.imcalc.input            = cellstr({self.hr_path,c1,c2}');
                 matlabbatch{1}.spm.util.imcalc.output           = self.skullstrip;
                 matlabbatch{1}.spm.util.imcalc.outdir           = {self.hr_dir};
                 matlabbatch{1}.spm.util.imcalc.expression       = 'i1.*((i2+i3)>0.2)';
