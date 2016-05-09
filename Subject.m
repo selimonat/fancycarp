@@ -314,6 +314,19 @@ classdef Subject < Project
             %
             self.RunSPMJob(matlabbatch);
         end
+        function NormalizeHR
+            %SegmentSurface writes deformation fields (y_*), which are here used
+            %to normalize the native hr images
+            matlabbatch{1}.spm.spatial.normalise.write.subj.def = '';
+            matlabbatch{1}.spm.spatial.normalise.write.subj.resample = {self.hr_path};
+            matlabbatch{1}.spm.spatial.normalise.write.woptions.bb = [-78 -112 -70
+                                                          78 76 85];
+            matlabbatch{1}.spm.spatial.normalise.write.woptions.vox = [Inf Inf Inf];
+            matlabbatch{1}.spm.spatial.normalise.write.woptions.interp = 4;
+            matlabbatch{1}.spm.spatial.normalise.write.woptions.prefix = 'w';
+            %
+            self.RunSPMJob(matlabbatch);
+        end
         function [scanunit]=StimTime2ScanUnit(self,run)
             %will return stim onsets in units of scan. Usefull for first
             %level.
