@@ -113,37 +113,39 @@ classdef Project < handle
                     return
                 end
             else
-                fprintf('To use DicomDownload method you have to use one of the institute''s linux boxes\n');
+                fprintf('DicomDownload: To use DicomDownload method you have to use one of the institute''s linux boxes\n');
             end
         end
         function DicomTo4D(self,destination)
             %A wrapper over conversion and merging functions.
             
             %start with conversion
-            if self.ConvertDicom(destination);
-                %finally merge 3D stuff to 4D and rename it data.nii.
-                 self.MergeTo4D(destination);
-            end
+            self.ConvertDicom(destination);
+            %finally merge 3D stuff to 4D and rename it data.nii.
+            self.MergeTo4D(destination);
         end
         function MergeTo4D(self,destination)
             %will create data.nii consisting of all the [f,s]TRIO images
             %merged to 4D. the final name will be called data.nii.
             % merge to 4D
             
-            files       = spm_select('FPListRec',destination,'^[f,s]TRIO');
+            files       = spm_select('FPListRec',self.epi_dir(1),'^fTRIO');
             fprintf('MergeTo4D:\nMerging (%s):\n',self.current_time);
-            spm_file_merge(spm_vol(files),sprintf('%sdata.nii',destination));           
+            matlabbatch{1}.spm.util.cat.vols  = cellstr(files);
+            matlabbatch{1}.spm.util.cat.name  = 'data.nii';
+            matlabbatch{1}.spm.util.cat.dtype = 0;
+            self.RunSPMJob(matlabbatch);            
             fprintf('Finished... (%s)\n',self.current_time);
             fprintf('Deleting 3D images in (%s)\n%s\n',self.current_time,destination);
-            files = cellstr(files);
-            %delete(files{:});
+%             files = cellstr(files);
+            delete(files{:});
         end
-        function success    = ConvertDicom(self,destination)
+        function ConvertDicom(self,destination)
             % dicom conversion. ATTENTION: dicoms will be converted and
             % then deleted. Assumes all files that start with MR are
             % dicoms.
             %
-            success =0;
+            
             matlabbatch = [];
             files       = spm_select('FPListRec',destination,'^MR');            
             if ~isempty(files)
@@ -163,8 +165,7 @@ classdef Project < handle
                 fprintf('Deleting DICOM images in (%s)\n%s\n',self.current_time,destination);
                 files = cellstr(files);
                 delete(files{:});
-                fprintf('Finished... (%s)\n',self.current_time);
-                success = 1;
+                fprintf('Finished... (%s)\n',self.current_time);                
             else
                 fprintf('No dicom files found for %i\n',self.id);
             end
@@ -172,15 +173,25 @@ classdef Project < handle
         function [result]   = dicomserver_request(self)
             %will make a normal dicom request. use this to see the state of
             %folders
-            fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.current_time);
-            [status result]  = system(['/common/apps/bin/dicq --series --exam=' self.trio_session]);
-            fprintf('This is what I found for you:\n');
-            result
+            results = [];
+            if ~ismac & ~ispc
+                fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.current_time);
+                [status result]  = system(['/common/apps/bin/dicq --series --exam=' self.trio_session]);
+                fprintf('This is what I found for you:\n');
+            else
+                fprintf('To use dicom query you have to use one of the institute''s linux boxes\n');
+            end
+            
         end
         function [paths]    = dicomserver_paths(self)
-            fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.current_time)
-            [status paths]   = system(['/common/apps/bin/dicq -t --series --exam=' self.trio_session]);
-            paths            = strsplit(paths,'\n');%split paths
+            paths = [];
+            if ~ismac & ~ispc
+                fprintf('Making a dicom query, sometimes this might take long (so be patient)...(%s)\n',self.current_time)
+                [status paths]   = system(['/common/apps/bin/dicq -t --series --exam=' self.trio_session]);
+                paths            = strsplit(paths,'\n');%split paths
+            else
+                fprintf('To use dicom query you have to use one of the institute''s linux boxes\n');
+            end
         end
         function [data_path]= pathfinder(self,subject,run)
             %gets the path
@@ -203,8 +214,8 @@ classdef Project < handle
             data_path(end+1)         = filesep;
         end
         function [out]      = dartel_templates(self,n)
-            %returns the path to Nth Dartel template                        
-            out = fullfile(self.spm_path,'toolbox','vbm','vbm12','templates_1.50mm',sprintf('Template_%i_IXI555_MNI152.nii',n) );            
+            %returns the path to Nth Dartel template                                    
+            out = fullfile(self.spm_path,'toolbox','cat12','templates_1.50mm',sprintf('Template_%i_IXI555_MNI152.nii',n) );
         end
         function CreateFolderHierarchy(self)
             %Creates a folder hiearchy for a project. You must run this

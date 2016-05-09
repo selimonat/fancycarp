@@ -31,7 +31,7 @@ classdef Subject < Project
         pmf_parameters= [];
         trio_session  = [];
         ratings       = [];
-        total_run     = [];
+        total_run     = [];        
     end
     %%
     methods
@@ -77,8 +77,12 @@ classdef Subject < Project
             if exist(self.hr_dir) == 0
                 mkdir(self.hr_dir);
             end            
-            self.DicomDownload(self.GetDicomHRpath,self.hr_dir);            
-            self.DicomTo4D(self.hr_dir);
+            self.DicomDownload(self.GetDicomHRpath,self.hr_dir);
+            self.ConvertDicom(self.hr_dir);
+            files       = spm_select('FPListRec',self.hr_dir,'^sTRIO');
+            if ~isempty(files)
+                movefile(files,regexprep(files,'/sTRIO.*$','/data.nii'));%rename it to data.nii
+            end
         end
         function p          = load_paradigm(self,nrun)
             filename = self.path2data(nrun,'stimulation');
@@ -107,11 +111,13 @@ classdef Subject < Project
             self.dicomserver_request;
             fprintf('You told me to download the following series: ');
             fprintf('%i,',self.dicom_serie_id);
-            fprintf('\nDouble check if everything is fine.\n')
+            fprintf('\nDouble check if everything is fine.\n');
             
             paths               = self.dicomserver_paths;
-            self.dicom_folders  = paths(self.dicom_serie_id);
-            fprintf('Will now dump series (%s)\n',self.current_time);            
+            if ~isempty(paths)
+                self.dicom_folders  = paths(self.dicom_serie_id);
+                fprintf('Will now dump series (%s)\n',self.current_time);            
+            end
             
             %% save the desired runs to disk
             n = 0;
@@ -193,6 +199,15 @@ classdef Subject < Project
                 fprintf('File:\n %s doesn''t exist.\n Most likely realignment is not yet done.\n');
             end            
         end
+        function out = GetTotalVolume(self,run)
+            %Returns the number of volumes present in a 4D image
+            out = size(spm_select('expand',self.epi_path(run)),1);            
+        end
+        function out = GetTotalVolumeLogged(self,run)
+            %returns number of pulses logged in stimulus computer during the experiment
+            L   = self.get_log(run);
+            out = sum(L(:,2) == 0);
+        end
     end
     
     methods %(mri, preprocessing))      
@@ -205,109 +220,7 @@ classdef Subject < Project
             self.Dartel;
             self.Re_Coreg(run);
         end
-        function segment(self)
-            %take run000/mrt/data.nii and produces {r}c{1,2}data.nii and
-            %data_seg8.mat files.
-            
-            matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(self.hr_path);
-            matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
-            matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
-            matlabbatch{1}.spm.spatial.preproc.channel.write = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm = {[self.tpm_dir 'TPM.nii,1']};
-            matlabbatch{1}.spm.spatial.preproc.tissue(1).ngaus = 1;
-            matlabbatch{1}.spm.spatial.preproc.tissue(1).native = [1 1];
-            matlabbatch{1}.spm.spatial.preproc.tissue(1).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm = {[self.tpm_dir 'TPM.nii,2']};
-            matlabbatch{1}.spm.spatial.preproc.tissue(2).ngaus = 1;
-            matlabbatch{1}.spm.spatial.preproc.tissue(2).native = [1 1];
-            matlabbatch{1}.spm.spatial.preproc.tissue(2).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm = {[self.tpm_dir 'TPM.nii,3']};
-            matlabbatch{1}.spm.spatial.preproc.tissue(3).ngaus = 2;
-            matlabbatch{1}.spm.spatial.preproc.tissue(3).native = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(3).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm = {[self.tpm_dir 'TPM.nii,4']};
-            matlabbatch{1}.spm.spatial.preproc.tissue(4).ngaus = 3;
-            matlabbatch{1}.spm.spatial.preproc.tissue(4).native = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(4).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm = {[self.tpm_dir 'TPM.nii,5']};
-            matlabbatch{1}.spm.spatial.preproc.tissue(5).ngaus = 4;
-            matlabbatch{1}.spm.spatial.preproc.tissue(5).native = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(5).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm = {[self.tpm_dir 'TPM.nii,6']};
-            matlabbatch{1}.spm.spatial.preproc.tissue(6).ngaus = 2;
-            matlabbatch{1}.spm.spatial.preproc.tissue(6).native = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(6).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.warp.mrf = 1;
-            matlabbatch{1}.spm.spatial.preproc.warp.cleanup = 1;
-            matlabbatch{1}.spm.spatial.preproc.warp.reg = [0 0.001 0.5 0.05 0.2];
-            matlabbatch{1}.spm.spatial.preproc.warp.affreg = 'mni';
-            matlabbatch{1}.spm.spatial.preproc.warp.fwhm = 0;
-            matlabbatch{1}.spm.spatial.preproc.warp.samp = 3;
-            matlabbatch{1}.spm.spatial.preproc.warp.write = [0 0];
-            %
-            self.RunSPMJob(matlabbatch);
-        end        
-        function SkullStrip(self)
-            %needs results of segment, will produce a skullstripped version
-            %of hr.
-            
-            c1         = regexprep(self.hr_path,'mrt/data','mrt/c1data');
-            c2         = regexprep(self.hr_path,'mrt/data','mrt/c2data');                
-                        
-            if exist(c1) && exist(c2)
-                matlabbatch{1}.spm.util.imcalc.input            = cellstr({self.hr_path,c1,c2}');
-                matlabbatch{1}.spm.util.imcalc.output           = self.skullstrip;
-                matlabbatch{1}.spm.util.imcalc.outdir           = {self.hr_dir};
-                matlabbatch{1}.spm.util.imcalc.expression       = 'i1.*((i2+i3)>0.2)';
-                matlabbatch{1}.spm.util.imcalc.options.dmtx     = 0;
-                matlabbatch{1}.spm.util.imcalc.options.mask     = 0;
-                matlabbatch{1}.spm.util.imcalc.options.interp   = 1;
-                matlabbatch{1}.spm.util.imcalc.options.dtype    = 4;
-                self.RunSPMJob(matlabbatch);
-            else
-                fprintf('Need to run segment first...\n')
-            end
-        end        
-        function Dartel(self)
-            %will write u_rc1 file.
-            
-            rc1         = regexprep(self.hr_path,'mrt/data','mrt/rc1data');
-            rc2         = regexprep(self.hr_path,'mrt/data','mrt/rc2data');
-            if exist(rc1) && exist(rc2)
-                matlabbatch{1}.spm.tools.dartel.warp1.images = {{rc1},{rc2}}';
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.rform = 0;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).its = 3;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).rparam = [4 2 1e-06];
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).K = 0;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(1).template = {self.dartel_templates(1)};
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).its = 3;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).rparam = [2 1 1e-06];
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).K = 0;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(2).template = {self.dartel_templates(2)};
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).its = 3;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).rparam = [1 0.5 1e-06];
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).K = 1;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(3).template = {self.dartel_templates(3)};
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).its = 3;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).rparam = [0.5 0.25 1e-06];
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).K = 2;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(4).template = {self.dartel_templates(4)};
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).its = 3;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).rparam = [0.25 0.125 1e-06];
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).K = 4;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(5).template = {self.dartel_templates(5)};
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).its = 3;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).rparam = [0.25 0.125 1e-06];
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).K = 6;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.param(6).template = {self.dartel_templates(6)};
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.optim.lmreg = 0.01;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.optim.cyc = 3;
-                matlabbatch{1}.spm.tools.dartel.warp1.settings.optim.its = 3;
-                self.RunSPMJob(matlabbatch);
-            else
-                fprintf('Need to run segment first...\n')
-            end
-        end        
+           
         function Re_Coreg(self,run)
             %will realign and coregister. Right now it cannot deal with
             %multiple runs simultaneously.
@@ -339,15 +252,14 @@ classdef Subject < Project
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.sep = [4 2];
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.fwhm = [7 7];
-                
+% %                 
                 %%write EPIs
                 matlabbatch{3}.spm.spatial.realign.write.data            = cellstr(self.epi_path(run));
                 matlabbatch{3}.spm.spatial.realign.write.roptions.which  = [2 1];%all images as well as the mean image.
                 matlabbatch{3}.spm.spatial.realign.write.roptions.interp = 4;
                 matlabbatch{3}.spm.spatial.realign.write.roptions.wrap   = [0 0 0];
                 matlabbatch{3}.spm.spatial.realign.write.roptions.mask   = 1;
-                matlabbatch{3}.spm.spatial.realign.write.roptions.prefix = 'r';
-                keyboard
+                matlabbatch{3}.spm.spatial.realign.write.roptions.prefix = 'r';                
                 self.RunSPMJob(matlabbatch);
    
             else
@@ -355,15 +267,16 @@ classdef Subject < Project
             end
         end            
         function SegmentSurface(self)            
-            matlabbatch{1}.spm.tools.cat.estwrite.data = {self.hr_path};
-            matlabbatch{1}.spm.tools.cat.estwrite.nproc = 1;
-            matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm = {[self.tpm_dir 'TPM.nii']};
+            %runs CAT12 Segment Surface routine.
+            matlabbatch{1}.spm.tools.cat.estwrite.data = {spm_select('expand',self.hr_path)};
+            matlabbatch{1}.spm.tools.cat.estwrite.nproc = 4;
+            matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm = {sprintf('%s/TPM.nii',self.tpm_dir)};
             matlabbatch{1}.spm.tools.cat.estwrite.opts.affreg = 'mni';
             matlabbatch{1}.spm.tools.cat.estwrite.extopts.APP = 1;
             matlabbatch{1}.spm.tools.cat.estwrite.extopts.LASstr = 0.5;
             matlabbatch{1}.spm.tools.cat.estwrite.extopts.gcutstr = 0.5;
             matlabbatch{1}.spm.tools.cat.estwrite.extopts.cleanupstr = 0.5;
-            matlabbatch{1}.spm.tools.cat.estwrite.extopts.darteltpm = {sprintf('%stoolbox/cat12/templates_1.50mm/Template_1_IXI555_MNI152.nii',self.spm_path)};
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.darteltpm = {self.dartel_templates(1)};
             matlabbatch{1}.spm.tools.cat.estwrite.extopts.vox = 1.5;
             matlabbatch{1}.spm.tools.cat.estwrite.output.surface = 1;
             matlabbatch{1}.spm.tools.cat.estwrite.output.GM.native = 1;
@@ -372,7 +285,7 @@ classdef Subject < Project
             matlabbatch{1}.spm.tools.cat.estwrite.output.WM.native = 1;
             matlabbatch{1}.spm.tools.cat.estwrite.output.WM.mod = 0;
             matlabbatch{1}.spm.tools.cat.estwrite.output.WM.dartel = 2;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.bias.warped = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.bias.warped = 1;
             matlabbatch{1}.spm.tools.cat.estwrite.output.jacobian.warped = 0;
             matlabbatch{1}.spm.tools.cat.estwrite.output.warps = [1 1];
             %
@@ -399,8 +312,8 @@ classdef Subject < Project
         end
     end
     methods %fmri path_tools which are related to the subject              
-        function out = skullstrip(self)
-            out = regexprep(self.hr_path,'mrt/data','mrt/data_skullstrip');
+        function out        = skullstrip(self)
+            out = regexprep(self.hr_path,'mrt/data','mrt/mri/wmdata');
         end
         function out        = spm_dir(self)
             %returns subject's path to spm folder for run RUN.
@@ -423,11 +336,15 @@ classdef Subject < Project
             bla = spm_vol_nifti(self.mrt_data(run),1);%simply read the first images header
             t   = bla.private.dat.dim(4);
         end        
-        function out        = epi_path(self,nrun)
-            % simply returns the path to the mrt data.
+        function out        = epi_path(self,nrun,varargin)
+            % simply returns the path to the mrt data. use VARARGIN to add
+            % prefixes.
             if nargin == 2
                 out = sprintf('%smrt/data.nii',self.pathfinder(self.id,nrun));                
+            elseif nargin == 3
+                out = sprintf('%smrt/%sdata.nii',self.pathfinder(self.id,nrun),varargin{1});
             else
+                
                 fprintf('Need to give an input...\n')
                 return
             end
@@ -445,27 +362,29 @@ classdef Subject < Project
         function [HRPath]   = GetDicomHRpath(self)
             % finds the dicom path to the latest HR measurement for this
             % subject.
-            
-            [status2 DicqOutputFull] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders',self.trio_session));
-            %take the latest anatomical scan.
-            [status2 HRLine] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders | grep mprage | tail -n 1',self.trio_session));
-            %
+             
             HRPath = [];
-            if ~isempty(HRLine);
-                HRPath = regexp(HRLine,'/common\S*','match');
-                HRPath = HRPath{1};
-                %HRPath = GetDicomPath(HRLine);
-                fprintf('Dicom Server returns:\n=====\n')
-                fprintf(DicqOutputFull);
-                fprintf('=====\n');
-                fprintf('The latest recorded HR data:\n')
-                fprintf(HRLine);
+            if ~ismac & ~ispc
+                [status2 DicqOutputFull] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders',self.trio_session));
+                %take the latest anatomical scan.
+                [status2 HRLine] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders | grep mprage | tail -n 1',self.trio_session));
+                %                
+                if ~isempty(HRLine);
+                    HRPath = regexp(HRLine,'/common\S*','match');
+                    HRPath = HRPath{1};
+                    %HRPath = GetDicomPath(HRLine);
+                    fprintf('Dicom Server returns:\n=====\n')
+                    fprintf(DicqOutputFull);
+                    fprintf('=====\n');
+                    fprintf('The latest recorded HR data:\n')
+                    fprintf(HRLine);
+                else
+                    fprintf('There is no HR data found for this subject.\n Here is the output of the Dicq:\n');
+                    fprintf(DicqOutputFull);
+                end
             else
-                fprintf('There is no HR data found for this subject.\n Here is the output of the Dicq:\n');
-                fprintf(DicqOutputFull);
-                
+                fprintf('GetDicomHRpath: To use dicom query you have to use one of the institute''s linux boxes\n');
             end
-            
         end
         function path2data  = path2data(self,run,varargin)
             % s.path2data(53,4) will return the path to the subject's phase 4
@@ -572,6 +491,18 @@ classdef Subject < Project
             grid on
             drawnow;
         end       
+        function plot_motionparams(self,nrun)
+            dummy = self.GetMotionParameters(nrun);
+            subplot(2,1,1);
+            plot(dummy(:,1:3));           
+            legend({'x','y' 'z'})
+            legend boxoff;ylabel('mm');box off
+            subplot(2,1,2)
+            plot(dummy(:,4:6));
+            legend({'pitch' 'roll' 'yaw'});
+            legend boxoff;ylabel('degrees');box off;
+            xlabel('volumes')
+        end
         function plot_pmf(self)
             
             try
@@ -608,7 +539,7 @@ classdef Subject < Project
             title(sprintf('CSN (%d), estimated alpha = %g, LL = %g',self.csn,out.params(2,1),out.LL(2)));
         end        
     end
-     methods %(fmri analysis)
+    methods %(fmri analysis)
         function FitFIR(self,nrun,model_num)
             %run the model MODEL_NUM for data in NRUN.
             %NRUN can be a vector, but then care has to be taken that
@@ -706,5 +637,5 @@ classdef Subject < Project
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
             spm_jobman('run', matlabbatch);
         end
-    end
+     end
 end
