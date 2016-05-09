@@ -254,9 +254,7 @@ classdef Subject < Project
                 end
             end
             %%
-                
-                mean_epi    = regexprep( self.epi_path(run),'mrt/data','mrt/meandata');
-                
+                mean_epi    = regexprep( self.epi_path(1),'mrt/data','mrt/meandata');
                 %double-pass realign EPIs and reslice the mean image only.
                 matlabbatch{1}.spm.spatial.realign.estwrite.data = epi_run;
                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
@@ -275,14 +273,14 @@ classdef Subject < Project
                 %%coregister to skullstrip (only the affine matrix is modified)
                 matlabbatch{2}.spm.spatial.coreg.estimate.ref    = cellstr(self.skullstrip);
                 matlabbatch{2}.spm.spatial.coreg.estimate.source = cellstr(mean_epi);
-                matlabbatch{2}.spm.spatial.coreg.estimate.other  = epi_run
+                matlabbatch{2}.spm.spatial.coreg.estimate.other  = vertcat(epi_run{:});
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.cost_fun = 'nmi';
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.sep = [4 2];
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.fwhm = [7 7];
 % %                 
                 %%write EPIs
-                matlabbatch{3}.spm.spatial.realign.write.data            = epi_run;
+                matlabbatch{3}.spm.spatial.realign.write.data            = vertcat(epi_run{:});
                 matlabbatch{3}.spm.spatial.realign.write.roptions.which  = [2 1];%all images as well as the mean image.
                 matlabbatch{3}.spm.spatial.realign.write.roptions.interp = 4;
                 matlabbatch{3}.spm.spatial.realign.write.roptions.wrap   = [0 0 0];

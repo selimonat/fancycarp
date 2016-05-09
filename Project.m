@@ -25,10 +25,10 @@ classdef Project < handle
         %project
         path_project          = '/projects/sepf/testtest/';
         trio_sessions         = { 'TRIO_17890' }
-        dicom_serie_selector  = { [2 3 ] }
+        dicom_serie_selector  = { [2 3 4] }
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
-        dicom2run             = {[1 2]}
+        dicom2run             = {[1 2 3]}
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};
         spm_path              = '/common/apps/spm12-6685/';
         tpm_dir               = sprintf('%stpm/',Project.spm_path); %path to the TPM images, needed by segment.       
@@ -128,8 +128,7 @@ classdef Project < handle
             %will create data.nii consisting of all the [f,s]TRIO images
             %merged to 4D. the final name will be called data.nii.
             % merge to 4D
-            
-            files       = spm_select('FPListRec',self.epi_dir(1),'^fTRIO');
+            files       = spm_select('FPListRec',destination,'^fTRIO');
             fprintf('MergeTo4D:\nMerging (%s):\n',self.current_time);
             matlabbatch{1}.spm.util.cat.vols  = cellstr(files);
             matlabbatch{1}.spm.util.cat.name  = 'data.nii';
