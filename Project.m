@@ -35,6 +35,7 @@ classdef Project < handle
         tpm_dir               = sprintf('%stpm/',Project.spm_path); %path to the TPM images, needed by segment.       
         TR                    = 0.99;        
         path_stimuli          = '';%optional in case you have methods that needs stimuli...        
+        surface_wanted   = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)
     end
     properties (Constant,Hidden) %project specific properties        
         current_time
