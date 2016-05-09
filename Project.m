@@ -23,19 +23,18 @@ classdef Project < handle
     properties (Hidden, Constant)
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
-        path_project          = '/projects/fearamy/data/';
-        trio_sessions         = {  '' '' '' 'TRIO_17455' 'TRIO_17468' 'TRIO_17476' 'TRIO_17477' 'TRIO_17478' 'TRIO_17479' 'TRIO_17480' 'TRIO_17481' 'TRIO_17482' 'TRIO_17483' 'TRIO_17484' 'TRIO_17485' 'TRIO_17486' 'TRIO_17487' 'TRIO_17488' 'TRIO_17514' 'TRIO_17515' 'TRIO_17516' 'TRIO_17517'  'TRIO_17520' 'TRIO_17521' 'TRIO_17522' 'TRIO_17523' 'TRIO_17524' 'TRIO_17525' 'TRIO_17526' 'TRIO_17527' 'TRIO_17557' 'TRIO_17558' 'TRIO_17559' 'TRIO_17560'  'TRIO_17563' 'TRIO_17564' 'TRIO_17565' 'TRIO_17566' 'TRIO_17567' 'TRIO_17568' 'TRIO_17569' 'TRIO_17570' 'TRIO_17571' 'TRIO_17572'};
-        dicom_serie_selector  = {  [] [] []   [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [5 6 7]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]       [3 4 5]      [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]      [3 4 5]    };
+        path_project          = '/projects/sepf/testtest/';
+        trio_sessions         = { 'TRIO_17890' }
+        dicom_serie_selector  = { [2 3 ] }
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
-        dicom2run             = repmat({[1 1 1]},1,length(Project.dicom_serie_selector));
+        dicom2run             = {[1 2]}
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};
-        palamedes_path        = '/home/onat/Documents/Code/Matlab/palamedes1_8_0/Palamedes/';
         spm_path              = '/common/apps/spm12-6685/';
         tpm_dir               = sprintf('%stpm/',Project.spm_path); %path to the TPM images, needed by segment.       
         TR                    = 0.99;        
         path_stimuli          = '';%optional in case you have methods that needs stimuli...        
-        surface_wanted   = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)
+        surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)
     end
     properties (Constant,Hidden) %project specific properties        
         current_time
@@ -138,7 +137,7 @@ classdef Project < handle
             self.RunSPMJob(matlabbatch);            
             fprintf('Finished... (%s)\n',self.current_time);
             fprintf('Deleting 3D images in (%s)\n%s\n',self.current_time,destination);
-%             files = cellstr(files);
+ 	    files = cellstr(files);
             delete(files{:});
         end
         function ConvertDicom(self,destination)

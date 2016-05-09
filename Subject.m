@@ -124,7 +124,7 @@ classdef Subject < Project
             for source = self.dicom_folders(:)'
                 %
                 n 				 = n+1;
-                dest             = self.epi_dir(self.dicom_target_run(n));                                
+                dest             = self.epi_dir(n);                                
                 self.DicomDownload(source{1},dest);                
                 self.DicomTo4D(dest);
             end
@@ -225,11 +225,10 @@ classdef Subject < Project
         function SkullStrip(self)
             %needs results of segment, will produce a skullstripped version
             %of hr.
-            
-            c1         = regexprep(s.hr_path,'mrt/data','mrt/mri/p1data');
-            c2         = regexprep(s.hr_path,'mrt/data','mrt/mri/p2data');
+            c1         = regexprep(self.hr_path,'mrt/data','mrt/mri/p1data');
+            c2         = regexprep(self.hr_path,'mrt/data','mrt/mri/p2data');
             if exist(c1) && exist(c2)
-                matlabbatch{1}.spm.util.imcalc.input            = {self.hr_path,c1,c2};
+                matlabbatch{1}.spm.util.imcalc.input            = cellstr(strvcat(self.hr_path,c1,c2));
                 matlabbatch{1}.spm.util.imcalc.output           = self.skullstrip;
                 matlabbatch{1}.spm.util.imcalc.outdir           = {self.hr_dir};
                 matlabbatch{1}.spm.util.imcalc.expression       = 'i1.*((i2+i3)>0.2)';
@@ -248,19 +247,18 @@ classdef Subject < Project
               
             %% collect all the EPIs as a cell array of cellstr
             c = 0;
-            for nr = 1:s.total_run
-                if exist(s.epi_path(nr))
+            for nr = 1:self.total_run
+                if exist(self.epi_path(nr))
                     c = c +1;
-                    epi_run{c} = cellstr(spm_select('expand',s.epi_path(nr)));
+                    epi_run{c} = cellstr(spm_select('expand',self.epi_path(nr)));
                 end
             end
             %%
-            if exist(self.epi_path(run))
                 
                 mean_epi    = regexprep( self.epi_path(run),'mrt/data','mrt/meandata');
                 
                 %double-pass realign EPIs and reslice the mean image only.
-                matlabbatch{1}.spm.spatial.realign.estwrite.data{1} = epi_run;
+                matlabbatch{1}.spm.spatial.realign.estwrite.data = epi_run;
                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.sep = 4;
                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.fwhm = 5;
@@ -292,9 +290,6 @@ classdef Subject < Project
                 matlabbatch{3}.spm.spatial.realign.write.roptions.prefix = 'r';                
                 self.RunSPMJob(matlabbatch);
    
-            else
-                fprintf('EPI is not here...\n')
-            end
         end            
         function SegmentSurface(self)            
             %runs CAT12 Segment Surface routine.
@@ -343,7 +338,7 @@ classdef Subject < Project
     end
     methods %fmri path_tools which are related to the subject              
         function out        = skullstrip(self)
-            out = regexprep(self.hr_path,'mrt/data','mrt/mri/wmdata');
+            out = sprintf('%s%s',self.hr_dir,'skullstrip.nii');
         end
         function out        = spm_dir(self)
             %returns subject's path to spm folder for run RUN.
@@ -383,7 +378,7 @@ classdef Subject < Project
             % simply returns the path to the mrt data.
             
             if nargin == 2                
-                out = sprintf('%smrt/',self.pathfinder(self.id,nrun));                
+                out = sprintf('%smrt/',self.pathfinder(self.id,self.dicom_target_run(nrun)));                
             else
                 fprintf('Need to give an input...\n')
                 return
