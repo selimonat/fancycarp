@@ -124,7 +124,7 @@ classdef Subject < Project
             for source = self.dicom_folders(:)'
                 %
                 n 				 = n+1;
-                dest             = self.epi_dir(self.dicom_target_run(n));                                
+                dest             = self.epi_dir(n);                                
                 self.DicomDownload(source{1},dest);                
                 self.DicomTo4D(dest);
             end
@@ -212,25 +212,51 @@ classdef Subject < Project
     
     methods %(mri, preprocessing))      
         
-        function preprocess_pipeline(self,run)
+        function preprocess_pipeline(self,runs)
             %meta method to run all the required steps for hr
-            %preprocessing.
-            self.segment;
-            self.SkullStrip;
-            self.Dartel;
-            self.Re_Coreg(run);
+            %preprocessing. RUNS specifies the functional runs, make it a
+            %vector if neede.
+            self.SegmentSurface;
+            self.SkullStrip;            
+            self.Re_Coreg(runs);
         end
            
+        
+        function SkullStrip(self)
+            %needs results of segment, will produce a skullstripped version
+            %of hr.
+            c1         = regexprep(self.hr_path,'mrt/data','mrt/mri/p1data');
+            c2         = regexprep(self.hr_path,'mrt/data','mrt/mri/p2data');
+            if exist(c1) && exist(c2)
+                matlabbatch{1}.spm.util.imcalc.input            = cellstr(strvcat(self.hr_path,c1,c2));
+                matlabbatch{1}.spm.util.imcalc.output           = self.skullstrip;
+                matlabbatch{1}.spm.util.imcalc.outdir           = {self.hr_dir};
+                matlabbatch{1}.spm.util.imcalc.expression       = 'i1.*((i2+i3)>0.2)';
+                matlabbatch{1}.spm.util.imcalc.options.dmtx     = 0;
+                matlabbatch{1}.spm.util.imcalc.options.mask     = 0;
+                matlabbatch{1}.spm.util.imcalc.options.interp   = 1;
+                matlabbatch{1}.spm.util.imcalc.options.dtype    = 4;
+                self.RunSPMJob(matlabbatch);
+            else
+                fprintf('Need to run segment first...\n')
+            end
+        end        
+        
         function Re_Coreg(self,run)
-            %will realign and coregister. Right now it cannot deal with
-            %multiple runs simultaneously.
-                                    
-            if exist(self.epi_path(run))
-                
-                mean_epi    = regexprep( self.epi_path(run),'mrt/data','mrt/meandata');
-                
+            %will realign and coregister. 
+              
+            %% collect all the EPIs as a cell array of cellstr
+            c = 0;
+            for nr = 1:self.total_run
+                if exist(self.epi_path(nr))
+                    c = c +1;
+                    epi_run{c} = cellstr(spm_select('expand',self.epi_path(nr)));
+                end
+            end
+            %%
+                mean_epi    = regexprep( self.epi_path(1),'mrt/data','mrt/meandata');
                 %double-pass realign EPIs and reslice the mean image only.
-                matlabbatch{1}.spm.spatial.realign.estwrite.data{1} = cellstr(spm_select('expand',self.epi_path(run)));
+                matlabbatch{1}.spm.spatial.realign.estwrite.data = epi_run;
                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.sep = 4;
                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.fwhm = 5;
@@ -247,14 +273,14 @@ classdef Subject < Project
                 %%coregister to skullstrip (only the affine matrix is modified)
                 matlabbatch{2}.spm.spatial.coreg.estimate.ref    = cellstr(self.skullstrip);
                 matlabbatch{2}.spm.spatial.coreg.estimate.source = cellstr(mean_epi);
-                matlabbatch{2}.spm.spatial.coreg.estimate.other  = cellstr(spm_select('expand',self.epi_path(run)));
+                matlabbatch{2}.spm.spatial.coreg.estimate.other  = vertcat(epi_run{:});
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.cost_fun = 'nmi';
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.sep = [4 2];
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.fwhm = [7 7];
 % %                 
                 %%write EPIs
-                matlabbatch{3}.spm.spatial.realign.write.data            = cellstr(self.epi_path(run));
+                matlabbatch{3}.spm.spatial.realign.write.data            = vertcat(epi_run{:});
                 matlabbatch{3}.spm.spatial.realign.write.roptions.which  = [2 1];%all images as well as the mean image.
                 matlabbatch{3}.spm.spatial.realign.write.roptions.interp = 4;
                 matlabbatch{3}.spm.spatial.realign.write.roptions.wrap   = [0 0 0];
@@ -262,9 +288,6 @@ classdef Subject < Project
                 matlabbatch{3}.spm.spatial.realign.write.roptions.prefix = 'r';                
                 self.RunSPMJob(matlabbatch);
    
-            else
-                fprintf('EPI is not here...\n')
-            end
         end            
         function SegmentSurface(self)            
             %runs CAT12 Segment Surface routine.
@@ -278,16 +301,29 @@ classdef Subject < Project
             matlabbatch{1}.spm.tools.cat.estwrite.extopts.cleanupstr = 0.5;
             matlabbatch{1}.spm.tools.cat.estwrite.extopts.darteltpm = {self.dartel_templates(1)};
             matlabbatch{1}.spm.tools.cat.estwrite.extopts.vox = 1.5;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.surface = 1;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.surface = self.surface_wanted;
             matlabbatch{1}.spm.tools.cat.estwrite.output.GM.native = 1;
             matlabbatch{1}.spm.tools.cat.estwrite.output.GM.mod = 0;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.dartel = 2;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.dartel = 0;
             matlabbatch{1}.spm.tools.cat.estwrite.output.WM.native = 1;
             matlabbatch{1}.spm.tools.cat.estwrite.output.WM.mod = 0;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.dartel = 2;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.dartel = 0;
             matlabbatch{1}.spm.tools.cat.estwrite.output.bias.warped = 1;
             matlabbatch{1}.spm.tools.cat.estwrite.output.jacobian.warped = 0;
             matlabbatch{1}.spm.tools.cat.estwrite.output.warps = [1 1];
+            %
+            self.RunSPMJob(matlabbatch);
+        end
+        function NormalizeHR(self)
+            %SegmentSurface writes deformation fields (y_*), which are here used
+            %to normalize the native hr images
+            matlabbatch{1}.spm.spatial.normalise.write.subj.def = cellstr(regexprep(self.hr_path,'data.nii','mri/y_data.nii'));
+            matlabbatch{1}.spm.spatial.normalise.write.subj.resample = {self.hr_path};
+            matlabbatch{1}.spm.spatial.normalise.write.woptions.bb = [-78 -112 -70
+                                                          78 76 85];
+            matlabbatch{1}.spm.spatial.normalise.write.woptions.vox = [Inf Inf Inf];
+            matlabbatch{1}.spm.spatial.normalise.write.woptions.interp = 4;
+            matlabbatch{1}.spm.spatial.normalise.write.woptions.prefix = 'w';
             %
             self.RunSPMJob(matlabbatch);
         end
@@ -313,7 +349,7 @@ classdef Subject < Project
     end
     methods %fmri path_tools which are related to the subject              
         function out        = skullstrip(self)
-            out = regexprep(self.hr_path,'mrt/data','mrt/mri/wmdata');
+            out = sprintf('%s%s',self.hr_dir,'skullstrip.nii');
         end
         function out        = spm_dir(self)
             %returns subject's path to spm folder for run RUN.
@@ -353,7 +389,7 @@ classdef Subject < Project
             % simply returns the path to the mrt data.
             
             if nargin == 2                
-                out = sprintf('%smrt/',self.pathfinder(self.id,nrun));                
+                out = sprintf('%smrt/',self.pathfinder(self.id,self.dicom_target_run(nrun)));                
             else
                 fprintf('Need to give an input...\n')
                 return

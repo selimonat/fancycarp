@@ -35,6 +35,7 @@ classdef Project < handle
         tpm_dir               = sprintf('%stpm/',Project.spm_path); %path to the TPM images, needed by segment.       
         TR                    = 0.99;        
         path_stimuli          = '';%optional in case you have methods that needs stimuli...        
+        surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)
     end
     properties (Constant,Hidden) %project specific properties        
         current_time
@@ -128,8 +129,7 @@ classdef Project < handle
             %will create data.nii consisting of all the [f,s]TRIO images
             %merged to 4D. the final name will be called data.nii.
             % merge to 4D
-            
-            files       = spm_select('FPListRec',self.epi_dir(1),'^fTRIO');
+            files       = spm_select('FPListRec',destination,'^fTRIO');
             fprintf('MergeTo4D:\nMerging (%s):\n',self.current_time);
             matlabbatch{1}.spm.util.cat.vols  = cellstr(files);
             matlabbatch{1}.spm.util.cat.name  = 'data.nii';
@@ -137,7 +137,7 @@ classdef Project < handle
             self.RunSPMJob(matlabbatch);            
             fprintf('Finished... (%s)\n',self.current_time);
             fprintf('Deleting 3D images in (%s)\n%s\n',self.current_time,destination);
-%             files = cellstr(files);
+ 	    files = cellstr(files);
             delete(files{:});
         end
         function ConvertDicom(self,destination)
