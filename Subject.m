@@ -215,7 +215,7 @@ classdef Subject < Project
         function preprocess_pipeline(self,runs)
             %meta method to run all the required steps for hr
             %preprocessing. RUNS specifies the functional runs, make it a
-            %vector if neede.
+            %vector if needed.
             self.SegmentSurface;
             self.SkullStrip;            
             self.Re_Coreg(runs);
@@ -369,7 +369,7 @@ classdef Subject < Project
         end                        
         function [t]        = total_volumes(self,run)
             % will tell you how many volumes are in a 4D image.
-            bla = spm_vol_nifti(self.mrt_data(run),1);%simply read the first images header
+            bla = spm_vol_nifti(self.epi_path(run),1);%simply read the first images header
             t   = bla.private.dat.dim(4);
         end        
         function out        = epi_path(self,nrun,varargin)

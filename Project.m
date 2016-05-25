@@ -79,9 +79,9 @@ classdef Project < handle
                 varargin{1} = '*';
             end
             n = 0;
-            for nr = 1:self.total_run
+            for nr = runs
                 n = n + 1;
-                subplot(self.total_run,1,n)
+                subplot(length(runs),1,n)
                 bar(DU(:,n));ylabel('MB or #');xlabel('Subjects');box off                
                 title(sprintf('Subfolder: %s\n Run: %i\n',varargin{1},nr))
             end
@@ -137,8 +137,8 @@ classdef Project < handle
             self.RunSPMJob(matlabbatch);            
             fprintf('Finished... (%s)\n',self.current_time);
             fprintf('Deleting 3D images in (%s)\n%s\n',self.current_time,destination);
- 	    files = cellstr(files);
-            delete(files{:});
+            files = cellstr(files);
+            %delete(files{:});
         end
         function ConvertDicom(self,destination)
             % dicom conversion. ATTENTION: dicoms will be converted and
@@ -164,7 +164,7 @@ classdef Project < handle
                 % delete dicom files
                 fprintf('Deleting DICOM images in (%s)\n%s\n',self.current_time,destination);
                 files = cellstr(files);
-                delete(files{:});
+                %delete(files{:});
                 fprintf('Finished... (%s)\n',self.current_time);                
             else
                 fprintf('No dicom files found for %i\n',self.id);
