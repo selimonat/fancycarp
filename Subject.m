@@ -314,10 +314,10 @@ classdef Subject < Project
             %
             self.RunSPMJob(matlabbatch);
         end
-        function NormalizeHR
+        function NormalizeHR(self)
             %SegmentSurface writes deformation fields (y_*), which are here used
             %to normalize the native hr images
-            matlabbatch{1}.spm.spatial.normalise.write.subj.def = '';
+            matlabbatch{1}.spm.spatial.normalise.write.subj.def = cellstr(regexprep(self.hr_path,'data.nii','mri/y_data.nii'));
             matlabbatch{1}.spm.spatial.normalise.write.subj.resample = {self.hr_path};
             matlabbatch{1}.spm.spatial.normalise.write.woptions.bb = [-78 -112 -70
                                                           78 76 85];
