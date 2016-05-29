@@ -51,14 +51,16 @@ classdef Project < handle
             %space. Use a string in VARARGIN to focus only on a subfolder.
             %MEASURE has to be 'size' or 'amount', for disk usage and
             %number of files, respectively.
+            cd(self.path_project);%
             total_subjects = length(Project.trio_sessions);
             DU = nan(total_subjects,length(runs));
             warning('off','all');
             for ns = 1:total_subjects
                 for nr = runs
                     fprintf('Requesting folder size for subject %03d and run %03d\n',ns,nr);
-                    fullpath = fullfile(self.pathfinder(ns,nr),varargin{:});
-                    if exist(fullpath)
+                    subject_run = self.pathfinder(ns,nr);
+                    if ~isempty(subject_run)
+                        fullpath = fullfile(subject_run,varargin{:});                    
                         if strcmp(measure,'size')
                             [a b]       = system(sprintf('/usr/bin/du -cd0 %s | grep -e total | grep -oh -e [0-9]*',fullpath));
                              DU(ns,nr+1)= str2double(b)./1024;
@@ -70,7 +72,7 @@ classdef Project < handle
                             return
                         end
                     else
-                        fprintf('Folder doesn''t exist: %s\n',fullpath);
+                        fprintf('Folder doesn''t exist: %s\n',subject_run);
                     end
                 end                
             end

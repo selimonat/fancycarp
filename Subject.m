@@ -242,19 +242,19 @@ classdef Subject < Project
             end
         end        
         
-        function Re_Coreg(self,run)
+        function Re_Coreg(self,runs)
             %will realign and coregister. 
               
             %% collect all the EPIs as a cell array of cellstr
             c = 0;
-            for nr = 1:self.total_run
+            for nr = runs
                 if exist(self.epi_path(nr))
                     c = c +1;
                     epi_run{c} = cellstr(spm_select('expand',self.epi_path(nr)));
                 end
             end
             %%
-                mean_epi    = regexprep( self.epi_path(1),'mrt/data','mrt/meandata');
+                mean_epi    = regexprep( self.epi_path(1),'mrt/data','mrt/meandata');%mean EPI will always be saved here.
                 %double-pass realign EPIs and reslice the mean image only.
                 matlabbatch{1}.spm.spatial.realign.estwrite.data = epi_run;
                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
@@ -292,7 +292,7 @@ classdef Subject < Project
         function SegmentSurface(self)            
             %runs CAT12 Segment Surface routine.
             matlabbatch{1}.spm.tools.cat.estwrite.data = {spm_select('expand',self.hr_path)};
-            matlabbatch{1}.spm.tools.cat.estwrite.nproc = 4;
+            matlabbatch{1}.spm.tools.cat.estwrite.nproc = 0;
             matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm = {sprintf('%s/TPM.nii',self.tpm_dir)};
             matlabbatch{1}.spm.tools.cat.estwrite.opts.affreg = 'mni';
             matlabbatch{1}.spm.tools.cat.estwrite.extopts.APP = 1;
