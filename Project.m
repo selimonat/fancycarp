@@ -23,16 +23,22 @@ classdef Project < handle
     properties (Hidden, Constant)
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
-        path_project          = '/projects/sepf/testtest/';
-        trio_sessions         = { 'TRIO_17890' }
-        dicom_serie_selector  = { [2 3 4] }
+        path_project          = 'C:\Users\Sepideh\work\cueingPE\fancycarp';
+        trio_sessions         = { 'TRIO_17815','TRIO_17816','TRIO_17819','TRIO_17820','TRIO_17821','TRIO_17851'...
+            'TRIO_17852','TRIO_17881','TRIO_17882','TRIO_17886','TRIO_17887','TRIO_17890','TRIO_17891',...
+            'TRIO_17892','TRIO_17893','TRIO_17894','TRIO_17915','TRIO_17916','TRIO_17917','TRIO_17920','TRIO_17921',...
+            'TRIO_17922','TRIO_17924','TRIO_17925','TRIO_17926'}
+        dicom_serie_selector  = { [2 3 4 5], [3 4 5 6], [3 4 6 7], [2 3 4 5], [2 3 4 5], [2 3 4 5],...
+            [2 3 4 5], [2 3 4 5], [2 3 4 5], [2 3 4 5], [2 3 4 5], [2 4 5 7], [2 3 6 7],...
+            [2 3 4 5], [2 3 4 5], [2 3 4 5], [2 3 4 5], [2 3 4 5], [2 3 4 5], [2 3 5 6], [2 4 5 6],...
+            [2 3 4 5], [3 4 6 7], [2 3 4 7], [2 3 4 5]}
+        dicom2run             = mat2cell(repmat([1 2 3 4],25,1),ones(1,25),4)
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
-        dicom2run             = {[1 2 3]}
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};
-        spm_path              = '/common/apps/spm12-6685/';
-        tpm_dir               = sprintf('%stpm/',Project.spm_path); %path to the TPM images, needed by segment.       
-        TR                    = 0.99;        
+        spm_path              = 'C:\Users\Sepideh\Documents\MATLAB\spm12-6685\';
+        tpm_dir               = sprintf('%stpm%s',Project.spm_path,filesep); %path to the TPM images, needed by segment.       
+        TR                    = 1.24;        
         path_stimuli          = '';%optional in case you have methods that needs stimuli...        
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)
     end

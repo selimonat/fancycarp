@@ -292,7 +292,7 @@ classdef Subject < Project
         function SegmentSurface(self)            
             %runs CAT12 Segment Surface routine.
             matlabbatch{1}.spm.tools.cat.estwrite.data = {spm_select('expand',self.hr_path)};
-            matlabbatch{1}.spm.tools.cat.estwrite.nproc = 4;
+            matlabbatch{1}.spm.tools.cat.estwrite.nproc = 0;
             matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm = {sprintf('%s/TPM.nii',self.tpm_dir)};
             matlabbatch{1}.spm.tools.cat.estwrite.opts.affreg = 'mni';
             matlabbatch{1}.spm.tools.cat.estwrite.extopts.APP = 1;
@@ -353,19 +353,19 @@ classdef Subject < Project
         end
         function out        = spm_dir(self)
             %returns subject's path to spm folder for run RUN.
-            out = sprintf('%smrt/spm/',self.pathfinder(self.id,1));
+            out = sprintf('%smrt%sspm%s',self.pathfinder(self.id,1),filesep,filesep);
         end        
         function out        = spm_path(self)
             %returns the path to spm folder for run RUN.
-            out = sprintf('%smrt/spm/SPM.mat',self.pathfinder(self.id,1));
+            out = sprintf('%smrt%sspm%sSPM.mat',self.pathfinder(self.id,1),filesep,filesep);
         end        
         function out        = hr_dir(self)
             %the directory where hr is located
-            out = sprintf('%smrt/',self.pathfinder(self.id,0));
+            out = sprintf('%smrt%s',self.pathfinder(self.id,0),filesep);
         end
         function out        = hr_path(self)
             %the directory where hr is located
-            out = sprintf('%smrt/data.nii',self.pathfinder(self.id,0));
+            out = sprintf('%smrt%sdata.nii',self.pathfinder(self.id,0),filesep);
         end                        
         function [t]        = total_volumes(self,run)
             % will tell you how many volumes are in a 4D image.
@@ -376,9 +376,9 @@ classdef Subject < Project
             % simply returns the path to the mrt data. use VARARGIN to add
             % prefixes.
             if nargin == 2
-                out = sprintf('%smrt/data.nii',self.pathfinder(self.id,nrun));                
+                out = sprintf('%smrt%sdata.nii',self.pathfinder(self.id,nrun),filesep);                
             elseif nargin == 3
-                out = sprintf('%smrt/%sdata.nii',self.pathfinder(self.id,nrun),varargin{1});
+                out = sprintf('%smrt%s%sdata.nii',self.pathfinder(self.id,nrun),filesep,varargin{1});
             else
                 
                 fprintf('Need to give an input...\n')
@@ -389,7 +389,7 @@ classdef Subject < Project
             % simply returns the path to the mrt data.
             
             if nargin == 2                
-                out = sprintf('%smrt/',self.pathfinder(self.id,self.dicom_target_run(nrun)));                
+                out = sprintf('%smrt%s',self.pathfinder(self.id,self.dicom_target_run(nrun)),filesep);                
             else
                 fprintf('Need to give an input...\n')
                 return
