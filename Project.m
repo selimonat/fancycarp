@@ -24,8 +24,8 @@ classdef Project < handle
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
         path_project          = '/projects/fearamy/data/';
-        trio_sessions         = {  '' '' '' 'TRIO_17455' 'TRIO_17468' 'TRIO_17476' 'TRIO_17477' 'TRIO_17478' 'TRIO_17479' 'TRIO_17480' 'TRIO_17481' 'TRIO_17482' 'TRIO_17483' 'TRIO_17484' 'TRIO_17485' 'TRIO_17486' 'TRIO_17487' 'TRIO_17488' 'TRIO_17514' 'TRIO_17515' 'TRIO_17516' 'TRIO_17517'  'TRIO_17520' 'TRIO_17521' 'TRIO_17522' 'TRIO_17523' 'TRIO_17524' 'TRIO_17525' 'TRIO_17526' 'TRIO_17527' 'TRIO_17557' 'TRIO_17558' 'TRIO_17559' 'TRIO_17560'  'TRIO_17563' 'TRIO_17564' 'TRIO_17565' 'TRIO_17566' 'TRIO_17567' 'TRIO_17568' 'TRIO_17569' 'TRIO_17570' 'TRIO_17571' 'TRIO_17572'};
-        dicom_serie_selector  = {  [] [] []   [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [5 6 7]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]       [3 4 5]      [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]      [3 4 5]    };
+        trio_sessions         = {  '' '' '' '' 'TRIO_17468' 'TRIO_17476' 'TRIO_17477' 'TRIO_17478' 'TRIO_17479' 'TRIO_17480' 'TRIO_17481' 'TRIO_17482' 'TRIO_17483' 'TRIO_17484' 'TRIO_17485' 'TRIO_17486' 'TRIO_17487' 'TRIO_17488' 'TRIO_17514' 'TRIO_17515' 'TRIO_17516' 'TRIO_17517'  'TRIO_17520' 'TRIO_17521' 'TRIO_17522' 'TRIO_17523' 'TRIO_17524' 'TRIO_17525' 'TRIO_17526' 'TRIO_17527' 'TRIO_17557' 'TRIO_17558' 'TRIO_17559' 'TRIO_17560'  'TRIO_17563' 'TRIO_17564' 'TRIO_17565' 'TRIO_17566' 'TRIO_17567' 'TRIO_17568' 'TRIO_17569' 'TRIO_17570' 'TRIO_17571' 'TRIO_17572'};
+        dicom_serie_selector  = {  [] [] []   []      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [5 6 7]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]       [3 4 5]      [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]      [3 4 5]    };
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
         dicom2run             = repmat({[1 1 1]},1,length(Project.dicom_serie_selector));
@@ -36,6 +36,7 @@ classdef Project < handle
         TR                    = 0.99;        
         path_stimuli          = '';%optional in case you have methods that needs stimuli...        
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)
+        path_group_skullstrip 
     end
     properties (Constant,Hidden) %project specific properties        
         current_time
@@ -43,7 +44,7 @@ classdef Project < handle
         colors                = [ [0 0 0]; 0.0784 0.3284 1.0000;0.5784    0.0784    1.0000;1.0000    0.0784    0.8284;1.0000    0.0784    0.0784;1.0000    0.8284    0.0784;0.5784    1.0000    0.0784;0.0784    1.0000    0.3284;0.0784    1.0000    1.0000;0.0784    0.0784    0.0784;0.5784    0.5784    0.5784  ;[.8 0 0];[.8 0 0]];
         line                  = {'-' '-' '-' '-' '-' '-' '-' '-' '-' '.' '.'};
         symbol                = {'.' '.' '.' '.' '.' '.' '.' '.' '.' 'p' 's'};        
-        font_style            = {'fontsize' 12};        
+        font_style            = {'fontsize' 12};                
     end    
     methods
         function DU = SanityCheck(self,runs,measure,varargin)
@@ -237,6 +238,11 @@ classdef Project < handle
         function t          = get.current_time(self)
             t = datestr(now,'hh:mm:ss');
         end
+        
+        function out = get.path_group_skullstrip(self)
+            out = sprintf('%s/midlevel/skullstrip.nii',self.path_project);
+        end
+        
     end
     methods(Static)
         
@@ -262,6 +268,19 @@ classdef Project < handle
             end            
         end                
     end
+    methods %methods that does something on all subjects
+        function GetGroupSkullstrip(self)
+            %so far not functioanl
+            files = [];
+            for ns = find(cellfun(@(x) ~isempty(x),self.trio_sessions))
+                s     = Subject(ns);
+                files = [files ;s.skullstrip];
+            end
+            keyboard
+            V = spm_vol(files);
+%             VV = spm_read_vols(V);
+        end
+    end
     methods %project specific methods
         function degree    = stimulus2degree(self,stim_id)
             %will transform condition indices to distances in degrees from
@@ -282,4 +301,5 @@ classdef Project < handle
             colormap(Project.colors(color_ind,:));
         end
     end
+    
 end
