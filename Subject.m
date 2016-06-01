@@ -270,7 +270,7 @@ classdef Subject < Project
                 matlabbatch{1}.spm.spatial.realign.estwrite.roptions.mask = 1;
                 matlabbatch{1}.spm.spatial.realign.estwrite.roptions.prefix = 'r';
                 
-                %%coregister to skullstrip (only the affine matrix is modified)
+                %%coregister EPIs to skullstrip (only the affine matrix is modified)
                 matlabbatch{2}.spm.spatial.coreg.estimate.ref    = cellstr(self.skullstrip);
                 matlabbatch{2}.spm.spatial.coreg.estimate.source = cellstr(mean_epi);
                 matlabbatch{2}.spm.spatial.coreg.estimate.other  = vertcat(epi_run{:});
@@ -317,11 +317,11 @@ classdef Subject < Project
         function NormalizeHR(self)
             %SegmentSurface writes deformation fields (y_*), which are here used
             %to normalize the native hr images
-            matlabbatch{1}.spm.spatial.normalise.write.subj.def = cellstr(regexprep(self.hr_path,'data.nii','mri/y_data.nii'));
-            matlabbatch{1}.spm.spatial.normalise.write.subj.resample = {self.hr_path};
-            matlabbatch{1}.spm.spatial.normalise.write.woptions.bb = [-78 -112 -70
+            matlabbatch{1}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.hr_path,'data.nii','mri/y_data.nii'));
+            matlabbatch{1}.spm.spatial.normalise.write.subj.resample = {self.skullstrip};
+            matlabbatch{1}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
                                                           78 76 85];
-            matlabbatch{1}.spm.spatial.normalise.write.woptions.vox = [Inf Inf Inf];
+            matlabbatch{1}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
             matlabbatch{1}.spm.spatial.normalise.write.woptions.interp = 4;
             matlabbatch{1}.spm.spatial.normalise.write.woptions.prefix = 'w';
             %
@@ -533,11 +533,18 @@ classdef Subject < Project
             plot(dummy(:,1:3));           
             legend({'x','y' 'z'})
             legend boxoff;ylabel('mm');box off
+            axis tight
+            ylim([-5 5])
+            set(gca,'ygrid','on')
+            %
             subplot(2,1,2)
             plot(dummy(:,4:6));
             legend({'pitch' 'roll' 'yaw'});
             legend boxoff;ylabel('degrees');box off;
             xlabel('volumes')
+            axis tight
+            ylim([-5 5].*10.^-2)
+            set(gca,'ygrid','on')
         end
         function plot_pmf(self)
             
