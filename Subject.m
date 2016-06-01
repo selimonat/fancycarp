@@ -327,25 +327,7 @@ classdef Subject < Project
             %
             self.RunSPMJob(matlabbatch);
         end
-        function [scanunit]=StimTime2ScanUnit(self,run)
-            %will return stim onsets in units of scan. Usefull for first
-            %level.
-            
-            L          = self.Log(run);
-            scan_times = L(L(:,2) == 0,1);%find all scan events
-            scan_id    = 1:length(scan_times);
-            nstim      = 0;
-            %ideally we could divide stim_onsets with TR, but this would
-            %create a problem if there are reference measurements during
-            %the measurements.
-            for stim_times = L(find(L(:,2)==3),1)';%run stim by stim
-                nstim          = nstim + 1;
-                d              = scan_times - stim_times;
-                first_positive = find(d > 0,1);
-                decimal        = d(first_positive)./self.TR;
-                scanunit(nstim)= (scan_id(first_positive)-1) + decimal;
-            end
-        end
+        
     end
     methods %fmri path_tools which are related to the subject              
         function out        = skullstrip(self)
@@ -385,6 +367,11 @@ classdef Subject < Project
                 return
             end
         end                
+        function out = epi_path_expanded(self,run)
+            %returns paths to EPI volumes which are specified with
+            %comma-separated volume numbers.
+            out = spm_select('expand',self.epi_path(run));
+        end
         function out        = epi_dir(self,nrun)
             % simply returns the path to the mrt data.
             
@@ -583,6 +570,62 @@ classdef Subject < Project
         end        
     end
     methods %(fmri analysis)
+        function [stim_scanunit,stim_ids]=StimTime2ScanUnit(self,run)
+            %will return stim onsets in units of scan. Will check the Log
+            %for stim onsets, it will discard those trials occuring outside
+            %the first and last scans based on their time-stamps. In
+            %FearAmy, we have the reference measurements, i.e. scanner
+            %stops for a while during the experiment. Those onsets are also
+            %excluded (if the next scan unit is more than the TR far away).
+            
+            L               = self.get_log(run);
+            scan_times      = L(L(:,2) == 0,1);%find all scan events and get their times            
+            scan_id         = 1:length(scan_times);%label pulses with increasing numbers
+            last_scan_time  = max(scan_times);%time of the last
+            first_scan_time = min(scan_times);
+            trial           = 0;
+            %collect info on stim onsets and discard those not occurring
+            %during scanning.
+            stim_times      = L(find(L(:,2)==3),1)';
+            valid           = stim_times<last_scan_time & stim_times>first_scan_time;%i.e. during scanning
+            %sanity check: check if valid onsets matches to tTRIAL
+            if sum(valid) ~= self.paradigm{run}.presentation.tTrial
+                fprintf('Number of stimulus onsets found in the log are different than tTRIAL.\n');
+                keyboard
+            end            
+            stim_times = stim_times(valid);            
+            %
+            trial = 0;
+            for stim_time = stim_times;%run stim by stim                
+                d                        = scan_times - stim_time;
+                first_positive           = find(d > 0,1);%find the first positive value
+                decimal                  = d(first_positive)./self.TR;
+                if decimal < 1%if stimuli are shown but the scanner is not running
+                    trial                = trial + 1;
+                    stim_scanunit(trial) = (scan_id(first_positive)-1) + decimal;
+                    stim_ids(trial)       = self.paradigm{run}.presentation.dist(trial);
+                end
+            end            
+        end
+        %
+        function CreateModels(self,run)
+            %%%%%%%%%%%%%%%%%%%%%%
+            model_num  = 1;
+            model_path = sprintf('%sdesign/model%02d/data.mat',self.path2data(run),model_num);
+            if ~exist(fileparts(model_path));mkdir(fileparts(model_path));end
+            [scan,id]  = self.StimTime2ScanUnit(run);
+            counter    = 0;
+            for current_condition = unique(id)
+                counter                = counter + 1;
+                cond(counter).name     = mat2str(current_condition);
+                cond(counter).onset    = scan(id == current_condition);
+                cond(counter).duration = zeros(1,length(cond(counter).onset));
+                cond(counter).tmod     = 0;
+                cond(counter).pmod     = struct('name',{},'param',{},'poly',{});
+            end
+            save(model_path,'cond');
+            %%%%%%%%%%%%%%%%%%%%%%
+        end
         function FitFIR(self,nrun,model_num)
             %run the model MODEL_NUM for data in NRUN.
             %NRUN can be a vector, but then care has to be taken that
@@ -651,13 +694,13 @@ classdef Subject < Project
             
             for session = nrun
                 %load files using ...,1, ....,2 format
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));
-                %load the onsets
-                dummy                                                   = load(sprintf('%sdesign/model%02d.mat',self.path2data(session),model_num));
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.epi_path_expanded(session));
+                %load the onsets                
+                dummy                                                   = load(sprintf('%sdesign/model%02d/data.mat',self.path2data(session),model_num));
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
                 %load nuissance parameters
-                nuis                                                    = self.MotionParameters(nrun);
+                nuis                                                    = self.GetMotionParameters(session);
                 nuis                                                    = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
                 for nNuis = 1:size(nuis,2)
                     matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
