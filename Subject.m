@@ -361,17 +361,11 @@ classdef Subject < Project
                 out = sprintf('%smrt/data.nii',self.pathfinder(self.id,nrun));                
             elseif nargin == 3
                 out = sprintf('%smrt/%sdata.nii',self.pathfinder(self.id,nrun),varargin{1});
-            else
-                
+            else                
                 fprintf('Need to give an input...\n')
                 return
             end
-        end                
-        function out = epi_path_expanded(self,run)
-            %returns paths to EPI volumes which are specified with
-            %comma-separated volume numbers.
-            out = spm_select('expand',self.epi_path(run));
-        end
+        end                        
         function out        = epi_dir(self,nrun)
             % simply returns the path to the mrt data.
             
@@ -694,7 +688,8 @@ classdef Subject < Project
             
             for session = nrun
                 %load files using ...,1, ....,2 format
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.epi_path_expanded(session));
+                out = self.epi_path(session,'r');
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(spm_select('expand',out));
                 %load the onsets                
                 dummy                                                   = load(sprintf('%sdesign/model%02d/data.mat',self.path2data(session),model_num));
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
