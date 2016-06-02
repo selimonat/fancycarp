@@ -335,7 +335,7 @@ classdef Subject < Project
         end
         function out        = spm_dir(self)
             %returns subject's path to spm folder for run RUN.
-            out = sprintf('%smrt/spm/',self.pathfinder(self.id,1));
+            out = sprintf('%s/spm/',self.pathfinder(self.id,1));
         end        
         function out        = spm_path(self)
             %returns the path to spm folder for run RUN.
@@ -669,15 +669,22 @@ classdef Subject < Project
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
             spm_jobman('run', matlabbatch);
         end
-        function FitHRF(self,nrun,model_num)
-            %run the model MODEL_NUM for data in NRUN.
-            %NRUN can be a vector, but then care has to be taken that
-            %model_num is correctly set for different runs.
+        function FitHRF(self,nrun,model_num,varargin)
+            %run the model MODEL_NUM for data in NRUN. NRUN can be a vector
+            %(not tested yet). VARARGIN specifies the derivatives for the
+            %basis functions. DEFAULT is [0 0], no derivatives, VARARGIN
+            %overwrites the default value. 
             
+            %overwrite the derivative defaults.
+            if nargin == 3
+                derivatives = [0 0];
+            else
+                derivatives = varargin{1};
+            end
             
-            spm_dir = sprintf('%s/model_chrf_%02d/',self.spm_dir,model_num);
-            spm_path= sprintf('%s/model_chrf_%02d/SPM.mat',self.spm_dir,model_num);
-            
+            %set spm dir: saves always to run1
+            spm_dir = sprintf('%s/model_%02d_chrf_%d%d/',self.spm_dir,model_num,derivatives(1),derivatives(2));
+            spm_path= sprintf('%s/model_%02d_chrf_%d%d/SPM.mat',self.spm_dir,model_num,derivatives(1),derivatives(2));            
             if ~exist(self.spm_path);mkdir(spm_dir);end
             
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
@@ -707,7 +714,7 @@ classdef Subject < Project
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = 128;
             end
             matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
-            matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs                  = [0 0];
+            matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs                  = derivatives;%we have [0 0], [ 1 0] or [ 1 1] for 1, 2, or 3 regressors.
             matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
