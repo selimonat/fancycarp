@@ -223,8 +223,11 @@ classdef Subject < Project
            
         
         function SkullStrip(self)
-            %needs results of segment, will produce a skullstripped version
-            %of hr.
+            %needs results of SegmentSurface, will produce a skullstripped
+            %version of hr (filename: ss_data.nii). It will also
+            %automatically create a normalized version as well
+            %(w_ss_data.nii).
+            %c
             c1         = regexprep(self.hr_path,'mrt/data','mrt/mri/p1data');
             c2         = regexprep(self.hr_path,'mrt/data','mrt/mri/p2data');
             if exist(c1) && exist(c2)
@@ -237,6 +240,8 @@ classdef Subject < Project
                 matlabbatch{1}.spm.util.imcalc.options.interp   = 1;
                 matlabbatch{1}.spm.util.imcalc.options.dtype    = 4;
                 self.RunSPMJob(matlabbatch);
+                
+                self.NormalizeHR;
             else
                 fprintf('Need to run segment first...\n')
             end
@@ -316,22 +321,29 @@ classdef Subject < Project
         end
         function NormalizeHR(self)
             %SegmentSurface writes deformation fields (y_*), which are here used
-            %to normalize the native hr images
+            %to normalize the native hr images. Adds a prefix w- to
+            %resampled images. 
             matlabbatch{1}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.hr_path,'data.nii','mri/y_data.nii'));
             matlabbatch{1}.spm.spatial.normalise.write.subj.resample = {self.skullstrip};
             matlabbatch{1}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
                                                           78 76 85];
             matlabbatch{1}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
             matlabbatch{1}.spm.spatial.normalise.write.woptions.interp = 4;
-            matlabbatch{1}.spm.spatial.normalise.write.woptions.prefix = 'w';
+            matlabbatch{1}.spm.spatial.normalise.write.woptions.prefix = 'w_';
             %
             self.RunSPMJob(matlabbatch);
         end
         
     end
     methods %fmri path_tools which are related to the subject              
-        function out        = skullstrip(self)
-            out = sprintf('%s%s',self.hr_dir,'skullstrip.nii');
+        function out        = skullstrip(self,varargin)
+            %returns filename for the skull stripped hr. Use VARARGIN to
+            %add a prefix to the output, such as 'w' for example.
+            if nargin == 1
+                out = sprintf('%s%s',self.hr_dir,'ss_data.nii');
+            elseif nargin == 2
+                out = sprintf('%s%s_%s',self.hr_dir,varargin{1},'ss_data.nii');
+            end
         end
         function out        = spm_dir(self)
             %returns subject's path to spm folder for run RUN.
@@ -404,9 +416,10 @@ classdef Subject < Project
             end
         end
         function path2data  = path2data(self,run,varargin)
-            % s.path2data(53,4) will return the path to the subject's phase 4
-            % s.path2data(53,4,'eye') return the path to the eye data file at the
-            % 4th phase.
+            % s.path2data(4) will return the path to the subject's phase 4
+            % s.path2data(4,'eye') return the path to the eye data file at the
+            % 4th phase. VARARGIN{1} is a subfolder in the run folder e.g.
+            % eye, mrt etc. VARARGIN{2} is file extension changer.
             
             if nargin < 2
                 fprintf('you have to have at least one input for me...\n');

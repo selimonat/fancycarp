@@ -268,18 +268,37 @@ classdef Project < handle
             end            
         end                
     end
-    methods %methods that does something on all subjects
-        function GetGroupSkullstrip(self)
+    methods %methods that does something on all subjects one by one
+        function GroupAverageVolume(self,run,selector)
+            %Averages all IMAGES across all subjects. This can only be done
+            %on normalized images. The result will be saved to the
+            %project/midlevel/. The string SELECTOR is appended to the
+            %folder RUN.             
+            %
+            %For example to take avarage skullstripped image use: RUN = 0,
+            %SELECTOR = 'mrt/w_ss_data.nii' (which is the normalized skullstripped
+            %image).
+            
             %so far not functioanl
             files = [];
             for ns = find(cellfun(@(x) ~isempty(x),self.trio_sessions))
                 s     = Subject(ns);
-                files = [files ;s.skullstrip];
+                current = sprintf('%s/%s',s.path2data(run),selector);
+                if exist(current) ~= 0
+                    files = [files ; current];
+                else
+                    keyboard;%for sanity checks
+                end
             end
-            keyboard
-            V = spm_vol(files);
-%             VV = spm_read_vols(V);
+            v           = spm_vol(files);%volume handles
+            V           = mean(spm_read_vols(v),4);%data
+            target_path = regexprep(files(1,:),'sub[0-9][0-9][0-9]','midlevel');%target filename
+            dummy       = v(1);
+            dummy.fname = target_path;
+            mkdir(fileparts(target_path));
+            spm_write_vol(dummy,V);
         end
+        
     end
     methods %project specific methods
         function degree    = stimulus2degree(self,stim_id)
