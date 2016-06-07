@@ -241,7 +241,7 @@ classdef Subject < Project
                 matlabbatch{1}.spm.util.imcalc.options.dtype    = 4;
                 self.RunSPMJob(matlabbatch);
                 
-                self.NormalizeHR;
+                self.NormalizeVolume(self.skullstrip);
             else
                 fprintf('Need to run segment first...\n')
             end
@@ -319,17 +319,24 @@ classdef Subject < Project
             %
             self.RunSPMJob(matlabbatch);
         end
-        function NormalizeHR(self)
+        function NormalizeVolume(self,path2image)
             %SegmentSurface writes deformation fields (y_*), which are here used
             %to normalize the native hr images. Adds a prefix w- to
-            %resampled images. 
-            matlabbatch{1}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.hr_path,'data.nii','mri/y_data.nii'));
-            matlabbatch{1}.spm.spatial.normalise.write.subj.resample = {self.skullstrip};
-            matlabbatch{1}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
+            %resampled images. path2image is the image to be resampled.
+            %Example: 
+            %
+            %s.NormalizeVolume(s.beta_path(1,1))
+            %s.NormalizeVolume(s.skullstrip);
+            
+            for nf = 1:size(path2image,1)
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.hr_path,'data.nii','mri/y_data.nii'));
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
                                                           78 76 85];
-            matlabbatch{1}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
-            matlabbatch{1}.spm.spatial.normalise.write.woptions.interp = 4;
-            matlabbatch{1}.spm.spatial.normalise.write.woptions.prefix = 'w_';
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'w_';
+            end
             %
             self.RunSPMJob(matlabbatch);
         end
@@ -344,15 +351,24 @@ classdef Subject < Project
             elseif nargin == 2
                 out = sprintf('%s%s_%s',self.hr_dir,varargin{1},'ss_data.nii');
             end
+        end        
+        function out = spmmat_dir(self,nrun,model_num,varargin)
+            %Returns the path to SPM folder in a given NRUN responsible for
+            %the model MODEL_NUM. VARARGIN is used for the derivatives.
+            if nargin == 3
+                derivatives = [0 0];
+            else
+                derivatives = varargin{1};
+            end
+            out = sprintf('%s/spm/model_%02d_chrf_%d%d/',self.path2data(nrun),model_num,derivatives(1),derivatives(2));
         end
-        function out        = spm_dir(self)
-            %returns subject's path to spm folder for run RUN.
-            out = sprintf('%s/spm/',self.pathfinder(self.id,1));
-        end        
-        function out        = spm_path(self)
+        
+        function out        = spmmat_path(self,nrun,model_num,varargin)
             %returns the path to spm folder for run RUN.
-            out = sprintf('%smrt/spm/SPM.mat',self.pathfinder(self.id,1));
+            dummy = self.spmmat_dir(nrun,model_num,varargin{:});
+            out   = sprintf('%s/SPM.mat',dummy);
         end        
+        
         function out        = hr_dir(self)
             %the directory where hr is located
             out = sprintf('%smrt/',self.pathfinder(self.id,0));
@@ -387,7 +403,15 @@ classdef Subject < Project
                 fprintf('Need to give an input...\n')
                 return
             end
-        end                
+        end   
+        function out = beta_path(self,nrun,model_num,varargin)
+            %returns the path for beta images computed in NRUN for
+            %MODEL_NUM. Use VARARGIN to make             
+           
+            out = self.spmmat_dir(nrun,model_num,varargin{:});
+            out = spm_select('FPList',out,'^beta_*');
+        end
+        
         function [HRPath]   = GetDicomHRpath(self)
             % finds the dicom path to the latest HR measurement for this
             % subject.
@@ -686,7 +710,8 @@ classdef Subject < Project
             %run the model MODEL_NUM for data in NRUN. NRUN can be a vector
             %(not tested yet). VARARGIN specifies the derivatives for the
             %basis functions. DEFAULT is [0 0], no derivatives, VARARGIN
-            %overwrites the default value. 
+            %overwrites the default value. The generated beta images are
+            %automatically normalized.
             
             %overwrite the derivative defaults.
             if nargin == 3
@@ -696,8 +721,8 @@ classdef Subject < Project
             end
             
             %set spm dir: saves always to run1
-            spm_dir = sprintf('%s/model_%02d_chrf_%d%d/',self.spm_dir,model_num,derivatives(1),derivatives(2));
-            spm_path= sprintf('%s/model_%02d_chrf_%d%d/SPM.mat',self.spm_dir,model_num,derivatives(1),derivatives(2));            
+            spm_dir = self.spmmat_dir(nrun,model_num,varargin{:});
+            spm_path= self.spmmat_path(nrun,model_num,varargin{:});
             if ~exist(self.spm_path);mkdir(spm_dir);end
             
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
@@ -737,6 +762,11 @@ classdef Subject < Project
             matlabbatch{2}.spm.stats.fmri_est.spmmat            = {spm_path};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
             spm_jobman('run', matlabbatch);
+            %
+            %normalize the beta images right away
+            beta_images = self.beta_path(nrun,model_num,varargin{:});
+            self.NormalizeVolume(beta_images);
+            
         end
      end
 end
