@@ -37,6 +37,7 @@ classdef Project < handle
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};
         tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.               
         TR                    = 0.99;                
+        HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
         smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method
     end

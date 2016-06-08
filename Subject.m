@@ -201,6 +201,21 @@ classdef Subject < Project
                 fprintf('File:\n %s doesn''t exist.\n Most likely realignment is not yet done.\n');
             end            
         end
+        function out  = path_model(self,run,model_num)
+            %returns the path to a model specified by MODEL_NUM in run RUN.
+            out = sprintf('%sdesign/model%02d/data.mat',self.path2data(run),model_num);
+        end
+        function cond = GetModelOnsets(self,nrun,model_num)
+            %returns stimulus onsets for NRUN defined by model specified by
+            %MODEL_NUM
+            cond = [];
+            load(self.path_model(nrun,model_num));
+        end
+        function N = GetNuissanceParameters(self,nrun)
+            %Computes nuissances parameters from MotionParameters.
+            N = self.GetMotionParameters(nrun);
+            N = zscore([N [zeros(1,size(N,2));diff(N)] N.^2 [zeros(1,size(N,2));diff(N)].^2 ]);
+        end
         function out = GetTotalVolume(self,run)
             %Returns the number of volumes present in a 4D image
             out = size(spm_select('expand',self.epi_path(run)),1);            
@@ -372,11 +387,12 @@ classdef Subject < Project
             movefile(target_file,self.path_native_atlas);
         end
         
-        function DesignMatrix(self,nrun,model_num)
+        function [X,N,K]=spm_DesignMatrix(self,nrun,model_num)
+            %will return the same design matrix used by spm in an efficient
+            %way.
 
-            keyboard
-            cond = [];
-            load(sprintf('%sdesign/model%02d/data.mat',self.path2data(nrun),model_num))
+            %% Design matrix X
+            cond = self.GetModelOnsets(nrun,model_num);            
             fMRI_T                = 16;
             fMRI_T0               = 1;
             xBF.T                 = fMRI_T;
@@ -386,7 +402,7 @@ classdef Subject < Project
             xBF.Volterra          = 1;
             xBF.name              = 'hrf';
             xBF                   = spm_get_bf(xBF);            
-            %%
+            %
             for i = 1:length(cond);%one regressor for each condition
                 Sess.U(i).dt        = xBF.dt;%- time bin (seconds)
                 
@@ -405,13 +421,30 @@ classdef Subject < Project
             SPM.xBF                 = xBF;
             SPM.nscan               = k;
             SPM.Sess                = Sess;
-            SPM.Sess.U              = spm_get_ons(SPM,1);
-            
-            %%
+            SPM.Sess.U              = spm_get_ons(SPM,1);            
+            %
             % Convolve stimulus functions with basis functions
             [X,Xn,Fc]               = spm_Volterra(SPM.Sess.U,SPM.xBF.bf,SPM.xBF.Volterra);
             % Resample regressors at acquisition times (32 bin offset)
             X                       = X((0:(k - 1))*fMRI_T + fMRI_T0 + 32,:);
+            %% Nuissance Parameters
+            N = self.GetNuissanceParameters(nrun);
+            %% Get high-pass filter
+            K  = struct('HParam', self.HParam , 'row',    1:size(X,1) , 'RT',     self.TR );            
+        end
+        
+        function spm_GetBetas(self,nrun,model_num)
+            %will compute the beta weights manually without calling SPM
+            
+            [X N K ] = self.spm_DesignMatrix(nrun,model_num);
+            Y        = spm_filter(K,Y);%high-pass filter
+            %            
+            DM        = [X N ones(size(X,1),1)];%append all togther
+            DM        = spm_filter(K,DM);%filter also the design matrix
+            DM        = spm_sp('Set',DM);
+            DM        = spm_sp('x-',DM);% projector;
+            beta      = DM*Y;
+
         end
         
     end
@@ -720,7 +753,7 @@ classdef Subject < Project
         function CreateModels(self,run)
             %%%%%%%%%%%%%%%%%%%%%%
             model_num  = 1;
-            model_path = sprintf('%sdesign/model%02d/data.mat',self.path2data(run),model_num);
+            model_path = self.path_model(run,model_num);
             if ~exist(fileparts(model_path));mkdir(fileparts(model_path));end
             [scan,id]  = self.StimTime2ScanUnit(run);
             counter    = 0;
@@ -756,12 +789,11 @@ classdef Subject < Project
                 %load files using ...,1, ....,2 format
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));
                 %load the onsets
-                dummy                                                   = load(sprintf('%sdesign/model%02d.mat',self.path2data(session),model_num));
+                dummy                                                   = GetModelOnsets(nrun,model_num);
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
                 %load nuissance parameters
-                nuis                                                    = self.MotionParameters(nrun);
-                nuis                                                    = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
+                N                                                       = self.GetNuissance(nrun);                
                 for nNuis = 1:size(nuis,2)
                     matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
                     matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).name  = mat2str(nNuis);
