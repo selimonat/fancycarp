@@ -31,14 +31,16 @@ classdef Project < handle
         dicom2run             = repmat({[1 1 1]},1,length(Project.dicom_serie_selector));
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};
         palamedes_path        = '/home/onat/Documents/Code/Matlab/palamedes1_8_0/Palamedes/';
-        spm_path              = '/common/apps/spm12-6685/';
+        spm_path              = '/common/apps/spm12-6685/';        
         tpm_dir               = sprintf('%stpm/',Project.spm_path); %path to the TPM images, needed by segment.       
+        second_level_path     = sprintf('%sspm/',Project.path_project);
         TR                    = 0.99;        
         path_stimuli          = '';%optional in case you have methods that needs stimuli...        
-        surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)        
+        surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
     end
     properties (Constant,Hidden) %project specific properties        
-        current_time
+        current_time          = datestr(now,'hh:mm:ss');
+        subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
         condition_labels      = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
         colors                = [ [0 0 0]; 0.0784 0.3284 1.0000;0.5784    0.0784    1.0000;1.0000    0.0784    0.8284;1.0000    0.0784    0.0784;1.0000    0.8284    0.0784;0.5784    1.0000    0.0784;0.0784    1.0000    0.3284;0.0784    1.0000    1.0000;0.0784    0.0784    0.0784;0.5784    0.5784    0.5784  ;[.8 0 0];[.8 0 0]];
         line                  = {'-' '-' '-' '-' '-' '-' '-' '-' '-' '.' '.'};
@@ -263,6 +265,27 @@ classdef Project < handle
             end            
         end                
     end
+    methods %second-level analysis
+        function SecondLevel_ANOVA(self,run,model)
+            
+            matlabbatch{1}.spm.stats.factorial_design.dir = self.second_level_path;
+            for ns = self.subject_indices
+                matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(ns).scans = '<UNDEFINED>';                
+            end                        
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.dept         = 0;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.variance     = 1;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca        = 0;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova       = 0;
+            matlabbatch{1}.spm.stats.factorial_design.cov                    = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
+            matlabbatch{1}.spm.stats.factorial_design.multi_cov              = struct('files', {}, 'iCFI', {}, 'iCC', {});
+            matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none     = 1;
+            matlabbatch{1}.spm.stats.factorial_design.masking.im             = 1;
+            matlabbatch{1}.spm.stats.factorial_design.masking.em             = {''};
+            matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit         = 1;
+            matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
+            matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm        = 1;
+        end
+    end
     methods %methods that does something on all subjects one by one
         function GroupAverageVolume(self,run,selector)
             %Averages all IMAGES across all subjects. This can only be done
@@ -276,7 +299,7 @@ classdef Project < handle
             
             %so far not functioanl
             files = [];
-            for ns = find(cellfun(@(x) ~isempty(x),self.trio_sessions))
+            for ns = self.subject_indices
                 s     = Subject(ns);
                 current = sprintf('%s/%s',s.path2data(run),selector);
                 if exist(current) ~= 0

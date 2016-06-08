@@ -21,6 +21,7 @@ classdef Subject < Project
         
         pmf               = []; %raw results of the pmf
         pmf_variablenames = {'alpha_chain01','beta_chain01','gamma_chain01','lapse_chain01','alpha_chain02','beta_chain02','gamma_chain02','lapse_chain02'}
+        derivatives       = [0 0];%specifies expansion degree of the cHRF when running models.
     end
     properties (SetAccess = private)
         id
@@ -352,20 +353,15 @@ classdef Subject < Project
                 out = sprintf('%s%s_%s',self.hr_dir,varargin{1},'ss_data.nii');
             end
         end        
-        function out = spmmat_dir(self,nrun,model_num,varargin)
+        function out = spmmat_dir(self,nrun,model_num)
             %Returns the path to SPM folder in a given NRUN responsible for
-            %the model MODEL_NUM. VARARGIN is used for the derivatives.
-            if nargin == 3
-                derivatives = [0 0];
-            else
-                derivatives = varargin{1};
-            end
-            out = sprintf('%s/spm/model_%02d_chrf_%d%d/',self.path2data(nrun),model_num,derivatives(1),derivatives(2));
+            %the model MODEL_NUM. VARARGIN is used for the derivatives.            
+            out = sprintf('%s/spm/model_%02d_chrf_%d%d/',self.path2data(nrun),model_num,self.derivatives(1),self.derivatives(2));
         end
         
-        function out        = spmmat_path(self,nrun,model_num,varargin)
+        function out        = spmmat_path(self,nrun,model_num)
             %returns the path to spm folder for run RUN.
-            dummy = self.spmmat_dir(nrun,model_num,varargin{:});
+            dummy = self.spmmat_dir(nrun,model_num,self.derivatives);
             out   = sprintf('%s/SPM.mat',dummy);
         end        
         
@@ -406,10 +402,15 @@ classdef Subject < Project
         end   
         function out = beta_path(self,nrun,model_num,varargin)
             %returns the path for beta images computed in NRUN for
-            %MODEL_NUM. Use VARARGIN to make             
+            %MODEL_NUM. Use VARARGIN to select a subset by indexing.
            
-            out = self.spmmat_dir(nrun,model_num,varargin{:});
+            out = self.spmmat_dir(nrun,model_num);
             out = spm_select('FPList',out,'^beta_*');
+            %select if VARARGIN provided
+            if nargin > 3
+                selector        = varargin{1};
+                out             = out(selector,:);
+            end
         end
         
         function [HRPath]   = GetDicomHRpath(self)
@@ -706,23 +707,14 @@ classdef Subject < Project
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
             spm_jobman('run', matlabbatch);
         end
-        function FitHRF(self,nrun,model_num,varargin)
+        function FitHRF(self,nrun,model_num)
             %run the model MODEL_NUM for data in NRUN. NRUN can be a vector
-            %(not tested yet). VARARGIN specifies the derivatives for the
-            %basis functions. DEFAULT is [0 0], no derivatives, VARARGIN
-            %overwrites the default value. The generated beta images are
-            %automatically normalized.
-            
-            %overwrite the derivative defaults.
-            if nargin == 3
-                derivatives = [0 0];
-            else
-                derivatives = varargin{1};
-            end
+            %(not tested yet).
+                        
             
             %set spm dir: saves always to run1
-            spm_dir = self.spmmat_dir(nrun,model_num,varargin{:});
-            spm_path= self.spmmat_path(nrun,model_num,varargin{:});
+            spm_dir = self.spmmat_dir(nrun,model_num);
+            spm_path= self.spmmat_path(nrun,model_num);
             if ~exist(self.spm_path);mkdir(spm_dir);end
             
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
@@ -752,7 +744,7 @@ classdef Subject < Project
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = 128;
             end
             matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
-            matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs                  = derivatives;%we have [0 0], [ 1 0] or [ 1 1] for 1, 2, or 3 regressors.
+            matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs                  = self.derivatives;%we have [0 0], [ 1 0] or [ 1 1] for 1, 2, or 3 regressors.
             matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
@@ -764,9 +756,8 @@ classdef Subject < Project
             spm_jobman('run', matlabbatch);
             %
             %normalize the beta images right away
-            beta_images = self.beta_path(nrun,model_num,varargin{:});
-            self.NormalizeVolume(beta_images);
-            
+            beta_images = self.beta_path(nrun,model_num);
+            self.NormalizeVolume(beta_images);            
         end
      end
 end
