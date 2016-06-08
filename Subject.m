@@ -242,7 +242,7 @@ classdef Subject < Project
                 matlabbatch{1}.spm.util.imcalc.options.dtype    = 4;
                 self.RunSPMJob(matlabbatch);
                 
-                self.NormalizeVolume(self.skullstrip);
+                self.VolumeNormalize(self.skullstrip);
             else
                 fprintf('Need to run segment first...\n')
             end
@@ -320,14 +320,14 @@ classdef Subject < Project
             %
             self.RunSPMJob(matlabbatch);
         end
-        function NormalizeVolume(self,path2image)
+        function VolumeNormalize(self,path2image)
             %SegmentSurface writes deformation fields (y_*), which are here used
             %to normalize the native hr images. Adds a prefix w- to
             %resampled images. path2image is the image to be resampled.
             %Example: 
             %
-            %s.NormalizeVolume(s.beta_path(1,1))
-            %s.NormalizeVolume(s.skullstrip);
+            %s.VolumeNormalize(s.beta_path(1,1))
+            %s.VolumeNormalize(s.skullstrip);
             
             for nf = 1:size(path2image,1)
                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.hr_path,'data.nii','mri/y_data.nii'));
@@ -400,17 +400,19 @@ classdef Subject < Project
                 return
             end
         end   
-        function out = beta_path(self,nrun,model_num,varargin)
+        function out = beta_path(self,nrun,model_num,prefix,varargin)
             %returns the path for beta images computed in NRUN for
             %MODEL_NUM. Use VARARGIN to select a subset by indexing.
+            %Actually spm_select is not even necessary here.
            
             out = self.spmmat_dir(nrun,model_num);
-            out = spm_select('FPList',out,'^w_beta_*');
+            out = spm_select('FPList',out,sprintf('^%sbeta_*',prefix'));
             if isempty(out)
+                fprintf('No beta images found, probably wrong prefix is entered...\n');
                 keyboard%sanity check
             end
             %select if VARARGIN provided
-            if nargin > 3
+            if nargin > 4
                 selector        = varargin{1};
                 out             = out(selector,:);
             end
@@ -759,8 +761,9 @@ classdef Subject < Project
             spm_jobman('run', matlabbatch);
             %
             %normalize the beta images right away
-            beta_images = self.beta_path(nrun,model_num);
-            self.NormalizeVolume(beta_images);            
+            beta_images = self.beta_path(nrun,model_num,'');%'' => with no prefix
+            self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
+            self.VolumeSmooth(self,beta_images);%('s_' will be added)
         end
      end
 end

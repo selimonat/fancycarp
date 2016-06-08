@@ -37,6 +37,7 @@ classdef Project < handle
         TR                    = 0.99;        
         path_stimuli          = '';%optional in case you have methods that needs stimuli...        
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
+        smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method
     end
     properties (Constant,Hidden) %project specific properties        
         current_time          = datestr(now,'hh:mm:ss');
@@ -273,7 +274,7 @@ classdef Project < handle
             beta_files = [];
             for ns = self.subject_indices                
                 s        = Subject(ns);
-                beta_files = cat(3,beta_files,s.beta_path(run,model)');
+                beta_files = cat(3,beta_files,s.beta_path(run,model,'s_w_')');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
             end
             %            
             c = 0;
@@ -300,14 +301,14 @@ classdef Project < handle
             matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
             matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm        = 1;
             %
-            matlabbatch{2}.spm.stats.fmri_est.spmmat                 = {[spm_dir '/SPM.mat']};
-            matlabbatch{2}.spm.stats.fmri_est.method.Classical       =  1;
+            matlabbatch{2}.spm.stats.fmri_est.spmmat                         = {[spm_dir '/SPM.mat']};
+            matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
             %
             spm_jobman('run', matlabbatch);
         end
     end
     methods %methods that does something on all subjects one by one
-        function GroupAverageVolume(self,run,selector)
+        function VolumeGroupAverage(self,run,selector)
             %Averages all IMAGES across all subjects. This can only be done
             %on normalized images. The result will be saved to the
             %project/midlevel/. The string SELECTOR is appended to the
@@ -335,7 +336,17 @@ classdef Project < handle
             dummy.fname = target_path;
             mkdir(fileparts(target_path));
             spm_write_vol(dummy,V);
-        end        
+        end   
+        function VolumeSmooth(self,files)
+            %will smooth the files by the factor defined as Project
+            %property.
+            matlabbatch{1}.spm.spatial.smooth.data   = cellstr(files);
+            matlabbatch{1}.spm.spatial.smooth.fwhm   = repmat(self.smoothing_factor,[1 3]);
+            matlabbatch{1}.spm.spatial.smooth.dtype  = 0;
+            matlabbatch{1}.spm.spatial.smooth.im     = 0;
+            matlabbatch{1}.spm.spatial.smooth.prefix = 's_';            
+            spm_jobman('run', matlabbatch);
+        end
     end
     methods %project specific methods
         function degree    = stimulus2degree(self,stim_id)
