@@ -21,8 +21,7 @@ classdef Subject < Project
         
         pmf               = []; %raw results of the pmf
         pmf_variablenames = {'alpha_chain01','beta_chain01','gamma_chain01','lapse_chain01','alpha_chain02','beta_chain02','gamma_chain02','lapse_chain02'}
-        derivatives       = [0 0];%specifies expansion degree of the cHRF when running models.
-        path_native_atlas 
+        derivatives       = [0 0];%specifies expansion degree of the cHRF when running models.         
     end
     properties (SetAccess = private)
         id
@@ -200,7 +199,7 @@ classdef Subject < Project
             else
                 fprintf('File:\n %s doesn''t exist.\n Most likely realignment is not yet done.\n');
             end            
-        end
+        end        
         function out  = path_model(self,run,model_num)
             %returns the path to a model specified by MODEL_NUM in run RUN.
             out = sprintf('%sdesign/model%02d/data.mat',self.path2data(run),model_num);
@@ -225,9 +224,13 @@ classdef Subject < Project
             L   = self.get_log(run);
             out = sum(L(:,2) == 0);
         end
-        function out = get.path_native_atlas(self)
-            %path to subjects native atlas
+        function out = path_native_atlas(self,varargin)
+            %path to subjects native atlas, use VARARGIN to slice out a
+            %given 3D volume.
             out = sprintf('%satlas/data.nii',self.path2data(0));
+            if nargin > 1
+                out = sprintf('%s,%d',out,varargin{1});
+            end
         end
     end
     
@@ -254,7 +257,7 @@ classdef Subject < Project
             c2         = regexprep(self.hr_path,'mrt/data','mrt/mri/p2data');
             if exist(c1) && exist(c2)
                 matlabbatch{1}.spm.util.imcalc.input            = cellstr(strvcat(self.hr_path,c1,c2));
-                matlabbatch{1}.spm.util.imcalc.output           = self.skullstrip;
+                matlabbatch{1}.spm.util.imcalc.output           = self.path_skullstrip;
                 matlabbatch{1}.spm.util.imcalc.outdir           = {self.hr_dir};
                 matlabbatch{1}.spm.util.imcalc.expression       = 'i1.*((i2+i3)>0.2)';
                 matlabbatch{1}.spm.util.imcalc.options.dmtx     = 0;
@@ -263,7 +266,7 @@ classdef Subject < Project
                 matlabbatch{1}.spm.util.imcalc.options.dtype    = 4;
                 self.RunSPMJob(matlabbatch);
                 
-                self.VolumeNormalize(self.skullstrip);
+                self.VolumeNormalize(self.path_skullstrip);
             else
                 fprintf('Need to run segment first...\n')
             end
@@ -298,7 +301,7 @@ classdef Subject < Project
                 matlabbatch{1}.spm.spatial.realign.estwrite.roptions.prefix = 'r';
                 
                 %%coregister EPIs to skullstrip (only the affine matrix is modified)
-                matlabbatch{2}.spm.spatial.coreg.estimate.ref    = cellstr(self.skullstrip);
+                matlabbatch{2}.spm.spatial.coreg.estimate.ref    = cellstr(self.path_skullstrip);
                 matlabbatch{2}.spm.spatial.coreg.estimate.source = cellstr(mean_epi);
                 matlabbatch{2}.spm.spatial.coreg.estimate.other  = vertcat(epi_run{:});
                 matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.cost_fun = 'nmi';
@@ -348,7 +351,7 @@ classdef Subject < Project
             %Example: 
             %
             %s.VolumeNormalize(s.beta_path(1,1))
-            %s.VolumeNormalize(s.skullstrip);
+            %s.VolumeNormalize(s.path_skullstrip);
             
             for nf = 1:size(path2image,1)
                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.hr_path,'data.nii','mri/y_data.nii'));
@@ -372,7 +375,7 @@ classdef Subject < Project
             %copy the atlas to subject's folder.
             copyfile(fileparts(self.path_atlas),[self.path2data(0) 'atlas/']);
             %
-            filename = sprintf('%s,120',self.path_native_atlas);
+            filename = self.path_native_atlas(120);%for test purposes and to gain speed I focus on amygdala right now.
             nf = 1;
             matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.hr_path,'data.nii','mri/iy_data.nii'));%iy_ not y_!
             matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {filename};
@@ -392,7 +395,7 @@ classdef Subject < Project
             %way.
 
             %% Design matrix X
-            cond = self.GetModelOnsets(nrun,model_num);            
+            cond                  = self.GetModelOnsets(nrun,model_num);            
             fMRI_T                = 16;
             fMRI_T0               = 1;
             xBF.T                 = fMRI_T;
@@ -404,11 +407,9 @@ classdef Subject < Project
             xBF                   = spm_get_bf(xBF);            
             %
             for i = 1:length(cond);%one regressor for each condition
-                Sess.U(i).dt        = xBF.dt;%- time bin (seconds)
-                
+                Sess.U(i).dt        = xBF.dt;%- time bin (seconds)                
                 Sess.U(i).ons       = cond(i).onset;%- onsets    (in SPM.xBF.UNITS)
-                Sess.U(i).name      = {sprintf('%02d',i)};%- cell of names for each input or cause
-                
+                Sess.U(i).name      = {sprintf('%02d',i)};%- cell of names for each input or cause                
                 %no parametric modulation here
                 Sess.U(i).dur    =  repmat(0,length(Sess.U(i).ons),1);%- durations (in SPM.xBF.UNITS)
                 Sess.U(i).P.name =  'none';
@@ -428,28 +429,45 @@ classdef Subject < Project
             % Resample regressors at acquisition times (32 bin offset)
             X                       = X((0:(k - 1))*fMRI_T + fMRI_T0 + 32,:);
             %% Nuissance Parameters
-            N = self.GetNuissanceParameters(nrun);
+            N                       = self.GetNuissanceParameters(nrun);
             %% Get high-pass filter
-            K  = struct('HParam', self.HParam , 'row',    1:size(X,1) , 'RT',     self.TR );            
+            K                       = struct('HParam', self.HParam , 'row',    1:size(X,1) , 'RT',     self.TR );            
         end
         
         function spm_GetBetas(self,nrun,model_num)
             %will compute the beta weights manually without calling SPM
             
-            [X N K ] = self.spm_DesignMatrix(nrun,model_num);
-            Y        = spm_filter(K,Y);%high-pass filter
+            [X N K ]  = self.spm_DesignMatrix(nrun,model_num);
+            Y         = spm_filter(K,Y);%high-pass filter
             %            
             DM        = [X N ones(size(X,1),1)];%append all togther
             DM        = spm_filter(K,DM);%filter also the design matrix
             DM        = spm_sp('Set',DM);
             DM        = spm_sp('x-',DM);% projector;
             beta      = DM*Y;
-
+        end
+        function D = TimeSeries(self,nrun,mask_id)
+            %will read the time series from NRUN. MASK can be used to mask
+            %the volume, otherwise all data will be returned (dangerous).
+            keyboard
+            vh          = spm_vol(self.epi_path(nrun,'r'));            
+            mask_handle = spm_vol(self.path_native_atlas(mask_id))
+            mask_ind    = spm_read_vols(mask_handle) > 50;
+            
+            [X Y Z]     = ind2sub(mask_handle.dim,find(mask_ind));
+            XYZ         = [X Y Z ones(sum(mask_ind(:)),1)]';%this is in hr space.
+            mm = mask_handle.mat*XYZ;
+            if spm_check_orientations(vh)
+                vox = vh(1).mat\mm;
+            else
+                 keyboard;%sanity check;
+            end
+            D           = spm_get_data(vh,vox);
         end
         
     end
     methods %fmri path_tools which are related to the subject              
-        function out        = skullstrip(self,varargin)
+        function out        = path_skullstrip(self,varargin)
             %returns filename for the skull stripped hr. Use VARARGIN to
             %add a prefix to the output, such as 'w' for example.
             if nargin == 1
