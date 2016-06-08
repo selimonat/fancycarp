@@ -35,8 +35,7 @@ classdef Project < handle
         tpm_dir               = sprintf('%stpm/',Project.spm_path); %path to the TPM images, needed by segment.       
         TR                    = 0.99;        
         path_stimuli          = '';%optional in case you have methods that needs stimuli...        
-        surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)
-        path_group_skullstrip 
+        surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)        
     end
     properties (Constant,Hidden) %project specific properties        
         current_time
@@ -238,11 +237,7 @@ classdef Project < handle
         function t          = get.current_time(self)
             t = datestr(now,'hh:mm:ss');
         end
-        
-        function out = get.path_group_skullstrip(self)
-            out = sprintf('%s/midlevel/skullstrip.nii',self.path_project);
-        end
-        
+
     end
     methods(Static)
         
@@ -297,8 +292,7 @@ classdef Project < handle
             dummy.fname = target_path;
             mkdir(fileparts(target_path));
             spm_write_vol(dummy,V);
-        end
-        
+        end        
     end
     methods %project specific methods
         function degree    = stimulus2degree(self,stim_id)
