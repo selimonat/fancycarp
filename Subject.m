@@ -405,7 +405,10 @@ classdef Subject < Project
             %MODEL_NUM. Use VARARGIN to select a subset by indexing.
            
             out = self.spmmat_dir(nrun,model_num);
-            out = spm_select('FPList',out,'^beta_*');
+            out = spm_select('FPList',out,'^w_beta_*');
+            if isempty(out)
+                keyboard%sanity check
+            end
             %select if VARARGIN provided
             if nargin > 3
                 selector        = varargin{1};
@@ -713,8 +716,8 @@ classdef Subject < Project
                         
             
             %set spm dir: saves always to run1
-            spm_dir = self.spmmat_dir(nrun,model_num);
-            spm_path= self.spmmat_path(nrun,model_num);
+            spm_dir  = self.spmmat_dir(nrun,model_num);
+            spm_path = self.spmmat_path(nrun,model_num);
             if ~exist(self.spm_path);mkdir(spm_dir);end
             
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
@@ -725,7 +728,7 @@ classdef Subject < Project
             
             for session = nrun
                 %load files using ...,1, ....,2 format
-                out = self.epi_path(session,'r');
+                out                                                     = self.epi_path(session,'r');
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(spm_select('expand',out));
                 %load the onsets                
                 dummy                                                   = load(sprintf('%sdesign/model%02d/data.mat',self.path2data(session),model_num));

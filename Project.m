@@ -266,12 +266,27 @@ classdef Project < handle
         end                
     end
     methods %second-level analysis
-        function SecondLevel_ANOVA(self,run,model)
+        function SecondLevel_ANOVA(self,run,model,beta_image_index)
+            %
             
-            matlabbatch{1}.spm.stats.factorial_design.dir = self.second_level_path;
-            for ns = self.subject_indices
-                matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(ns).scans = '<UNDEFINED>';                
-            end                        
+            %store all the beta_images in a 3D array
+            beta_files = [];
+            for ns = self.subject_indices                
+                s        = Subject(ns);
+                beta_files = cat(3,beta_files,s.beta_path(run,model)');
+            end
+            %            
+            c = 0;
+            for ind = beta_image_index;    
+                %take single beta_images across all subjects and store them
+                %in a cell
+                c = c +1;                
+                files                                                              = squeeze(beta_files(:,ind,:))';
+                matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files);
+            end
+            %
+            spm_dir                                                          = regexprep(s.spmmat_dir(1,1),'sub...','second_level');%convert to second-level path
+            matlabbatch{1}.spm.stats.factorial_design.dir                    = cellstr(spm_dir);
             matlabbatch{1}.spm.stats.factorial_design.des.anova.dept         = 0;
             matlabbatch{1}.spm.stats.factorial_design.des.anova.variance     = 1;
             matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca        = 0;
@@ -284,6 +299,11 @@ classdef Project < handle
             matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit         = 1;
             matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
             matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm        = 1;
+            %
+            matlabbatch{2}.spm.stats.fmri_est.spmmat                 = {[spm_dir '/SPM.mat']};
+            matlabbatch{2}.spm.stats.fmri_est.method.Classical       =  1;
+            %
+            spm_jobman('run', matlabbatch);
         end
     end
     methods %methods that does something on all subjects one by one
