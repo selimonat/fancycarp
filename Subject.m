@@ -713,8 +713,7 @@ classdef Subject < Project
             spm_jobman('run', matlabbatch);
         end
         function FitHRF(self,nrun,model_num)
-            %run the model MODEL_NUM for data in NRUN. NRUN can be a vector
-            %(not tested yet).
+            %run the model MODEL_NUM for data in NRUN. NRUN can be a vector.            
                         
             
             %set spm dir: saves always to run1
