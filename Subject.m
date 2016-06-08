@@ -22,6 +22,7 @@ classdef Subject < Project
         pmf               = []; %raw results of the pmf
         pmf_variablenames = {'alpha_chain01','beta_chain01','gamma_chain01','lapse_chain01','alpha_chain02','beta_chain02','gamma_chain02','lapse_chain02'}
         derivatives       = [0 0];%specifies expansion degree of the cHRF when running models.
+        path_native_atlas 
     end
     properties (SetAccess = private)
         id
@@ -209,6 +210,10 @@ classdef Subject < Project
             L   = self.get_log(run);
             out = sum(L(:,2) == 0);
         end
+        function out = get.path_native_atlas(self)
+            %path to subjects native atlas
+            out = sprintf('%satlas/data.nii',self.path2data(0));
+        end
     end
     
     methods %(mri, preprocessing))      
@@ -218,8 +223,9 @@ classdef Subject < Project
             %preprocessing. RUNS specifies the functional runs, make it a
             %vector if needed.
             self.SegmentSurface;
-            self.SkullStrip;            
-            self.Re_Coreg(runs);
+            self.SkullStrip;%removes neural voxels
+            self.MNI2Native;%brings the atlas to native space
+            self.Re_Coreg(runs);            
         end
            
         
@@ -340,6 +346,30 @@ classdef Subject < Project
             end
             %
             self.RunSPMJob(matlabbatch);
+        end
+        
+        function MNI2Native(self)
+            %brings the atlas to MNI space and saves it in run000/atlas.
+            %Same as VolumeNormalize but uses the inverse deformation
+            %fields but same batch. Currently functions only with the 120th
+            %volume (which is right amygdala).
+            
+            %copy the atlas to subject's folder.
+            copyfile(fileparts(self.path_atlas),[self.path2data(0) 'atlas/']);
+            %
+            filename = sprintf('%s,120',self.path_native_atlas);
+            nf = 1;
+            matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.hr_path,'data.nii','mri/iy_data.nii'));%iy_ not y_!
+            matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {filename};
+            matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
+                78 76 85];
+            matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
+            matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
+            matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'w';%inverse warped                        
+            %
+            self.RunSPMJob(matlabbatch);
+            target_file = regexprep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
+            movefile(target_file,self.path_native_atlas);
         end
         
     end
@@ -478,7 +508,7 @@ classdef Subject < Project
 %                 fprintf('PMF Fit found and loaded successfully for subject %i...\n',self.id);
                 
             elseif ~isempty(varargin) || ~exist(self.path2data(2,'pmf'))
-                addpath(self.palamedes_path);
+                addpath(self.path_palamedes);
                 %compute and save it.
                 fprintf('Fitting PMF...\n')                                
                 % define a search grid
@@ -573,7 +603,7 @@ classdef Subject < Project
         function plot_pmf(self)
             
             try
-                addpath(self.palamedes_path);
+                addpath(self.path_palamedes);
             catch
                 fprintf('Add Palamedes to your path.\n')
                 return
@@ -670,9 +700,9 @@ classdef Subject < Project
             
             
             spm_dir = sprintf('%s/model_fir_%02d/',self.spm_dir,model_num);
-            spm_path= sprintf('%s/model_fir_%02d/SPM.mat',self.spm_dir,model_num);
+            path_spm= sprintf('%s/model_fir_%02d/SPM.mat',self.spm_dir,model_num);
             
-            if ~exist(self.spm_path);mkdir(spm_dir);end
+            if ~exist(self.path_spm);mkdir(spm_dir);end
             
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
             matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
@@ -708,7 +738,7 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
             %estimation
-            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {spm_path};
+            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spm};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
             spm_jobman('run', matlabbatch);
         end
@@ -718,8 +748,8 @@ classdef Subject < Project
             
             %set spm dir: saves always to run1
             spm_dir  = self.spmmat_dir(nrun,model_num);
-            spm_path = self.spmmat_path(nrun,model_num);
-            if ~exist(self.spm_path);mkdir(spm_dir);end
+            path_spm = self.spmmat_path(nrun,model_num);
+            if ~exist(self.path_spm);mkdir(spm_dir);end
             
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
             matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
@@ -755,7 +785,7 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
             %estimation
-            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {spm_path};
+            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spm};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
             spm_jobman('run', matlabbatch);
             %
