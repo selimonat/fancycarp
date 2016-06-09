@@ -40,6 +40,7 @@ classdef Project < handle
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
         smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method
+        atlas2mask_threshold  = 50;
     end
     properties (Constant,Hidden) %project specific properties        
         current_time          = datestr(now,'hh:mm:ss');

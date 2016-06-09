@@ -99,7 +99,7 @@ classdef Subject < Project
                 end
             end
         end 
-        function dump_functional(self)
+        function dump_epi(self)
             %Will dump all DICOMS based on Sessions entered in the
             %Project object. trio_folders are folders in the dicom server,
             %trio2run dictates in which run these folders should be dumped
@@ -229,6 +229,18 @@ classdef Subject < Project
             if nargin > 1
                 out = sprintf('%s,%d',out,varargin{1});
             end
+        end
+        function XYZ = native_atlas2mask(self,mask_id)
+            %Will return XYZ coordinates from ROI specified by MASK_INDEX
+            %thresholded by the default value. XYZ values are in world 
+            %space, so they will need to be brought to the voxel space of
+            %the EPIs.            
+            mask_handle = spm_vol(self.path_native_atlas(mask_id));%read the mask
+            mask_ind    = spm_read_vols(mask_handle) > self.atlas2mask_threshold;%threshold it            
+            [X Y Z]     = ind2sub(mask_handle.dim,find(mask_ind));%get voxel indices
+            XYZ         = [X Y Z ones(sum(mask_ind(:)),1)]';%this is in hr's voxels space.
+            mm          = mask_handle.mat*XYZ;%this is world space.            
+            mm          = unique(mm','rows')';%remove repetititons.
         end
     end
     
@@ -390,7 +402,7 @@ classdef Subject < Project
         
         function [X,N,K]=spm_DesignMatrix(self,nrun,model_num)
             %will return the same design matrix used by spm in an efficient
-            %way.
+            %way. see also: GetTimeSeries, spm_GetBetas
 
             %% Design matrix X
             cond                  = self.GetModelOnsets(nrun,model_num);            
@@ -429,38 +441,46 @@ classdef Subject < Project
             %% Nuissance Parameters
             N                       = self.GetNuissanceParameters(nrun);
             %% Get high-pass filter
-            K                       = struct('HParam', self.HParam , 'row',    1:size(X,1) , 'RT',     self.TR );            
+            %this is how it should be, but due to fearamy specificities, we
+            %have to make work around. Note that this cannot be merge to
+            %/mrt/xx or
+            %K                       = struct('HParam', self.HParam , 'row',    1:size(X,1) , 'RT',     self.TR );%
+            run_borders              = [[0 910 910+895]+1;[910 910+895  self.total_volumes(nrun)]];
+            c = 0;
+            for b = run_borders
+                c    = c + 1;
+                K(c) = struct('HParam', self.HParam , 'row',    b(1):b(2) , 'RT',     self.TR );
+            end
         end
         
-        function spm_GetBetas(self,nrun,model_num)
-            %will compute the beta weights manually without calling SPM
-            
-            [X N K ]  = self.spm_DesignMatrix(nrun,model_num);
-            Y         = spm_filter(K,Y);%high-pass filter
+        function spm_GetBetas(self,nrun,model_num,mask_id)
+            %will compute beta weights manually without calling SPM.
+            keyboard
+            [X N K ]  = self.spm_DesignMatrix(nrun,model_num);%returns the Design Matrix, Nuissiance Matrix, and High-pass Filtering Matrix
+            Y         = self.TimeSeries(nrun,mask_id);
+            Y         = spm_filter(K,Y);%high-pass filtering.
             %            
-            DM        = [X N ones(size(X,1),1)];%append all togther
+            DM        = [X N ones(size(X,1),1)];%append together Onsets, Nuissances and a constant
             DM        = spm_filter(K,DM);%filter also the design matrix
             DM        = spm_sp('Set',DM);
             DM        = spm_sp('x-',DM);% projector;
             beta      = DM*Y;
         end
-        function D = TimeSeries(self,nrun,mask_id)
+        
+        function [D,XYZvox] = TimeSeries(self,nrun,mask_id)
             %will read the time series from NRUN. MASK can be used to mask
             %the volume, otherwise all data will be returned (dangerous).
-            keyboard
-            vh          = spm_vol(self.epi_path(nrun,'r'));            
-            mask_handle = spm_vol(self.path_native_atlas(mask_id))
-            mask_ind    = spm_read_vols(mask_handle) > 50;
             
-            [X Y Z]     = ind2sub(mask_handle.dim,find(mask_ind));
-            XYZ         = [X Y Z ones(sum(mask_ind(:)),1)]';%this is in hr space.
-            mm = mask_handle.mat*XYZ;
+            vh          = spm_vol(self.epi_path(nrun,'r'));
+            XYZmm       = self.native_atlas2mask(mask_id);%in world space from native mask
+            
             if spm_check_orientations(vh)
-                vox = vh(1).mat\mm;
+                XYZvox  = vh(1).mat\XYZmm;%in EPI voxel space.
+                XYZvox  = unique(XYZvox','rows')';
             else
                  keyboard;%sanity check;
             end
-            D           = spm_get_data(vh,vox);
+            D           = spm_get_data(vh,round(XYZvox));
         end
         
     end
