@@ -55,9 +55,7 @@ classdef Subject < Project
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
                 end
                 s.scr = SCR(s);                       
-                %                 try
-                %                     s.bold = BOLD(s);
-                %                 end
+                
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path);
                 fprintf('Your path might also be wrong...\n');
