@@ -230,7 +230,7 @@ classdef Subject < Project
                 out = sprintf('%s,%d',out,varargin{1});
             end
         end
-        function XYZ = native_atlas2mask(self,mask_id)
+        function XYZmm = native_atlas2mask(self,mask_id)
             %Will return XYZ coordinates from ROI specified by MASK_INDEX
             %thresholded by the default value. XYZ values are in world 
             %space, so they will need to be brought to the voxel space of
@@ -239,8 +239,8 @@ classdef Subject < Project
             mask_ind    = spm_read_vols(mask_handle) > self.atlas2mask_threshold;%threshold it            
             [X Y Z]     = ind2sub(mask_handle.dim,find(mask_ind));%get voxel indices
             XYZ         = [X Y Z ones(sum(mask_ind(:)),1)]';%this is in hr's voxels space.
-            mm          = mask_handle.mat*XYZ;%this is world space.            
-            mm          = unique(mm','rows')';%remove repetititons.
+            XYZmm       = mask_handle.mat*XYZ;%this is world space.            
+            XYZmm       = unique(XYZmm','rows')';%remove repetititons.
         end
     end
     
@@ -443,19 +443,22 @@ classdef Subject < Project
             %% Get high-pass filter
             %this is how it should be, but due to fearamy specificities, we
             %have to make work around. Note that this cannot be merge to
-            %/mrt/xx or
-            %K                       = struct('HParam', self.HParam , 'row',    1:size(X,1) , 'RT',     self.TR );%
-            run_borders              = [[0 910 910+895]+1;[910 910+895  self.total_volumes(nrun)]];
-            c = 0;
+            %/mrt/xx or                        
+            %% get the filtering strcture a la spm.
+            run_borders              = [[0 910 910+895]+1;[910 910+895  self.total_volumes(nrun)]];            
+            K(1:size(run_borders,2)) = struct('HParam', self.HParam, 'row',    [] , 'RT',     self.TR ,'X0',[]);
+            c = 0;            
             for b = run_borders
-                c    = c + 1;
-                K(c) = struct('HParam', self.HParam , 'row',    b(1):b(2) , 'RT',     self.TR );
+                c        = c + 1;
+                K(c).row = b(1):b(2);
+                K(c)     = spm_filter(K(c));
+                K(c).X0  = [ones(length(K(c).row),1)*std(K(c).X0(:)) K(c).X0];                
             end
+            
         end
         
         function spm_GetBetas(self,nrun,model_num,mask_id)
-            %will compute beta weights manually without calling SPM.
-            keyboard
+            %will compute beta weights manually without calling SPM.            
             [X N K ]  = self.spm_DesignMatrix(nrun,model_num);%returns the Design Matrix, Nuissiance Matrix, and High-pass Filtering Matrix
             Y         = self.TimeSeries(nrun,mask_id);
             Y         = spm_filter(K,Y);%high-pass filtering.
@@ -482,6 +485,7 @@ classdef Subject < Project
             end
             D           = spm_get_data(vh,round(XYZvox));
         end
+        
         
     end
     methods %fmri path_tools which are related to the subject              
