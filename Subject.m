@@ -111,7 +111,6 @@ classdef Subject < Project
             fprintf('You told me to download the following series: ');
             fprintf('%i,',self.dicom_serie_id);
             fprintf('\nDouble check if everything is fine.\n');
-            
             paths               = self.dicomserver_paths;
             if ~isempty(paths)
                 self.dicom_folders  = paths(self.dicom_serie_id);
@@ -124,8 +123,13 @@ classdef Subject < Project
                 %
                 n 				 = n+1;
                 dest             = self.epi_dir(n);                                
-                self.DicomDownload(source{1},dest);                
-                self.DicomTo4D(dest);
+                if exist(dest)
+					self.DicomDownload(source{1},dest);                
+                	self.DicomTo4D(dest);
+				else
+					keyboard
+					fprintf('Stopped here as a sanity check\nIt seems the destination folder doesn''t exist.')
+				end
             end
             
         end
