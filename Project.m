@@ -33,7 +33,7 @@ classdef Project < handle
         dicom_serie_selector  = {  [] [] []   []      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [5 6 7]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]       [3 4 5]      [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]      [3 4 5]    };
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
-        dicom2run             = repmat({[1 1 1]},1,length(Project.dicom_serie_selector));
+        dicom2run             = repmat({[1 2 3]},1,length(Project.dicom_serie_selector));
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};
         tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.               
         TR                    = 0.99;                
@@ -53,7 +53,8 @@ classdef Project < handle
     end    
     methods
         function DU = SanityCheck(self,runs,measure,varargin)
-            %will run through subject folders and will plot their disk
+            %DU = SanityCheck(self,runs,measure,varargin)
+			%will run through subject folders and will plot their disk
             %space. Use a string in VARARGIN to focus only on a subfolder.
             %MEASURE has to be 'size' or 'amount', for disk usage and
             %number of files, respectively.
@@ -146,7 +147,7 @@ classdef Project < handle
             fprintf('Finished... (%s)\n',self.current_time);
             fprintf('Deleting 3D images in (%s)\n%s\n',self.current_time,destination);
             files = cellstr(files);
-            %delete(files{:});
+            delete(files{:});
         end
         function ConvertDicom(self,destination)
             % dicom conversion. ATTENTION: dicoms will be converted and
@@ -172,7 +173,7 @@ classdef Project < handle
                 % delete dicom files
                 fprintf('Deleting DICOM images in (%s)\n%s\n',self.current_time,destination);
                 files = cellstr(files);
-                %delete(files{:});
+                delete(files{:});
                 fprintf('Finished... (%s)\n',self.current_time);                
             else
                 fprintf('No dicom files found for %i\n',self.id);
