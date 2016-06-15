@@ -457,10 +457,11 @@ classdef Subject < Project
             
         end
         
-        function spm_GetBetas(self,nrun,model_num,mask_id)
+        function beta = spm_GetBetas(self,nrun,model_num,mask_id)
             %will compute beta weights manually without calling SPM.            
             [X N K ]  = self.spm_DesignMatrix(nrun,model_num);%returns the Design Matrix, Nuissiance Matrix, and High-pass Filtering Matrix
             Y         = self.TimeSeries(nrun,mask_id);
+            Y         = zscore(Y);
             Y         = spm_filter(K,Y);%high-pass filtering.
             %            
             DM        = [X N ones(size(X,1),1)];%append together Onsets, Nuissances and a constant
@@ -483,7 +484,8 @@ classdef Subject < Project
             else
                  keyboard;%sanity check;
             end
-            D           = spm_get_data(vh,round(XYZvox));
+            XYZvox      = round(XYZvox);
+            D           = spm_get_data(vh,XYZvox);
         end
         
         
