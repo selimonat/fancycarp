@@ -1,64 +1,75 @@
 classdef Project < handle
-    % This is the PROJECT object that many of the other objects will
+    % This is the PROJECT object that other objects will
     % be a child of. Here enters all the project specific data (e.g. the
     % subject ids) and methods (for e.g. getting paths from the dicom
     % server).
     %
-    % To start with, trio_sessions should be entered manually for your
-    % experiment. Later these variables will be used by different methods
-    % in the SUBJECT object to transfer data from the dicom server.
+    % The first set of properties has to be entered by hand. For example
+    % TRIO_SESSIONS should be entered manually for your experiment. The
+    % other properties drive from these. 
     %
     % To create the standard project structure you will need to call the
     % CreateFolderHierarchy method. Based on dicom2run, trio_sessions,
-    % data_folders properties, the hierarchy will be created.
+    % data_folders properties, the folder hierarchy will be created. These 
+	% folders will later be populated by dump_epi and dump_hr methods. 
     %
     % Once you data is nicely loaded into the subject/run/ structure,
     % SanityCheck method comes very handy to ensure that your project
     % folders have all the size they should be.
+	% 
+	% Current methods:
+	%
+    % CreateFolderHierarchy
+	% SanityCheck
+    % DicomDownload
+    % DicomTo4D
+    % MergeTo4D
+    % ConvertDicom
+    % dicomserver_request
+    % dicomserver_paths
+    % dartel_templates
+	% SecondLevel_ANOVA
+    % VolumeGroupAverage
+    % VolumeSmooth
+    % RunSPMJob
     %
     % Feel free to improve this help section.
     %
-    % please ensure that smrREADER, SPM12, Palamedes are in your path.
+    % 
     
-    properties (Hidden, Constant)
+    properties (Hidden, Constant)%adapt these properties for your project
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
+
         path_project          = '/projects/fearamy/data/';        
-        path_palamedes        = '/home/onat/Documents/Code/Matlab/palamedes1_8_0/Palamedes/';
         path_spm              = '/common/apps/spm12-6685/';        
-        path_second_level     = sprintf('%sspm/',Project.path_project);
-        path_stimuli          = '';%optional in case you have methods that needs stimuli...        
-        path_atlas            = sprintf('%satlas/data.nii',Project.path_project);
-        url_atlas 			  = 'https://www.dropbox.com/sh/4amxap6oozglsye/AAByCVXk7FQZtZ18mL1wruxra?dl=0';%where to download the atlas
-		trio_sessions         = {  '' '' '' '' 'TRIO_17468' 'TRIO_17476' 'TRIO_17477' 'TRIO_17478' 'TRIO_17479' 'TRIO_17480' 'TRIO_17481' 'TRIO_17482' 'TRIO_17483' 'TRIO_17484' 'TRIO_17485' 'TRIO_17486' 'TRIO_17487' 'TRIO_17488' 'TRIO_17514' 'TRIO_17515' 'TRIO_17516' 'TRIO_17517'  'TRIO_17520' 'TRIO_17521' 'TRIO_17522' 'TRIO_17523' 'TRIO_17524' 'TRIO_17525' 'TRIO_17526' 'TRIO_17527' 'TRIO_17557' 'TRIO_17558' 'TRIO_17559' 'TRIO_17560'  'TRIO_17563' 'TRIO_17564' 'TRIO_17565' 'TRIO_17566' 'TRIO_17567' 'TRIO_17568' 'TRIO_17569' 'TRIO_17570' 'TRIO_17571' 'TRIO_17572'};
+        trio_sessions         = {  '' '' '' '' 'TRIO_17468' 'TRIO_17476' 'TRIO_17477' 'TRIO_17478' 'TRIO_17479' 'TRIO_17480' 'TRIO_17481' 'TRIO_17482' 'TRIO_17483' 'TRIO_17484' 'TRIO_17485' 'TRIO_17486' 'TRIO_17487' 'TRIO_17488' 'TRIO_17514' 'TRIO_17515' 'TRIO_17516' 'TRIO_17517'  'TRIO_17520' 'TRIO_17521' 'TRIO_17522' 'TRIO_17523' 'TRIO_17524' 'TRIO_17525' 'TRIO_17526' 'TRIO_17527' 'TRIO_17557' 'TRIO_17558' 'TRIO_17559' 'TRIO_17560'  'TRIO_17563' 'TRIO_17564' 'TRIO_17565' 'TRIO_17566' 'TRIO_17567' 'TRIO_17568' 'TRIO_17569' 'TRIO_17570' 'TRIO_17571' 'TRIO_17572'};
         dicom_serie_selector  = {  [] [] []   []      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [5 6 7]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]       [3 4 5]      [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]      [3 4 5]    };
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
-        dicom2run             = repmat({[1 2 3]},1,length(Project.dicom_serie_selector));
-        data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};
-        tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.               
+        dicom2run             = repmat({[1 2 3]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
+        data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};%if you need another folder, do it here.
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
         smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method
-        atlas2mask_threshold  = 50;
+        atlas2mask_threshold  = 50;%where ROI masks are computed, this threshold is used.
     end
-    properties (Constant,Hidden) %project specific properties        
-        current_time          = datestr(now,'hh:mm:ss');
+    properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
+        tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.         
+        path_second_level     = sprintf('%sspm/',Project.path_project);%where the second level results has to be stored
+        path_atlas            = sprintf('%satlas/data.nii',Project.path_project);%the location of the atlas
+		current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
-        condition_labels      = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
-        colors                = [ [0 0 0]; 0.0784 0.3284 1.0000;0.5784    0.0784    1.0000;1.0000    0.0784    0.8284;1.0000    0.0784    0.0784;1.0000    0.8284    0.0784;0.5784    1.0000    0.0784;0.0784    1.0000    0.3284;0.0784    1.0000    1.0000;0.0784    0.0784    0.0784;0.5784    0.5784    0.5784  ;[.8 0 0];[.8 0 0]];
-        line                  = {'-' '-' '-' '-' '-' '-' '-' '-' '-' '.' '.'};
-        symbol                = {'.' '.' '.' '.' '.' '.' '.' '.' '.' 'p' 's'};        
-        font_style            = {'fontsize' 12};                
     end    
-    methods
+    
+	methods
         function DU = SanityCheck(self,runs,measure,varargin)
             %DU = SanityCheck(self,runs,measure,varargin)
 			%will run through subject folders and will plot their disk
             %space. Use a string in VARARGIN to focus only on a subfolder.
             %MEASURE has to be 'size' or 'amount', for disk usage and
-            %number of files, respectively.
+            %number of files, respectively. This only works on Unix systems.
             cd(self.path_project);%
             total_subjects = length(Project.trio_sessions);
             DU = nan(total_subjects,length(runs));
@@ -233,7 +244,7 @@ classdef Project < handle
             for ns = 1:length(self.trio_sessions)
                 for nr = 0:length(self.dicom2run{1})
                     for nf = 1:length(self.data_folders)                        
-                        path2subject = sprintf('%s/sub%03d/run%03d/%s',self.path_project,ns,nr,self.data_folders{nf});
+                        path2subject = sprintf('%s%ssub%03d%srun%03d%s%s',self.path_project,filesep,ns,filesep,nr,filesep,self.data_folders{nf});
                         if ~isempty(self.trio_sessions{ns})
                             a = fullfile(path2subject);
                             mkdir(a);
@@ -247,20 +258,8 @@ classdef Project < handle
         end
 
     end
-    methods(Static)
-        
-        function RunSPMJob_inParallel(matlabbatch)
-            %will run the spm matlabbatch using the parallel toolbox.
-            fprintf('Will call spm_jobman in parallel with 4 cores...\n');
-            if isempty(gcp)
-                parpool(4);
-            end
-            parfor n = 1:length(matlabbatch)
-                fprintf('Running SPM jobman %i...\n',n);
-                spm_jobman('run', matlabbatch(n));
-            end
-            delete(gcp);
-        end
+    methods(Static) %SPM analysis related methods.
+       
         function RunSPMJob(matlabbatch)
             %will run the spm matlabbatch using the parallel toolbox.
             fprintf('Will call spm_jobman...\n');
@@ -270,10 +269,8 @@ classdef Project < handle
                 spm_jobman('run', matlabbatch(n));
             end            
         end                
-    end
-    methods %second-level analysis
         function SecondLevel_ANOVA(self,run,model,beta_image_index)
-            %
+            % This method runs a second level analysis for a model defined in MODEL using beta images indexed in BETA_IMAGE_INDEX.
             
             %store all the beta_images in a 3D array
             beta_files = [];
@@ -321,7 +318,7 @@ classdef Project < handle
             %
             %For example to take avarage skullstripped image use: RUN = 0,
             %SELECTOR = 'mrt/w_ss_data.nii' (which is the normalized skullstripped
-            %image).
+            %image). This method will go through all subjects and compute an average skull stripped image.
             
             %so far not functioanl
             files = [];
@@ -353,25 +350,4 @@ classdef Project < handle
             spm_jobman('run', matlabbatch);
         end
     end
-    methods %project specific methods
-        function degree    = stimulus2degree(self,stim_id)
-            %will transform condition indices to distances in degrees from
-            %the csp face. stim_id is a cell array.
-            
-            ind_valid     = find(cellfun(@(x) ~isempty(x),regexp(stim_id,'[0-9]')));
-            degree        = stim_id;
-            for i = ind_valid(:)'
-                degree{i} = mat2str(MinimumAngle( 0 , (stim_id{i}-self.csp)*45 ));
-            end
-        end
-        function set_feargen_colors(h,color_ind);
-            %if H is a handle of a barplot, it will colorize it with
-            %typical feargen colors.
-            h     = get(h,'children');
-            tbar  = length(get(h,'YData'));
-            set(h,'CData', repmat(1:tbar,1,tbar/tbar),'edgecolor','none');
-            colormap(Project.colors(color_ind,:));
-        end
-    end
-    
 end
