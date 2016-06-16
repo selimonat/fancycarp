@@ -81,7 +81,7 @@ classdef Subject < Project
             self.ConvertDicom(self.hr_dir);
             files       = spm_select('FPListRec',self.hr_dir,'^sTRIO');
             if ~isempty(files)
-                movefile(files,regexprep(files,'/sTRIO.*$','/data.nii'));%rename it to data.nii
+                movefile(files,strrep(files,sprintf('%ssTRIO.*$',filesep),sprintf('%sdata.nii',filesep)));%rename it to data.nii
             end
         end
         function p          = load_paradigm(self,nrun)
@@ -192,7 +192,7 @@ classdef Subject < Project
         function o      = GetMotionParameters(self,run)
             %will load the realignment parameters, of course you have to
             %realign the EPIs first.
-            filename = sprintf('%smrt/rp_data.txt',self.path2data(run));
+            filename = sprintf('%smrt%srp_data.txt',self.path2data(run),filesep);
             if exist(filename)
                 o = load(filename);
             else
@@ -217,7 +217,8 @@ classdef Subject < Project
             %preprocessing. RUNS specifies the functional runs, make it a
             %vector if neede.
             self.SegmentSurface;
-            self.SkullStrip;            
+            self.SkullStrip;  
+            self.NormalizeHR;
             self.Re_Coreg(runs);
         end
            
@@ -225,8 +226,8 @@ classdef Subject < Project
         function SkullStrip(self)
             %needs results of segment, will produce a skullstripped version
             %of hr.
-            c1         = regexprep(self.hr_path,'mrt/data','mrt/mri/p1data');
-            c2         = regexprep(self.hr_path,'mrt/data','mrt/mri/p2data');
+            c1         = strrep(self.hr_path,sprintf('mrt%sdata',filesep),sprintf('mrt%smri%sp1data',filesep,filesep));
+            c2         = strrep(self.hr_path,sprintf('mrt%sdata',filesep),sprintf('mrt%smri%sp2data',filesep,filesep));
             if exist(c1) && exist(c2)
                 matlabbatch{1}.spm.util.imcalc.input            = cellstr(strvcat(self.hr_path,c1,c2));
                 matlabbatch{1}.spm.util.imcalc.output           = self.skullstrip;
@@ -254,7 +255,7 @@ classdef Subject < Project
                 end
             end
             %%
-                mean_epi    = regexprep( self.epi_path(1),'mrt/data','mrt/meandata');
+                mean_epi    = strrep( self.epi_path(1),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
                 %double-pass realign EPIs and reslice the mean image only.
                 matlabbatch{1}.spm.spatial.realign.estwrite.data = epi_run;
                 matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
@@ -293,7 +294,7 @@ classdef Subject < Project
             %runs CAT12 Segment Surface routine.
             matlabbatch{1}.spm.tools.cat.estwrite.data = {spm_select('expand',self.hr_path)};
             matlabbatch{1}.spm.tools.cat.estwrite.nproc = 0;
-            matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm = {sprintf('%s/TPM.nii',self.tpm_dir)};
+            matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm = {sprintf('%sTPM.nii',self.tpm_dir)};
             matlabbatch{1}.spm.tools.cat.estwrite.opts.affreg = 'mni';
             matlabbatch{1}.spm.tools.cat.estwrite.extopts.APP = 1;
             matlabbatch{1}.spm.tools.cat.estwrite.extopts.LASstr = 0.5;
@@ -317,7 +318,7 @@ classdef Subject < Project
         function NormalizeHR(self)
             %SegmentSurface writes deformation fields (y_*), which are here used
             %to normalize the native hr images
-            matlabbatch{1}.spm.spatial.normalise.write.subj.def = cellstr(regexprep(self.hr_path,'data.nii','mri/y_data.nii'));
+            matlabbatch{1}.spm.spatial.normalise.write.subj.def = cellstr(strrep(self.hr_path,'data.nii',sprintf('mri%sy_data.nii',filesep)));
             matlabbatch{1}.spm.spatial.normalise.write.subj.resample = {self.hr_path};
             matlabbatch{1}.spm.spatial.normalise.write.woptions.bb = [-78 -112 -70
                                                           78 76 85];
@@ -437,7 +438,7 @@ classdef Subject < Project
                 path2data = sprintf('%s%s%sdata.mat',path2data,varargin{1},filesep);
             end
             if length(varargin) == 2
-                path2data = regexprep(path2data,'mat',varargin{2});
+                path2data = strrep(path2data,'mat',varargin{2});
             end
         end       
     end
@@ -582,8 +583,8 @@ classdef Subject < Project
             %model_num is correctly set for different runs.
             
             
-            spm_dir = sprintf('%s/model_fir_%02d/',self.spm_dir,model_num);
-            spm_path= sprintf('%s/model_fir_%02d/SPM.mat',self.spm_dir,model_num);
+            spm_dir = sprintf('%s%smodel_fir_%02d%s',self.spm_dir,filesep,model_num,filesep);
+            spm_path= sprintf('%s%smodel_fir_%02d%sSPM.mat',self.spm_dir,filesep,model_num,filesep);
             
             if ~exist(self.spm_path);mkdir(spm_dir);end
             
@@ -597,7 +598,7 @@ classdef Subject < Project
                 %load files using ...,1, ....,2 format
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));
                 %load the onsets
-                dummy                                                   = load(sprintf('%sdesign/model%02d.mat',self.path2data(session),model_num));
+                dummy                                                   = load(sprintf('%sdesign%smodel%02d.mat',self.path2data(session),filesep,model_num));
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
                 %load nuissance parameters
@@ -630,9 +631,8 @@ classdef Subject < Project
             %NRUN can be a vector, but then care has to be taken that
             %model_num is correctly set for different runs.
             
-            
-            spm_dir = sprintf('%s/model_chrf_%02d/',self.spm_dir,model_num);
-            spm_path= sprintf('%s/model_chrf_%02d/SPM.mat',self.spm_dir,model_num);
+            spm_dir = sprintf('%s%smodel_chrf_%02d%s',self.spm_dir,filesep,model_num,filesep);
+            spm_path= sprintf('%s%smodel_chrf_%02d%sSPM.mat',self.spm_dir,filesep,model_num,filesep);
             
             if ~exist(self.spm_path);mkdir(spm_dir);end
             
@@ -646,7 +646,7 @@ classdef Subject < Project
                 %load files using ...,1, ....,2 format
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));
                 %load the onsets
-                dummy                                                   = load(sprintf('%sdesign/model%02d.mat',self.path2data(session),model_num));
+                dummy                                                   = load(sprintf('%sdesign%smodel%02d.mat',self.path2data(session),filesep,model_num));
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
                 %load nuissance parameters
