@@ -36,11 +36,11 @@ classdef Project < handle
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};
-        spm_path              = 'C:\Users\Sepideh\Documents\MATLAB\spm12-6685\';
+        spm_path              = 'C:\Users\Sepideh\Documents\MATLAB\spm12\';
         tpm_dir               = sprintf('%stpm%s',Project.spm_path,filesep); %path to the TPM images, needed by segment.       
         TR                    = 1.24;        
         path_stimuli          = '';%optional in case you have methods that needs stimuli...        
-        surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)
+        surface_wanted        = 1;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)
     end
     properties (Constant,Hidden) %project specific properties        
         current_time
@@ -228,7 +228,7 @@ classdef Project < handle
             for ns = 1:length(self.trio_sessions)
                 for nr = 0:length(self.dicom2run{1})
                     for nf = 1:length(self.data_folders)                        
-                        path2subject = sprintf('%s/sub%03d/run%03d/%s',self.path_project,ns,nr,self.data_folders{nf});
+                        path2subject = sprintf('%s%ssub%03d%srun%03d%s%s',self.path_project,filesep,ns,filesep,nr,filesep,self.data_folders{nf});
                         if ~isempty(self.trio_sessions{ns})
                             a = fullfile(path2subject);
                             mkdir(a);
