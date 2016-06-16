@@ -81,7 +81,7 @@ classdef Subject < Project
             self.ConvertDicom(self.hr_dir);
             files       = spm_select('FPListRec',self.hr_dir,'^sTRIO');
             if ~isempty(files)
-                movefile(files,strrep(files,sprintf('%ssTRIO.*$',filesep),sprintf('%sdata.nii',filesep)));%rename it to data.nii
+                movefile(files,regexprep(files,sprintf('%ssTRIO.*$',filesep),sprintf('%sdata.nii',filesep)));%rename it to data.nii
             end
         end
         function p          = load_paradigm(self,nrun)
