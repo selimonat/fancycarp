@@ -20,7 +20,7 @@ classdef Tuning < handle
     
     methods
         function tuning = Tuning(data,varargin)
-            %data is anything that has a x and y fields.
+            %data is anything that has a x and y fields data.x(Subject,angles)
             tuning.x   = data.x;
             tuning.y   = data.y;
             tuning.ids = data.ids;
@@ -106,15 +106,15 @@ classdef Tuning < handle
                 result.dof    = 6;
                 result.funname= 'gabor';
             elseif funtype == 7
-                result.fitfun = @(x,p) p(1)*cos(x*p(2)+p(3)) + p(4);%amp std freq baseline
-                L           = [ -range(y)*2  0.5  0      -range(y)*2    .01    ];
-                U           = [  range(y)*2  4    2*pi    range(y)*2 std(y(:)+rand(length(y),1).*eps)*2 ];
+                result.fitfun = @(x,p) p(1)*cos(x*p(2)+p(3)) + p(4);%amp freq phase baseline
+                L           = [ -range(y)*2  0    0      -range(y)*2    .01    ];
+                U           = [  range(y)*2  2    2*pi    range(y)*2     std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
                 result.funname= 'cosine';
             elseif funtype == 8
                 result.fitfun = @(x,p) self.VonMises(x,p(1),p(2),p(3),p(4));%amp,kappa,centerX,offset
-                L             = [ eps             0.1        min(x)   min(y(:))-std(y)   eps ];
-                U             = [ range(y(:))      15        max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
+                L             = [ eps             0         min(x)   min(y(:))-std(y)   eps ];
+                U             = [ range(y(:))     15        max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
                 %                 L      = [ eps                   0.1   eps     -pi   eps ];
                 %                 U      = [ min(10,range(y)*1.1)  20   2*pi   pi   10];
                 result.dof    = 3;
@@ -191,6 +191,7 @@ classdef Tuning < handle
                 if funtype > 1
                     title(sprintf('Likelihood: %03g (p = %5.5g)',result.Likelihood,result.pval));
                 end
+                fprintf('Kappa: %g (FWHM: %g, Sigma: %g)\n',result.Est(2),vM2FWHM(result.Est(2)),vM2FWHM(result.Est(2))/2.35);
                 xlim([min(x(:)) max(x(:))]);
                 drawnow;
                 grid on;                      
