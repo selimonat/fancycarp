@@ -111,7 +111,6 @@ classdef Subject < Project
             fprintf('You told me to download the following series: ');
             fprintf('%i,',self.dicom_serie_id);
             fprintf('\nDouble check if everything is fine.\n');
-            
             paths               = self.dicomserver_paths;
             if ~isempty(paths)
                 self.dicom_folders  = paths(self.dicom_serie_id);
@@ -124,8 +123,13 @@ classdef Subject < Project
                 %
                 n 				 = n+1;
                 dest             = self.epi_dir(n);                                
-                self.DicomDownload(source{1},dest);                
-                self.DicomTo4D(dest);
+                if exist(dest)
+					self.DicomDownload(source{1},dest);                
+                	self.DicomTo4D(dest);
+				else
+					keyboard
+					fprintf('Stopped here as a sanity check\nIt seems the destination folder doesn''t exist.')
+				end
             end
             
         end
@@ -457,10 +461,11 @@ classdef Subject < Project
             
         end
         
-        function spm_GetBetas(self,nrun,model_num,mask_id)
+        function beta = spm_GetBetas(self,nrun,model_num,mask_id)
             %will compute beta weights manually without calling SPM.            
             [X N K ]  = self.spm_DesignMatrix(nrun,model_num);%returns the Design Matrix, Nuissiance Matrix, and High-pass Filtering Matrix
             Y         = self.TimeSeries(nrun,mask_id);
+            Y         = zscore(Y);
             Y         = spm_filter(K,Y);%high-pass filtering.
             %            
             DM        = [X N ones(size(X,1),1)];%append together Onsets, Nuissances and a constant
@@ -483,7 +488,8 @@ classdef Subject < Project
             else
                  keyboard;%sanity check;
             end
-            D           = spm_get_data(vh,round(XYZvox));
+            XYZvox      = round(XYZvox);
+            D           = spm_get_data(vh,XYZvox);
         end
         
         

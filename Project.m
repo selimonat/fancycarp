@@ -1,10 +1,10 @@
 classdef Project < handle
-    % This is the PROJECT object that many of the other objects will
+    % This is the PROJECT object that other objects will
     % be a child of. Here enters all the project specific data (e.g. the
     % subject ids) and methods (for e.g. getting paths from the dicom
     % server).
     %
-    % The first set of Properties has to be entered by hand. For example
+    % The first set of properties has to be entered by hand. For example
     % TRIO_SESSIONS should be entered manually for your experiment. The
     % other properties drive from these. 
     %
@@ -35,7 +35,7 @@ classdef Project < handle
     %
     % Feel free to improve this help section.
     %
-    % please ensure that smrREADER, SPM12, Palamedes are in your path.
+    % 
     
     properties (Hidden, Constant)%adapt these properties for your project
         %All these properties MUST BE CORRECT and adapted to one owns
@@ -64,7 +64,8 @@ classdef Project < handle
     
 	methods
         function DU = SanityCheck(self,runs,measure,varargin)
-            %will run through subject folders and will plot their disk
+            %DU = SanityCheck(self,runs,measure,varargin)
+			%will run through subject folders and will plot their disk
             %space. Use a string in VARARGIN to focus only on a subfolder.
             %MEASURE has to be 'size' or 'amount', for disk usage and
             %number of files, respectively. This only works on Unix systems.
@@ -157,7 +158,7 @@ classdef Project < handle
             fprintf('Finished... (%s)\n',self.current_time);
             fprintf('Deleting 3D images in (%s)\n%s\n',self.current_time,destination);
             files = cellstr(files);
-            %delete(files{:});
+            delete(files{:});
         end
         function ConvertDicom(self,destination)
             % dicom conversion. ATTENTION: dicoms will be converted and
@@ -183,7 +184,7 @@ classdef Project < handle
                 % delete dicom files
                 fprintf('Deleting DICOM images in (%s)\n%s\n',self.current_time,destination);
                 files = cellstr(files);
-                %delete(files{:});
+                delete(files{:});
                 fprintf('Finished... (%s)\n',self.current_time);                
             else
                 fprintf('No dicom files found for %i\n',self.id);
