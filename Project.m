@@ -329,7 +329,7 @@ classdef Project < handle
             files = [];
             for ns = self.subject_indices
                 s     = Subject(ns);
-                current = sprintf('%s/%s',s.path2data(run),selector);
+                current = sprintf('%s/%s',s.path_data(run),selector);
                 if exist(current) ~= 0
                     files = [files ; current];
                 else

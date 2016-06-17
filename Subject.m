@@ -580,7 +580,7 @@ classdef Subject < Project
             
             %set spm dir: saves always to run1
             spm_dir  = self.dir_spmmat(nrun(1),model_num);
-            path_spm = self.path_spmmat(nrun,model_num);
+            path_spm = self.path_spmmat(nrun(1),model_num);%stuff is always saved to the first run.
             if ~exist(self.path_spm);mkdir(spm_dir);end
 
             
@@ -593,9 +593,9 @@ classdef Subject < Project
             for session = nrun
                 %load files using ...,1, ....,2 format
 
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(spm_select('expand',self.path_epi(session,'r')));%use always the realigned data.
                 %load the onsets
-                dummy                                                   = load(sprintf('%sdesign%smodel%02d.mat',self.path_data(session),filesep,model_num));
+                dummy                                                   = load(self.path_model(session,model_num));
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
                 %load nuissance parameters
@@ -623,9 +623,9 @@ classdef Subject < Project
             spm_jobman('run', matlabbatch);
             %
             %normalize the beta images right away
-            beta_images = self.path_beta(nrun,model_num,'');%'' => with no prefix
+            beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
-            self.VolumeSmooth(self,beta_images);%('s_' will be added)
+            self.VolumeSmooth(beta_images);%('s_' will be added)
         end
      end
 end
