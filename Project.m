@@ -4,6 +4,11 @@ classdef Project < handle
     % subject ids) and methods (for e.g. getting paths from the dicom
     % server).
     %
+    % This branch is mrt/main that is all future branches for new projects
+    % should be based on this branch. The CheckConsistency.m file can be
+    % used to test the consistency of this branch on a test dataset (the
+    % test data set can be found in /common/raw/users/onat/test_project).
+    %
     % The first set of properties has to be entered by hand. For example
     % TRIO_SESSIONS should be entered manually for your experiment. The
     % other properties drive from these. 
@@ -19,19 +24,19 @@ classdef Project < handle
 	% 
 	% Current methods:
 	%
-    % CreateFolderHierarchy
-	% SanityCheck
-    % DicomDownload
-    % DicomTo4D
-    % MergeTo4D
-    % ConvertDicom
-    % dicomserver_request
-    % dicomserver_paths
-    % dartel_templates
-	% SecondLevel_ANOVA
-    % VolumeGroupAverage
-    % VolumeSmooth
-    % RunSPMJob
+    % CreateFolderHierarchy: Will create a folder hierarchy to store data
+	% SanityCheck: Will bar-plot the content of your folders
+    % DicomDownload: connects to dicom server and dumps the epi and hr data
+    % DicomTo4D: 3D 2 4D conversion
+    % MergeTo4D: 3D 2 4D conversion
+    % ConvertDicom: convert dicoms
+    % dicomserver_request: unix-specific commands to talk with dicomserser.
+    % dicomserver_paths: unix-specific commands to talk with dicomserser.
+    % dartel_templates: location of dartel templates
+	% SecondLevel_ANOVA: conducts secondlevel analysis.
+    % VolumeGroupAverage: can average lots of images.
+    % VolumeSmooth: smooths volumes
+    % RunSPMJob: runs spm jobs.
     %
     % Feel free to improve this help section.
     %
@@ -42,9 +47,9 @@ classdef Project < handle
         %project
 
         path_project          = '/Users/onat/Documents/test_project/';        
-        path_spm              = '/common/apps/spm12-6685/';        
-        trio_sessions         = {  '' '' '' '' 'TRIO_17468' 'TRIO_17476' 'TRIO_17477' 'TRIO_17478' 'TRIO_17479' 'TRIO_17480' 'TRIO_17481' 'TRIO_17482' 'TRIO_17483' 'TRIO_17484' 'TRIO_17485' 'TRIO_17486' 'TRIO_17487' 'TRIO_17488' 'TRIO_17514' 'TRIO_17515' 'TRIO_17516' 'TRIO_17517'  'TRIO_17520' 'TRIO_17521' 'TRIO_17522' 'TRIO_17523' 'TRIO_17524' 'TRIO_17525' 'TRIO_17526' 'TRIO_17527' 'TRIO_17557' 'TRIO_17558' 'TRIO_17559' 'TRIO_17560'  'TRIO_17563' 'TRIO_17564' 'TRIO_17565' 'TRIO_17566' 'TRIO_17567' 'TRIO_17568' 'TRIO_17569' 'TRIO_17570' 'TRIO_17571' 'TRIO_17572'};
-        dicom_serie_selector  = {  [] [] []   []      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [5 6 7]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]       [3 4 5]      [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]      [3 4 5]    };
+        path_spm              = '/common/apps/spm12-6685/';%IMPORTANT: use the same SPM version.
+        trio_sessions         = {  'TRIO_17468' 'TRIO_17476' };%random triosession ids, need to be entered for new projects
+        dicom_serie_selector  = {  [3 4 5]      [3 4 5]      };%need to be entered manually for new projects.
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
         dicom2run             = repmat({[1 2 3]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
@@ -103,8 +108,8 @@ classdef Project < handle
             for nr = runs
                 n = n + 1;
                 subplot(length(runs),1,n)
-                bar(DU(:,n));ylabel('MB or #');xlabel('Subjects');box off                
-                title(sprintf('Subfolder: %s\n Run: %i\n',varargin{1},nr))
+                bar(DU(:,n));ylabel('MB or #','fontsize',10);xlabel('Subjects','fontsize',10);box off                
+                title(sprintf('Subfolder: %s Run: %i',varargin{1},nr),'fontsize',10);
             end
             warning('on','all');
         end
