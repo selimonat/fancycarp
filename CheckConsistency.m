@@ -8,7 +8,7 @@ for sub = 1:2
     s.preprocess_pipeline(runs);%start the preprocessing pipeline.
     figure;s.plot_motionparams(runs(1));%plot the motion parameters
     s.CreateModels(runs(1:2));%create onsets.
-    s.FitHRF(1:2);%make a first-level model
-    s.VolumeGroupAverage(0,'mrt/w_ss_data.nii');    
+    s.FitHRF(runs,1);%make a first-level model    
 end
+s.VolumeGroupAverage(0,'mrt/w_ss_data.nii');    
 
