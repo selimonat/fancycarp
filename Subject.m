@@ -89,19 +89,13 @@ classdef Subject < Project
             end
         end
         function p          = get_paradigm(self,nrun)
+            %will load the paradigm file saved during your psychophysics
+            %session.
             filename = self.path_data(nrun,'stimulation');
             p = [];
             if exist(filename)
                 p = load(filename);
-                p = p.p;
-                %transform id to labels
-                if isfield(p,'presentation')
-                    %                 p.presentation.stim_label = self.condition_labels(p.presentation.cond_id+1);
-                    p.presentation.dist(p.presentation.dist < 500)   = p.presentation.dist(p.presentation.dist < 500) + 180;
-                    p.presentation.dist(p.presentation.dist == 500)  = 1001;%ucs
-                    p.presentation.dist(p.presentation.dist == 1000) = 1002;%odd
-                    p.presentation.dist(isnan(p.presentation.dist))  = 1000;%null
-                end
+                p = p.p;                
             end
         end 
         function get_epi(self)
