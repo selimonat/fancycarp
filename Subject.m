@@ -250,8 +250,7 @@ classdef Subject < Project
         end
     end
     
-    methods %(mri, preprocessing))      
-        
+    methods %(mri, preprocessing))              
         function preprocess_pipeline(self,runs)
             %meta method to run all the required steps for hr
             %preprocessing. RUNS specifies the functional runs, make it a
@@ -261,9 +260,7 @@ classdef Subject < Project
             self.MNI2Native;%brings the atlas to native space
             self.Re_Coreg(runs);            
 
-        end
-           
-        
+        end                   
         function SkullStrip(self)
             %needs results of SegmentSurface, will produce a skullstripped
             %version of hr (filename: ss_data.nii). It will also
@@ -291,8 +288,7 @@ classdef Subject < Project
             else
                 fprintf('Need to run segment first...\n')
             end
-        end        
-        
+        end                
         function Re_Coreg(self,runs)
             %will realign and coregister. 
               
@@ -342,7 +338,6 @@ classdef Subject < Project
             self.RunSPMJob(matlabbatch);
             
         end
-
         function SegmentSurface(self)            
             %runs CAT12 Segment Surface routine.
             matlabbatch{1}.spm.tools.cat.estwrite.data = {spm_select('expand',self.path_hr)};
@@ -389,8 +384,7 @@ classdef Subject < Project
             end
             %
             self.RunSPMJob(matlabbatch);
-        end
-        
+        end        
         function MNI2Native(self)
             %brings the atlas to MNI space and saves it in run000/atlas.
             %Same as VolumeNormalize but uses the inverse deformation
@@ -413,8 +407,7 @@ classdef Subject < Project
             self.RunSPMJob(matlabbatch);
             target_file = regexprep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
             movefile(target_file,self.path_native_atlas);
-        end
-        
+        end        
         function [X,N,K]=spm_DesignMatrix(self,nrun,model_num)
             %will return the same design matrix used by spm in an efficient
             %way. see also: GetTimeSeries, spm_GetBetas
@@ -470,8 +463,7 @@ classdef Subject < Project
                 K(c).X0  = [ones(length(K(c).row),1)*std(K(c).X0(:)) K(c).X0];                
             end
             
-        end
-        
+        end        
         function beta = spm_GetBetas(self,nrun,model_num,mask_id)
             %will compute beta weights manually without calling SPM.            
             [X N K ]  = self.spm_DesignMatrix(nrun,model_num);%returns the Design Matrix, Nuissiance Matrix, and High-pass Filtering Matrix
@@ -484,8 +476,7 @@ classdef Subject < Project
             DM        = spm_sp('Set',DM);
             DM        = spm_sp('x-',DM);% projector;
             beta      = DM*Y;
-        end
-        
+        end        
         function [D,XYZvox] = TimeSeries(self,nrun,mask_id)
             %will read the time series from NRUN. MASK can be used to mask
             %the volume, otherwise all data will be returned (dangerous).
@@ -501,9 +492,7 @@ classdef Subject < Project
             end
             XYZvox      = round(XYZvox);
             D           = spm_get_data(vh,XYZvox);
-        end
-        
-        
+        end              
     end
     methods %fmri path_tools which are related to the subject              
         function out        = path_skullstrip(self,varargin)
@@ -547,8 +536,7 @@ classdef Subject < Project
         function out        = path_hr(self)
             %the directory where hr is located
             out = sprintf('%smrt%sdata.nii',self.pathfinder(self.id,0),filesep);
-        end                        
-        
+        end                                
         function out        = path_epi(self,nrun,varargin)
             % simply returns the path to the mrt data. use VARARGIN to add
             % prefixes.
@@ -814,7 +802,6 @@ classdef Subject < Project
                 end
             end            
         end
-        %
         function CreateModels(self,run)
             %%%%%%%%%%%%%%%%%%%%%%
             model_num  = 1;
