@@ -46,7 +46,7 @@ classdef SCR < handle
             %s is either the subject number of block id.
             if length(varargin) == 1%construct
                 s = varargin{1};
-                scr.path_acqfile  = s.path2data(s.id,SCR.default_run,'scr','acq');
+                scr.path_acqfile  = s.path_data(s.id,SCR.default_run,'scr','acq');
                 if exist(scr.path_acqfile);
                     if ~exist(sprintf('%s.mat',scr.path_acqfile))
                         dummy     = load_acq(scr.path_acqfile);
