@@ -367,8 +367,7 @@ classdef Subject < Project
         function out        = dir_spmmat(self,nrun,model_num)
             %Returns the path to SPM folder in a given NRUN responsible for
             %the model MODEL_NUM. VARARGIN is used for the derivatives.            
-
-            out = sprintf('%s%sspm%smodel_%02d_chrf_%d%d%s',self.path_data(nrun),filesep,model_num,filesep,self.derivatives(1),self.derivatives(2),filesep);
+            out = sprintf('%sspm%smodel_%02d_chrf_%d%d%s',self.path_data(nrun),filesep,model_num,self.derivatives(1),self.derivatives(2),filesep);
 
         end
         function out        = path_model(self,run,model_num)
@@ -377,7 +376,7 @@ classdef Subject < Project
         end
         function out        = path_spmmat(self,nrun,model_num)
             %returns the path to spm folder for run RUN.
-            dummy = self.dir_spmmat(nrun,model_num,self.derivatives);
+            dummy = self.dir_spmmat(nrun(1),model_num);
             out   = sprintf('%s%sSPM.mat',dummy,filesep);
         end        
         function out        = path_native_atlas(self,varargin)
@@ -549,27 +548,29 @@ classdef Subject < Project
                 if decimal < 1%if stimuli are shown but the scanner is not running
                     trial                = trial + 1;
                     stim_scanunit(trial) = (scan_id(first_positive)-1) + decimal;
-                    stim_ids(trial)       = self.paradigm{run}.presentation.dist(trial);
+                    stim_ids(trial)       = self.paradigm{run}.presentation.con_id(trial);
                 end
             end            
         end
-        function CreateModels(self,run)
+        function CreateModels(self,runs)
             %%%%%%%%%%%%%%%%%%%%%%
-            model_num  = 1;
-            model_path = self.path_model(run,model_num);
-            if ~exist(fileparts(model_path));mkdir(fileparts(model_path));end
-            [scan,id]  = self.StimTime2ScanUnit(run);
-            counter    = 0;
-            for current_condition = unique(id)
-                counter                = counter + 1;
-                cond(counter).name     = mat2str(current_condition);
-                cond(counter).onset    = scan(id == current_condition);
-                cond(counter).duration = zeros(1,length(cond(counter).onset));
-                cond(counter).tmod     = 0;
-                cond(counter).pmod     = struct('name',{},'param',{},'poly',{});
+            for run = runs
+                model_num  = 1;
+                model_path = self.path_model(run,model_num);
+                if ~exist(fileparts(model_path));mkdir(fileparts(model_path));end
+                [scan,id]  = self.StimTime2ScanUnit(run);
+                counter    = 0;
+                for current_condition = unique(id)
+                    counter                = counter + 1;
+                    cond(counter).name     = mat2str(current_condition);
+                    cond(counter).onset    = scan(id == current_condition);
+                    cond(counter).duration = zeros(1,length(cond(counter).onset));
+                    cond(counter).tmod     = 0;
+                    cond(counter).pmod     = struct('name',{},'param',{},'poly',{});
+                end
+                save(model_path,'cond');
+                %%%%%%%%%%%%%%%%%%%%%%
             end
-            save(model_path,'cond');
-            %%%%%%%%%%%%%%%%%%%%%%
         end        
         function FitHRF(self,nrun,model_num)
 
@@ -578,8 +579,8 @@ classdef Subject < Project
             %model_num is correctly set for different runs.
             
             %set spm dir: saves always to run1
-            spm_dir  = self.dir_spmmat(nrun,model_num);
-            path_spm = self.path_spmmat(nrun,model_num);
+            spm_dir  = self.dir_spmmat(nrun(1),model_num);
+            path_spm = self.path_spmmat(nrun(1),model_num);%stuff is always saved to the first run.
             if ~exist(self.path_spm);mkdir(spm_dir);end
 
             
@@ -592,9 +593,9 @@ classdef Subject < Project
             for session = nrun
                 %load files using ...,1, ....,2 format
 
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(spm_select('expand',self.path_epi(session,'r')));%use always the realigned data.
                 %load the onsets
-                dummy                                                   = load(sprintf('%sdesign%smodel%02d.mat',self.path_data(session),filesep,model_num));
+                dummy                                                   = load(self.path_model(session,model_num));
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
                 %load nuissance parameters
@@ -622,9 +623,9 @@ classdef Subject < Project
             spm_jobman('run', matlabbatch);
             %
             %normalize the beta images right away
-            beta_images = self.path_beta(nrun,model_num,'');%'' => with no prefix
+            beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
-            self.VolumeSmooth(self,beta_images);%('s_' will be added)
+            self.VolumeSmooth(beta_images);%('s_' will be added)
         end
      end
 end

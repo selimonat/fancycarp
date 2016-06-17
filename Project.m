@@ -19,19 +19,19 @@ classdef Project < handle
 	% 
 	% Current methods:
 	%
-    % CreateFolderHierarchy
-	% SanityCheck
-    % DicomDownload
-    % DicomTo4D
-    % MergeTo4D
-    % ConvertDicom
-    % dicomserver_request
-    % dicomserver_paths
-    % dartel_templates
-	% SecondLevel_ANOVA
-    % VolumeGroupAverage
-    % VolumeSmooth
-    % RunSPMJob
+    % CreateFolderHierarchy: Will create a folder hierarchy to store data
+	% SanityCheck: Will bar-plot the content of your folders
+    % DicomDownload: connects to dicom server and dumps the epi and hr data
+    % DicomTo4D: 3D 2 4D conversion
+    % MergeTo4D: 3D 2 4D conversion
+    % ConvertDicom: convert dicoms
+    % dicomserver_request: unix-specific commands to talk with dicomserser.
+    % dicomserver_paths: unix-specific commands to talk with dicomserser.
+    % dartel_templates: location of dartel templates
+	% SecondLevel_ANOVA: conducts secondlevel analysis.
+    % VolumeGroupAverage: can average lots of images.
+    % VolumeSmooth: smooths volumes
+    % RunSPMJob: runs spm jobs.
     %
     % Feel free to improve this help section.
     %
@@ -103,8 +103,8 @@ classdef Project < handle
             for nr = runs
                 n = n + 1;
                 subplot(length(runs),1,n)
-                bar(DU(:,n));ylabel('MB or #');xlabel('Subjects');box off                
-                title(sprintf('Subfolder: %s\n Run: %i\n',varargin{1},nr))
+                bar(DU(:,n));ylabel('MB or #','fontsize',10);xlabel('Subjects','fontsize',10);box off                
+                title(sprintf('Subfolder: %s Run: %i',varargin{1},nr),'fontsize',10);
             end
             warning('on','all');
         end
@@ -324,7 +324,7 @@ classdef Project < handle
             files = [];
             for ns = self.subject_indices
                 s     = Subject(ns);
-                current = sprintf('%s/%s',s.path2data(run),selector);
+                current = sprintf('%s/%s',s.path_data(run),selector);
                 if exist(current) ~= 0
                     files = [files ; current];
                 else
