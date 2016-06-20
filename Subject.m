@@ -41,7 +41,8 @@ classdef Subject < Project
         get_param_pmf= [];
         trio_session  = [];
         ratings       = [];
-        total_run     = [];        
+        total_run     = [];
+        pmf
     end
     %%
     methods
