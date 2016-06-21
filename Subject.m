@@ -202,7 +202,7 @@ classdef Subject < Project
             %vector if needed.
             self.SegmentSurface;
             self.SkullStrip;%removes non-neural voxels
-            self.MNI2Native;%brings the atlas to native space
+%             self.MNI2Native;%brings the atlas to native space
             self.Re_Coreg(runs);            
 
         end                   
@@ -336,11 +336,11 @@ classdef Subject < Project
             %volume (which is right amygdala).
             
             %copy the atlas to subject's folder.
-            copyfile(fileparts(self.path_atlas),[self.path_data(0) 'atlas/']);
+            copyfile(fileparts(self.path_atlas),[self.path_data(0) sprintf('atlas%s',filesep)]);
             %
             filename = self.path_native_atlas(120);%for test purposes and to gain speed I focus on amygdala right now.
             nf = 1;
-            matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_hr,'data.nii','mri/iy_data.nii'));%iy_ not y_!
+            matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%siy_data.nii',filesep)));%iy_ not y_!
             matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {filename};
             matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
                 78 76 85];
@@ -349,7 +349,7 @@ classdef Subject < Project
             matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'w';%inverse warped                        
             %
             self.RunSPMJob(matlabbatch);
-            target_file = regexprep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
+            target_file = strrep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
             movefile(target_file,self.path_native_atlas);
         end        
     end
@@ -372,7 +372,7 @@ classdef Subject < Project
         end
         function out        = path_model(self,run,model_num)
             %returns the path to a model specified by MODEL_NUM in run RUN.
-            out = sprintf('%sdesign/model%02d/data.mat',self.path_data(run),model_num);
+            out = sprintf('%sdesign%smodel%02d%sdata.mat',self.path_data(run),filesep,model_num,filesep);
         end
         function out        = path_spmmat(self,nrun,model_num)
             %returns the path to spm folder for run RUN.
@@ -382,7 +382,7 @@ classdef Subject < Project
         function out        = path_native_atlas(self,varargin)
             %path to subjects native atlas, use VARARGIN to slice out a
             %given 3D volume.
-            out = sprintf('%satlas/data.nii',self.path_data(0));
+            out = sprintf('%satlas%sdata.nii',self.path_data(0),filesep);
             if nargin > 1
                 out = sprintf('%s,%d',out,varargin{1});
             end
@@ -433,7 +433,24 @@ classdef Subject < Project
                 selector        = varargin{1};
                 out             = out(selector,:);
             end
-        end        
+        end
+        function out        = path_con(self,nrun,model_num,prefix,varargin)
+            %returns the path for beta images computed in NRUN for
+            %MODEL_NUM. Use VARARGIN to select a subset by indexing.
+            %Actually spm_select is not even necessary here.
+           
+            out = self.dir_spmmat(nrun,model_num);
+            out = spm_select('FPList',out,sprintf('^%scon_*',prefix'));
+            if isempty(out)
+                fprintf('No con images found, probably wrong prefix is entered...\n');
+                keyboard%sanity check
+            end
+            %select if VARARGIN provided
+            if nargin > 4
+                selector        = varargin{1};
+                out             = out(selector,:);
+            end
+        end
         function [HRPath]   = path_hr_dicom(self)
             % finds the dicom path to the latest HR measurement for this
             % subject.
@@ -532,13 +549,19 @@ classdef Subject < Project
             %collect info on stim onsets and discard those not occurring
             %during scanning.
             stim_times      = L(find(L(:,2)==3),1)';
-            valid           = stim_times<last_scan_time & stim_times>first_scan_time;%i.e. during scanning
+            catch_times      = L(find(L(:,2)==11),1)';
+            rate_times      = L(find(L(:,2)==7),1)';
+            valid_s           = stim_times<last_scan_time & stim_times>first_scan_time;%i.e. during scanning
+            valid_c           = catch_times<last_scan_time & catch_times>first_scan_time;%i.e. during scanning
+            valid_r           = rate_times<last_scan_time & rate_times>first_scan_time;%i.e. during scanning
             %sanity check: check if valid onsets matches to tTRIAL
-            if sum(valid) ~= self.paradigm{run}.presentation.tTrial
+            if sum(valid_s) ~= self.paradigm{run}.presentation.tTrial
                 fprintf('Number of stimulus onsets found in the log are different than tTRIAL.\n');
                 keyboard
             end            
-            stim_times = stim_times(valid);            
+            stim_times = stim_times(valid_s); 
+            catch_times = catch_times(valid_c); 
+            rate_times = rate_times(valid_r); 
             %
             trial = 0;
             for stim_time = stim_times;%run stim by stim                
@@ -550,7 +573,27 @@ classdef Subject < Project
                     stim_scanunit(trial) = (scan_id(first_positive)-1) + decimal;
                     stim_ids(trial)       = self.paradigm{run}.presentation.con_id(trial);
                 end
-            end            
+            end  
+            for catch_times = catch_times;%run stim by stim                
+                d                        = scan_times - catch_times;
+                first_positive           = find(d > 0,1);%find the first positive value
+                decimal                  = d(first_positive)./self.TR;
+                if decimal < 1%if stimuli are shown but the scanner is not running
+                    trial                = trial + 1;
+                    stim_scanunit(trial) = (scan_id(first_positive)-1) + decimal;
+                    stim_ids(trial)       = max(self.paradigm{run}.presentation.con_id)+1;
+                end
+            end
+            for rate_times = rate_times;%run stim by stim                
+                d                        = scan_times - rate_times;
+                first_positive           = find(d > 0,1);%find the first positive value
+                decimal                  = d(first_positive)./self.TR;
+                if decimal < 1%if stimuli are shown but the scanner is not running
+                    trial                = trial + 1;
+                    stim_scanunit(trial) = (scan_id(first_positive)-1) + decimal;
+                    stim_ids(trial)       = max(self.paradigm{run}.presentation.con_id)+2;
+                end
+            end 
         end
         function CreateModels(self,runs)
             %%%%%%%%%%%%%%%%%%%%%%
@@ -564,7 +607,7 @@ classdef Subject < Project
                     counter                = counter + 1;
                     cond(counter).name     = mat2str(current_condition);
                     cond(counter).onset    = scan(id == current_condition);
-                    cond(counter).duration = zeros(1,length(cond(counter).onset));
+                    cond(counter).duration = self.duration(current_condition)*ones(1,length(cond(counter).onset));
                     cond(counter).tmod     = 0;
                     cond(counter).pmod     = struct('name',{},'param',{},'poly',{});
                 end
@@ -625,7 +668,36 @@ classdef Subject < Project
             %normalize the beta images right away
             beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
-            self.VolumeSmooth(beta_images);%('s_' will be added)
+            self.VolumeSmooth(beta_images);%('s_' will be added)         
+        end
+        function estContrast(self,nrun,model_num)
+            nuis                  = self.get_param_motion(1);
+            nuis                  = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
+            n_nuis    = size(nuis,2);
+            n_sess    = length(nrun);
+            path_spm = self.path_spmmat(nrun(1),model_num);
+            
+            matlabbatch{1}.spm.stats.fmri_est.spmmat           = {path_spm};
+            matlabbatch{1}.spm.stats.fmri_est.method.Classical = 1;
+
+            matlabbatch{2}.spm.stats.con.spmmat = {path_spm};
+            matlabbatch{2}.spm.stats.con.delete = 1;
+
+            
+            matlabbatch{2}.spm.stats.con.consess{1}.fcon.name   = 'eff_of_int';
+            matlabbatch{2}.spm.stats.con.consess{1}.fcon.convec = {[repmat([eye(self.cond_use) zeros(self.cond_use,n_nuis+2)],1,n_sess) zeros(self.cond_use,n_sess)]};
+
+            for co=2:length(self.con_name)+1
+                matlabbatch{2}.spm.stats.con.consess{co}.tcon.name    = self.con_name{co-1};
+                matlabbatch{2}.spm.stats.con.consess{co}.tcon.convec  = [repmat([self.con_value(co-1,:) zeros(1,n_nuis)],1,n_sess) zeros(1,n_sess)];
+                matlabbatch{2}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+            end
+            spm_jobman('initcfg');
+            spm('defaults', 'FMRI');
+            spm_jobman('run',matlabbatch);
+            con_images = self.path_con(nrun(1),model_num,'');%'' => with no prefix
+            self.VolumeNormalize(con_images);%normalize them ('w_' will be added)
+            self.VolumeSmooth(con_images);%('s_' will be added)   
         end
      end
 end
