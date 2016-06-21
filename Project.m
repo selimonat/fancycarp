@@ -46,24 +46,50 @@ classdef Project < handle
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
 
-        path_project          = '/Users/onat/Documents/test_project/';        
-        path_spm              = '/common/apps/spm12-6685/';%IMPORTANT: use the same SPM version.
-        trio_sessions         = {  'TRIO_17468' 'TRIO_17476' };%random triosession ids, need to be entered for new projects
-        dicom_serie_selector  = {  [3 4 5]      [3 4 5]      };%need to be entered manually for new projects.
+        path_project          = 'C:\Users\Sepideh\work\cueingPE\fancycarp'; 
+        %         path_project          = '/projects/sepf/fancycarp';
+%         path_spm              = '/common/apps/spm12-6685/';%IMPORTANT: use the same SPM version.
+        path_spm              = 'C:\Users\Sepideh\Documents\MATLAB\spm12\';
+        trio_sessions         = { 'TRIO_17815','TRIO_17816','TRIO_17819','TRIO_17820','TRIO_17821','TRIO_17851'...
+            'TRIO_17852','TRIO_17881','TRIO_17882','TRIO_17886','TRIO_17887','TRIO_17890','TRIO_17891',...
+            'TRIO_17892','TRIO_17893','TRIO_17894','TRIO_17915','TRIO_17916','TRIO_17917','TRIO_17920','TRIO_17921',...
+            'TRIO_17922','TRIO_17924','TRIO_17925','TRIO_17926','TRIO_18013','TRIO_18014','TRIO_18021','TRIO_18022',...
+            'TRIO_18023','TRIO_18061','TRIO_18074'}; %random triosession ids, need to be entered for new projects
+        dicom_serie_selector  = { [2 3 4 5], [3 4 5 6], [3 4 6 7], [2 3 4 5], [2 3 4 5], [2 3 4 5],...
+            [2 3 4 5], [2 3 4 5], [2 3 4 5], [2 3 4 5], [2 3 4 5], [2 4 5 7], [2 3 6 7], [2 3 4 5],...
+            [2 3 4 5], [2 3 4 5], [2 3 4 5], [2 3 4 5], [2 3 4 5], [2 3 5 6], [2 4 5 6], [2 3 4 5],...
+            [3 4 6 7], [2 3 4 7], [2 3 4 5], [2 3 4 5], [2 3 4 5], [3 4 6 7], [2 3 4 5], [2 3 4 5],...
+            [3 4 5 6], [2 3 4 5]};%need to be entered manually for new projects.
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
-        dicom2run             = repmat({[1 2 3]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
+        dicom2run             = repmat({[1 2 3 4]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};%if you need another folder, do it here.
-        TR                    = 0.99;                
+        TR                    = 1.24;  
+        duration              = [2*ones(1,36) 9 0];
         HParam                = 128;%parameter for high-pass filtering
-        surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
+        surface_wanted        = 1;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
         smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method
         atlas2mask_threshold  = 50;%where ROI masks are computed, this threshold is used.
+        con_value       = [repmat([zeros(1,3) -1*ones(1,3) ones(1,3)  zeros(1,9)],1,2) 0 0;...
+                    repmat([-1*ones(1,3) zeros(1,3) ones(1,3)  zeros(1,9)],1,2) 0 0;...
+                    repmat([-1*ones(1,3) ones(1,3) zeros(1,3) zeros(1,9)],1,2) 0 0;...
+                    repmat([zeros(1,9)   zeros(1,3) -1*ones(1,3) ones(1,3)],1,2) 0 0;...
+                    repmat([zeros(1,9)  -1*ones(1,3) zeros(1,3) ones(1,3)],1,2) 0 0;...
+                    repmat([zeros(1,9)  -1*ones(1,3) ones(1,3) zeros(1,3)],1,2) 0 0;...
+                    1 0 -1 zeros(1,33) 0 0;...
+                    zeros(1,6) -1 0 1 zeros(1,27) 0 0;...
+                    zeros(1,27) 1 0 -1 zeros(1,6) 0 0;...
+                    zeros(1,33) -1 0 1 0 0;...
+                    -1 0 1 0 0 0 1 0 -1 zeros(1,27) 0 0;...
+                    zeros(1,27) -1 0 1 0 0 0 1 0 -1 0 0]; 
+        con_name  = {'pain_hi_med'; 'pain_hi_lo'; 'pain_med_lo'; 'pic_hi_med'; 'pic_hi_lo'; 'pic_med_lo'; 'pain_lo_exp';...
+                       'pain_high_err'; 'pic_lo_exp'; 'pic_high_err'; 'pain_interaction'; 'pic_interaction'};
+        cond_use  =36;
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
-        tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.         
-        path_second_level     = sprintf('%sspm/',Project.path_project);%where the second level results has to be stored
-        path_atlas            = sprintf('%satlas/data.nii',Project.path_project);%the location of the atlas
+        tpm_dir               = sprintf('%stpm%s',Project.path_spm,filesep); %path to the TPM images, needed by segment.         
+        path_second_level     = sprintf('%sspm%s',Project.path_project,filesep);%where the second level results has to be stored
+        path_atlas            = sprintf('%satlas%sdata.nii',Project.path_project,filesep);%the location of the atlas
 		current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
     end    
@@ -308,7 +334,7 @@ classdef Project < handle
             matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
             matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm        = 1;
             %
-            matlabbatch{2}.spm.stats.fmri_est.spmmat                         = {[spm_dir '/SPM.mat']};
+            matlabbatch{2}.spm.stats.fmri_est.spmmat                         = {[spm_dir sprintf('%sSPM.mat',filesep)]};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
             %
             spm_jobman('run', matlabbatch);
@@ -329,7 +355,7 @@ classdef Project < handle
             files = [];
             for ns = self.subject_indices
                 s     = Subject(ns);
-                current = sprintf('%s/%s',s.path_data(run),selector);
+                current = sprintf('%s%s%s',s.path_data(run),filesep,selector);
                 if exist(current) ~= 0
                     files = [files ; current];
                 else
