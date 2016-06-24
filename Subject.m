@@ -733,10 +733,27 @@ classdef Subject < Project
             L       = self.get_log(nrun);
             tevents = size(L,1);
             figure;
-            plot(L(1:tevents,1) - L(1,1),L(1:tevents,2),'o','markersize',10);
-            ylim([-2 8]);
+            plot(L(1:tevents,1),L(1:tevents,2),'o','markersize',10);%plot events as dots.
+            % plot line
+            hold on;            
+            scan_events = find(L(:,2) == 0);            
+            scan_times  = L(scan_events,1);
+            plot([scan_times(1:4:end) scan_times(1:4:end)],ylim,'k','linewidth',.1);%plot every 5 th pulse event as a line
+            % mark with a star missing pulses (if any)
+            miss        = find(diff(scan_times) > self.TR*1.1);
+            if ~isempty(miss)
+                plot(scan_times(miss)+self.TR,0,'mp','markersize',40);
+            end
+            % text condition ids on dots.
+            stim_events = find(L(:,2) == 3);
+            stim_types  = L(stim_events,3);
+            stim_times  = L(stim_events,1);
+            text(stim_times,repmat(3,length(stim_times),1),num2str(stim_types),'color','r');
+            %
+            hold off;            
             set(gca,'ytick',[-2:8],'yticklabel',{'Rating On','Text','Pulse','Tracker+','Cross+','Stim+','CrossMov','UCS','Stim-','Key+','Tracker-'});
-            grid on
+            grid off;box off;
+            ylim([-5 15]);
             drawnow;
         end       
         function plot_motionparams(self,nrun)
@@ -762,25 +779,9 @@ classdef Subject < Project
             %plots the data logged by the stim pc together with data logged
             %in the physio-computer. Will mark with a star the missing
             %pulses.
+            self.plot_log(nrun);
             L = self.get_physio2log;
-            plot(L(:,1),L(:,2),'r+');            
-            hold on;
-            L           = self.get_log(nrun);plot(L(:,1),L(:,2),'bo');
-            scan_events = find(L(:,2) == 0);            
-            scan_times  = L(scan_events,1);
-            plot([scan_times(1:4:end) scan_times(1:4:end)],ylim,'k','linewidth',.1);%plot every 5 th pulse event as a line
-            %mark with a start the missing pulses if any
-            miss        = find(diff(scan_times) > self.TR*1.1);
-            if ~isempty(miss)
-                plot(scan_times(miss)+self.TR,0,'mp','markersize',40);
-            end
-            hold off;
-            ylim([-2 8]);
-            set(gca,'ytick',[-2:8],'yticklabel',{'Rating On','Text','Pulse','Tracker+','Cross+','Stim+','CrossMov','UCS','Stim-','Key+','Tracker-'});
-            grid off;box off;
-            axis tight;
-            ylim([-5 15]);
-            drawnow;
+            plot(L(:,1),L(:,2),'r+');                        
         end
     end
     methods %(fmri analysis)
