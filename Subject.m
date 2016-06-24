@@ -177,22 +177,19 @@ classdef Subject < Project
             % first/last scan and defines zero as the first scan.
             %
             
-            L          = self.paradigm{run}.out.log;
-            %sort things according to time rather than order of being
-            %logged
-            [~,i]      = sort(L(:,1),'ascend');
-            L          = L(i,:);
+            L               = self.paradigm{run}.out.log;
+            %sort things according to time rather than order of being logged
+            [~,i]           = sort(L(:,1),'ascend');
+            L               = L(i,:);
             % delete all the events that are after the last scanning..
-            scan_times      = L(find(L(:,2) == 0),1);
-            last_scan_ind   = find(diff(scan_times) < 1,1,'last');
-            first_scan_ind  = find(diff(scan_times) < 1,1,'first');
+            scan_times      = L(find(L(:,2) == 0),1);                        
             %
-            first_scan_time = scan_times(first_scan_ind);
-            last_scan_time  = scan_times(last_scan_ind);
-            %
+            first_scan_time = min(scan_times);
+            last_scan_time  = max(scan_times);
+            %            
             L(L(:,1) < first_scan_time,:) = [];
             L(L(:,1) > last_scan_time,:)  = [];
-            L(:,1)  = L(:,1) - first_scan_time;
+            L(:,1)          = L(:,1) - first_scan_time;
         end
         function out    = get.pmf(self)
             %will load the raw pmf data.
@@ -276,7 +273,7 @@ classdef Subject < Project
             L(L(:,1) > last_scan_time,:)  = [];
             %
             L(:,1)   = L(:,1) - first_scan_time;
-            %%                    
+            %                   
             fclose(fh);
         end
     end
@@ -764,13 +761,15 @@ classdef Subject < Project
             L = self.get_physio2log;
             plot(L(:,1),L(:,2),'r+');            
             hold on;
-            L           = self.get_log(1);plot(L(:,1),L(:,2),'bo');
+            L           = self.get_log(nrun);plot(L(:,1),L(:,2),'bo');
             scan_events = find(L(:,2) == 0);            
             scan_times  = L(scan_events,1);
             plot([scan_times(1:4:end) scan_times(1:4:end)],ylim,'k','linewidth',.1);%plot every 5 th pulse event as a line
             %mark with a start the missing pulses if any
             miss        = find(diff(scan_times) > self.TR*1.1);
-            plot(scan_times(miss)+self.TR,0,'mp','markersize',40);
+            if ~isempty(miss)
+                plot(scan_times(miss)+self.TR,0,'mp','markersize',40);
+            end
             hold off;
             ylim([-2 8]);
             set(gca,'ytick',[-2:8],'yticklabel',{'Rating On','Text','Pulse','Tracker+','Cross+','Stim+','CrossMov','UCS','Stim-','Key+','Tracker-'});
