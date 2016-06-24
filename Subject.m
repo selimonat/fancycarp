@@ -775,7 +775,6 @@ classdef Subject < Project
             ylim([-2 8]);
             set(gca,'ytick',[-2:8],'yticklabel',{'Rating On','Text','Pulse','Tracker+','Cross+','Stim+','CrossMov','UCS','Stim-','Key+','Tracker-'});
             grid off;box off;
-            grid on;
             axis tight;
             ylim([-5 15]);
             drawnow;
