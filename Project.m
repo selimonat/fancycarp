@@ -16,6 +16,9 @@ classdef Project < handle
     % Once you data is nicely loaded into the subject/run/ structure,
     % SanityCheck method comes very handy to ensure that your project
     % folders have all the size they should be.
+    %
+    % Don't forget to add spm, smr to your path, they are defined below,
+    % however automatic changing of path names is not recommended.
 	% 
 	% Current methods:
 	%
@@ -53,7 +56,8 @@ classdef Project < handle
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
         smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method
-        atlas2mask_threshold  = 50;%where ROI masks are computed, this threshold is used.
+        atlas2mask_threshold  = 50;%where ROI masks are computed, this threshold is used.        
+        path_smr              = sprintf('%s%ssmrReader%s',fileparts(which('Project')),filesep,filesep);%path to .SMR importing files in the fancycarp toolbox.
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.         
