@@ -172,18 +172,27 @@ classdef Subject < Project
             %% returns the total number of runs in a folder (except run000)
             o      = length(dir(self.path))-3;%exclude the directories .., ., and run000
         end        
-        function out    = get_log(self,run)
-            %loads and plots the Log, here you can put the old experiment
-            %plotter.
+        function L      = get_log(self,run)
+            % Loads the ptb log. Removes all events before/after the
+            % first/last scan and defines zero as the first scan.
+            %
             
-            out        = self.paradigm{run}.out.log;
+            L          = self.paradigm{run}.out.log;
             %sort things according to time rather than order of being
             %logged
-            [~,i]      = sort(out(:,1),'ascend');
-            out        = out(i,:);
+            [~,i]      = sort(L(:,1),'ascend');
+            L          = L(i,:);
             % delete all the events that are after the last scanning..
-            scan_times = out(out(:,2) == 0,1);
-            i          = out(:,1) > max(scan_times);            
+            scan_times      = L(find(L(:,2) == 0),1);
+            last_scan_ind   = find(diff(scan_times) < 1,1,'last');
+            first_scan_ind  = find(diff(scan_times) < 1,1,'first');
+            %
+            first_scan_time = scan_times(first_scan_ind);
+            last_scan_time  = scan_times(last_scan_ind);
+            %
+            L(L(:,1) < first_scan_time,:) = [];
+            L(L(:,1) > last_scan_time,:)  = [];
+            L(:,1)  = L(:,1) - first_scan_time;
         end
         function out    = get.pmf(self)
             %will load the raw pmf data.
@@ -239,6 +248,36 @@ classdef Subject < Project
             XYZ         = [X Y Z ones(sum(mask_ind(:)),1)]';%this is in hr's voxels space.
             XYZmm       = mask_handle.mat*XYZ;%this is world space.            
             XYZmm       = unique(XYZmm','rows')';%remove repetititons.
+        end
+        function L      = get_physio2log(self)            
+            %returns logged events from the physio computer in the same
+            %format as the log file. Events are aligned to the first valid
+            %scan pulse.
+            %%
+            
+            filename = sprintf('%s/run001/scr/data.smr',self.path);
+            fh       = fopen(filename);
+            % get times for trigger channels.
+            chan2L   = [NaN 9 3 NaN 5 0 NaN NaN 5];%transform channels to event_types as logged by the stim computer.
+            L        = [];
+            for chan     = [2 3 4 5 6 9];%all event channels.            
+                dummy    = SONGetEventChannel(fh,chan);
+                L        = [L ;[dummy(:) repmat(chan2L(chan),length(dummy),1)]];%returns time in seconds.                
+            end
+            % include only the period starting and ending with pulses.            
+            scan_times      = L(find(L(:,2) == 0),1);
+            last_scan_ind   = find(diff(scan_times) < 1,1,'last');
+            first_scan_ind  = find(diff(scan_times) < 1,1,'first');
+            %
+            first_scan_time = scan_times(first_scan_ind);
+            last_scan_time  = scan_times(last_scan_ind);
+            %
+            L(L(:,1) < first_scan_time,:) = [];
+            L(L(:,1) > last_scan_time,:)  = [];
+            %
+            L(:,1)   = L(:,1) - first_scan_time;
+            %%                    
+            fclose(fh);
         end
     end
     
@@ -718,6 +757,29 @@ classdef Subject < Project
             ylim([-5 5].*10.^-2)
             set(gca,'ygrid','on')
         end            
+        function plot_logcomparison(self,nrun)
+            %plots the data logged by the stim pc together with data logged
+            %in the physio-computer. Will mark with a star the missing
+            %pulses.
+            L = self.get_physio2log;
+            plot(L(:,1),L(:,2),'r+');            
+            hold on;
+            L           = self.get_log(1);plot(L(:,1),L(:,2),'bo');
+            scan_events = find(L(:,2) == 0);            
+            scan_times  = L(scan_events,1);
+            plot([scan_times(1:4:end) scan_times(1:4:end)],ylim,'k','linewidth',.1);%plot every 5 th pulse event as a line
+            %mark with a start the missing pulses if any
+            miss        = find(diff(scan_times) > self.TR*1.1);
+            plot(scan_times(miss)+self.TR,0,'mp','markersize',40);
+            hold off;
+            ylim([-2 8]);
+            set(gca,'ytick',[-2:8],'yticklabel',{'Rating On','Text','Pulse','Tracker+','Cross+','Stim+','CrossMov','UCS','Stim-','Key+','Tracker-'});
+            grid off;box off;
+            grid on;
+            axis tight;
+            ylim([-5 15]);
+            drawnow;
+        end
     end
     methods %(fmri analysis)
         function [stim_scanunit,stim_ids]=StimTime2ScanUnit(self,run)
@@ -733,17 +795,12 @@ classdef Subject < Project
             scan_id         = 1:length(scan_times);%label pulses with increasing numbers
             last_scan_time  = max(scan_times);%time of the last
             first_scan_time = min(scan_times);
-            trial           = 0;
             %collect info on stim onsets and discard those not occurring
             %during scanning.
             stim_times      = L(find(L(:,2)==3),1)';
             valid           = stim_times<last_scan_time & stim_times>first_scan_time;%i.e. during scanning
-            %sanity check: check if valid onsets matches to tTRIAL
-            if sum(valid) ~= self.paradigm{run}.presentation.tTrial
-                fprintf('Number of stimulus onsets found in the log are different than tTRIAL.\n');
-                keyboard
-            end            
-            stim_times = stim_times(valid);            
+            fprintf('Discarded %i stimulus\n',length(valid)-sum(valid));
+            stim_times      = stim_times(valid);
             %
             trial = 0;
             for stim_time = stim_times;%run stim by stim                
@@ -753,7 +810,9 @@ classdef Subject < Project
                 if decimal < 1%if stimuli are shown but the scanner is not running
                     trial                = trial + 1;
                     stim_scanunit(trial) = (scan_id(first_positive)-1) + decimal;
-                    stim_ids(trial)       = self.paradigm{run}.presentation.con_id(trial);
+                    stim_ids(trial)      = self.paradigm{run}.presentation.dist(trial);
+                else
+                    keyboard;%sanity check
                 end
             end            
         end
