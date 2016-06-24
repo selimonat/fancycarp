@@ -801,20 +801,22 @@ classdef Subject < Project
             %during scanning.
             stim_times      = L(find(L(:,2)==3),1)';
             valid           = stim_times<last_scan_time & stim_times>first_scan_time;%i.e. during scanning
-            fprintf('Discarded %i stimulus\n',length(valid)-sum(valid));
-            stim_times      = stim_times(valid);
-            %
+            if sum(valid) ~= length(stim_times)
+                keyboard
+            end            
+            %%
+            stim_ids        = nan(1,length(scan_times)); 
+            stim_scanunit   = nan(1,length(scan_times));
             trial = 0;
-            for stim_time = stim_times;%run stim by stim                
-                d                        = scan_times - stim_time;
-                first_positive           = find(d > 0,1);%find the first positive value
-                decimal                  = d(first_positive)./self.TR;
-                if decimal < 1%if stimuli are shown but the scanner is not running
-                    trial                = trial + 1;
-                    stim_scanunit(trial) = (scan_id(first_positive)-1) + decimal;
-                    stim_ids(trial)      = self.paradigm{run}.presentation.dist(trial);
-                else
-                    keyboard;%sanity check
+            for stim_time = stim_times;%run stim by stim          
+                trial                = trial + 1;
+                d                    = stim_time - scan_times;
+                first_positive       = find(d > 0,1,'last');%find the first positive value
+                decimal              = d(first_positive)./self.TR;                
+                stim_scanunit(trial) = (scan_id(first_positive)-1) + mod(decimal,1);
+                stim_ids(trial)      = self.paradigm{run}.presentation.dist(trial);
+                if decimal > 1%if stimuli are shown but the scanner is not running
+                    cprintf('*[1 .5 0]','Hit one missing pulse!!!.\nRight now will ignore it, but you have to make sure this is correct.\n');                    
                 end
             end            
         end
