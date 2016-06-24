@@ -261,10 +261,14 @@ classdef Subject < Project
                 dummy    = SONGetEventChannel(fh,chan);
                 L        = [L ;[dummy(:) repmat(chan2L(chan),length(dummy),1)]];%returns time in seconds.                
             end
-            % include only the period starting and ending with pulses.            
+            % include only the period starting and ending with pulses. To
+            % this end find the period where the distance between the two
+            % pulse is smaller than the TR times 1.1. In the physio
+            % computer events might have been recorded before and after
+            % scanning session.
             scan_times      = L(find(L(:,2) == 0),1);
-            last_scan_ind   = find(diff(scan_times) < 1,1,'last');
-            first_scan_ind  = find(diff(scan_times) < 1,1,'first');
+            last_scan_ind   = find(diff(scan_times) < self.TR*1.1,1,'last');
+            first_scan_ind  = find(diff(scan_times) < self.TR*1.1,1,'first');
             %
             first_scan_time = scan_times(first_scan_ind);
             last_scan_time  = scan_times(last_scan_ind);
