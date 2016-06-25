@@ -940,7 +940,8 @@ classdef Subject < Project
             %normalize the beta images right away
             beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
-            self.VolumeSmooth(beta_images);%('s_' will be added)
+            beta_images = self.path_beta(nrun(1),model_num,'w_');%smooth the normalized images.
+            self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
         end
      end
 end
