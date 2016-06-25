@@ -733,11 +733,14 @@ classdef Subject < Project
             L       = self.get_log(nrun);
             tevents = size(L,1);            
             plot(L(1:tevents,1),L(1:tevents,2),'o','markersize',10);%plot events as dots.
-            % plot line
+            % plot lines for pulses
             hold on;            
             scan_events = find(L(:,2) == 0);            
-            scan_times  = L(scan_events,1);
-            plot([scan_times(1:4:end) scan_times(1:4:end)],ylim,'k','linewidth',.1);%plot every 5 th pulse event as a line
+            scan_times  = L(scan_events,1);            
+            plot([scan_times(5:5:end) scan_times(5:5:end)],ylim,'k','linewidth',.1);%plot every 5 th pulse event as a line
+            % text pulse indices for each line as well.
+            t_scan = length(scan_times);
+            text(scan_times(5:5:t_scan),repmat(0,length(5:5:t_scan),1),num2str([5:5:t_scan]'),'color','r');
             % mark with a star missing pulses (if any)
             miss        = find(diff(scan_times) > self.TR*1.1);
             if ~isempty(miss)
@@ -747,7 +750,7 @@ classdef Subject < Project
             stim_events = find(L(:,2) == 3);
             stim_types  = L(stim_events,3);
             stim_times  = L(stim_events,1);
-            text(stim_times,repmat(3,length(stim_times),1),num2str(stim_types),'color','r');
+            text(stim_times,repmat(3,length(stim_times),1),num2str(stim_types),'color','r');            
             %
             hold off;            
             set(gca,'ytick',[-2:8],'yticklabel',{'Rating On','Text','Pulse','Tracker+','Cross+','Stim+','CrossMov','UCS','Stim-','Key+','Tracker-'});
@@ -802,25 +805,18 @@ classdef Subject < Project
             first_scan_time = min(scan_times);
             %collect info on stim onsets and discard those not occurring
             %during scanning.
-            stim_times      = L(find(L(:,2)==3),1)';
+            stim_times      = L(find(L(:,2)==3),1)';            
             valid           = stim_times<last_scan_time & stim_times>first_scan_time;%i.e. during scanning
             if sum(valid) ~= length(stim_times)
                 keyboard
             end            
-            %%
-            stim_ids        = nan(1,length(stim_times)); 
+            %%     
+            stim_ids        = L(find(L(:,2)==3),3)';
             stim_scanunit   = stim_ids;
             trial           = 0;
             for stim_time = stim_times;%run stim by stim          
                 trial                = trial + 1;
-                d                    = stim_time - scan_times;
-                first_positive       = find(d > 0,1,'last');%find the first positive value
-                decimal              = d(first_positive)./self.TR;                
-                stim_scanunit(trial) = (scan_id(first_positive)-1) + mod(decimal,1);
-                stim_ids(trial)      = self.paradigm{run}.presentation.dist(trial);
-                if decimal > 1%if stimuli are shown but the scanner is not running
-                    cprintf('*[1 .5 0]','Hit one missing pulse!!!.\nThis might be a risk for stimulus timing.\nFor now this will be ignored..\n');
-                end
+                stim_scanunit(trial) = floor(stim_time./self.TR)+1 + mod(stim_time./self.TR,1);                
             end            
         end
         function FitFIR(self,nrun,model_num)
@@ -873,8 +869,8 @@ classdef Subject < Project
         end
         function CreateModels(self,runs)
             %%%%%%%%%%%%%%%%%%%%%%
-            for run = runs
-                model_num  = 1;
+            model_num  = 1;
+            for run = runs                
                 model_path = self.path_model(run,model_num);
                 if ~exist(fileparts(model_path));mkdir(fileparts(model_path));end
                 [scan,id]  = self.StimTime2ScanUnit(run);
