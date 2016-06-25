@@ -731,8 +731,7 @@ classdef Subject < Project
         function plot_log(self,nrun)
             %will plot the events that are logged during the experiment.
             L       = self.get_log(nrun);
-            tevents = size(L,1);
-            figure;
+            tevents = size(L,1);            
             plot(L(1:tevents,1),L(1:tevents,2),'o','markersize',10);%plot events as dots.
             % plot line
             hold on;            
@@ -779,9 +778,12 @@ classdef Subject < Project
             %plots the data logged by the stim pc together with data logged
             %in the physio-computer. Will mark with a star the missing
             %pulses.
+            clf;
             self.plot_log(nrun);
+            hold on;
             L = self.get_physio2log;
-            plot(L(:,1),L(:,2),'r+');                        
+            plot(L(:,1),L(:,2),'r+');
+            hold off;
         end
     end
     methods %(fmri analysis)
@@ -806,9 +808,9 @@ classdef Subject < Project
                 keyboard
             end            
             %%
-            stim_ids        = nan(1,length(scan_times)); 
-            stim_scanunit   = nan(1,length(scan_times));
-            trial = 0;
+            stim_ids        = nan(1,length(stim_times)); 
+            stim_scanunit   = stim_ids;
+            trial           = 0;
             for stim_time = stim_times;%run stim by stim          
                 trial                = trial + 1;
                 d                    = stim_time - scan_times;
@@ -817,7 +819,7 @@ classdef Subject < Project
                 stim_scanunit(trial) = (scan_id(first_positive)-1) + mod(decimal,1);
                 stim_ids(trial)      = self.paradigm{run}.presentation.dist(trial);
                 if decimal > 1%if stimuli are shown but the scanner is not running
-                    cprintf('*[1 .5 0]','Hit one missing pulse!!!.\nRight now will ignore it, but you have to make sure this is correct.\n');                    
+                    cprintf('*[1 .5 0]','Hit one missing pulse!!!.\nThis might be a risk for stimulus timing.\nFor now this will be ignored..\n');
                 end
             end            
         end
