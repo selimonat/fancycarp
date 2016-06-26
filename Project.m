@@ -4,11 +4,6 @@ classdef Project < handle
     % subject ids) and methods (for e.g. getting paths from the dicom
     % server).
     %
-    % This branch is mrt/main that is all future branches for new projects
-    % should be based on this branch. The CheckConsistency.m file can be
-    % used to test the consistency of this branch on a test dataset (the
-    % test data set can be found in /common/raw/users/onat/test_project).
-    %
     % The first set of properties has to be entered by hand. For example
     % TRIO_SESSIONS should be entered manually for your experiment. The
     % other properties drive from these. 
@@ -21,6 +16,9 @@ classdef Project < handle
     % Once you data is nicely loaded into the subject/run/ structure,
     % SanityCheck method comes very handy to ensure that your project
     % folders have all the size they should be.
+    %
+    % Don't forget to add spm, smr to your path, they are defined below,
+    % however automatic changing of path names is not recommended.
 	% 
 	% Current methods:
 	%
@@ -46,10 +44,10 @@ classdef Project < handle
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
 
-        path_project          = '/Users/onat/Documents/test_project/';        
-        path_spm              = '/common/apps/spm12-6685/';%IMPORTANT: use the same SPM version.
-        trio_sessions         = {  'TRIO_17468' 'TRIO_17476' };%random triosession ids, need to be entered for new projects
-        dicom_serie_selector  = {  [3 4 5]      [3 4 5]      };%need to be entered manually for new projects.
+        path_project          = '/projects/fearamy/data/';        
+        path_spm              = '/common/apps/spm12-6685/';        
+        trio_sessions         = {  '' '' '' '' 'TRIO_17468' 'TRIO_17476' 'TRIO_17477' 'TRIO_17478' 'TRIO_17479' 'TRIO_17480' 'TRIO_17481' 'TRIO_17482' 'TRIO_17483' 'TRIO_17484' 'TRIO_17485' 'TRIO_17486' 'TRIO_17487' 'TRIO_17488' 'TRIO_17514' 'TRIO_17515' 'TRIO_17516' 'TRIO_17517'  'TRIO_17520' 'TRIO_17521' 'TRIO_17522' 'TRIO_17523' 'TRIO_17524' 'TRIO_17525' 'TRIO_17526' 'TRIO_17527' 'TRIO_17557' 'TRIO_17558' 'TRIO_17559' 'TRIO_17560'  'TRIO_17563' 'TRIO_17564' 'TRIO_17565' 'TRIO_17566' 'TRIO_17567' 'TRIO_17568' 'TRIO_17569' 'TRIO_17570' 'TRIO_17571' 'TRIO_17572'};
+        dicom_serie_selector  = {  [] [] []   []      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [5 6 7]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]       [3 4 5]      [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]      [3 4 5]    };
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
         dicom2run             = repmat({[1 2 3]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
@@ -58,7 +56,8 @@ classdef Project < handle
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
         smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method
-        atlas2mask_threshold  = 50;%where ROI masks are computed, this threshold is used.
+        atlas2mask_threshold  = 50;%where ROI masks are computed, this threshold is used.        
+        path_smr              = sprintf('%s%ssmrReader%s',fileparts(which('Project')),filesep,filesep);%path to .SMR importing files in the fancycarp toolbox.
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.         

@@ -34,10 +34,15 @@ classdef Subject < Project
     end
     properties (SetAccess = private)
         id
-        path        
-        scr                
+        path
+        csp
+        csn
+        scr        
+        get_param_pmf= [];
         trio_session  = [];
-        total_run     = [];        
+        ratings       = [];
+        total_run     = [];
+        pmf
     end
     %%
     methods
@@ -131,24 +136,72 @@ classdef Subject < Project
 				end
             end
             
-        end            
+        end
+        function rating = get.ratings(self)
+            %returns the CS+-aligned ratings for all the runs
+            for run = 1:self.total_run;%don't count the first run
+                if isfield(self.paradigm{run}.out,'rating')
+                    if ~isempty(self.paradigm{run});
+                        rating(run).y      = self.paradigm{run}.out.rating';
+                        rating(run).y      = circshift(rating.y,[1 4-self.csp ]);
+                        rating(run).x      = repmat([-135:45:180],size(self.paradigm{run}.out.rating,2),1);
+                        rating(run).ids    = repmat(self.id,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
+                        rating(run).y_mean = mean(rating.y);
+                    else
+                        fprintf('No rating present for this subject and run (%d) \n',nr);
+                    end
+                end
+            end
+        end
+        function out    = get_scr(self,run,cond)
+            if nargin < 3
+                cond=1:8;
+            end
+            conddummy = [-135:45:180 500 1000 3000];
+            % s is a subject instance
+            out       = [];
+            cutnum    = self.scr.findphase(run);
+            self.scr.cut(cutnum);
+            self.scr.run_ledalab;
+            self.scr.plot_tuning_ledalab(cond);
+            out.y     = self.scr.fear_tuning;
+            out.x     = conddummy(cond);
+            out.ind   = cutnum;
+        end        
         function [o]    = get.total_run(self)
             %% returns the total number of runs in a folder (except run000)
             o      = length(dir(self.path))-3;%exclude the directories .., ., and run000
         end        
-        function out    = get_log(self,run)
-            %loads and plots the Log, here you can put the old experiment
-            %plotter.
+        function L      = get_log(self,run)
+            % Loads the ptb log. Removes all events before/after the
+            % first/last scan and defines zero as the first scan.
+            %
             
-            out        = self.paradigm{run}.out.log;
-            %sort things according to time rather than order of being
-            %logged
-            [~,i]      = sort(out(:,1),'ascend');
-            out        = out(i,:);
+            L               = self.paradigm{run}.out.log;
+            %sort things according to time rather than order of being logged
+            [~,i]           = sort(L(:,1),'ascend');
+            L               = L(i,:);
             % delete all the events that are after the last scanning..
-            scan_times = out(out(:,2) == 0,1);
-            i          = out(:,1) > max(scan_times);            
-        end             
+            scan_times      = L(find(L(:,2) == 0),1);                        
+            %
+            first_scan_time = min(scan_times);
+            last_scan_time  = max(scan_times);
+            %            
+            L(L(:,1) < first_scan_time,:) = [];
+            L(L(:,1) > last_scan_time,:)  = [];
+            L(:,1)          = L(:,1) - first_scan_time;
+        end
+        function out    = get.pmf(self)
+            %will load the raw pmf data.
+            dummy    = load(self.path_data(2,'stimulation'));
+            out      = dummy.p.psi;
+        end 
+        function out    = get.get_param_pmf(self)
+            %returns the parameters of the pmf fit (condition x parameter);
+            out      = self.fit_pmf;
+            out      = [out.params(1,:),out.params(2,:)];
+            out      = array2table([out self.id ],'variablenames',[self.pmf_variablenames 'subject_id']);
+        end         
         function o      = get_param_motion(self,run)
             %will load the realignment parameters, of course you have to
             %realign the EPIs first.
@@ -192,6 +245,40 @@ classdef Subject < Project
             XYZ         = [X Y Z ones(sum(mask_ind(:)),1)]';%this is in hr's voxels space.
             XYZmm       = mask_handle.mat*XYZ;%this is world space.            
             XYZmm       = unique(XYZmm','rows')';%remove repetititons.
+        end
+        function L      = get_physio2log(self)            
+            %returns logged events from the physio computer in the same
+            %format as the log file. Events are aligned to the first valid
+            %scan pulse.
+            %%
+            
+            filename = sprintf('%s/run001/scr/data.smr',self.path);
+            fh       = fopen(filename);
+            % get times for trigger channels.
+            chan2L   = [NaN 9 3 NaN 5 0 NaN NaN 5];%transform channels to event_types as logged by the stim computer.
+            L        = [];
+            for chan     = [2 3 4 5 6 9];%all event channels.            
+                dummy    = SONGetEventChannel(fh,chan);
+                L        = [L ;[dummy(:) repmat(chan2L(chan),length(dummy),1)]];%returns time in seconds.                
+            end
+            % include only the period starting and ending with pulses. To
+            % this end find the period where the distance between the two
+            % pulse is smaller than the TR times 1.1. In the physio
+            % computer events might have been recorded before and after
+            % scanning session.
+            scan_times      = L(find(L(:,2) == 0),1);
+            last_scan_ind   = find(diff(scan_times) < self.TR*1.1,1,'last');
+            first_scan_ind  = find(diff(scan_times) < self.TR*1.1,1,'first');
+            %
+            first_scan_time = scan_times(first_scan_ind);
+            last_scan_time  = scan_times(last_scan_ind);
+            %
+            L(L(:,1) < first_scan_time,:) = [];
+            L(L(:,1) > last_scan_time,:)  = [];
+            %
+            L(:,1)   = L(:,1) - first_scan_time;
+            %                   
+            fclose(fh);
         end
     end
     
@@ -352,6 +439,91 @@ classdef Subject < Project
             target_file = regexprep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
             movefile(target_file,self.path_native_atlas);
         end        
+        function [X,N,K]=spm_DesignMatrix(self,nrun,model_num)
+            %will return the same design matrix used by spm in an efficient
+            %way. see also: GetTimeSeries, spm_GetBetas
+
+            %% Design matrix X
+            cond                  = self.get_modelonsets(nrun,model_num);            
+            fMRI_T                = 16;
+            fMRI_T0               = 1;
+            xBF.T                 = fMRI_T;
+            xBF.T0                = fMRI_T0;
+            xBF.dt                = self.TR/xBF.T;
+            xBF.UNITS             = 'scans';
+            xBF.Volterra          = 1;
+            xBF.name              = 'hrf';
+            xBF                   = spm_get_bf(xBF);            
+            %
+            for i = 1:length(cond);%one regressor for each condition
+                Sess.U(i).dt        = xBF.dt;%- time bin (seconds)                
+                Sess.U(i).ons       = cond(i).onset;%- onsets    (in SPM.xBF.UNITS)
+                Sess.U(i).name      = {sprintf('%02d',i)};%- cell of names for each input or cause                
+                %no parametric modulation here
+                Sess.U(i).dur    =  repmat(0,length(Sess.U(i).ons),1);%- durations (in SPM.xBF.UNITS)
+                Sess.U(i).P.name =  'none';
+                Sess.U(i).P.P    =  'none';
+                Sess.U(i).P.h    =  0;%- order of polynomial expansion
+                Sess.U(i).P.i    =  1;%- sub-indices of u pertaining to P
+            end
+            %
+            k                       = self.total_volumes(nrun);
+            SPM.xBF                 = xBF;
+            SPM.nscan               = k;
+            SPM.Sess                = Sess;
+            SPM.Sess.U              = spm_get_ons(SPM,1);            
+            %
+            % Convolve stimulus functions with basis functions
+            [X,Xn,Fc]               = spm_Volterra(SPM.Sess.U,SPM.xBF.bf,SPM.xBF.Volterra);
+            % Resample regressors at acquisition times (32 bin offset)
+            X                       = X((0:(k - 1))*fMRI_T + fMRI_T0 + 32,:);
+            %% Nuissance Parameters
+            N                       = self.get_param_nuissance(nrun);
+            %% Get high-pass filter
+            %this is how it should be, but due to fearamy specificities, we
+            %have to make work around. Note that this cannot be merge to
+            %/mrt/xx or                        
+            %% get the filtering strcture a la spm.
+            run_borders              = [[0 910 910+895]+1;[910 910+895  self.total_volumes(nrun)]];            
+            K(1:size(run_borders,2)) = struct('HParam', self.HParam, 'row',    [] , 'RT',     self.TR ,'X0',[]);
+            c = 0;            
+            for b = run_borders
+                c        = c + 1;
+                K(c).row = b(1):b(2);
+                K(c)     = spm_filter(K(c));
+                K(c).X0  = [ones(length(K(c).row),1)*std(K(c).X0(:)) K(c).X0];                
+            end
+            
+        end        
+        function beta = spm_GetBetas(self,nrun,model_num,mask_id)
+            %will compute beta weights manually without calling SPM.            
+            [X N K ]  = self.spm_DesignMatrix(nrun,model_num);%returns the Design Matrix, Nuissiance Matrix, and High-pass Filtering Matrix
+            Y         = self.TimeSeries(nrun,mask_id);
+            Y         = zscore(Y);
+            Y         = spm_filter(K,Y);%high-pass filtering.
+            %            
+            DM        = [X N ones(size(X,1),1)];%append together Onsets, Nuissances and a constant
+            DM        = spm_filter(K,DM);%filter also the design matrix
+            DM        = spm_sp('Set',DM);
+            DM        = spm_sp('x-',DM);% projector;
+            beta      = DM*Y;
+        end        
+        function [D,XYZvox] = TimeSeries(self,nrun,mask_id)
+            %will read the time series from NRUN. MASK can be used to mask
+            %the volume, otherwise all data will be returned (dangerous).
+            
+            vh          = spm_vol(self.path_epi(nrun,'r'));
+            XYZmm       = self.get_nativeatlas2mask(mask_id);%in world space from native mask
+            
+            if spm_check_orientations(vh)
+                XYZvox  = vh(1).mat\XYZmm;%in EPI voxel space.
+                XYZvox  = unique(XYZvox','rows')';
+            else
+                 keyboard;%sanity check;
+            end
+            XYZvox      = round(XYZvox);
+            D           = spm_get_data(vh,XYZvox);
+        end              
     end
     methods %path_tools which are related to the subject              
         function out        = path_skullstrip(self,varargin)
@@ -482,16 +654,108 @@ classdef Subject < Project
         end       
     end
    
+    methods %analysis
+        function [out] = fit_pmf(self,varargin)
+            %will load the pmf fit (saved in runXXX/pmf) if computed other
+            %wise will read the raw pmf data (saved in runXXX/stimulation)
+            %and compute a fit.            
+                
+            if exist(self.path_data(2,'pmf')) && isempty(varargin)
+                %load directly or 
+                load(self.path_data(2,'pmf'));
+%                 fprintf('PMF Fit found and loaded successfully for subject %i...\n',self.id);
+                
+            elseif ~isempty(varargin) || ~exist(self.path_data(2,'pmf'))
+                addpath(self.path_palamedes);
+                %compute and save it.
+                fprintf('Fitting PMF...\n')                                
+                % define a search grid
+                searchGrid.alpha  = linspace(0,100,10);    %structure defining grid to
+                searchGrid.beta   = 10.^[-1:0.1:1];         %search for initial values
+                searchGrid.gamma  = linspace(0,0.5,10);
+                searchGrid.lambda = linspace(0,0.1,10);
+                paramsFree        = [1 1 1 1];
+                PF                = @PAL_Weibull;
+                %prepare some variables
+                tchain            = size(self.pmf.log.xrounded,3);
+                xlevels           = unique(abs(self.pmf.presentation.uniquex));
+                NumPos            = NaN(length(xlevels),tchain);
+                OutOfNum          = NaN(length(xlevels),tchain);
+                sd                = NaN(length(xlevels),tchain);
+                %first collapse the two directions (pos/neg differences from
+                %csp)
+                
+                for chain = 1:tchain
+                    fprintf('Starting to fit chain %g...\n',chain)
+                    %get responses, and resulting PMF from PAL algorithm
+                    data = self.pmf.log.xrounded(:,:,chain);
+                    rep  = self.pmf.presentation.rep;
+                    cl   = 0;
+                    for l = xlevels(:)'
+                        cl                 = cl+1;
+                        ind                = find(abs(self.pmf.presentation.uniquex) == l);
+                        collecttrials      = data(ind,1:rep(ind(1)));
+                        collecttrials      = collecttrials(:);
+                        NumPos(cl,chain)   = sum(collecttrials);% number of "different" responses
+                        OutOfNum(cl,chain) = length(collecttrials);%number of presentations at that level
+                        sd(cl,chain)       = (OutOfNum(cl,chain)*NumPos(cl,chain)/OutOfNum(cl,chain)...
+                            *(1-NumPos(cl,chain)/OutOfNum(cl,chain)))./OutOfNum(cl,chain);%var of binomial distr. (np(1-p))
+                    end
+                    %fit the function using PAL
+                    %%
+                    options             = PAL_minimize('options');
+                    options.MaxIter     = 10.^3;
+                    options.MaxFunEvals = 10.^3;
+                    options.Display     = 'On';
+                    options.ToX         = -10.^3;
+                    options.TolFun      = -10.^3;
+                    
+                    [paramsValues LL exitflag output] = PAL_PFML_Fit(xlevels, ...
+                        NumPos(:,chain), OutOfNum(:,chain), searchGrid, paramsFree, PF,'lapseLimits',[0 .5],'guessLimits',[0 .5]);
+                    fprintf('%s.\n',output.message );
+                    out.NumPos(chain,:)          = NumPos(:,chain);
+                    out.OutOfNum(chain,:)        = OutOfNum(:,chain);
+                    out.PropCorrectData(chain,:) = NumPos(:,chain)./OutOfNum(:,chain);
+                    out.sd(chain,:)              = sd(:,chain);
+                    out.params(chain,:)          = paramsValues;
+                    out.LL(chain,:)              = LL;
+                    out.exitflag(chain,:)        = exitflag;
+                    out.PF                       = PF;
+                    out.xlevels                  = xlevels;
+                end
+                save(self.path_data(2,'pmf'),'out')
+            end
+        end
+    end
     methods %(plotters)
         function plot_log(self,nrun)
             %will plot the events that are logged during the experiment.
             L       = self.get_log(nrun);
-            tevents = size(L,1);
-            figure;
-            plot(L(1:tevents,1) - L(1,1),L(1:tevents,2),'o','markersize',10);
-            ylim([-2 8]);
+            tevents = size(L,1);            
+            plot(L(1:tevents,1),L(1:tevents,2),'o','markersize',10);%plot events as dots.
+            % plot lines for pulses
+            hold on;            
+            scan_events = find(L(:,2) == 0);            
+            scan_times  = L(scan_events,1);            
+            plot([scan_times(5:5:end) scan_times(5:5:end)],ylim,'k','linewidth',.1);%plot every 5 th pulse event as a line
+            % text pulse indices for each line as well.
+            t_scan = length(scan_times);
+            text(scan_times(5:5:t_scan),repmat(0,length(5:5:t_scan),1),num2str([5:5:t_scan]'),'color','r');
+            % mark with a star missing pulses (if any)
+            miss        = find(diff(scan_times) > self.TR*1.1);
+            if ~isempty(miss)
+                plot(scan_times(miss)+self.TR,0,'mp','markersize',40);
+            end
+            % text condition ids on dots.
+            stim_events = find(L(:,2) == 3);
+            stim_types  = L(stim_events,3);
+            stim_times  = L(stim_events,1);
+            text(stim_times,repmat(3,length(stim_times),1),num2str(stim_types),'color','r');            
+            %
+            hold off;            
             set(gca,'ytick',[-2:8],'yticklabel',{'Rating On','Text','Pulse','Tracker+','Cross+','Stim+','CrossMov','UCS','Stim-','Key+','Tracker-'});
-            grid on
+            grid off;box off;
+            ylim([-5 15]);
             drawnow;
         end       
         function plot_motionparams(self,nrun)
@@ -513,6 +777,17 @@ classdef Subject < Project
             ylim([-5 5].*10.^-2)
             set(gca,'ygrid','on')
         end            
+        function plot_logcomparison(self,nrun)
+            %plots the data logged by the stim pc together with data logged
+            %in the physio-computer. Will mark with a star the missing
+            %pulses.
+            clf;
+            self.plot_log(nrun);
+            hold on;
+            L = self.get_physio2log;
+            plot(L(:,1),L(:,2),'r+');
+            hold off;
+        end
     end
     methods %(fmri analysis)
         function [stim_scanunit,stim_ids]=StimTime2ScanUnit(self,run)
@@ -528,34 +803,74 @@ classdef Subject < Project
             scan_id         = 1:length(scan_times);%label pulses with increasing numbers
             last_scan_time  = max(scan_times);%time of the last
             first_scan_time = min(scan_times);
-            trial           = 0;
             %collect info on stim onsets and discard those not occurring
             %during scanning.
-            stim_times      = L(find(L(:,2)==3),1)';
+            stim_times      = L(find(L(:,2)==3),1)';            
             valid           = stim_times<last_scan_time & stim_times>first_scan_time;%i.e. during scanning
-            %sanity check: check if valid onsets matches to tTRIAL
-            if sum(valid) ~= self.paradigm{run}.presentation.tTrial
-                fprintf('Number of stimulus onsets found in the log are different than tTRIAL.\n');
+            if sum(valid) ~= length(stim_times)
                 keyboard
             end            
-            stim_times = stim_times(valid);            
-            %
-            trial = 0;
-            for stim_time = stim_times;%run stim by stim                
-                d                        = scan_times - stim_time;
-                first_positive           = find(d > 0,1);%find the first positive value
-                decimal                  = d(first_positive)./self.TR;
-                if decimal < 1%if stimuli are shown but the scanner is not running
-                    trial                = trial + 1;
-                    stim_scanunit(trial) = (scan_id(first_positive)-1) + decimal;
-                    stim_ids(trial)       = self.paradigm{run}.presentation.con_id(trial);
-                end
+            %%     
+            stim_ids        = L(find(L(:,2)==3),3)';
+            stim_scanunit   = stim_ids;
+            trial           = 0;
+            for stim_time = stim_times;%run stim by stim          
+                trial                = trial + 1;
+                stim_scanunit(trial) = floor(stim_time./self.TR)+1 + mod(stim_time./self.TR,1);                
             end            
+        end
+        function FitFIR(self,nrun,model_num)
+            %run the model MODEL_NUM for data in NRUN.
+            %NRUN can be a vector, but then care has to be taken that
+            %model_num is correctly set for different runs.
+                       
+            spm_dir = sprintf('%s%smodel_fir_%02d%s',self.spm_dir,filesep,model_num,filesep);
+            spm_path= sprintf('%s%smodel_fir_%02d%sSPM.mat',self.spm_dir,filesep,model_num,filesep);
+
+            
+            if ~exist(self.path_spm);mkdir(spm_dir);end
+            
+            matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
+            matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
+            matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
+            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
+            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
+            
+            for session = nrun
+                %load files using ...,1, ....,2 format
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));
+                %load the onsets
+                dummy                                                   = get_modelonsets(nrun,model_num);
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
+                %load nuissance parameters
+                N                                                       = self.GetNuissance(nrun);                
+                for nNuis = 1:size(nuis,2)
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).name  = mat2str(nNuis);
+                end
+                %
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi               = {''};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi_reg           = {''};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = 128;
+            end
+            matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
+            matlabbatch{1}.spm.stats.fmri_spec.bases.fir.length                  = self.TR*15;
+            matlabbatch{1}.spm.stats.fmri_spec.bases.fir.order                   = 10;
+            matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
+            matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
+            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
+            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
+            %estimation
+            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spm};
+            matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
+            spm_jobman('run', matlabbatch);
         end
         function CreateModels(self,runs)
             %%%%%%%%%%%%%%%%%%%%%%
-            for run = runs
-                model_num  = 1;
+            model_num  = 1;
+            for run = runs                
                 model_path = self.path_model(run,model_num);
                 if ~exist(fileparts(model_path));mkdir(fileparts(model_path));end
                 [scan,id]  = self.StimTime2ScanUnit(run);
@@ -571,7 +886,7 @@ classdef Subject < Project
                 save(model_path,'cond');
                 %%%%%%%%%%%%%%%%%%%%%%
             end
-        end        
+        end
         function FitHRF(self,nrun,model_num)
 
             %run the model MODEL_NUM for data in NRUN.
@@ -625,7 +940,8 @@ classdef Subject < Project
             %normalize the beta images right away
             beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
-            self.VolumeSmooth(beta_images);%('s_' will be added)
+            beta_images = self.path_beta(nrun(1),model_num,'w_');%smooth the normalized images.
+            self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
         end
      end
 end
