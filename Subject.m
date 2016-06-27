@@ -483,7 +483,7 @@ classdef Subject < Project
             %this is how it should be, but due to fearamy specificities, we
             %have to make work around. Note that this cannot be merge to
             %/mrt/xx or                        
-            %% get the filtering strcture a la spm.
+            % get the filtering strcture a la spm.
             run_borders              = [[0 910 910+895]+1;[910 910+895  self.total_volumes(nrun)]];            
             K(1:size(run_borders,2)) = struct('HParam', self.HParam, 'row',    [] , 'RT',     self.TR ,'X0',[]);
             c = 0;            
@@ -943,5 +943,11 @@ classdef Subject < Project
             beta_images = self.path_beta(nrun(1),model_num,'w_');%smooth the normalized images.
             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
         end
+    end
+     methods %(clearly fearamy specific)
+         function CreateModel02(self)
+             %will generate stim onsets ignoring all microblocks where UCS
+             %is delivered. In model 1 stim 4 has less repetitions.
+         end
      end
 end

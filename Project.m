@@ -321,7 +321,7 @@ classdef Project < handle
             beta_files = [];
             for ns = self.subject_indices
                 s        = Subject(ns);
-                beta_files = cat(3,beta_files,self.beta_path(run,model,'s_w_')');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
+                beta_files = cat(3,beta_files,self.path_beta(run,model,'s_w_')');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
             end
             %            
             c = 0;
@@ -333,7 +333,7 @@ classdef Project < handle
                 matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files);
             end
             %
-            spm_dir                                                          = regexprep(s.spmmat_dir(1,1),'sub...','second_level');%convert to second-level path
+            spm_dir                                                          = regexprep(self.dir_spmmat(run,model),'sub...','second_level');%convert to second-level path
             matlabbatch{1}.spm.stats.factorial_design.dir                    = cellstr(spm_dir);
             matlabbatch{1}.spm.stats.factorial_design.des.anova.dept         = 0;
             matlabbatch{1}.spm.stats.factorial_design.des.anova.variance     = 1;
