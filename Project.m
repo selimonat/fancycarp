@@ -272,46 +272,7 @@ classdef Project < handle
                 fprintf('Running SPM jobman %i...\n',n);
                 spm_jobman('run', matlabbatch(n));
             end            
-        end                
-        function SecondLevel_ANOVA(self,run,model,beta_image_index)
-            % This method runs a second level analysis for a model defined in MODEL using beta images indexed in BETA_IMAGE_INDEX.
-            
-            %store all the beta_images in a 3D array
-            beta_files = [];
-            for ns = self.subject_indices                
-                s        = Subject(ns);
-                beta_files = cat(3,beta_files,s.beta_path(run,model,'s_w_')');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
-            end
-            %            
-            c = 0;
-            for ind = beta_image_index;    
-                %take single beta_images across all subjects and store them
-                %in a cell
-                c = c +1;                
-                files                                                              = squeeze(beta_files(:,ind,:))';
-                matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files);
-            end
-            %
-            spm_dir                                                          = regexprep(s.spmmat_dir(1,1),'sub...','second_level');%convert to second-level path
-            matlabbatch{1}.spm.stats.factorial_design.dir                    = cellstr(spm_dir);
-            matlabbatch{1}.spm.stats.factorial_design.des.anova.dept         = 0;
-            matlabbatch{1}.spm.stats.factorial_design.des.anova.variance     = 1;
-            matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca        = 0;
-            matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova       = 0;
-            matlabbatch{1}.spm.stats.factorial_design.cov                    = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
-            matlabbatch{1}.spm.stats.factorial_design.multi_cov              = struct('files', {}, 'iCFI', {}, 'iCC', {});
-            matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none     = 1;
-            matlabbatch{1}.spm.stats.factorial_design.masking.im             = 1;
-            matlabbatch{1}.spm.stats.factorial_design.masking.em             = {''};
-            matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit         = 1;
-            matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
-            matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm        = 1;
-            %
-            matlabbatch{2}.spm.stats.fmri_est.spmmat                         = {[spm_dir '/SPM.mat']};
-            matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
-            %
-            spm_jobman('run', matlabbatch);
-        end
+        end                        
     end
     methods %methods that does something on all subjects one by one
         function VolumeGroupAverage(self,run,selector)
@@ -351,6 +312,45 @@ classdef Project < handle
             matlabbatch{1}.spm.spatial.smooth.dtype  = 0;
             matlabbatch{1}.spm.spatial.smooth.im     = 0;
             matlabbatch{1}.spm.spatial.smooth.prefix = 's_';            
+            spm_jobman('run', matlabbatch);
+        end
+        function SecondLevel_ANOVA(self,run,model,beta_image_index)
+            % This method runs a second level analysis for a model defined in MODEL using beta images indexed in BETA_IMAGE_INDEX.
+            
+            %store all the beta_images in a 3D array
+            beta_files = [];
+            for ns = self.subject_indices
+                s        = Subject(ns);
+                beta_files = cat(3,beta_files,self.beta_path(run,model,'s_w_')');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
+            end
+            %            
+            c = 0;
+            for ind = beta_image_index;    
+                %take single beta_images across all subjects and store them
+                %in a cell
+                c = c +1;                
+                files                                                              = squeeze(beta_files(:,ind,:))';
+                matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files);
+            end
+            %
+            spm_dir                                                          = regexprep(s.spmmat_dir(1,1),'sub...','second_level');%convert to second-level path
+            matlabbatch{1}.spm.stats.factorial_design.dir                    = cellstr(spm_dir);
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.dept         = 0;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.variance     = 1;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca        = 0;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova       = 0;
+            matlabbatch{1}.spm.stats.factorial_design.cov                    = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
+            matlabbatch{1}.spm.stats.factorial_design.multi_cov              = struct('files', {}, 'iCFI', {}, 'iCC', {});
+            matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none     = 1;
+            matlabbatch{1}.spm.stats.factorial_design.masking.im             = 1;
+            matlabbatch{1}.spm.stats.factorial_design.masking.em             = {''};
+            matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit         = 1;
+            matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
+            matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm        = 1;
+            %
+            matlabbatch{2}.spm.stats.fmri_est.spmmat                         = {[spm_dir '/SPM.mat']};
+            matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
+            %
             spm_jobman('run', matlabbatch);
         end
     end
