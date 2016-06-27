@@ -50,7 +50,7 @@ classdef Project < handle
         dicom_serie_selector  = {  [] [] []   []      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [5 6 7]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]       [3 4 5]      [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]      [3 4 5]    };
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
-        dicom2run             = repmat({[1 2 3]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
+        dicom2run             = [1 1 1];%how to distribute TRIO sessiosn to folders.
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};%if you need another folder, do it here.
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
@@ -246,7 +246,7 @@ classdef Project < handle
             %Creates a folder hiearchy for a project. You must run this
             %first to create an hiearchy and fill this with data.
             for ns = 1:length(self.trio_sessions)
-                for nr = 0:length(self.dicom2run{1})
+                for nr = 0:length(self.dicom2run)
                     for nf = 1:length(self.data_folders)                        
                         path2subject = sprintf('%s%ssub%03d%srun%03d%s%s',self.path_project,filesep,ns,filesep,nr,filesep,self.data_folders{nf});
                         if ~isempty(self.trio_sessions{ns})
