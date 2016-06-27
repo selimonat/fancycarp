@@ -51,7 +51,7 @@ classdef Subject < Project
             s.id               = id;
             s.path             = s.pathfinder(s.id,[]);
             s.dicom_serie_id   = s.dicom_serie_selector{s.id};
-            s.dicom_target_run = s.dicom2run{s.id};
+            s.dicom_target_run = s.dicom2run;
             try
                 s.trio_session 	  = s.trio_sessions{s.id};
             end
@@ -121,21 +121,24 @@ classdef Subject < Project
                 fprintf('Will now dump series (%s)\n',self.current_time);            
             end
             
-            %% save the desired runs to disk
+            %% save the desired runs to disk into folders specified in dicom2run
             n = 0;
             for source = self.dicom_folders(:)'
                 %
                 n 				 = n+1;
-                dest             = self.dir_epi(n);                                
+                dest             = self.dir_epi(self.dicom2run(n));
                 if exist(dest)
 					self.DicomDownload(source{1},dest);                
-                	self.DicomTo4D(dest);
 				else
 					keyboard
 					fprintf('Stopped here as a sanity check\nIt seems the destination folder doesn''t exist.')
 				end
             end
-            
+            %% merge the data into 4D
+            for nrun = 1:self.total_run
+                self.DicomTo4D(self.dir_epi(nrun));
+            end
+                
         end
         function rating = get.ratings(self)
             %returns the CS+-aligned ratings for all the runs
@@ -169,8 +172,8 @@ classdef Subject < Project
             out.ind   = cutnum;
         end        
         function [o]    = get.total_run(self)
-            %% returns the total number of runs in a folder (except run000)
-            o      = length(dir(self.path))-3;%exclude the directories .., ., and run000
+            %% returns the total number of EPI runs in a folder. Relies on dicom2run.
+            o      = length(unique(self.dicom2run));%
         end        
         function L      = get_log(self,run)
             % Loads the ptb log. Removes all events before/after the
@@ -582,12 +585,17 @@ classdef Subject < Project
         function out        = dir_epi(self,nrun)
             % simply returns the path to the mrt data.
             
+            if nrun > self.total_run
+                fprintf('Requested a run which doesn''t exist\n');
+                keyboard%sanity check.
+            end
+            
             if nargin == 2                
                 out = sprintf('%smrt%s',self.pathfinder(self.id,self.dicom_target_run(nrun)),filesep);                
             else
                 fprintf('Need to give an input...\n')
                 return
-            end
+            end            
         end   
         function out        = path_beta(self,nrun,model_num,prefix,varargin)
             %returns the path for beta images computed in NRUN for
