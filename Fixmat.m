@@ -122,7 +122,7 @@ classdef Fixmat < Project
             for n = 1:2:length(varargin)
                 obj.selection = obj.selection .* ismember(obj.(varargin{n}),varargin{n+1});
             end                        
-            fprintf('Selection vector updated...\n');
+%             fprintf('Selection vector updated...\n');
             obj.selection = logical(obj.selection);
             obj.query     = varargin;
         end
@@ -417,7 +417,7 @@ classdef Fixmat < Project
                 M = log10(M);            
             end
             %
-            ffigure;
+%             ffigure;
             clf                        
             nsp     = obj.subplot_number;
             for nc = 1:size(M,3)
@@ -434,6 +434,7 @@ classdef Fixmat < Project
                 t     = sprintf('%s%d/',obj.map_titles{nc}{1:2});                
                 title(t,'interpreter','none');
                 end
+                drawnow
             end
             %             thincolorbar('vert');
             colorbar
@@ -611,7 +612,7 @@ classdef Fixmat < Project
             end
             supertitle('Fixation Counts',1);
         end
-        function fixmat = getfixmat(obj,edfdata, edfmeta)
+        function fixmat  = getfixmat(obj,edfdata, edfmeta)
             % fixmat = fixations(edfdata, edfmeta)
             %   where [edfdata, edfmeta] = edfread('file.edf')
             %   returns a flat fixation matrix
@@ -740,6 +741,39 @@ classdef Fixmat < Project
                 fixmat.(exp_fields{f}) = ones(1, length(fixmat.start), 'int32') * str2double(edfmeta.(exp_fields{f}));
             end
             
-        end                
-    end    
+        end
+        function [C, Cr] = get_corrFixbyFix(obj,phases,conditions,fixations)
+            %Will run across all subjects and collect fixation maps for
+            %each FIXATION, CONDITION and PHASE. This will result in a
+            %similarity matrix of 
+            %[FIXATIONxCONDITIONxPHASE FIXATIONxCONDITIONxPHASE N).
+            %Fixations maps are always cocktail blank corrected.
+            
+            %set blank correction to 1, but will revert it at the end to
+            %its initial value.
+            old_value = obj.bc;
+            obj.bc    = 1;
+            c_sub     = 0;
+            %
+            for ns = unique(obj.subject);
+                c_sub   = c_sub +1;
+                fprintf('Processing subject %d...\n',ns);
+                counter = 0;
+                v       = [];
+                for phase = phases
+                    for nfix = fixations
+                        for ncond = conditions
+                            counter      = counter + 1;                            
+                            v{counter}   = {'phase' phase 'deltacsp' ncond 'subject' ns 'fix' nfix(:)'};
+                        end
+                    end
+                end
+                obj.getmaps(v{:});                
+                C(:,:,c_sub)      = obj.cov;
+                Cr(:,:,c_sub)     = obj.corr;
+            end
+            obj.bc = old_value;
+        end
+    end
 end
+
