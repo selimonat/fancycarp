@@ -472,7 +472,11 @@ classdef Fixmat < Project
             end
             %correct for baseline if wanted.
             if obj.bc
-                obj.maps = obj.maps - repmat(mean(obj.maps,3),[1 1 size(obj.maps,3)]);
+                obj.maps = obj.maps - repmat(nanmean(obj.maps,3),[1 1 size(obj.maps,3)]);
+                nnan = sum(isnan(obj.maps(1,1,:)));%total number of maps with nans;
+                if nnan ~= 0
+                    cprintf('*[1 0 0]','ATTENTION: %i maps was just full of NaNs\n',nnan);
+                end
             end            
         end                      
         function bild = get.stimulus(obj)
@@ -754,7 +758,7 @@ classdef Fixmat < Project
             old_value = obj.bc;
             obj.bc    = 1;
             c_sub     = 0;
-            %
+            %            
             for ns = unique(obj.subject);
                 c_sub   = c_sub +1;
                 fprintf('Processing subject %d...\n',ns);
@@ -764,13 +768,13 @@ classdef Fixmat < Project
                     for nfix = fixations
                         for ncond = conditions
                             counter      = counter + 1;                            
-                            v{counter}   = {'phase' phase 'deltacsp' ncond 'subject' ns 'fix' nfix(:)'};
+                            v{counter}   = {'phase' phase 'deltacsp' ncond 'subject' ns 'fix' nfix(:)'};                                
                         end
                     end
                 end
                 obj.getmaps(v{:});                
                 C(:,:,c_sub)      = obj.cov;
-                Cr(:,:,c_sub)     = obj.corr;
+                Cr(:,:,c_sub)     = CancelDiagonals(obj.corr,NaN);
             end
             obj.bc = old_value;
         end
