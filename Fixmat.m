@@ -762,19 +762,22 @@ classdef Fixmat < Project
             for ns = unique(obj.subject);
                 c_sub   = c_sub +1;
                 fprintf('Processing subject %d...\n',ns);
-                counter = 0;
-                v       = [];
-                for phase = phases
+                M = [];
+                for phase = phases                    
+                    v       = [];
+                    counter = 0;                
                     for nfix = fixations
                         for ncond = conditions
                             counter      = counter + 1;                            
-                            v{counter}   = {'phase' phase 'deltacsp' ncond 'subject' ns 'fix' nfix(:)'};                                
+                            v{counter}   = {'phase' phase 'deltacsp' ncond 'subject' ns 'fix' nfix};                                
                         end
-                    end
-                end
-                obj.getmaps(v{:});                
+                    end         
+                    obj.getmaps(v{:});
+                    M = cat(3,M,obj.maps);                   
+                end                
+                obj.maps          = M;
                 C(:,:,c_sub)      = obj.cov;
-                Cr(:,:,c_sub)     = CancelDiagonals(obj.corr,NaN);
+                Cr(:,:,c_sub)     = obj.corr;
             end
             obj.bc = old_value;
         end
