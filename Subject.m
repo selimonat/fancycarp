@@ -192,7 +192,8 @@ classdef Subject < Project
             %            
             L(L(:,1) < first_scan_time,:) = [];
             L(L(:,1) > last_scan_time,:)  = [];
-            L(:,1)          = L(:,1) - first_scan_time;
+            L(:,1)                        = L(:,1) - first_scan_time;            
+            
         end
         function out    = get.pmf(self)
             %will load the raw pmf data.
@@ -336,7 +337,7 @@ classdef Subject < Project
                 end
             end
             %% path to the mean_epi
-            mean_epi    = strrep( self.path_epi(1),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
+            mean_epi    = self.path_meanepi;
             
             %double-pass realign EPIs and reslice the mean image only.
             matlabbatch{1}.spm.spatial.realign.estwrite.data = epi_run;
@@ -528,6 +529,72 @@ classdef Subject < Project
             D           = spm_get_data(vh,XYZvox);
         end              
     end
+    methods %sanity checks
+        function sanity_realignement(self)
+            %will load both the realigned and original data and compute the
+            %correlation between consecutive frames.            
+            %%
+            V = [];c = 0;
+            for nrun = 1:self.total_run
+                vol  = spm_select('expand',self.path_epi(nrun));
+                volh = spm_vol(vol);
+                volh = volh;
+                tvol = length(volh);
+                %
+                for n = 1:tvol
+                    c = c+1;
+                    fprintf('Reading volumes %3d percent',round((n/tvol)*100));
+                    V(:,:,:,c)    = spm_read_vols(volh(n));
+                    if n < tvol;fprintf(repmat('\b',1,27));end
+                end
+                fprintf('\n')
+            end
+            %
+            V        = reshape(V,[size(V,1)*size(V,2)*size(V,3) size(V,4)]);
+            R(:,:,1) = CancelDiagonals(corrcoef(V),NaN);
+            C(:,1)   = diag(R(:,:,1),-1);
+            clear V;
+            % load the realigned data 
+            V = [];c = 0;
+            for nrun = 1:self.total_run
+                vol  = spm_select('expand',self.path_epi(nrun,'r'));                
+                volh = spm_vol(vol);
+                volh = volh;
+                tvol = length(volh);
+                %
+                for n = 1:tvol
+                    c = c+1;
+                    fprintf('Reading volumes %3d percent',round((n/tvol)*100));
+                    V(:,:,:,c)    = spm_read_vols(volh(n));
+                    if n < tvol;fprintf(repmat('\b',1,27));end
+                end
+                fprintf('\n')
+            end
+            V        = reshape(V,[size(V,1)*size(V,2)*size(V,3) size(V,4)]);
+            R(:,:,2) = CancelDiagonals(corrcoef(V),NaN);
+            C(:,2)   = diag(R(:,:,2),-1);
+            clear V
+            %%            
+            ffigure(1);imagesc([R(:,:,1) R(:,:,2)]);axis image;colorbar;
+            SaveFigure(sprintf('%ssanity_realignment01.png',self.path_midlevel(1)));
+            
+            ffigure(2);
+            plot(C,'o-');            
+            SaveFigure(sprintf('%ssanity_realignment02.png',self.path_midlevel(1)));
+            %%            
+        end
+        function sanity_saveslice(self)
+            %save a slice from the mean epi resulting from the realignement
+            vol  = self.path_meanepi;
+            V    = spm_read_vols(spm_vol(vol));
+            imagesc(V(:,:,13));
+            axis image;
+            colormap('gray');
+            grid on;
+            colorbar;                    
+            SaveFigure(sprintf('%ssanity_saveslice.png',self.path_midlevel(1)));
+        end
+    end
     methods %path_tools which are related to the subject              
         function out        = path_skullstrip(self,varargin)
             %returns filename for the skull stripped hr. Use VARARGIN to
@@ -660,6 +727,13 @@ classdef Subject < Project
                 path2data = strrep(path2data,'mat',varargin{2});
             end
         end       
+        function out        = path_midlevel(self,run)
+            out = sprintf('%s%smidlevel%s',self.path_data(run),filesep,filesep);
+        end
+        function out        = path_meanepi(self)
+            %path to meanepi.
+           out = strrep( self.path_epi(1),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
+        end
     end
    
     methods %analysis
