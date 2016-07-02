@@ -621,8 +621,11 @@ classdef Subject < Project
             HRPath = [];
             if ~ismac & ~ispc
                 [status2 DicqOutputFull] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders',self.trio_session));
+                %get the patient_id from exam
+                a         = regexp(DicqOutputFull,'Patient: V[0-9]*','match');
+                PatientID = str2num(a{1}(regexp(a{1},'\d')));
                 %take the latest anatomical scan.
-                [status2 HRLine] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders | grep mprage | tail -n 1',self.trio_session));
+                [status2 HRLine] = system(sprintf('/common/apps/bin/dicq --verbose  --series --patient=V%i --folders | grep mprage | tail -n 1',PatientID));
                 %                
                 if ~isempty(HRLine);
                     HRPath = regexp(HRLine,'/common\S*','match');
