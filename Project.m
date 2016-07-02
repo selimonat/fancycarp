@@ -44,13 +44,13 @@ classdef Project < handle
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
 
-        path_project          = '/projects/fearamy/data/';        
+        path_project          = '/projects/fearamy/feargen/data/';        
         path_spm              = '/common/apps/spm12-6685/';        
-        trio_sessions         = {  '' '' '' '' 'TRIO_17468' 'TRIO_17476' 'TRIO_17477' 'TRIO_17478' 'TRIO_17479' 'TRIO_17480' 'TRIO_17481' 'TRIO_17482' 'TRIO_17483' 'TRIO_17484' 'TRIO_17485' 'TRIO_17486' 'TRIO_17487' 'TRIO_17488' 'TRIO_17514' 'TRIO_17515' 'TRIO_17516' 'TRIO_17517'  'TRIO_17520' 'TRIO_17521' 'TRIO_17522' 'TRIO_17523' 'TRIO_17524' 'TRIO_17525' 'TRIO_17526' 'TRIO_17527' 'TRIO_17557' 'TRIO_17558' 'TRIO_17559' 'TRIO_17560'  'TRIO_17563' 'TRIO_17564' 'TRIO_17565' 'TRIO_17566' 'TRIO_17567' 'TRIO_17568' 'TRIO_17569' 'TRIO_17570' 'TRIO_17571' 'TRIO_17572'};
-        dicom_serie_selector  = {  [] [] []   []      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [5 6 7]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]       [3 4 5]      [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]      [3 4 5]    };
+        trio_sessions         = {  '' 'TRIO_12476' 'TRIO_12506' 'TRIO_12509' 'TRIO_12522' 'TRIO_12545' 'TRIO_12546' 'TRIO_12547' 'TRIO_12548' 'TRIO_12550' 'TRIO_12551' 'TRIO_12557' 'TRIO_12749' 'TRIO_12750' 'TRIO_12752' 'TRIO_12753' 'TRIO_12754' 'TRIO_12755'  'TRIO_12756' 'TRIO_12757'  'TRIO_12758' 'TRIO_12766' 'TRIO_12767' 'TRIO_12777' 'TRIO_12778' 'TRIO_12779' 'TRIO_12785' 'TRIO_12786'   'TRIO_12906' 'TRIO_13084' 'TRIO_13085' 'TRIO_13086' 'TRIO_13087' 'TRIO_13088' 'TRIO_13089'};
+        dicom_serie_selector  = {  ''  [3 6 7]     [3 6 8]       [3 7 8]      [3 6 7]      [3 6 7]      [3 6 7]      [3 6 7]      [3 6 7]      [12 15 16]    [3 6 7]     [3 6 7]       [3 6 7]      [3 6 7]      [3 6 7]      [3 6 7]       [3 6 7]     [3 6 7]       [3 6 8]      [3 6 7]    [ 3 6 7]         [ 3 6 7]     [3 6 7]     [3 6 7]      [3 6 7]      [3 6 7]       [3 6 8]      [3 6 7]      [3 6 7]      [3 6 7]      [3 6 7]      [3 6 7]      [3 6 7]      [3 6 7]      [3 8 9]};
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
-        dicom2run             = [1 1 1];%how to distribute TRIO sessiosn to folders.
+        dicom2run             = [1 2 3];%how to distribute TRIO sessiosn to folders.
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};%if you need another folder, do it here.
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
