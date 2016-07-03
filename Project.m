@@ -50,7 +50,7 @@ classdef Project < handle
         dicom_serie_selector  = {  [] [] []   []      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [5 6 7]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]       [3 4 5]      [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]      [3 4 5]    };
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
-        dicom2run             = [1 1 1];%how to distribute TRIO sessiosn to folders.
+        dicom2run             = [1 2 3];%how to distribute TRIO sessiosn to folders.
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};%if you need another folder, do it here.
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
@@ -260,7 +260,21 @@ classdef Project < handle
         function t          = get.current_time(self)
             t = datestr(now,'hh:mm:ss');
         end
-
+        function files      = collect_files(self,selector)
+            %will collect all the files from all subjects that matches the
+            %SELECTOR.
+            
+            files = [];
+            for ns = self.subject_indices
+                s     = Subject(ns);
+                current = sprintf('%s/%s',s.path_data(run),selector);
+                if exist(current) ~= 0
+                    files = [files ; current];
+                else
+                    keyboard;%for sanity checks
+                end
+            end
+        end
     end
     methods(Static) %SPM analysis related methods.
        
@@ -285,17 +299,9 @@ classdef Project < handle
             %SELECTOR = 'mrt/w_ss_data.nii' (which is the normalized skullstripped
             %image). This method will go through all subjects and compute an average skull stripped image.
             
-            %so far not functioanl
-            files = [];
-            for ns = self.subject_indices
-                s     = Subject(ns);
-                current = sprintf('%s/%s',s.path_data(run),selector);
-                if exist(current) ~= 0
-                    files = [files ; current];
-                else
-                    keyboard;%for sanity checks
-                end
-            end
+            
+            files       = self.collect_files(selector);
+            
             v           = spm_vol(files);%volume handles
             V           = mean(spm_read_vols(v),4);%data
             target_path = regexprep(files(1,:),'sub[0-9][0-9][0-9]','midlevel');%target filename
