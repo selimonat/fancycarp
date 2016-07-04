@@ -284,14 +284,14 @@ classdef Subject < Project
             %                   
             fclose(fh);
         end
-        function XYZvox  = get_mm2vox(self,XYZmm,vh)
+        function XYZvox = get_mm2vox(self,XYZmm,vh)
             %brings points in the world space XYZmm to voxel space XYZvox
             %of the image in VH.
             XYZvox  = vh.mat\XYZmm;
             XYZvox  = unique(XYZvox','rows')';%remove repetitions
             XYZvox  = round(XYZvox);%remove decimals as these are going to be matlab indices.
         end
-        function D       = get_data(self,selector,mask_id)
+        function D      = get_data(self,selector,mask_id)
             %will read the data specified in SELECTOR 
             %SELECTOR is the relative path to a 3/4D .nii file. for example
             %'run001/spm/model_02_chrf_00/beta_0001.nii'.
@@ -902,15 +902,18 @@ classdef Subject < Project
         end
     end
     methods %(fmri analysis)
-        function [stim_scanunit,stim_ids] = analysis_StimTime2ScanUnit(self,run)
+        function [stim_scanunit,stim_ids] = analysis_StimTime2ScanUnit(self,L)
             %will return stim onsets in units of scan. Will check the Log
             %for stim onsets, it will discard those trials occuring outside
-            %the first and last scans based on their time-stamps. In
-            %FearAmy, we have the reference measurements, i.e. scanner
+            %the first and last scans based on their time-stamps. This
+            %methods accepts now Log data as input, instead of loading the
+            %original from disk.
+            %
+            %In FearAmy, we have the reference measurements, i.e. scanner
             %stops for a while during the experiment. Those onsets are also
             %excluded (if the next scan unit is more than the TR far away).
+            %
             
-            L               = self.get_log(run);
             scan_times      = L(L(:,2) == 0,1);%find all scan events and get their times            
             scan_id         = 1:length(scan_times);%label pulses with increasing numbers
             last_scan_time  = max(scan_times);%time of the last
@@ -980,14 +983,18 @@ classdef Subject < Project
             spm_jobman('run', matlabbatch);
         end
         function analysis_CreateModels(self,runs)
+            %simply creates the default model based on the stimulus onsets
+            %and logged pulses in the log file. Whether this makes sense or
+            %not it is uptoyou.
             %%%%%%%%%%%%%%%%%%%%%%
             model_num  = 1;
             for run = runs                
                 model_path = self.path_model(run,model_num);
                 if ~exist(fileparts(model_path));mkdir(fileparts(model_path));end
-                [scan,id]  = self.StimTime2ScanUnit(run);
+                L          = self.get_log(run);
+                [scan,stim_id]  = self.analysis_StimTime2ScanUnit(run);
                 counter    = 0;
-                for current_condition = unique(id)
+                for current_condition = unique(stim_id)
                     counter                = counter + 1;
                     cond(counter).name     = mat2str(current_condition);
                     cond(counter).onset    = scan(id == current_condition);
@@ -1062,10 +1069,46 @@ classdef Subject < Project
             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
         end
     end
-     methods %(clearly fearamy specific)
-         function analysis_CreateModel02(self)
+    methods %(clearly fearamy specific)
+         function analysis_CreateModel03(self)
              %will generate stim onsets ignoring all microblocks where UCS
-             %is delivered. In model 1 stim 4 has less repetitions.
+             %is delivered. 
+             model_num      = 3;             
+             L              = self.get_log(1);%get the log file.
+             % identify each event with its microblock id.
+             mbi            = [];
+             current_mb     = 1;
+             for n = 1:size(L,1)
+                 if L(n,2) ~= 9
+                     mbi(n,1) = current_mb;
+                 else
+                     current_mb = L(n,3);
+                     mbi(n,1)   = current_mb;
+                 end
+             end
+             mbi(L(:,1) < 0) = NaN;
+             % find stim events which are appearing in a microblock where
+             % there is an UCS (number 5);
+             stim_onsets     = L(:,2) == 3;%all stim events.
+             i               = ismember(mbi,mbi(L(:,2) == 5))&stim_onsets;
+             %annihilate these events immediately !
+             L(i,:)          = [];
+             %from this point on it is the same as self.analysis_CreateModels
+             model_path      = self.path_model(1,model_num);             
+             [scan,stim_id]  = self.analysis_StimTime2ScanUnit(L);
+             counter         = 0;
+             for current_condition = unique(stim_id)
+                 counter                = counter + 1;
+                 cond(counter).name     = mat2str(current_condition);
+                 cond(counter).onset    = scan(stim_id == current_condition);
+                 cond(counter).duration = zeros(1,length(cond(counter).onset));
+                 cond(counter).tmod     = 0;
+                 cond(counter).pmod     = struct('name',{},'param',{},'poly',{});
+             end
+             if ~exist(fileparts(model_path));
+                 mkdir(fileparts(model_path));
+             end
+             save(model_path,'cond');
          end
          function [out] = fit_pmf(self,varargin)
             %will load the pmf fit (saved in runXXX/pmf) if computed other
