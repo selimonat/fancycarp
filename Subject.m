@@ -284,6 +284,30 @@ classdef Subject < Project
             %                   
             fclose(fh);
         end
+        function D      = get_data(self,selector,mask_id)
+            %will read the data specified in SELECTOR 
+            %SELECTOR is the relative path to a 3/4D .nii file. for example
+            %'run001/spm/model_02_chrf_00/beta_0001.nii'.
+            %
+            %MASK_ID is used to select voxels.
+            %
+            
+            file  = sprintf('%s/%s',self.path,selector);
+            if exist(file)
+                vh      = spm_vol(file);
+                if spm_check_orientations(vh)
+                    XYZmm   = self.get_nativeatlas2mask(mask_id);
+                    XYZvox  = vh(1).mat\XYZmm;%in EPI voxel space.
+                    XYZvox  = unique(XYZvox','rows')';
+                    XYZvox  = round(XYZvox);
+                    D       = spm_get_data(vh,XYZvox);
+                else
+                    fprintf('The data in\n %s\n doesn''t have same orientations...',file);
+                end
+            else
+                fprintf('The file:\n %s\n doesn''t exist...',file);
+            end
+        end
     end
     
     methods %(mri, preprocessing))              
@@ -471,7 +495,7 @@ classdef Subject < Project
                 Sess.U(i).P.i    =  1;%- sub-indices of u pertaining to P
             end
             %
-            k                       = self.total_volumes(nrun);
+            k                       = self.get_total_volumes(nrun);
             SPM.xBF                 = xBF;
             SPM.nscan               = k;
             SPM.Sess                = Sess;
@@ -487,8 +511,9 @@ classdef Subject < Project
             %this is how it should be, but due to fearamy specificities, we
             %have to make work around. Note that this cannot be merge to
             %/mrt/xx or                        
-            % get the filtering strcture a la spm.
-            run_borders              = [[0 910 910+895]+1;[910 910+895  self.total_volumes(nrun)]];            
+            % get the filtering strcture a la spm. 
+            run_borders              = [[0 910 910+895]+1;[910 910+895  self.get_total_volumes(nrun)]];
+            %
             K(1:size(run_borders,2)) = struct('HParam', self.HParam, 'row',    [] , 'RT',     self.TR ,'X0',[]);
             c = 0;            
             for b = run_borders
@@ -499,11 +524,19 @@ classdef Subject < Project
             end
             
         end        
-        function beta = spm_GetBetas(self,nrun,model_num,mask_id)
-            %will compute beta weights manually without calling SPM.            
-            [X N K ]  = self.spm_DesignMatrix(nrun,model_num);%returns the Design Matrix, Nuissiance Matrix, and High-pass Filtering Matrix
-            Y         = self.TimeSeries(nrun,mask_id);
-            Y         = zscore(Y);
+        function beta = spm_Fit(self,nrun,model_num,mask_id)
+            %will compute beta weights "manually" without calling SPM.
+            
+            
+            [X N K]   = self.spm_DesignMatrix(nrun,model_num);%returns the Design Matrix, Nuissance Matrix, and High-pass Filtering Matrix            
+            selector  = regexprep(self.path_epi(1,'r'),self.path,'');%could be an input
+            Y         = self.get_data(selector,mask_id);            
+            
+%             GM        = 100;
+%             g         = spm_global(spm_vol(self.path_epi(nrun)));    
+%             factor    = GM./mean(g);
+%             Y         = Y*factor;
+            Y         = (Y-mean(Y(:)))./std(Y(:));                        
             Y         = spm_filter(K,Y);%high-pass filtering.
             %            
             DM        = [X N ones(size(X,1),1)];%append together Onsets, Nuissances and a constant
@@ -511,6 +544,7 @@ classdef Subject < Project
             DM        = spm_sp('Set',DM);
             DM        = spm_sp('x-',DM);% projector;
             beta      = DM*Y;
+            beta      = beta';%(voxels x betas)
         end        
         function [D,XYZvox] = TimeSeries(self,nrun,mask_id)
             %will read the time series from NRUN. MASK can be used to mask
@@ -1014,9 +1048,14 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
             matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
+            spm_jobman('run', matlabbatch);%create SPM file first
+            % now adapt for session effects.            
+            spm_fmri_concatenate(path_spm, [910 895 self.get_total_volumes(nrun)-910-895]);
+            
+            matlabbatch = [];
             %estimation
-            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spm};
-            matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
+            matlabbatch{1}.spm.stats.fmri_est.spmmat            = {path_spm};
+            matlabbatch{1}.spm.stats.fmri_est.method.Classical  = 1;
             spm_jobman('run', matlabbatch);
             %
             %normalize the beta images right away
