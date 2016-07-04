@@ -55,8 +55,7 @@ classdef Project < handle
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
-        smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method
-        atlas2mask_threshold  = 50;%where ROI masks are computed, this threshold is used.        
+        smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method        
         path_smr              = sprintf('%s%ssmrReader%s',fileparts(which('Project')),filesep,filesep);%path to .SMR importing files in the fancycarp toolbox.
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
@@ -66,7 +65,9 @@ classdef Project < handle
 		current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
     end    
-    
+    properties (Hidden)
+        atlas2mask_threshold  = 50;%where ROI masks are computed, this threshold is used.        
+    end
 	methods
         function DU = SanityCheck(self,runs,measure,varargin)
             %DU = SanityCheck(self,runs,measure,varargin)
@@ -289,7 +290,7 @@ classdef Project < handle
         end                        
     end
     methods %methods that does something on all subjects one by one
-        function VolumeGroupAverage(self,run,selector)
+        function VolumeGroupAverage(self,selector)
             %Averages all IMAGES across all subjects. This can only be done
             %on normalized images. The result will be saved to the
             %project/midlevel/. The string SELECTOR is appended to the
@@ -358,6 +359,77 @@ classdef Project < handle
             matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
             %
             spm_jobman('run', matlabbatch);
+        end
+    end
+    methods %plotters
+        function plot_activitymap_normalized(self,files)
+            %plots the data in a volume as average intensity projection, as
+            %a 3xN panel, where N is the number of volumes. Masking
+            %operates in the normalized space.
+            
+            %%                        
+            %%                    
+            files      = vertcat(files{:});
+            vh         = spm_vol(files);%volume handle
+            data_mat   = spm_read_vols(vh);%read the activity data, bonus: it checks also for orientation.
+            [XYZmm]    = self.get_nativeatlas2mask(120);%world space;
+            XYZvox     = self.get_mm2vox(XYZmm,vh(1));%get indices for the selected voxels.
+            s          = size(data_mat);if length(s) == 3;s = [s 1];end
+            mask       = logical(zeros(s(1:3)));%create an empty mask.
+            i          = sub2ind(size(data_mat),XYZvox(1,:),XYZvox(2,:),XYZvox(3,:));
+            mask(i)    = true;              
+            %%
+            tcond      = size(data_mat,4);
+            %mask the data
+            data_mat   = data_mat.*repmat(mask,[1 1 1 tcond]);
+            %
+            x          = [min(find(sum(squeeze(sum(mask,3)),2) ~= 0)) max(find(sum(squeeze(sum(mask,3)),2) ~= 0))];
+            y          = [min(find(sum(squeeze(sum(mask,3))) ~= 0)) max(find(sum(squeeze(sum(mask,3))) ~= 0))];
+            z          = [min(find(sum(squeeze(sum(mask))) ~= 0)) max(find(sum(squeeze(sum(mask))) ~= 0))];
+                        
+            %vectorize it so that we can get the contribution of all voxels to the
+            %colormap computation
+            
+            %for the first COL conditions
+            col                                    = tcond;            
+            dummy                                  = reshape(data_mat,prod(s(1:3)),s(4));
+            dummy                                  = mean(dummy(mask(:),:),2);
+            sigma_cmap = 4;
+            [roi.cmap(1:tcond,1) roi.cmap(1:tcond,2)]  = GetColorMapLimits(dummy(:),sigma_cmap);
+            %            
+            for n = 1:tcond
+                current          = data_mat(x(1):x(2),y(1):y(2),z(1):z(2),n);                
+                current_mask     = mask(x(1):x(2),y(1):y(2),z(1):z(2));                
+                % get the data
+                roi.x(:,:,n)     = squeeze(nanmean(current,1));
+                roi.y(:,:,n)     = squeeze(nanmean(current,2));
+                roi.z(:,:,n)     = squeeze(nanmean(current,3));
+                
+                % get the alpha masks
+                roi.x_alpha      = squeeze(mean(double(current_mask),1) ~=  0);
+                roi.y_alpha      = squeeze(mean(double(current_mask),2) ~=  0);
+                roi.z_alpha      = squeeze(mean(double(current_mask),3) ~=  0);
+                %
+            end            
+            %%
+            fields_alpha = {'x_alpha' 'y_alpha' 'z_alpha' };
+
+            fields_data  = {'x' 'y' 'z'};
+            ffigure(1);clf;
+            for ncol = 1:tcond;%run over conditions
+                for nrow = 1:3%run over rows
+                    subplot(3,tcond, ncol+(tcond*(nrow-1)) );                    
+                    imagesc(roi.(fields_data{nrow})(:,:,ncol),[roi.cmap(1,1) roi.cmap(1,2)]);
+                    alpha(double(roi.(fields_alpha{nrow})));
+                    box off  
+                    axis off
+                    thincolorbar('horizontal');            
+                    set(gca,'xtick',[],'ytick',[],'linewidth',1);
+                    axis image;
+                    drawnow;
+                end
+            end
+            
         end
     end
 end
