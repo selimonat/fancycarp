@@ -291,27 +291,21 @@ classdef Subject < Project
             XYZvox  = unique(XYZvox','rows')';%remove repetitions
             XYZvox  = round(XYZvox);%remove decimals as these are going to be matlab indices.
         end
-        function D      = get_data(self,selector,mask_id)
-            %will read the data specified in SELECTOR 
-            %SELECTOR is the relative path to a 3/4D .nii file. for example
-            %'run001/spm/model_02_chrf_00/beta_0001.nii'.
+        function D      = get_data(self,file,mask_id)
+            %will read the data specified in FILE 
+            %FILE is the absolute path to a 3/4D .nii file.            
             %
             %MASK_ID is used to select voxels.
-            %
+            %                        
             
-            file  = sprintf('%s/%s',self.path,selector);
-            if exist(file)
-                vh      = spm_vol(file);
-                if spm_check_orientations(vh)
-                    XYZmm   = self.get_nativeatlas2mask(mask_id);
-                    XYZvox  = self.get_mm2vox(XYZmm,vh);%in EPI voxel space.                    
-                    D       = spm_get_data(vh,XYZvox);
-                else
-                    fprintf('The data in\n %s\n doesn''t have same orientations...',file);
-                end
+            vh      = spm_vol(vertcat(file{:}));
+            if spm_check_orientations(vh)
+                XYZmm   = self.get_nativeatlas2mask(mask_id);
+                XYZvox  = self.get_mm2vox(XYZmm,vh(1));%in EPI voxel space.
+                D       = spm_get_data(vh,XYZvox);
             else
-                fprintf('The file:\n %s\n doesn''t exist...',file);
-            end
+                fprintf('The data in\n %s\n doesn''t have same orientations...',file);
+            end            
         end
     end
     
@@ -535,9 +529,8 @@ classdef Subject < Project
             %will compute beta weights "manually" without calling SPM.
             
             
-            [X N K]   = self.spm_DesignMatrix(nrun,model_num);%returns the Design Matrix, Nuissance Matrix, and High-pass Filtering Matrix            
-            selector  = regexprep(self.path_epi(1,'r'),self.path,'');%could be an input
-            Y         = self.get_data(selector,mask_id);            
+            [X N K]   = self.spm_DesignMatrix(nrun,model_num);%returns the Design Matrix, Nuissance Matrix, and High-pass Filtering Matrix                        
+            Y         = self.get_data(self.path_epi(nrun,'r'),mask_id);%return the realigned data.
             
 %             GM        = 100;
 %             g         = spm_global(spm_vol(self.path_epi(nrun)));    
@@ -555,6 +548,12 @@ classdef Subject < Project
         end                
         function              analysis_mumfordian(self,nrun,model,mask_id)
             keyboard
+        end
+        function [result]   = analysis_roi_average(self,beta_files,mask_id)
+            %returns interesting statistics with the roi MASK_ID on
+            %activity maps specified in BETA_FILES.            
+            D               = self.get_data(beta_files,mask_id)';
+            result.mean     = mean(D);
         end
     end
     methods %sanity checks
@@ -1067,7 +1066,7 @@ classdef Subject < Project
             self.VolumeSmooth(beta_images);%smooth the native images ('s_' will be added, resulting in 's_')
             beta_images = self.path_beta(nrun(1),model_num,'w_');%smooth the normalized images too.
             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
-        end
+        end                
     end
     methods %(clearly fearamy specific)
          function analysis_CreateModel03(self)
