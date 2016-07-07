@@ -93,7 +93,7 @@ classdef Subject < Project
                 movefile(files,regexprep(files,sprintf('%ssTRIO.*$',filesep),sprintf('%sdata.nii',filesep)));%rename it to data.nii
             end
         end
-        function p          = get_paradigm(self,nrun)
+        function p      = get_paradigm(self,nrun)
             %will load the paradigm file saved during your psychophysics
             %session.
             filename = self.path_data(nrun,'stimulation');
@@ -298,7 +298,7 @@ classdef Subject < Project
             %MASK_ID is used to select voxels.
             %                        
             
-            vh      = spm_vol(vertcat(file{:}));
+            vh      = spm_vol(file);
             if spm_check_orientations(vh)
                 XYZmm   = self.get_nativeatlas2mask(mask_id);
                 XYZvox  = self.get_mm2vox(XYZmm,vh(1));%in EPI voxel space.
@@ -444,7 +444,7 @@ classdef Subject < Project
             self.RunSPMJob(matlabbatch);
         end                        
         function MNI2Native(self)
-            %brings the atlas to MNI space and saves it in run000/atlas.
+            %brings the atlas to native space and saves it in run000/atlas.
             %Same as VolumeNormalize but uses the inverse deformation
             %fields but same batch. Currently functions only with the 120th
             %volume (which is right amygdala).
@@ -452,18 +452,21 @@ classdef Subject < Project
             %copy the atlas to subject's folder.
             copyfile(fileparts(self.path_atlas),[self.path_data(0) 'atlas/']);
             %
-            filename = self.path_native_atlas(120);%for test purposes and to gain speed I focus on amygdala right now.
-            nf = 1;
-            matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_hr,'data.nii','mri/iy_data.nii'));%iy_ not y_!
-            matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {filename};
-            matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
-                78 76 85];
-            matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
-            matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
-            matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'w';%inverse warped                        
-            %
+            nf = 0;
+            for roi = [58 120 182]%left, right, bilateral amygdala
+                nf                                                          = nf + 1;
+                filename                                                    = self.path_native_atlas(roi);%for test purposes and to gain speed I focus on amygdala right now.                
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.def        = cellstr(regexprep(self.path_hr,'data.nii','mri/iy_data.nii'));%iy_ not y_!
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.resample   = {filename};
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb     = [-78 -112 -70
+                    78 76 85];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'w';%inverse warped
+                %                
+            end
             self.RunSPMJob(matlabbatch);
-            target_file = regexprep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
+            target_file                                                     = regexprep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
             movefile(target_file,self.path_native_atlas);
         end
     end
@@ -546,8 +549,100 @@ classdef Subject < Project
             beta      = DM*Y;
             beta      = beta';%(voxels x betas)
         end                
-        function              analysis_mumfordian(self,nrun,model,mask_id)
-            keyboard
+        function beta       = analysis_mumfordian(self,nrun,model_num,mask_id)
+            
+            %% get the nuissance and highpass filtering matrices.
+            N                       = self.get_param_nuissance(nrun);            
+            run_borders             = [[0 910 910+895]+1;[910 910+895  self.get_total_volumes(nrun)]];
+            %
+            K(1:size(run_borders,2)) = struct('HParam', self.HParam, 'row',    [] , 'RT',     self.TR ,'X0',[]);
+            c = 0;            
+            for b = run_borders
+                c        = c + 1;
+                K(c).row = b(1):b(2);
+                K(c)     = spm_filter(K(c));
+                K(c).X0  = [ones(length(K(c).row),1)*std(K(c).X0(:)) K(c).X0];                
+            end   
+            %% get the data and highpass filter right away.
+            Y         = self.get_data(self.path_epi(nrun,'r'),mask_id);%return the realigned data.
+            Y         = (Y-mean(Y(:)))./std(Y(:));                        
+            Y         = spm_filter(K,Y);%high-pass filtering.
+            %% now we run across all trials and get a specific design matrix for each trial.                        
+            cond                  = self.get_modelonsets(nrun,model_num);
+            %%
+            onsets = [];name=[];
+            for nc = 1:9
+                onsets = [onsets cond(nc).onset];
+                name   = [name   repmat(str2num(cond(nc).name),1,length(cond(nc).onset))];
+            end
+            onsets2 = [];name2=[];
+            for nc = 10:11
+                onsets2 = [onsets2 cond(nc).onset];
+                name2   = [name2   repmat(str2num(cond(nc).name),1,length(cond(nc).onset))];
+            end
+            %%
+            new_cond = [];
+            for ntrial = 1:length(onsets)                
+                new_cond{ntrial}(1).name     = num2str(name(ntrial));
+                new_cond{ntrial}(1).onset    = onsets(ntrial);
+                new_cond{ntrial}(1).duration = 0;
+                new_cond{ntrial}(1).tmod     = [];
+                new_cond{ntrial}(1).pmod     = struct('name',{},'param',{},'poly',{});
+                %
+                new_cond{ntrial}(2).name     = 'stim_onsets';
+                new_cond{ntrial}(2).onset    = setdiff(onsets,onsets(ntrial));%everything else
+                new_cond{ntrial}(2).duration = 0;
+                new_cond{ntrial}(2).tmod     = [];
+                new_cond{ntrial}(2).pmod     = struct('name',{},'param',{},'poly',{});
+                %
+                new_cond{ntrial}(3).name     = 'ucs';
+                new_cond{ntrial}(3).onset    = onsets2;%everything else
+                new_cond{ntrial}(3).duration = 0;
+                new_cond{ntrial}(3).tmod     = [];
+                new_cond{ntrial}(3).pmod     = struct('name',{},'param',{},'poly',{});
+            end
+            %%
+            for ntrial = 1:length(new_cond)
+                fMRI_T                = 16;
+                fMRI_T0               = 1;
+                xBF.T                 = fMRI_T;
+                xBF.T0                = fMRI_T0;
+                xBF.dt                = self.TR/xBF.T;
+                xBF.UNITS             = 'scans';
+                xBF.Volterra          = 1;
+                xBF.name              = 'hrf';
+                xBF                   = spm_get_bf(xBF);
+                %
+                for i = 1:length(new_cond{ntrial});%one regressor for each condition
+                    Sess.U(i).dt        = xBF.dt;%- time bin (seconds)
+                    Sess.U(i).ons       = new_cond{ntrial}(i).onset;%- onsets    (in SPM.xBF.UNITS)
+                    Sess.U(i).name      = {sprintf('%02d',i)};%- cell of names for each input or cause
+                    %no parametric modulation here
+                    Sess.U(i).dur    =  repmat(0,length(Sess.U(i).ons),1);%- durations (in SPM.xBF.UNITS)
+                    Sess.U(i).P.name =  'none';
+                    Sess.U(i).P.P    =  'none';
+                    Sess.U(i).P.h    =  0;%- order of polynomial expansion
+                    Sess.U(i).P.i    =  1;%- sub-indices of u pertaining to P
+                end
+                %
+                k                       = self.get_total_volumes(nrun);
+                SPM.xBF                 = xBF;
+                SPM.nscan               = k;
+                SPM.Sess                = Sess;
+                SPM.Sess.U              = spm_get_ons(SPM,1);
+                %
+                % Convolve stimulus functions with basis functions
+                [X,Xn,Fc]               = spm_Volterra(SPM.Sess.U,SPM.xBF.bf,SPM.xBF.Volterra);
+                % Resample regressors at acquisition times (32 bin offset)
+                X                       = X((0:(k - 1))*fMRI_T + fMRI_T0 + 32,:);                
+                %%
+                DM                     = [X N ones(size(X,1),1)];%append together Onsets, Nuissances and a constant
+                DM                     = spm_filter(K,DM);%filter also the design matrix
+                DM                     = spm_sp('Set',DM);
+                DM                     = spm_sp('x-',DM);% projector;
+                beta(:,:,ntrial)       = DM*Y;%(voxels x betas)
+                
+            end
         end
         function [result]   = analysis_roi_average(self,beta_files,mask_id)
             %returns interesting statistics with the roi MASK_ID on
@@ -768,27 +863,29 @@ classdef Subject < Project
     methods %(plotters)
         function plot_log(self,nrun)
             %will plot the events that are logged during the experiment.
-            L       = self.get_log(nrun);
-            tevents = size(L,1);            
+            L           = self.get_log(nrun);
+            tevents     = size(L,1);            
+            scan_events = find(L(:,2) == 0);                        
+            stim_events = find(L(:,2) == 3);
+            scan_times  = L(scan_events,1);            
+            stim_types  = L(stim_events,3);
+            stim_times  = L(stim_events,1);
+            t_scan      = length(scan_times);            
+            %
             plot(L(1:tevents,1),L(1:tevents,2),'o','markersize',10);%plot events as dots.
             % plot lines for pulses
-            hold on;            
-            scan_events = find(L(:,2) == 0);            
-            scan_times  = L(scan_events,1);            
+            hold on;                        
             plot([scan_times(5:5:end) scan_times(5:5:end)],ylim,'k','linewidth',.1);%plot every 5 th pulse event as a line
-            % text pulse indices for each line as well.
-            t_scan = length(scan_times);
-            text(scan_times(5:5:t_scan),repmat(0,length(5:5:t_scan),1),num2str([5:5:t_scan]'),'color','r');
+            % text pulse indices for each line as well.            
+            text(scan_times(5:5:end),repmat(0,length(5:5:t_scan),1),num2str([5:5:t_scan]'),'color','r');
             % mark with a star missing pulses (if any)
             miss        = find(diff(scan_times) > self.TR*1.1);
             if ~isempty(miss)
                 plot(scan_times(miss)+self.TR,0,'mp','markersize',40);
             end
-            % text condition ids on dots.
-            stim_events = find(L(:,2) == 3);
-            stim_types  = L(stim_events,3);
-            stim_times  = L(stim_events,1);
+            % text condition ids on dots.            
             text(stim_times,repmat(3,length(stim_times),1),num2str(stim_types),'color','r');            
+%             text(stim_times,repmat(3.5,length(stim_times),1),num2str(onsets),'color','r');            
             %
             hold off;            
             set(gca,'ytick',[-2:8],'yticklabel',{'Rating On','Text','Pulse','Tracker+','Cross+','Stim+','CrossMov','UCS','Stim-','Key+','Tracker-'});
@@ -913,25 +1010,42 @@ classdef Subject < Project
             %excluded (if the next scan unit is more than the TR far away).
             %
             
-            scan_times      = L(L(:,2) == 0,1);%find all scan events and get their times            
-            scan_id         = 1:length(scan_times);%label pulses with increasing numbers
-            last_scan_time  = max(scan_times);%time of the last
-            first_scan_time = min(scan_times);
-            %collect info on stim onsets and discard those not occurring
-            %during scanning.
-            stim_times      = L(find(L(:,2)==3),1)';            
-            valid           = stim_times<last_scan_time & stim_times>first_scan_time;%i.e. during scanning
-            if sum(valid) ~= length(stim_times)
+            scan_times          = L(L(:,2) == 0,1);%find all scan events and get their times            
+            scan_id             = 1:length(scan_times);%label pulses with increasing numbers, assumes no pulses is missing.
+            stim_events         = find(L(:,2)==3);
+            stim_times          = L(stim_events,1)';
+            total_stims         = length(stim_times);
+            stim_ids_all        = L(stim_events,3);%all stim ids including the to-be discarded ones.                       
+            trial               = 0;
+            stim_ids            = [];
+            stim_scanunit       = [];
+            discarded           = 0;
+            for stim_time = stim_times;%run stim by stim
+                trial           = trial + 1;
+                d               = scan_times - stim_time;
+                first_positive  = find(d > 0,1);%find the first positive value
+                decimal         = d(first_positive)./self.TR;
+                if decimal < 1%if stimuli are shown but the scanner is not running                                        
+                    stim_scanunit        = [stim_scanunit; (scan_id(first_positive)-1) + decimal];
+                    stim_ids             = [stim_ids     ; stim_ids_all(trial)];
+                    fprintf('Stim %03i (%04i) onset converted %5.7g ==> %5.7g\n',trial,stim_ids(end), stim_time, stim_scanunit(end));
+                else %probably between the phases.
+                    discarded = discarded + 1;
+                    fprintf('Found a stim onset happening between phases at %5.7g seconds.\n',stim_time);
+                end
+            end
+            unusual_jumps = sum(diff(scan_times) > 15)-2;
+            total_stims2  = discarded+length(stim_ids);
+            cprintf([1 0 1],'%i stimulus onsets..\n',length(stim_ids));
+            cprintf([1 0 1],'%i scanner  pulses..\n',length(scan_times));
+            cprintf([1 0 1],'%i volumes present in the disk..\n',self.get_total_volumes(1));
+            cprintf([1 0 1],'%i unusal jumps on the logged scan times..\n',unusual_jumps);            
+            cprintf([1 0 1],'%i stimuli discarded..\n',discarded);            
+            cprintf([1 0 1],'%i TOTAL stimuli..\n',discarded+length(stim_ids));
+            %
+            if unusual_jumps > 0 || total_stims ~= total_stims2
                 keyboard
-            end            
-            %%     
-            stim_ids        = L(find(L(:,2)==3),3)';
-            stim_scanunit   = stim_ids;
-            trial           = 0;
-            for stim_time = stim_times;%run stim by stim          
-                trial                = trial + 1;
-                stim_scanunit(trial) = floor(stim_time./self.TR)+1 + mod(stim_time./self.TR,1);                
-            end            
+            end
         end
         function analysis_FitFIR(self,nrun,model_num)
             %run the model MODEL_NUM for data in NRUN.
@@ -980,31 +1094,7 @@ classdef Subject < Project
             matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spm};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
             spm_jobman('run', matlabbatch);
-        end
-        function analysis_CreateModels(self,runs)
-            %simply creates the default model based on the stimulus onsets
-            %and logged pulses in the log file. Whether this makes sense or
-            %not it is uptoyou.
-            %%%%%%%%%%%%%%%%%%%%%%
-            model_num  = 1;
-            for run = runs                
-                model_path = self.path_model(run,model_num);
-                if ~exist(fileparts(model_path));mkdir(fileparts(model_path));end
-                L          = self.get_log(run);
-                [scan,stim_id]  = self.analysis_StimTime2ScanUnit(run);
-                counter    = 0;
-                for current_condition = unique(stim_id)
-                    counter                = counter + 1;
-                    cond(counter).name     = mat2str(current_condition);
-                    cond(counter).onset    = scan(id == current_condition);
-                    cond(counter).duration = zeros(1,length(cond(counter).onset));
-                    cond(counter).tmod     = 0;
-                    cond(counter).pmod     = struct('name',{},'param',{},'poly',{});
-                end
-                save(model_path,'cond');
-                %%%%%%%%%%%%%%%%%%%%%%
-            end
-        end
+        end        
         function analysis_spm_firstlevel(self,nrun,model_num)
 
             %run the model MODEL_NUM for data in NRUN.
@@ -1048,7 +1138,7 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
-            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {self.path_native_atlas(58)};%add a proper mask here.
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
             spm_jobman('run', matlabbatch);%create SPM file first
             % now adapt for session effects.            
@@ -1069,47 +1159,97 @@ classdef Subject < Project
         end                
     end
     methods %(clearly fearamy specific)
-         function analysis_CreateModel03(self)
+        function analysis_CreateModel01(self,runs)
+            %creates a model based on the stimulus onsets and logged pulses
+            %in the log file. This model doesn't remove the microblocks
+            %where an UCS event has occured but removes the transition
+            %blocks. It is best suited for mumfordian single trial
+            %analysis.
+            model_num  = 1;            
+            for run = runs                
+                model_path               = self.path_model(run,model_num);%path to the model
+                if ~exist(fileparts(model_path));
+                    mkdir(fileparts(model_path));
+                end
+                L                        = self.get_log(run);                                
+                %%
+                [scan,stim_id]           = self.analysis_StimTime2ScanUnit(L);
+                counter                  = 0;
+                for current_condition = unique(stim_id(:))'
+                    counter                = counter + 1;
+                    cond(counter).name     = mat2str(current_condition);
+                    cond(counter).onset    = scan(stim_id == current_condition);
+                    cond(counter).duration = zeros(1,length(cond(counter).onset));
+                    cond(counter).tmod     = 0;
+                    cond(counter).pmod     = struct('name',{},'param',{},'poly',{});
+                end
+                save(model_path,'cond');                
+            end
+        end
+        function analysis_CreateModel02(self)
              %will generate stim onsets ignoring all microblocks where UCS
-             %is delivered. 
-             model_num      = 3;             
+             %is delivered.              
+             model_num      = 2;             
              L              = self.get_log(1);%get the log file.
-             % identify each event with its microblock id.
-             mbi            = [];
+             tevents        = size(L,1);
+             stim_onsets    = L(:,2) == 3;%all stim events.
+             scan_onsets    = L((L(:,2) == 0),1);%all scan events.
+             ucs_events     = L(:,2) == 5;%all ucs events
+             odd_events     = L(:,3) == 1002;%recover oddball events from the stim id as they are not logged in a specific channel.
+             microb_events  = L(:,2) ~= 9;
+             % identify each event with its microblock id.                          
+             mbi            = nan(tevents,1);
              current_mb     = 1;
-             for n = 1:size(L,1)
-                 if L(n,2) ~= 9
+             for n = 1:tevents
+                 if microb_events(n)%is 0 when it is microblock event.
                      mbi(n,1) = current_mb;
-                 else
+                 else%if ti is micro_block event use its info value to update the current_mb
                      current_mb = L(n,3);
                      mbi(n,1)   = current_mb;
                  end
-             end
-             mbi(L(:,1) < 0) = NaN;
+             end                          
+             %now we have to discard mbi where stimuli occured during a
+             %transition. This can be achieved by search mbi indices that
+             %occured between scans 910-911 and 1805-1806                         
+             % micro blocks during transition:
+             transition_events = (L(:,1)>scan_onsets(910) & L(:,1)<scan_onsets(911))|(L(:,1)>scan_onsets(1805) & L(:,1)<scan_onsets(1806));
+             %
              % find stim events which are appearing in a microblock where
-             % there is an UCS (number 5);
-             stim_onsets     = L(:,2) == 3;%all stim events.
-             i               = ismember(mbi,mbi(L(:,2) == 5))&stim_onsets;
-             %annihilate these events immediately !
-             L(i,:)          = [];
-             %from this point on it is the same as self.analysis_CreateModels
+             % there is an UCS (number 5);             
+             i               = ismember(mbi,mbi(ucs_events|odd_events|transition_events))&stim_onsets;
+             %%
+             %add 500 degrees to "bad stimulus events".
+             L(i,3)          = L(i,3)+500;
+             %some more finetuning here basically for future convenience on labelling of conditions.
+             i               = L(:,3) ==1500;%shifted null trials: put them back to 1000, we want to model null trials together irrespective of their microblock belongance.
+             L(i,3)          = 1000;
+             i               = L(:,3) ==1501;%shifted ucs trials: put them to 500, which is the cond_id for CS+ with shock.
+             L(i,3)          = 500;
+             i               = L(:,3) ==1502;%shifted oddball trials: put them back to 1002.
+             L(i,3)          = 1002;
+             i               = L(:,3) ==1000;%shifted oddball trials: put them back to 1002.
+             L(i,3)          = 200;             
+             %sanity check plot
+             figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'o');title(mat2str(self.id));
+             %from this point on it is the same as
+             %self.analysis_CreateModels01
              model_path      = self.path_model(1,model_num);             
              [scan,stim_id]  = self.analysis_StimTime2ScanUnit(L);
              counter         = 0;
-             for current_condition = unique(stim_id)
+             for current_condition = unique(stim_id(:)')
                  counter                = counter + 1;
                  cond(counter).name     = mat2str(current_condition);
                  cond(counter).onset    = scan(stim_id == current_condition);
                  cond(counter).duration = zeros(1,length(cond(counter).onset));
                  cond(counter).tmod     = 0;
                  cond(counter).pmod     = struct('name',{},'param',{},'poly',{});
-             end
+             end             
              if ~exist(fileparts(model_path));
                  mkdir(fileparts(model_path));
              end
              save(model_path,'cond');
          end
-         function [out] = fit_pmf(self,varargin)
+        function [out] = fit_pmf(self,varargin)
             %will load the pmf fit (saved in runXXX/pmf) if computed other
             %wise will read the raw pmf data (saved in runXXX/stimulation)
             %and compute a fit.            
