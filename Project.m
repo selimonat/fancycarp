@@ -60,8 +60,7 @@ classdef Project < handle
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.         
-        path_second_level     = sprintf('%sspm/',Project.path_project);%where the second level results has to be stored
-        path_atlas            = sprintf('%satlas/data.nii',Project.path_project);%the location of the atlas
+        path_second_level     = sprintf('%sspm/',Project.path_project);%where the second level results has to be stored        
 		current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
     end    
@@ -276,6 +275,14 @@ classdef Project < handle
                 end
             end
         end
+        function out        = path_atlas(self,varargin)
+            %path to subjects native atlas, use VARARGIN to slice out a
+            %given 3D volume.
+            out = sprintf('%satlas/data.nii',self.path_project);
+            if nargin > 1
+                out = sprintf('%s,%d',out,varargin{1});
+            end
+        end
     end
     methods(Static) %SPM analysis related methods.
        
@@ -430,6 +437,23 @@ classdef Project < handle
                 end
             end
             
+        end
+        function plot_volume(self,filename)
+            %will plot the volume using spm_image;
+            spm_image('init',filename)
+        end
+        function plot_overlay(self,file1,file2)
+            spm_image('init',file1)
+            spm_clf;
+            pause(0.5);                        
+            v1 = spm_vol(file1);
+            v2 = spm_vol(file2);            
+            h  = spm_orthviews('Image' ,v1 );            
+            spm_orthviews('Addtruecolourimage', h(1), file2, hot, 0.5 );            
+            spm_orthviews('Redraw');
+            spm_orthviews('AddColourBar',h(1),1);
+            spm_orthviews('AddContext',h(1));
+            spm_orthviews('Caption', h(1),file2);
         end
     end
 end
