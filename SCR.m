@@ -532,7 +532,7 @@ classdef SCR < handle
             if ~isempty(self.ledalab)%if ledalab analysis is done
                 %detect time window, based on averaged data we take [1.5 4]
                 %seconds. Could be improved for single-subject variations
-                i                    = (self.ledalab.x(:,1) >= 1.5)&(self.ledalab.x(:,1) <= 4);
+                i                    = (self.ledalab.x(:,1) >= 2.5)&(self.ledalab.x(:,1) <= 5.5);
                 self.fear_tuning     = mean(self.ledalab.mean(i,:));%take out the average in that window
                 self.fear_tuning = self.fear_tuning(:,conds);
             else%if the analysis not done yet,
