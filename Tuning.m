@@ -42,14 +42,21 @@ classdef Tuning < handle
         end
         
         function FitGetParam(self)
-            self.params = NaN(length(self.singlesubject_data),size(self.singlesubject_data{1}.Est,2));
+            %this is just a lame method that collects whatever is needed
+            %from the main fitting method, which has notoriously high
+            %number of fields.
+            self.fit_results = [];
             for unit = 1:length(self.singlesubject_data)
-                self.fit_results.params(unit,:)   = self.singlesubject_data{unit}.Est;
-                self.fit_results.ExitFlag(unit,1) = self.singlesubject_data{unit}.ExitFlag;
-                self.fit_results.pval(unit,1)     = self.singlesubject_data{unit}.pval;
-                self.fit_results.x(unit,:)        = self.singlesubject_data{unit}.x;  
-                self.fit_results.y_fitted(unit,:) = self.singlesubject_data{unit}.fit;
-            end
+                if ~isempty(self.singlesubject_data{unit})
+                    self.fit_results.params(unit,:)   = self.singlesubject_data{unit}.Est;
+                    self.fit_results.ExitFlag(unit,1) = self.singlesubject_data{unit}.ExitFlag;
+                    self.fit_results.pval(unit,1)     = self.singlesubject_data{unit}.pval;
+                    self.fit_results.x(unit,:)        = self.singlesubject_data{unit}.x;
+                    self.fit_results.y_fitted(unit,:) = self.singlesubject_data{unit}.fit;
+                    self.fit_results.x_HD(unit,:)     = self.singlesubject_data{unit}.x_HD;
+                    self.fit_results.y_fitted_HD(unit,:) = self.singlesubject_data{unit}.fit_HD;
+                end
+            end            
         end
         
         function GroupFit(self,funtype)
@@ -83,7 +90,7 @@ classdef Tuning < handle
                 L           = [ -range(y)*2    5          .01    ];
                 U           = [ range(y)*2    180       std(y(:)+rand(length(y),1).*eps)*2 ];
 
-                result.dof    = 3;
+                result.dof    = 2;
                 result.funname= 'gaussian_ZeroMean';
                 %detect the mean, store it and subtract it
                 CONSTANT    = mean(y);
@@ -104,7 +111,7 @@ classdef Tuning < handle
                 result.fitfun = @(x,p) make_gabor1d_ZeroMean(x,p(1),p(2),p(3),p(4));%amp std freq baseline
                 L           = [ -range(y)*2  0    1  -range(y)*2    .01    ];
                 U           = [  range(y)*2  180   4   range(y)*2  std(y(:)+rand(length(y),1).*eps)*2 ];
-                result.dof    = 6;
+                result.dof    = 4;
                 result.funname= 'gabor';
             elseif funtype == 7
                 result.fitfun = @(x,p) p(1)*cos(x*p(2)) + p(3);%amp std freq baseline
@@ -118,7 +125,7 @@ classdef Tuning < handle
                 U             = [ range(y(:))      15        max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
                 %                 L      = [ eps                   0.1   eps     -pi   eps ];
                 %                 U      = [ min(10,range(y)*1.1)  20   2*pi   pi   10];
-                result.dof    = 3;
+                result.dof    = 4;
                 result.funname= 'vonmisses_mobile';
             end
             %% set the objective function
@@ -131,7 +138,8 @@ classdef Tuning < handle
             else %null model
                 Init = mean(y);
             end
-            
+            %% add some small noise in case of super-flat ratings
+            if sum(diff(y)) == 0;y = y + rand(length(y),1)*.001;end
             %% estimate initial values for sigma_noise
             %based on the likelihood of sigma given the data points assuming a Gaussian normal distribution.
             tsample      = 1000;
@@ -142,7 +150,7 @@ classdef Tuning < handle
             %% Optimize!
             try
                 [result.Est, result.Likelihood, result.ExitFlag]  = fmincon(result.likelihoodfun, Init, [],[],[],[],L,U,[],self.options);
-                result.Likelihood = result.likelihoodfun(result.Est);
+                result.Likelihood = result.likelihoodfun(result.Est);                
             catch
                 result.Est        = Init;
                 result.Likelihood = result.likelihoodfun(result.Est);
@@ -165,10 +173,10 @@ classdef Tuning < handle
                 result.dof   = result.dof - 1;%the DOF of the null hypothesis is 0.
                 result.pval  = -log10(1-chi2cdf(-2*(result.Likelihood - result.null_Likelihood),result.dof) + eps);
             end
-            result.x       = unique(x);
-            x_HD           = linspace(min(result.x),max(result.x),100);
+            result.x       = unique(x);            
             result.fit     = result.fitfun(result.x,result.Est);
-            
+            result.x_HD    = linspace(min(result.x),max(result.x),100);
+            result.fit_HD  = result.fitfun(result.x_HD,result.Est);
             %% show fit if wanted
             if self.visualization
                 
@@ -184,9 +192,9 @@ classdef Tuning < handle
                 end
                 
                 figure(100);clf
-                plot(x_HD,result.fitfun(x_HD,result.Est),'ro','linewidth',3);
+                plot(result.x_HD,result.fit_HD,'ro','linewidth',3);
                 hold on
-                plot(x_HD, result.fitfun(x_HD,Init)  ,'color',[.3 .3 .3] ,'linewidth',3);                                
+                plot(result.x_HD, result.fit_HD  ,'color',[.3 .3 .3] ,'linewidth',3);                                
                 errorbar(result.x, Y_ave+CONSTANT, Y_sem   , 'b'   ,'linewidth', 3);                                
                 hold off
                 if funtype > 1
