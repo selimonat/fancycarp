@@ -3,7 +3,7 @@ classdef Tuning < handle
         visualization = 1;%visualization of fit results
         gridsize      = 20;%resolution per parameter for initial estimation.
         options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
-        singlesubject_data = [];%will contain the fit results for individual subjects
+        singlesubject = [];%will contain the fit results for individual subjects
     end
     %tuning object, can contain any kind of fear-tuning SCR, rating etc.
     properties
@@ -38,7 +38,7 @@ classdef Tuning < handle
             ts = size(self.x,1);
             for ns = 1:ts
                 fprintf('Fitting subject %03d of %03d, id: %03d\n',ns,ts,self.ids(ns));
-                self.singlesubject_data{ns} = self.Fit(self.x(ns,:),self.y(ns,:),funtype);
+                self.singlesubject{ns} = self.Fit(self.x(ns,:),self.y(ns,:),funtype);
             end
             self.FitGetParam;
         end
@@ -48,15 +48,15 @@ classdef Tuning < handle
             %from the main fitting method, which has notoriously high
             %number of fields.
             self.fit_results = [];
-            for unit = 1:length(self.singlesubject_data)
-                if ~isempty(self.singlesubject_data{unit})
-                    self.fit_results.params(unit,:)   = self.singlesubject_data{unit}.Est;
-                    self.fit_results.ExitFlag(unit,1) = self.singlesubject_data{unit}.ExitFlag;
-                    self.fit_results.pval(unit,1)     = self.singlesubject_data{unit}.pval;
-                    self.fit_results.x(unit,:)        = self.singlesubject_data{unit}.x;
-                    self.fit_results.y_fitted(unit,:) = self.singlesubject_data{unit}.fit;
-                    self.fit_results.x_HD(unit,:)     = self.singlesubject_data{unit}.x_HD;
-                    self.fit_results.y_fitted_HD(unit,:) = self.singlesubject_data{unit}.fit_HD;
+            for unit = 1:length(self.singlesubject)
+                if ~isempty(self.singlesubject{unit})
+                    self.fit_results.params(unit,:)   = self.singlesubject{unit}.Est;
+                    self.fit_results.ExitFlag(unit,1) = self.singlesubject{unit}.ExitFlag;
+                    self.fit_results.pval(unit,1)     = self.singlesubject{unit}.pval;
+                    self.fit_results.x(unit,:)        = self.singlesubject{unit}.x;
+                    self.fit_results.y_fitted(unit,:) = self.singlesubject{unit}.fit;
+                    self.fit_results.x_HD(unit,:)     = self.singlesubject{unit}.x_HD;
+                    self.fit_results.y_fitted_HD(unit,:) = self.singlesubject{unit}.fit_HD;
                 end
             end            
         end
