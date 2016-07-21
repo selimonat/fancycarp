@@ -1,8 +1,8 @@
 classdef Tuning < handle
     properties (Hidden)
-        visualization = 1;%visualization of fit results
+        visualization = 0;%visualization of fit results
         gridsize      = 20;%resolution per parameter for initial estimation.
-        options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
+        options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-5,'tolfun',10^-5,'MaxIter',10000,'Algorithm','interior-point');
         singlesubject_data = [];%will contain the fit results for individual subjects
     end
     %tuning object, can contain any kind of fear-tuning SCR, rating etc.
@@ -48,13 +48,14 @@ classdef Tuning < handle
             self.fit_results = [];
             for unit = 1:length(self.singlesubject_data)
                 if ~isempty(self.singlesubject_data{unit})
-                    self.fit_results.params(unit,:)   = self.singlesubject_data{unit}.Est;
-                    self.fit_results.ExitFlag(unit,1) = self.singlesubject_data{unit}.ExitFlag;
-                    self.fit_results.pval(unit,1)     = self.singlesubject_data{unit}.pval;
-                    self.fit_results.x(unit,:)        = self.singlesubject_data{unit}.x;
-                    self.fit_results.y_fitted(unit,:) = self.singlesubject_data{unit}.fit;
-                    self.fit_results.x_HD(unit,:)     = self.singlesubject_data{unit}.x_HD;
+                    self.fit_results.params(unit,:)      = self.singlesubject_data{unit}.Est;
+                    self.fit_results.ExitFlag(unit,1)    = self.singlesubject_data{unit}.ExitFlag;
+                    self.fit_results.pval(unit,1)        = self.singlesubject_data{unit}.pval;
+                    self.fit_results.x(unit,:)           = self.singlesubject_data{unit}.x;
+                    self.fit_results.y_fitted(unit,:)    = self.singlesubject_data{unit}.fit;
+                    self.fit_results.x_HD(unit,:)        = self.singlesubject_data{unit}.x_HD;
                     self.fit_results.y_fitted_HD(unit,:) = self.singlesubject_data{unit}.fit_HD;
+                    self.fit_results.fitfun              = self.singlesubject_data{1}.fitfun;
                 end
             end            
         end
