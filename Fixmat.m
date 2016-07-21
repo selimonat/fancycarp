@@ -1,25 +1,25 @@
 classdef Fixmat < Project
-    properties (Hidden,Constant)                
-        window       = 250;%half size of the fixation maps        
+    properties (Hidden,Constant)
+        window       = 250;%half size of the fixation maps
     end
     
     properties (Hidden,SetAccess = public)
         %related to map computation
-         bc                  = 0;%cocktail blank correction
-         unitize             = 1;%sums to 1 or not         
-         maptype             = 'conv';%conv or bin         
-         kernel_fwhm         = Fixmat.PixelPerDegree*.8;
-         binsize             = 25;
-         linkage_method      = 'average';
-         linkage_metric      = 'correlation';
-         similarity_metric   = 'correlation';         
-         dendro_tree         = [];%results of linkage analysis will be stored here.
-         dendro_D            = [];
-         dendro_leafOrder    = [];
-         maps%current maps;
-         mds%mds results
+        bc                  = 0;%cocktail blank correction
+        unitize             = 1;%sums to 1 or not
+        maptype             = 'conv';%conv or bin
+        kernel_fwhm         = Fixmat.PixelPerDegree*.8;
+        binsize             = 25;
+        linkage_method      = 'average';
+        linkage_metric      = 'correlation';
+        similarity_metric   = 'correlation';
+        dendro_tree         = [];%results of linkage analysis will be stored here.
+        dendro_D            = [];
+        dendro_leafOrder    = [];
+        maps%current maps;
+        mds%mds results
     end
-   
+    
     properties (Hidden,SetAccess = private)
         %internal
         query
@@ -32,8 +32,8 @@ classdef Fixmat < Project
     properties (SetAccess = private,Dependent,Hidden)
         %rect: [y x y_size x_size]
         rect       %the aperture
-        binedges   %bin edges for binned fixation maps        
-        stimulus   %contains average stimulus              
+        binedges   %bin edges for binned fixation maps
+        stimulus   %contains average stimulus
     end
     
     properties (SetAccess = private)
@@ -56,27 +56,27 @@ classdef Fixmat < Project
     end
     
     events
-      UpdateGraph 
+        UpdateGraph
     end
     
-    methods        
+    methods
         function obj = Fixmat(subjects,runs)%constructor
             %%
             %initialize
             for run = runs(:)'
-                for subject = subjects(:)'                
-%                     if exist(regexprep(obj.path2data(subject,run,'eye'),'.mat','.edf')) ~= 0 %does the subject has an edf file?
-
-					%% edf2mat conversion                    
-					if ~exist(obj.path2data(subject,run,'eye'))%is the edf file converted?
-							fprintf('-edfread not yet ran (subject:%03d, run:%03d)\n-Roger that, will do it ASAP, sir!\n',subject,run);
-							[trials info] = edfread(regexprep(obj.path2data(subject,run,'eye'),'.mat','.edf'),'TRIALID');
-							save(obj.path2data(subject,run,'eye'),'trials','info');
-							%if the conversion fails the code will fail, it is recommended to rename the data.edf file to something else then.
-					else
-						fprintf('edf is converted (subject:%03d, run:%03d)\n',subject,run);
-					end
-
+                for subject = subjects(:)'
+                    %                     if exist(regexprep(obj.path2data(subject,run,'eye'),'.mat','.edf')) ~= 0 %does the subject has an edf file?
+                    
+                    %% edf2mat conversion
+                    if ~exist(obj.path2data(subject,run,'eye'))%is the edf file converted?
+                        fprintf('-edfread not yet ran (subject:%03d, run:%03d)\n-Roger that, will do it ASAP, sir!\n',subject,run);
+                        [trials info] = edfread(regexprep(obj.path2data(subject,run,'eye'),'.mat','.edf'),'TRIALID');
+                        save(obj.path2data(subject,run,'eye'),'trials','info');
+                        %if the conversion fails the code will fail, it is recommended to rename the data.edf file to something else then.
+                    else
+                        fprintf('edf is converted (subject:%03d, run:%03d)\n',subject,run);
+                    end
+                    
                     dummy = load(obj.path2data(subject,run,'eye'));
                     %this is necessary to expand the PTB message to
                     %something that is understandable by the fixations
@@ -92,22 +92,22 @@ classdef Fixmat < Project
                     end
                     %
                     dummy.trials = rmfield(dummy.trials,{'TRIALID'});%make .getfixmat happy
-                    dummy        = obj.getfixmat(dummy.trials,dummy.info);%get the fixmat                    
+                    dummy        = obj.getfixmat(dummy.trials,dummy.info);%get the fixmat
                     dummy.subject= repmat(uint32(subject),1,length(dummy.x));
                     %and append it to the previous fixmat
                     for fns = properties(obj)'
-                        %% take fixations which are only coming from the required phase.            
-                        %(e.g. ratings in baseline are coded as 5)                                    
+                        %% take fixations which are only coming from the required phase.
+                        %(e.g. ratings in baseline are coded as 5)
                         valid_fix = dummy.phase == run;
-                        if isfield(dummy,fns{1})%if it is not a property dont even consider                            
+                        if isfield(dummy,fns{1})%if it is not a property dont even consider
                             obj.(fns{1}) = [obj.(fns{1}) dummy.(fns{1})(valid_fix)];%append it to the previous
                         else
                             obj.(fns{1}) = [obj.(fns{1}) zeros(1,sum(valid_fix))];%append it to the previous
                         end
                     end
-				end
-%                 end                    
-            end                                                    
+                end
+                %                 end
+            end
             %% remove fixations outside of the image border
             obj.selection = ~(obj.x < obj.rect(2) | obj.x > (obj.rect(2)+obj.rect(4)-1) | obj.y < obj.rect(1) | obj.y > (obj.rect(1)+obj.rect(3)-1) );
             obj.ApplySelection;
@@ -117,19 +117,19 @@ classdef Fixmat < Project
             obj.realcond = unique(obj.deltacsp(~ismember(obj.deltacsp,[500 1000 3000]))); %500 UCS, 1000 Odd, 3000 Null
         end
         function UpdateSelection(obj,varargin)
-            %takes VARARGIN pairs to update the selection vektor            
+            %takes VARARGIN pairs to update the selection vektor
             obj.selection = logical(ones(1,length(obj.subject)));
             for n = 1:2:length(varargin)
                 obj.selection = obj.selection .* ismember(obj.(varargin{n}),varargin{n+1});
-            end                        
-%             fprintf('Selection vector updated...\n');
+            end
+            %             fprintf('Selection vector updated...\n');
             obj.selection = logical(obj.selection);
             obj.query     = varargin;
         end
         function ApplySelection(obj)
             %removes fixations based on the fixation vecktor, only used in
-            %the constructor.            
-            %removes fixations which are FALSE in selection                        
+            %the constructor.
+            %removes fixations which are FALSE in selection
             for p = properties(obj)'
                 if ~strcmp(p{1},'rect') && ~strcmp(p{1},'maps') && ~strcmp(p{1},'selection');%all the properties unrelated to fixation data.
                     if ~isempty(obj.(p{1}))%sometimes the property is not filled in
@@ -168,7 +168,7 @@ classdef Fixmat < Project
             end
         end
         function out = entropy(obj)
-           
+            
             obj.maps = obj.maps + eps;
             out = nan(size(obj.maps,3),1);
             maps = obj.vectorize_maps;
@@ -200,15 +200,15 @@ classdef Fixmat < Project
                     c    = c+1;
                     v{c} = {'subject' ns 'deltacsp' cond 'phase' phase};
                 end
-                obj.getmaps(v{:});                            
+                obj.getmaps(v{:});
                 vecmaps     = obj.vectorize_maps;
                 %
                 vecmaps     = vecmaps - repmat(mean(vecmaps,2),1,size(vecmaps,2));
-%                 S           = squareform(pdist(vecmaps',obj.similarity_metric));
+                %                 S           = squareform(pdist(vecmaps',obj.similarity_metric));
                 S           = squareform(pdist(vecmaps','correlation'));
-               coor        = mdscale(S,mds_dim,'criterion','metricstress');%,'start',initial_positions);
-%                 coor        = cmdscale(S,mds_dim);
-%                 coor        = zscore(coor(:));%shifts and scale all coordinates to have same center and scale
+                coor        = mdscale(S,mds_dim,'criterion','metricstress');%,'start',initial_positions);
+                %                 coor        = cmdscale(S,mds_dim);
+                %                 coor        = zscore(coor(:));%shifts and scale all coordinates to have same center and scale
                 mds(:,sc)   = coor(:); %set to (im,2) for 2-dimensional scaling.
             end
             %now we procrustes-align
@@ -224,16 +224,16 @@ classdef Fixmat < Project
             obj.mds = mds_aligned;
         end
         function mds_plot(obj)
-                        
+            
             x = obj.mds(1:8,:);
             y = obj.mds(9:end,:);
             plot(mean(x,2),mean(y,2),'r--');
             hold on;
             plot(mean(x,2),mean(y,2),'ro');
             
-%             for node = 1:size(x,1)
-%                 error_ellipse([x(node,:) ;y(node,:)]','color',Project.colors(node+1,:),'linewidth',1.5);                                                
-%             end
+            %             for node = 1:size(x,1)
+            %                 error_ellipse([x(node,:) ;y(node,:)]','color',Project.colors(node+1,:),'linewidth',1.5);
+            %             end
             hold off
             
             
@@ -255,7 +255,7 @@ classdef Fixmat < Project
                 c    = c+1;
                 v{c} = {'subject' subjects 'deltacsp' cond};
             end
-            obj.getmaps(v{:});            
+            obj.getmaps(v{:});
         end
         
         function getsubmaps(obj,varargin)
@@ -279,9 +279,9 @@ classdef Fixmat < Project
             fprintf('Conducting linkage analysis with linkage method: _%s_ and linkage metric: _%s_\n',char(obj.linkage_method),obj.linkage_metric);
             %provides data for a dendrogram analysis.
             vecmaps     = obj.vectorize_maps;
-            obj.dendro_tree        = linkage(vecmaps',obj.linkage_method,obj.linkage_metric);            
-            obj.dendro_D           = pdist(vecmaps',obj.linkage_metric);            
-            obj.dendro_leafOrder   = optimalleaforder(obj.dendro_tree,obj.dendro_D);            
+            obj.dendro_tree        = linkage(vecmaps',obj.linkage_method,obj.linkage_metric);
+            obj.dendro_D           = pdist(vecmaps',obj.linkage_metric);
+            obj.dendro_leafOrder   = optimalleaforder(obj.dendro_tree,obj.dendro_D);
         end
         
         function [branch_id,order0,pmat]=dendrogram(obj,k,varargin)
@@ -294,8 +294,8 @@ classdef Fixmat < Project
             
             % plotting business
             %plot the dendro
-            figure;                        
-            [H,T,order]    = dendrogram(obj.dendro_tree,k); 
+            figure;
+            [H,T,order]    = dendrogram(obj.dendro_tree,k);
             [H2,~,order0]   = dendrogram(obj.dendro_tree,0,'colorthreshold',obj.dendro_tree(end-k+2,3),'reorder',obj.dendro_leafOrder);
             title('optimal leaforder')
             set(H2,'LineWidth',2);
@@ -355,7 +355,7 @@ classdef Fixmat < Project
                 fprintf('t-test p = %g. \n',10.^-max(tmat))
             end
         end
-      
+        
         function plotband(obj,varargin)%varargin can reorder the subjmaps
             if nargin > 1
                 order = varargin{1};
@@ -369,7 +369,7 @@ classdef Fixmat < Project
                 c=c+1;
                 obj.getmaps({'subject' sub 'deltacsp' obj.realcond})
                 h = subplot(1,N,c);imagesc(obj.maps);
-%                 title(num2str(sub))
+                %                 title(num2str(sub))
                 axis square
                 axis off
                 subplotChangeSize(h,.01,.01);
@@ -397,7 +397,7 @@ classdef Fixmat < Project
             [~,out.ttest.p,out.ttest.ci] = ttest2(criterion(cluster(imax).subs),criterion(cluster(imin).subs));%compares higgest to smallest bar
             
         end
-        function plot(obj,varargin)    
+        function plot(obj,varargin)
             
             M = obj.maps;
             if nargin > 1
@@ -410,33 +410,37 @@ classdef Fixmat < Project
                 [d u] = GetColorMapLimits(M,7);
                 if sum(obj.maps(:) < 0) == 0%if there are no negative values
                     d = 0;
-                end                                      
-            elseif strcmp(cmap,'log')                            
+                end
+            elseif strcmp(cmap,'log')
                 u = max(log10(M(:)));
                 d = u - 1;
-                M = log10(M);            
+                M = log10(M);
             end
             %
-%             ffigure;
-            clf                        
-            nsp     = obj.subplot_number;
+            %             ffigure;
+            clf
+            if nargin > 2
+                nsp = varargin{2};
+            else
+                nsp     = obj.subplot_number;
+            end
             for nc = 1:size(M,3)
-                h   = subplot(nsp(1),nsp(2),nc);          
+                h   = subplot(nsp(1),nsp(2),nc);
                 
-                %plot the image;                                       
+                %plot the image;
                 imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.stimulus);
                 hold on;
                 h     = imagesc(obj.bincenters_x,obj.bincenters_y,M(:,:,nc),[d u]);
-                set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.9+.1);               
+                set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.9+.1);
                 axis image;
                 axis off;
-                try
-                t     = sprintf('%s%d/',obj.map_titles{nc}{1:2});                
-                title(t,'interpreter','none');
-                end
+%                 try
+%                     t     = sprintf('%s %d ',obj.map_titles{nc}{1:2});
+%                     title(t,'interpreter','none');
+%                 end
                 drawnow
             end
-            %             thincolorbar('vert');
+%                         thincolorbar('vert');
             colorbar
         end
         function getmaps(obj,varargin)
@@ -449,13 +453,13 @@ classdef Fixmat < Project
             obj.all_queries = varargin;
             for v = varargin
                 c                 = c+1;
-                obj.UpdateSelection(v{1}{:});                
+                obj.UpdateSelection(v{1}{:});
                 if strcmp(obj.maptype,'conv')
                     %accum and conv
                     FixMap            = accumarray([obj.current_y-obj.rect(1)+1 obj.current_x-obj.rect(2)+1],1,[obj.rect(3) obj.rect(4)]);
                     FixMap            = conv2(sum(obj.kernel),sum(obj.kernel,2),FixMap,'same');
                 elseif strcmp(obj.maptype,'bin')
-                    %divide by a factor (i.e. binning) and accum, but no conv                                        
+                    %divide by a factor (i.e. binning) and accum, but no conv
                     [FixMap]          = hist3([obj.current_y obj.current_x],'edges',obj.binedges);
                     FixMap            = FixMap/obj.current_ttrial;%divide by the number of trials
                     %remove the last column and row
@@ -477,14 +481,14 @@ classdef Fixmat < Project
                 if nnan ~= 0
                     cprintf('*[1 0 0]','ATTENTION: %i maps was just full of NaNs\n',nnan);
                 end
-            end            
-        end                      
+            end
+        end
         function bild = get.stimulus(obj)
             
-            bild    = imread(obj.find_stim);            
+            bild    = imread(obj.find_stim);
             bild    = bild( obj.rect(1):obj.rect(1)+obj.rect(3)-1,  obj.rect(2):obj.rect(2)+obj.rect(4)-1);
             bild    = repmat(bild,[1 1 3]);
-        end        
+        end
         function out = cropmaps(obj,map)
             if strcmp(obj.maptype,'conv')
                 out      = map(obj.rect(2)/2-obj.mapsize : obj.rect(2)/2+obj.mapsize, obj.rect(4)/2-obj.mapsize: obj.rect(4)/2+obj.mapsize);
@@ -493,10 +497,10 @@ classdef Fixmat < Project
                 
                 out      = map(obj.rect(2)/obj.binsize/2-new_size : obj.rect(2)/obj.binsize/2+new_size, obj.rect(4)/obj.binsize/2-new_size: obj.rect(4)/obj.binsize/2+new_size);
             end
-        end        
-        function out = kernel(obj)            
+        end
+        function out = kernel(obj)
             dummy       = make_gaussian2D(obj.kernel_fwhm*2.65,obj.kernel_fwhm*2.65,obj.kernel_fwhm,obj.kernel_fwhm,obj.kernel_fwhm*2.65/2,obj.kernel_fwhm*2.65/2);
-            out         = dummy./sum(dummy(:));       
+            out         = dummy./sum(dummy(:));
         end
         function maps   = vectorize_maps(obj)
             if ~isempty(obj.maps)
@@ -511,29 +515,29 @@ classdef Fixmat < Project
             out       = sort([row col]);
         end
         function out = cov(obj)
-%             figure(3);clf
-%             set(gcf,'position',[1104         152         337         299]);
+            %             figure(3);clf
+            %             set(gcf,'position',[1104         152         337         299]);
             out = cov(obj.vectorize_maps);
-%             imagesc(out);
-%             axis image;
-%             colorbar
+            %             imagesc(out);
+            %             axis image;
+            %             colorbar
         end
         function [out pval] = corr(obj)
-            %plots the corrmat between maps             
-%             figure(2);clf
-%             set(gcf,'position',[1104         152         337         299])            
+            %plots the corrmat between maps
+            %             figure(2);clf
+            %             set(gcf,'position',[1104         152         337         299])
             [out pval] = corr(obj.vectorize_maps);
-%             imagesc(out);
-%             axis image;
-%             colorbar
-        end        
+            %             imagesc(out);
+            %             axis image;
+            %             colorbar
+        end
         function [x] = current_x(obj)
-            %returns the current x y coordinates            
+            %returns the current x y coordinates
             x = obj.x(obj.selection)';
         end
         function [y] = current_y(obj)
             %returns the current x y coordinates
-            y = obj.y(obj.selection)';            
+            y = obj.y(obj.selection)';
         end
         function ttrial = current_ttrial(obj)
             %computes number of trials included in the current selection
@@ -544,7 +548,7 @@ classdef Fixmat < Project
         end
         function out = get.binedges(obj)
             out = {obj.rect(1):obj.binsize:(obj.rect(1)+obj.rect(3)) ...
-                               obj.rect(2):obj.binsize:(obj.rect(2)+obj.rect(4))};                           
+                obj.rect(2):obj.binsize:(obj.rect(2)+obj.rect(4))};
         end
         function [out] = bincenters_y(obj,varargin)
             %
@@ -564,8 +568,8 @@ classdef Fixmat < Project
             else
                 resolution = varargin{1};
             end
-            %transforms edges to centers with a required resolution.            
-            out = linspace( min(obj.binedges{2}), max(obj.binedges{2}),resolution);            
+            %transforms edges to centers with a required resolution.
+            out = linspace( min(obj.binedges{2}), max(obj.binedges{2}),resolution);
             out = out + mean(unique(diff(out)))/2;
             out(end) =[];
         end
@@ -573,7 +577,7 @@ classdef Fixmat < Project
             if ~isempty(obj.maps)
                 %returns size of fixmap along VARARGIN dimension
                 out = size(obj.maps,varargin{1});
-            else 
+            else
                 out =[];
             end
         end
@@ -590,8 +594,8 @@ classdef Fixmat < Project
                 ph  = 0;
                 for np = phase
                     ph = ph + 1;
-                    cond = 0;                    
-                    for nc = condition                        
+                    cond = 0;
+                    for nc = condition
                         cond = cond + 1;
                         index.cond(cond) = double(nc);%column identities
                         obj.UpdateSelection('subject',ns,'phase',np,'deltacsp',nc);
@@ -749,7 +753,7 @@ classdef Fixmat < Project
         function [C, Cr] = get_corrFixbyFix(obj,phases,conditions,fixations)
             %Will run across all subjects and collect fixation maps for
             %each FIXATION, CONDITION and PHASE. This will result in a
-            %similarity matrix of 
+            %similarity matrix of
             %[FIXATIONxCONDITIONxPHASE FIXATIONxCONDITIONxPHASE N).
             %Fixations maps are always cocktail blank corrected.
             
@@ -758,23 +762,23 @@ classdef Fixmat < Project
             old_value = obj.bc;
             obj.bc    = 1;
             c_sub     = 0;
-            %            
+            %
             for ns = unique(obj.subject);
                 c_sub   = c_sub +1;
                 fprintf('Processing subject %d...\n',ns);
                 M = [];
-                for phase = phases                    
+                for phase = phases
                     v       = [];
-                    counter = 0;                
+                    counter = 0;
                     for nfix = fixations
                         for ncond = conditions
-                            counter      = counter + 1;                            
-                            v{counter}   = {'phase' phase 'deltacsp' ncond 'subject' ns 'fix' nfix};                                
+                            counter      = counter + 1;
+                            v{counter}   = {'phase' phase 'deltacsp' ncond 'subject' ns 'fix' nfix};
                         end
-                    end         
+                    end
                     obj.getmaps(v{:});
-                    M = cat(3,M,obj.maps);                   
-                end                
+                    M = cat(3,M,obj.maps);
+                end
                 obj.maps          = M;
                 C(:,:,c_sub)      = obj.cov;
                 Cr(:,:,c_sub)     = obj.corr;
