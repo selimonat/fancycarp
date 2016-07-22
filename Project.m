@@ -50,13 +50,15 @@ classdef Project < handle
         dicom_serie_selector  = {  [] [] []   []      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [5 6 7]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]       [3 4 5]      [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]      [3 4 5]    };
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
-        dicom2run             = [1 2 3];%how to distribute TRIO sessiosn to folders.
-        data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};%if you need another folder, do it here.
+        dicom2run             = [1 1 1];%how to distribute TRIO sessiosn to folders.
+        data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation' 'pmf' 'rating'};%if you need another folder, do it here.
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
         smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method        
         path_smr              = sprintf('%s%ssmrReader%s',fileparts(which('Project')),filesep,filesep);%path to .SMR importing files in the fancycarp toolbox.
+        gs                    = [5 6 7 8 9 12 14 16 17 18 19 20 21 24 25 27 28 30 32 34 35 37 39 40 41 42 43 44];
+        bs                    = [10 11 13 15 22 23 26 29 31 33 36 38];
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.         
@@ -65,10 +67,10 @@ classdef Project < handle
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
     end    
     properties (Hidden)
-        atlas2mask_threshold  = 50;%where ROI masks are computed, this threshold is used.        
+        atlas2mask_threshold  = 20;%where ROI masks are computed, this threshold is used.        
     end
 	methods
-        function DU = SanityCheck(self,runs,measure,varargin)
+        function DU         = SanityCheck(self,runs,measure,varargin)
             %DU = SanityCheck(self,runs,measure,varargin)
 			%will run through subject folders and will plot their disk
             %space. Use a string in VARARGIN to focus only on a subfolder.
@@ -112,7 +114,7 @@ classdef Project < handle
             end
             warning('on','all');
         end
-        function DicomDownload(self,source,destination)
+        function              DicomDownload(self,source,destination)
             % Will download all the dicoms, convert them and merge them to
             % 4D.
             
@@ -142,7 +144,7 @@ classdef Project < handle
                 fprintf('DicomDownload: To use DicomDownload method you have to use one of the institute''s linux boxes\n');
             end
         end
-        function DicomTo4D(self,destination)
+        function              DicomTo4D(self,destination)
             %A wrapper over conversion and merging functions.
             
             %start with conversion
@@ -150,7 +152,7 @@ classdef Project < handle
             %finally merge 3D stuff to 4D and rename it data.nii.
             self.MergeTo4D(destination);
         end
-        function MergeTo4D(self,destination)
+        function              MergeTo4D(self,destination)
             %will create data.nii consisting of all the [f,s]TRIO images
             %merged to 4D. the final name will be called data.nii.
             % merge to 4D
@@ -165,7 +167,7 @@ classdef Project < handle
             files = cellstr(files);
             delete(files{:});
         end
-        function ConvertDicom(self,destination)
+        function              ConvertDicom(self,destination)
             % dicom conversion. ATTENTION: dicoms will be converted and
             % then deleted. Assumes all files that start with MR are
             % dicoms.
@@ -242,7 +244,7 @@ classdef Project < handle
             %returns the path to Nth Dartel template                                    
             out = fullfile(self.path_spm,'toolbox','cat12','templates_1.50mm',sprintf('Template_%i_IXI555_MNI152.nii',n) );
         end
-        function CreateFolderHierarchy(self)
+        function              CreateFolderHierarchy(self)
             %Creates a folder hiearchy for a project. You must run this
             %first to create an hiearchy and fill this with data.
             for ns = 1:length(self.trio_sessions)
@@ -262,15 +264,20 @@ classdef Project < handle
         end
         function files      = collect_files(self,selector)
             %will collect all the files from all subjects that matches the
-            %SELECTOR.
+            %SELECTOR. Example selectors could be:
+            %'run001/spm/model_03_chrf_0_0/s_w_beta_0001.nii'; 
+            %
+            % The selector string is simply appended to subjects' path. And
+            % its existence is checked, in case of inexistenz method
+            % stops.
             
             files = [];
-            for ns = self.subject_indices
-                s       = Subject(ns);
-                current = sprintf('%s/%s',s.path,selector);
+            for ns = self.subject_indices                
+                current = sprintf('%s/sub%03d/%s',self.path_project,ns,selector);
                 if exist(current) ~= 0
                     files = [files ; current];
                 else
+                    cprintf([0 0 1],'Invalid Selector\n');
                     keyboard;%for sanity checks
                 end
             end
@@ -284,8 +291,7 @@ classdef Project < handle
             end
         end
     end
-    methods(Static) %SPM analysis related methods.
-       
+    methods(Static) %SPM analysis related methods.       
         function RunSPMJob(matlabbatch)
             %will run the spm matlabbatch using the parallel toolbox.
             fprintf('Will call spm_jobman...\n');
@@ -295,6 +301,49 @@ classdef Project < handle
                 spm_jobman('run', matlabbatch(n));
             end            
         end                        
+    end
+    methods %getters
+        function out        = getgroup_pmf_param(self)
+            %collects the pmf parameters for all subjects in a table.
+            out = [];
+            for ns = self.subject_indices
+                s       = Subject(ns);
+                if ~isempty(s.pmf)
+                    out = [out;[s.id s.pmf_param(:)']];
+                end
+            end
+            out = array2table(out,'variablenames',{'subject_id' 'csp_alpha' 'csn_alpha' 'pooled_alpha' 'csp_beta' 'csn_beta' 'pooled_beta' 'csp_gamma' 'csn_gamma' 'pooled_gamma' 'csp_lamda'    'csn_lamda'    'pooled_lamda' });
+        end
+        function out        = getgroup_rating_param(self)
+            %collects the rating parameters for all subjects in a table.
+            out = [];
+            for ns = self.subject_indices
+                s   = Subject(ns);
+                if ~isempty(s.pmf)%if there is no pmf data
+                    out = [out;[s.id s.rating_param]];
+                end
+            end            
+            out = array2table(out,'variablenames',{'subject_id' 'amp' 'fwhm' 'mu' 'offset' 'std' });
+        end        
+        function out        = path_beta_group(self,nrun,model_num,prefix,varargin)
+            %returns the path for beta images for the second level
+            %analysis. it simply loads single subjects' beta images and
+            %replaces the string sub0000 with second_level.           
+            dummy     = self.path_beta(nrun,model_num,prefix,varargin{:});
+            for n = 1:size(dummy,1)
+                out(n,:) = strrep(dummy(n,:),sprintf('sub%03d',self.id),'second_level');
+            end
+        end        
+        function out        = path_contrast_group(self,nrun,model_num,prefix,type)
+            %returns the path for F,T images for the second level
+            %analysis. it simply loads single subjects' images and
+            %replaces the string sub0000 with second_level.
+            
+            dummy     = self.path_contrast(nrun,model_num,prefix,type);
+            for n = 1:size(dummy,1)
+                out(n,:) = strrep(dummy(n,:),sprintf('sub%03d',self.id),'second_level');
+            end
+        end        
     end
     methods %methods that does something on all subjects one by one
         function VolumeGroupAverage(self,selector)
@@ -306,10 +355,8 @@ classdef Project < handle
             %For example to take avarage skullstripped image use: RUN = 0,
             %SELECTOR = 'mrt/w_ss_data.nii' (which is the normalized skullstripped
             %image). This method will go through all subjects and compute an average skull stripped image.
-            
-            
-            files       = self.collect_files(selector);
-            
+                        
+            files       = self.collect_files(selector);            
             v           = spm_vol(files);%volume handles
             V           = mean(spm_read_vols(v),4);%data
             target_path = regexprep(files(1,:),'sub[0-9][0-9][0-9]','midlevel');%target filename
@@ -331,15 +378,16 @@ classdef Project < handle
         function SecondLevel_ANOVA(self,run,model,beta_image_index)
             % This method runs a second level analysis for a model defined in MODEL using beta images indexed in BETA_IMAGE_INDEX.
             
-            %store all the beta_images in a 3D array
+            %store all the beta_images in a 3D array            
             beta_files = [];
             for ns = self.subject_indices
-                s        = Subject(ns);
-                beta_files = cat(3,beta_files,self.path_beta(run,model,'s_w_')');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
+                s          = Subject(ns);
+%                 beta_files = cat(3,beta_files,s.path_contrast(run,model,'s_w_','T',beta_image_index)');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
+                  beta_files = cat(3,beta_files,s.path_beta(run,model,'s_w_',beta_image_index)');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
             end
             %            
             c = 0;
-            for ind = beta_image_index;    
+            for ind = 1:length(beta_image_index)
                 %take single beta_images across all subjects and store them
                 %in a cell
                 c = c +1;                
@@ -367,8 +415,43 @@ classdef Project < handle
             %
             spm_jobman('run', matlabbatch);
         end
+        function B = SecondLevel_Mumfordian(self,nrun,mask_id)
+            %
+            B = [];
+            for ns = self.subject_indices
+                s        = Subject(ns);
+                beta     = s.analysis_mumfordian(nrun,mask_id);
+                B        = cat(3,B,mean(beta,3));
+            end
+        end
     end
     methods %plotters
+        function plot_ss_ratings(self)
+            %will plot all single subject ratings in a big subplot
+            tsubject = length(self.subject_indices);
+            [y x]    = GetSubplotNumber(tsubject);
+            c =0;
+            for ns = self.subject_indices                
+                c        = c+1;
+                s        = Subject(ns);
+                subplot(y,x,c)                
+                s.plot_rating;
+            end
+            supertitle(self.path_project,1)
+        end
+        function plot_ss_pmf(self,chains)
+            %will plot all single subject ratings in a big subplot
+            tsubject = length(self.subject_indices);
+            [y x]    = GetSubplotNumber(tsubject);
+            c =0;
+            for ns = self.subject_indices                
+                c        = c+1;
+                s        = Subject(ns);
+                subplot(y,x,c)                                
+                s.plot_pmf(chains);                
+            end
+            supertitle(self.path_project,1)
+        end
         function plot_activitymap_normalized(self,files)
             %plots the data in a volume as average intensity projection, as
             %a 3xN panel, where N is the number of volumes. Masking
@@ -440,20 +523,112 @@ classdef Project < handle
         end
         function plot_volume(self,filename)
             %will plot the volume using spm_image;
+            global st                        
             spm_image('init',filename)
+            spm_clf;
+            st.callback = @self.test
+            spm_orthviews('Image',filename)
+%             spm_image('display',filename)
+            spm_orthviews('AddColourBar',h(1),1);
+            spm_orthviews('AddContext',h(1));
+%             keyboard
         end
+        function test(self)
+            global st;
+            coor = (st.centre);            
+            self.default_model_name                                 = 'fir_15_15';
+            %betas = self.path_beta(1,2,'s_',1:135);
+            betas  = FilterF(sprintf('%s/midlevel/run001/spm/model_02_fir_15_15/s_w_beta_*',self.path_project));
+            betas  = vertcat(betas{:});
+            XYZvox = self.get_mm2vox([coor ;1],spm_vol(betas(1,:)))
+            d = spm_get_data(betas,XYZvox);
+            d = reshape(d,15,9);            
+            figure(10001);   
+            set(gcf,'position',[1370 1201 416  1104])
+            set(gca, 'ColorOrder', GetFearGenColors, 'NextPlot', 'replacechildren');
+            subplot(3,1,1)
+            plot(d);box off;
+            subplot(3,1,2)            
+            imagesc(d);colormap jet
+            subplot(3,1,3)                        
+            set(gca, 'ColorOrder', [linspace(0,1,15);zeros(1,15);1-linspace(0,1,15)]', 'NextPlot', 'replacechildren');            
+            data = [];
+            data.x   = repmat(linspace(-135,180,8),15,1);
+            data.y   = d(:,1:8);
+            data.ids = 1:15;
+            Y = repmat([1:15]',1,8);            
+            h=bar(mean(d));            
+            grid on;
+            self.default_model_name                                 = 'chrf_0_0';
+            %
+            betas  = FilterF(sprintf('%s/midlevel/run001/spm/model_03_chrf_0_0/s_w_beta_*',self.path_project));
+            betas  = vertcat(betas{:});
+            XYZvox = self.get_mm2vox([coor(:); 1],spm_vol(betas(1,:)));
+            d      = spm_get_data(betas,XYZvox);
+            Weights2Dynamics(d(:)');          
+        end
+        
+        
         function plot_overlay(self,file1,file2)
             spm_image('init',file1)
             spm_clf;
-            pause(0.5);                        
+            pause(0.5);                                    
             v1 = spm_vol(file1);
-            v2 = spm_vol(file2);            
+            v2 = spm_vol(file2);        
+            
+            global st                                                
+            st.callback = @self.test
+            
+            
             h  = spm_orthviews('Image' ,v1 );            
-            spm_orthviews('Addtruecolourimage', h(1), file2, hot, 0.5 );            
+            spm_orthviews('Addtruecolourimage', h(1), file2, jet, 0.8 );
             spm_orthviews('Redraw');
             spm_orthviews('AddColourBar',h(1),1);
             spm_orthviews('AddContext',h(1));
             spm_orthviews('Caption', h(1),file2);
+        end
+        function hist_pmf_param(self,fields)
+            %will generate an histogram of the pmf parameters
+            out = self.getgroup_pmf_param;
+            counter = 0;
+            for fields = fields
+                counter = counter+1;
+                x   = linspace(0,120,11);
+                c   = histc(out.(fields{1}),x);
+                subplot(1,length(fields),counter)
+                bar(x,c,1,'k');
+                axis tight;
+                box off;
+                xlabel('alpha');                
+                M = mean(out.(fields{1}));
+                S = std(out.(fields{1}))./sqrt(size(M,1));
+                hold on;
+                plot([M M],ylim,'r','linewidth',4);
+                hold off;
+                title(sprintf('%s: %3.4g ± %3.4g (M±SEM)',fields{1},M,S),'interpreter','none');
+            end
+        end
+        function hist_rating_param(self)
+            %%will generate an histogram of the rating parameters.
+            out     = self.getgroup_rating_param;
+            counter = 0;            
+            for fields = {'amp' 'kappa' 'mu'}
+                counter = counter+1;                
+                Y   = out.(fields{1});
+                x   = linspace(min(Y),max(Y),20);
+                c   = histc(Y,x);                
+                subplot(1,3,counter)
+                bar(x,c,1,'k');
+                axis tight;
+                box off;
+                xlabel('alpha');                
+                M = mean(out.(fields{1}));
+                S = std(out.(fields{1}))./sqrt(size(M,1));
+                hold on;
+                plot([M M],ylim,'r');
+                hold off;
+                title(sprintf('%s: %3.4g ± %3.4g (M±SEM)',fields{1},M,S),'interpreter','none');
+            end
         end
     end
 end
