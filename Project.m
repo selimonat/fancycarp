@@ -65,6 +65,8 @@ classdef Project < handle
         path_second_level     = sprintf('%sspm/',Project.path_project);%where the second level results has to be stored        
 		current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
+        PixelPerDegree        = 29;
+        screen_resolution     = [768 1024];
     end    
     properties (Hidden)
         atlas2mask_threshold  = 20;%where ROI masks are computed, this threshold is used.        

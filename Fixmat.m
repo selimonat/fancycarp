@@ -66,18 +66,18 @@ classdef Fixmat < Project
             for run = runs(:)'
                 for subject = subjects(:)'                
 %                     if exist(regexprep(obj.path2data(subject,run,'eye'),'.mat','.edf')) ~= 0 %does the subject has an edf file?
-
+                    s = Subject(subject);
 					%% edf2mat conversion                    
-					if ~exist(obj.path2data(subject,run,'eye'))%is the edf file converted?
+					if ~exist(s.path_data(run,'eye'))%is the edf file converted?
 							fprintf('-edfread not yet ran (subject:%03d, run:%03d)\n-Roger that, will do it ASAP, sir!\n',subject,run);
-							[trials info] = edfread(regexprep(obj.path2data(subject,run,'eye'),'.mat','.edf'),'TRIALID');
-							save(obj.path2data(subject,run,'eye'),'trials','info');
+							[trials info] = edfread(regexprep(s.path_data(run,'eye'),'.mat','.edf'),'TRIALID');
+							save(s.path_data(run,'eye'),'trials','info');
 							%if the conversion fails the code will fail, it is recommended to rename the data.edf file to something else then.
 					else
 						fprintf('edf is converted (subject:%03d, run:%03d)\n',subject,run);
 					end
 
-                    dummy = load(obj.path2data(subject,run,'eye'));
+                    dummy = load(s.path_data(run,'eye'));
                     %this is necessary to expand the PTB message to
                     %something that is understandable by the fixations
                     %method.
@@ -435,7 +435,7 @@ classdef Fixmat < Project
                 title(t,'interpreter','none');
                 end
             end
-            %             thincolorbar('vert');
+            thincolorbar('vert');
             colorbar
         end
         function getmaps(obj,varargin)
@@ -602,7 +602,7 @@ classdef Fixmat < Project
             for phases = 1:ph
                 subplot(1,ph,phases)
                 imagesc(count(:,:,phases),[0 7]);
-                thincolorbar('vert');
+%                thincolorbar('vert');
                 ylabel('subjects')
                 xlabel('condition');
                 axis image;
