@@ -1,6 +1,6 @@
 classdef Fixmat < Project
     properties (Hidden,Constant)                
-        window       = 250;%half size of the fixation maps        
+        window       = [768 1024]./2;%half size of the fixation maps        
     end
     
     properties (Hidden,SetAccess = public)
@@ -18,6 +18,7 @@ classdef Fixmat < Project
          dendro_leafOrder    = [];
          maps%current maps;
          mds%mds results
+         duration_weight     = 0;
     end
    
     properties (Hidden,SetAccess = private)
@@ -407,7 +408,7 @@ classdef Fixmat < Project
             end
             %get colormap limits.
             if strcmp(cmap,'linear')
-                [d u] = GetColorMapLimits(M,7);
+                [d u] = GetColorMapLimits(M,10);
                 if sum(obj.maps(:) < 0) == 0%if there are no negative values
                     d = 0;
                 end                                      
@@ -424,10 +425,10 @@ classdef Fixmat < Project
                 h   = subplot(nsp(1),nsp(2),nc);          
                 
                 %plot the image;                                       
-                imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.stimulus);
+                imagesc(obj.bincenters_x(obj.window(1)),obj.bincenters_y(obj.window(2)),obj.stimulus);
                 hold on;
                 h     = imagesc(obj.bincenters_x,obj.bincenters_y,M(:,:,nc),[d u]);
-                set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.9+.1);               
+                set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.7+.3);               
                 axis image;
                 axis off;
                 try
@@ -435,8 +436,7 @@ classdef Fixmat < Project
                 title(t,'interpreter','none');
                 end
             end
-            thincolorbar('vert');
-            colorbar
+            thincolorbar('vert');            
         end
         function getmaps(obj,varargin)
             %will populate the maps property based on the filter in
@@ -451,7 +451,14 @@ classdef Fixmat < Project
                 obj.UpdateSelection(v{1}{:});                
                 if strcmp(obj.maptype,'conv')
                     %accum and conv
-                    FixMap            = accumarray([obj.current_y-obj.rect(1)+1 obj.current_x-obj.rect(2)+1],1,[obj.rect(3) obj.rect(4)]);
+                    if obj.duration_weight
+                        fprintf('Weighing fixations by durations...\n');
+                        dur_weight    = obj.stop(obj.selection)-obj.start(obj.selection);
+%                         dur_weight    = dur_weight./sum(dur_weight);
+                        FixMap        = accumarray([obj.current_y-obj.rect(1)+1 obj.current_x-obj.rect(2)+1],dur_weight,[obj.rect(3) obj.rect(4)]);
+                    else
+                        FixMap        = accumarray([obj.current_y-obj.rect(1)+1 obj.current_x-obj.rect(2)+1],1,[obj.rect(3) obj.rect(4)]);
+                    end
                     FixMap            = conv2(sum(obj.kernel),sum(obj.kernel,2),FixMap,'same');
                 elseif strcmp(obj.maptype,'bin')
                     %divide by a factor (i.e. binning) and accum, but no conv                                        
@@ -475,10 +482,14 @@ classdef Fixmat < Project
             end            
         end                      
         function bild = get.stimulus(obj)
-            
-            bild    = imread(obj.find_stim);            
-            bild    = bild( obj.rect(1):obj.rect(1)+obj.rect(3)-1,  obj.rect(2):obj.rect(2)+obj.rect(4)-1);
-            bild    = repmat(bild,[1 1 3]);
+            try
+                bild    = imread(obj.path_stim);            
+%                 bild    = bild( obj.rect(1):obj.rect(1)+obj.rect(3)-1,  obj.rect(2):obj.rect(2)+obj.rect(4)-1);
+%                 bild    = repmat(bild,[1 1 3]);
+            catch
+                bild = [];
+                fprintf('No background image found...\n')
+            end
         end        
         function out = cropmaps(obj,map)
             if strcmp(obj.maptype,'conv')
@@ -535,7 +546,7 @@ classdef Fixmat < Project
             ttrial = length(unique([obj.trialid(obj.selection) ;obj.subject(obj.selection)]','rows'));
         end
         function out = get.rect(obj)
-            out = [obj.screen_resolution(1)/2-obj.window obj.screen_resolution(2)/2-obj.window [obj.window obj.window]*2];
+            out = [obj.screen_resolution(1)/2-obj.window(1) obj.screen_resolution(2)/2-obj.window(2) obj.window*2];            
         end
         function out = get.binedges(obj)
             out = {obj.rect(1):obj.binsize:(obj.rect(1)+obj.rect(3)) ...
@@ -741,5 +752,14 @@ classdef Fixmat < Project
             end
             
         end                
+        function replaceXY(obj,x,y)
+            %As X, Y are read-only properties it is only possible to modify
+            %them via a method.
+            obj.x         = x;
+            obj.y         = y;            
+        end
+        function replaceselection(obj,new_selection)            
+            obj.selection         = new_selection;            
+        end
     end    
 end
