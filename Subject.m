@@ -173,13 +173,124 @@ classdef Subject < Project
             out.y     = self.scr.fear_tuning;
             out.x     = conddummy(cond);
             out.ind   = cutnum;
-        end        
+        end   
+        function plot_facecircle(self)
+            %plots the ptb screen during the face circle "task".
+            
+            %%            
+            %A rect in the Psychophysics Toolbox is a set of rectangular
+            %coordinates [x1 y1 x2 y2] specifying the upper left (x1, y1)
+            %and lower right (x2, y2) coordinates of a rectangle. The
+            %origin (0, 0) of the screen is in the upper left, so y
+            %increases from the top to the bottom of the screen, and x
+            %increases from left to right.        
+            figure(7);clf;
+            C = round([self.paradigm{1}.stim.circle_rect(:,1:2) self.paradigm{1}.stim.circle_rect(:,3)-self.paradigm{1}.stim.circle_rect(:,1)   self.paradigm{1}.stim.circle_rect(:,4)-self.paradigm{1}.stim.circle_rect(:,2)]);
+            axis ij;
+            for n = 1:8;
+                rectangle('position',[C(n,:)]);
+                text(C(n,1),C(n,2),sprintf('%s\nfile:%d\ndelta:%d',mat2str(n),self.paradigm{1}.stim.circle_file_id(n),self.paradigm{1}.stim.circle_order(n)),'fontsize',20);
+            end
+            hold on;
+            rectangle('position',self.paradigm{1}.ptb.rect)
+            hold on;
+            axis tight;            
+            xlim([0 1024]);
+            ylim([0 768]);
+            set(gca,'Color','none','xticklabel',[],'yticklabel',[],'xtick',linspace(1,1024,3),'ytick',linspace(1,768,3),'xgrid','on','ygrid','on')            
+            circle(1024/2,768/2,190,'r');
+            hold on
+            circle(1024/2,768/2,380,'r');
+            hold off;
+            supertitle(mat2str(self.id));
+            %it seems the PTB was drawing the face circle from 11:00 oclock
+            %clockwise.
+        end
+        function [fg]=get_facecircle(self,partition)            
+            %% get the masks to count the fixations as a f(cs+ distance)
+            res      = self.screen_resolution;
+            center   = res./2;%[y x]
+            %% plot the fixation map with a mask            
+            fix      = Fixmat(self.id,3);
+            limits   = prctile(double(fix.start),linspace(0,100,partition+1));
+            counter  = 0;
+            for limit = [limits(1:end-1);limits(2:end)]
+                %
+                counter  = counter + 1;
+                fix      = Fixmat(self.id,3);
+                S        = fix.start;
+                %
+                valid    = (S >= limit(1))&(S < limit(2));%take only fixations which are within the limits.
+                fix.replaceselection(valid);
+                fix.ApplySelection;
+                %
+                X        = fix.x;
+                Y        = fix.y;
+                X        = (X-center(2));%center X and Y
+                Y        = (Y-center(1));
+                W        = double(abs(fix.stop - fix.start));
+                Rank     = double(fix.fix);
+%                 W        = W./sum(W);%weights which are proportional to fixation duration.
+                %
+                wedge_angle = 135:-45:-180;%this is the midpoint of the wedge.
+                if length(unique(fix.trialid)) == 1;%%sanity check: there should be only one trial here.
+                    [theta, rho]                = cart2pol(X,Y);%transform X and Y to
+                    [theta]                     = rad2deg(theta);%angle of the fixation point in degrees
+                    shift_angle                 = -mod(theta+22.5-45,360);%shift the angles so that we can get the wedge index.
+                    wedge_index                 = mod(ceil(shift_angle./45)+3-1,8)+1;%moves together the same as PTB drawing
+                end
+                face_angle          = self.paradigm{1}.stim.circle_order(wedge_index)';%drawn condition in the wedge
+                face_index          = face_angle./45+4;                
+                A                   = [X;Y;double(W);theta;rho;wedge_index;wedge_angle(wedge_index);face_angle;face_index;Rank];
+                %A is still in register with fixmat
+                valid               = (A(5,:) > 190)&(A(5,:) < 380);%take only those fixations which are on the faces.
+                A(:,~valid)         = [];%remove also fixations from the fixmat
+                fix.replaceselection(valid);
+                fix.ApplySelection;
+                %
+                [~,i]               = sort(A(6,:));%sort according to wedge_index i.e. drawing order.
+                A                   = A(:,i);                
+                
+                [A(11,:),A(12,:)]   = pol2cart(deg2rad(A(8,:)+(A(4,:)-A(7,:))),A(5,:));%(new theta, old amp)
+%                 figure(333);
+%                 imagesc(A);
+%                 set(gca,'ytick',1:size(A,1),'yticklabel',{'X' 'Y' 'W' 'angle' 'amp' 'wedge index' 'wedge angle' 'face angle' 'face index' 'Rank' 'NewX' 'NewY' });
+%                 %                                
+%                 %
+%                 figure(3333);
+%                 fix.kernel_fwhm = 30;
+%                 subplot(2,1,1)
+%                 fix.getcondmaps;
+%                 M = fix.maps;
+%                 imagesc(M);
+%                 subplot(2,1,2);
+%                 fix.duration_weight = 0;                
+%                 fix.replaceXY(min(round(A(11,:)+center(2)),1023),min(round(A(12,:)+center(1)),767));
+%                 fix.getcondmaps;
+%                 M=fix.maps;
+%                 imagesc(M)
+                %
+%                 figure(8);
+                for nface = 1:8
+                    fg.duration(counter,nface)  = sum(A(3,A(9,:) == nface));                    
+                    fg.count(counter,nface)     = sum(A(9,:) == nface);
+                end                
+                ranks = unique(A(10,:));
+                fg.Y = zeros(100,8);
+                for rank = ranks(ranks<=100)
+                    i                 = A(10,:) == rank;
+                    fg.Y(rank,A(9,i)) = fg.Y(rank,A(9,i)) + 1;
+                end
+%                 figure;
+%                 imagesc(fg.Y);drawnow
+            end
+        end
         function [o]        = get.total_run(self)
             % returns the total number of ALL (epi+others) runs in a folder.
             o      = length(dir(sprintf('%s/run*',self.path)));%
         end        
         function L          = get_log(self,run)
-            % Loads the ptb log. Removes all events before/after the
+            % Loads the ptb log.s Removes all events before/after the
             % first/last scan and defines zero as the first scan.
             %
             % Fearamy specificity: appends the microblock index of events
@@ -302,7 +413,7 @@ classdef Subject < Project
         function out        = get.rating_param(self)
             %returns the parameters of the pmf fit (1 x parameter);            
             out      = [self.fit_rating.params(1,:)];
-        end         
+        end           
         function o          = get_param_motion(self,run)
             %will load the realignment parameters, of course you have to
             %realign the EPIs first.
@@ -351,7 +462,7 @@ classdef Subject < Project
             %Creates a binary mask image from the 4D native atlas. Selects
             %3D volumes from the 4D native atlas based on MASK_ID, binarize
             %the images individually, merges them to 3D and saves the final
-            %volume. Binarization is based on the atlas2mask_threshold
+            %volume in run000/mask. Binarization is based on the atlas2mask_threshold
             %property.                        
             %
             V = [];
@@ -1542,8 +1653,7 @@ classdef Subject < Project
             model_dir        = fileparts(model_path);
             if ~exist(model_dir);mkdir(model_dir);end
             save(model_path,'cond');
-        end
-        
+        end        
         function analysis_CreateModel04(self)
             %this model discards condition information and treat all
             %stimuli as if one single type, however add different pmod
@@ -1587,7 +1697,7 @@ classdef Subject < Project
             %self.analysis_CreateModels01            
             [scan,stim_id,mbi_id]  = self.analysis_StimTime2ScanUnit(L);            
             %%
-            kappa   = .5;
+            kappa   = .1;
             %create a weight vector for the derivative.
             res     = 8;
             x2      = [0:(res-1)]*(360/res)-135;
@@ -1602,11 +1712,10 @@ classdef Subject < Project
                     pmod(ntrial,5) = deriv(mod(stim_id(ntrial)./45+4-1,8)+1);%sigma
                 end
             end
-            %
-            pmod(:,2:3)      = nandemean(pmod(:,2:3));            
-            pmod(:,5)        = nandemean(pmod(:,5));            
+            pmod(:,2:3)      = nandemean(pmod(:,2:3));%time and amp            
+            pmod(:,5)        = nandemean(pmod(:,5));%dsigma mean corrected
             pmod(:,4)        = pmod(:,2).*pmod(:,3);%time x amp            
-            pmod(:,6)        = pmod(:,2).*pmod(:,5);%time x amp            
+            pmod(:,6)        = pmod(:,2).*pmod(:,5);%time x dsigma
             pmod(:,2:end)    = nanzscore(pmod(:,2:end));
             %%                        
             cond             = [];
@@ -1644,9 +1753,109 @@ classdef Subject < Project
             model_dir        = fileparts(model_path);
             if ~exist(model_dir);mkdir(model_dir);end
             save(model_path,'cond');
-        end
-        
-        
+        end        
+        function analysis_CreateModel05(self)
+            %same as 04, but with quadratic terms on pmods.
+            %
+            
+            %this initial part is exactly the same as model_02
+            model_num      = 5;
+            L              = self.get_log(1);%get the log file.
+            stim_onsets    = L(:,2) == 3;%all stim events.
+            scan_onsets    = L((L(:,2) == 0),1);%all scan events.
+            ucs_events     = L(:,2) == 5;%all ucs events
+            odd_events     = L(:,3) == 1002;%recover oddball events from the stim id as they are not logged in a specific channel.
+            %
+            mbi            = L(:,end);%microblock identity for all events.
+            %now we have to discard mbi where stimuli occured during a
+            %transition. This can be achieved by search mbi indices that
+            %occured between scans 910-911 and 1805-1806
+            % micro blocks during transition:
+            transition_events = (L(:,1)>scan_onsets(910) & L(:,1)<scan_onsets(911))|(L(:,1)>scan_onsets(1805) & L(:,1)<scan_onsets(1806));
+            %
+            % find stim events which are appearing in a microblock where
+            % there is an UCS (number 5);
+            i                 = ismember(mbi,mbi(ucs_events|odd_events|transition_events))&stim_onsets;
+            %
+            %add 500 degrees to "bad stimulus events".
+            L(i,3)            = L(i,3)+360;
+            %some more finetuning here basically for future convenience on labelling of conditions.
+            i                 = L(:,3) ==1360;%shifted null trials: put them back to 1000, we want to model null trials together irrespective of their microblock belongance.
+            L(i,3)            = 1000;
+            i                 = L(:,3) ==1361;%shifted ucs trials: put them to 500, which is the cond_id for CS+ with shock.
+            L(i,3)            = 360;
+            i                 = L(:,3) ==1362;%shifted oddball trials: put them back to 1002.
+            L(i,3)            = 1002;
+            i                 = L(:,3) ==1000;%shifted oddball trials: put them back to 1002.            
+            %sanity check plot
+            figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));
+            %from this point on it is the same as
+            %self.analysis_CreateModels01            
+            [scan,stim_id,mbi_id]  = self.analysis_StimTime2ScanUnit(L);            
+            %%
+            kappa   = .1;
+            %create a weight vector for the derivative.
+            res     = 8;
+            x2      = [0:(res-1)]*(360/res)-135;
+            x2      = [x2 - (360/res/2) x2(end)+(360/res/2)];
+            deriv   = -abs(diff(Tuning.VonMises(x2,1,kappa,0,0)));
+            pmod    = NaN(length(stim_id),6);
+            for ntrial = 1:length(stim_id)
+                if stim_id(ntrial) < 1000
+                    pmod(ntrial,1) = 1;%constant term
+                    pmod(ntrial,2) = mbi_id(ntrial);%onsets
+                    pmod(ntrial,3) = Tuning.VonMises( stim_id(ntrial),1,kappa,0,0);%amp
+                    pmod(ntrial,5) = deriv(mod(stim_id(ntrial)./45+4-1,8)+1);%dsigma
+                end
+            end
+            %            
+            
+            pmod(:,2:3)      = nandemean(pmod(:,2:3));%mean correct
+            pmod(:,7)        = nandemean(pmod(:,2).^2);%poly expansion time;
+            
+            pmod(:,5)        = nandemean(pmod(:,5));%dsigma
+            pmod(:,4)        = pmod(:,2).*pmod(:,3);%time x amp            
+            pmod(:,6)        = pmod(:,2).*pmod(:,5);%time x dsigma
+            pmod(:,8)        = pmod(:,7).*pmod(:,3);%time2 x amp
+            pmod(:,9)        = pmod(:,7).*pmod(:,5);%time2 x dsigma
+            pmod(:,2:end)    = nanzscore(pmod(:,2:end));
+            %%                        
+            cond             = [];
+            %all valid trials
+            i                = stim_id < 200;
+            cond(1).name     = 'onsets';
+            cond(1).onset    = scan(i);
+            cond(1).duration = zeros(1,sum(i));
+            cond(1).tmod     = 0;
+            cond(1).pmod     = struct('name',{'time' 'amp' 'ampxtime' 'time2' ' ampxtime2' 'dyds' 'dydsxtime'},'param',{ pmod(i,2) pmod(i,3) pmod(i,4) pmod(i,7) pmod(i,8) pmod(i,5) pmod(i,6)},'poly',{1 1 1 1 1 1 1});
+%             bar([cond(1).onset]',[cond(1).pmod(4).param]');                        
+            %all the rest invalid trials            
+            i                = stim_id > 200 & stim_id < 800;
+            cond(2).name     = 'onsets_invalid';
+            cond(2).onset    = scan(i);
+            cond(2).duration = zeros(1,sum(i));
+            cond(2).tmod     = 0;
+            cond(2).pmod     = struct('name',{'time' 'amp' 'ampxtime' 'time2' 'ampxtime2' 'dyds' 'dydsxtime'},'param',{pmod(i,2) pmod(i,3) pmod(i,4) pmod(i,7) pmod(i,8) pmod(i,5) pmod(i,6)},'poly',{1 1 1 1 1 1 1});
+            %null trials            
+            i                = stim_id == 1000;
+            cond(3).name     = 'null';
+            cond(3).onset    = scan(i);
+            cond(3).duration = zeros(1,sum(i));
+            cond(3).tmod     = 0;
+            cond(3).pmod     = struct('name',{},'param',{},'poly',{});            
+            %add also the oddtrials
+            i                = stim_id == 1002;
+            cond(4).name     = 'odd';
+            cond(4).onset    = scan(i);
+            cond(4).duration = zeros(1,sum(i));
+            cond(4).tmod     = 0;
+            cond(4).pmod     = struct('name',{},'param',{},'poly',{});
+            
+            model_path       = self.path_model(1,model_num);
+            model_dir        = fileparts(model_path);
+            if ~exist(model_dir);mkdir(model_dir);end
+            save(model_path,'cond');
+        end        
         function [out] = fit_pmf(self,varargin)
             %will load the pmf fit (saved in runXXX/pmf) if computed other
             %wise will read the raw pmf data (saved in runXXX/stimulation)
@@ -1727,6 +1936,6 @@ classdef Subject < Project
                 end
             end
             save(self.path_data(1,'rating'),'out')
-        end
+        end        
     end
 end

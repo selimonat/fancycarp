@@ -67,6 +67,7 @@ classdef Project < handle
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
         PixelPerDegree        = 29;
         screen_resolution     = [768 1024];
+        path_stim             = sprintf('%sstim/data.png',Project.path_project); %path to the TPM images, needed by segment.         
     end    
     properties (Hidden)
         atlas2mask_threshold  = 20;%where ROI masks are computed, this threshold is used.        
@@ -292,6 +293,35 @@ classdef Project < handle
                 out = sprintf('%s,%d',out,varargin{1});
             end
         end
+        function XYZmm      = get_XYZmmNormalized(self,mask_id)
+            %Will return XYZ coordinates from ROI specified by MASK_INDEX
+            %thresholded by the default value. XYZ values are in world 
+            %space, so they will need to be brought to the voxel space of
+            %the EPIs.            
+            mask_handle = spm_vol(self.path_atlas(mask_id));%read the mask
+            mask_ind    = spm_read_vols(mask_handle) > self.atlas2mask_threshold;%threshold it            
+            [X Y Z]     = ind2sub(mask_handle.dim,find(mask_ind));%get voxel indices
+            XYZ         = [X Y Z ones(sum(mask_ind(:)),1)]';%this is in hr's voxels space.
+            XYZmm       = mask_handle.mat*XYZ;%this is world space.            
+            XYZmm       = unique(XYZmm','rows')';%remove repetititons.
+        end
+        function D          = getgroup_data(self,file,mask_id)
+            %will read the data specified in FILE 
+            %FILE is the absolute path to a 3/4D .nii file. Important point
+            %is that the file should be in the normalized space, as MASK_ID
+            %refers to a normalized atlas.
+            %
+            %MASK_ID is used to select voxels.
+            %                                    
+            vh      = spm_vol(file);
+            if spm_check_orientations(vh)
+                XYZmm   = self.get_XYZmmNormalized(mask_id);
+                XYZvox  = self.get_mm2vox(XYZmm,vh(1));%in EPI voxel space.
+                D       = spm_get_data(vh,XYZvox);
+            else
+                fprintf('The data in\n %s\n doesn''t have same orientations...',file);
+            end            
+        end
     end
     methods(Static) %SPM analysis related methods.       
         function RunSPMJob(matlabbatch)
@@ -382,7 +412,7 @@ classdef Project < handle
             
             %store all the beta_images in a 3D array            
             beta_files = [];
-            for ns = self.subject_indices
+            for ns = self.gs;
                 s          = Subject(ns);
 %                 beta_files = cat(3,beta_files,s.path_contrast(run,model,'s_w_','T',beta_image_index)');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
                   beta_files = cat(3,beta_files,s.path_beta(run,model,'s_w_',beta_image_index)');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
@@ -505,7 +535,6 @@ classdef Project < handle
             end            
             %%
             fields_alpha = {'x_alpha' 'y_alpha' 'z_alpha' };
-
             fields_data  = {'x' 'y' 'z'};
             ffigure(1);clf;
             for ncol = 1:tcond;%run over conditions
@@ -536,38 +565,46 @@ classdef Project < handle
 %             keyboard
         end
         function test(self)
+            
             global st;
-            coor = (st.centre);            
-            self.default_model_name                                 = 'fir_15_15';
-            %betas = self.path_beta(1,2,'s_',1:135);
-            betas  = FilterF(sprintf('%s/midlevel/run001/spm/model_02_fir_15_15/s_w_beta_*',self.path_project));
-            betas  = vertcat(betas{:});
-            XYZvox = self.get_mm2vox([coor ;1],spm_vol(betas(1,:)))
-            d = spm_get_data(betas,XYZvox);
-            d = reshape(d,15,9);            
-            figure(10001);   
-            set(gcf,'position',[1370 1201 416  1104])
-            set(gca, 'ColorOrder', GetFearGenColors, 'NextPlot', 'replacechildren');
-            subplot(3,1,1)
-            plot(d);box off;
-            subplot(3,1,2)            
-            imagesc(d);colormap jet
-            subplot(3,1,3)                        
-            set(gca, 'ColorOrder', [linspace(0,1,15);zeros(1,15);1-linspace(0,1,15)]', 'NextPlot', 'replacechildren');            
-            data = [];
-            data.x   = repmat(linspace(-135,180,8),15,1);
-            data.y   = d(:,1:8);
-            data.ids = 1:15;
-            Y = repmat([1:15]',1,8);            
-            h=bar(mean(d));            
-            grid on;
-            self.default_model_name                                 = 'chrf_0_0';
-            %
-            betas  = FilterF(sprintf('%s/midlevel/run001/spm/model_03_chrf_0_0/s_w_beta_*',self.path_project));
-            betas  = vertcat(betas{:});
-            XYZvox = self.get_mm2vox([coor(:); 1],spm_vol(betas(1,:)));
-            d      = spm_get_data(betas,XYZvox);
-            Weights2Dynamics(d(:)');          
+            try
+                coor = (st.centre);
+                self.default_model_name                                 = 'fir_15_15';
+                %betas = self.path_beta(1,2,'s_',1:135);
+                betas  = FilterF(sprintf('%s/midlevel/run001/spm/model_02_fir_15_15/s_w_beta_*',self.path_project));
+                betas  = vertcat(betas{:});
+                XYZvox = self.get_mm2vox([coor ;1],spm_vol(betas(1,:)))
+                d = spm_get_data(betas,XYZvox);
+                d = reshape(d,15,9);
+                figure(10001);
+                set(gcf,'position',[1370 1201 416  1104])                
+                subplot(3,1,1)
+                set(gca, 'ColorOrder', GetFearGenColors, 'NextPlot', 'replacechildren');
+                plot(d);box off;
+                hold on;plot(mean(d(:,1:8),2)-d(:,9),'k--','linewidth',3);                
+                hold off;
+                subplot(3,1,2)
+                imagesc(d);colormap jet;
+                subplot(3,1,3)                
+                set(gca, 'ColorOrder', [linspace(0,1,15);zeros(1,15);1-linspace(0,1,15)]', 'NextPlot', 'replacechildren');
+                data = [];
+                data.x   = repmat(linspace(-135,180,8),15,1);
+                data.y   = d(:,1:8);
+                data.ids = 1:15;
+                Y = repmat([1:15]',1,8);
+                h=bar(mean(d));
+%                 SetFearGenBarColors(h);
+                grid on;
+                self.default_model_name                                 = 'chrf_0_0';
+                %
+                betas  = FilterF(sprintf('%s/second_level/run001/spm/model_05_chrf_0_0/beta_*',self.path_project));
+                betas  = vertcat(betas{:});
+                XYZvox = self.get_mm2vox([coor(:); 1],spm_vol(betas(1,:)));
+                d      = spm_get_data(betas,XYZvox);
+                Weights2Dynamics(d(:)');
+            catch
+                fprintf('call back doesn''t run\n')
+            end
         end
         
         
@@ -583,7 +620,7 @@ classdef Project < handle
             
             
             h  = spm_orthviews('Image' ,v1 );            
-            spm_orthviews('Addtruecolourimage', h(1), file2, jet, 0.8 );
+            spm_orthviews('Addtruecolourimage', h(1), file2, jet, 0.4 );
             spm_orthviews('Redraw');
             spm_orthviews('AddColourBar',h(1),1);
             spm_orthviews('AddContext',h(1));
