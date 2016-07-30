@@ -1336,8 +1336,8 @@ classdef Subject < Project
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond      = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 %adjust onsets so that the FIR model contains also
                 %prestimulus period.
-                for nc = 1:length(cond)
-                    cond(nc).onset = cond(nc).onset - 5;%push the onset 5s to the past
+                for nc = 1:length(dummy.cond)
+                    dummy.cond(nc).onset = dummy.cond(nc).onset - 5;%push the onset 5s to the past
                 end
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond      = dummy.cond;
                 %load nuissance parameters
@@ -1400,8 +1400,8 @@ classdef Subject < Project
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond      = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 %adjust onsets so that the FIR model contains also
                 %prestimulus period.
-                for nc = 1:length(cond)
-                    cond(nc).onset = cond(nc).onset - 5;%push the onset 5s to the past
+                for nc = 1:length(dummy.cond)
+                    dummy.cond(nc).onset = dummy.cond(nc).onset - 5;%push the onset 5s to the past
                 end
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond      = dummy.cond;
                 %load nuissance parameters
@@ -1621,8 +1621,7 @@ classdef Subject < Project
             end
             if ~exist(fileparts(model_path));
                 mkdir(fileparts(model_path));
-            end
-            keyboard
+            end            
             save(model_path,'cond');
         end
         function analysis_CreateModel03(self)
