@@ -13,7 +13,9 @@ classdef Project < handle
        
 %         path_project        = '/Users/onat/Documents/BehavioralExperiments/fearcloud/';
 %         path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sBDNF%s',homedir,filesep,filesep,filesep,filesep);
+%         path_project      = sprintf('%s%sDocuments%sExperiments%sBDNF%sdata%s',homedir,filesep,filesep,filesep,filesep,filesep)
         path_project      = sprintf('%s%sDocuments%sExperiments%sFearCloud_Eyelab%sdata%s',homedir,filesep,filesep,filesep,filesep,filesep)
+%          path_project      = sprintf('%s%sDocuments%sExperiments%sPlaPil%sdata%s',homedir,filesep,filesep,filesep,filesep,filesep)
         scr_blocknames    = {'test_rating' 'test' 'cond_rating' 'cond' 'base_rating' 'base' };
 
         path_stimuli      = sprintf('%sstimuli%s',Project.path_project,filesep);
@@ -34,7 +36,7 @@ classdef Project < handle
             %will return the path to the Nth (varargin) stimulus. If not
             %specified the average stim will be returned.                       
             if ~isempty(varargin)
-                stim = sprintf('%s%02d.bmp',Project.path_stimuli,n);            
+                stim = sprintf('%s%02d.png',Project.path_stimuli,varargin{:});            
             else
                 stim = sprintf('%save.bmp',Project.path_stimuli);
             end
