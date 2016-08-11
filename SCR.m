@@ -4,7 +4,7 @@ classdef SCR < handle
         default_run = 4;%at which run the scr data is located.
     end
     properties (Hidden)
-        ledalab_defaults      = {'open', 'mat','downsample', 5, 'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1};%
+        ledalab_defaults      = {'open', 'mat','downsample', 5, 'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1 };%
         hdr
         markers
         block2phase
@@ -278,7 +278,8 @@ classdef SCR < handle
             
             if exist(filename_results) == 0
                 %% convert to data format that ledalab understands.
-                data.conductance            = self.y;
+                self.smooth('sgolay');
+                data.conductance            = self.data;
                 data.time                   = self.time/1000;%in seconds
                 data.time                   = data.time - min(data.time(:));
                 data.samplingrate           = self.sampling_rate;%Hz
@@ -302,7 +303,7 @@ classdef SCR < handle
                 save(filename,'data');
                 %%
                 Ledalab({filename},self.ledalab_defaults{:});
-            end
+           end
             leda         = load(filename_results);
             % before assigning tonic and phasic values upsample the data to
             % original sampling rate so that we can use normally the
