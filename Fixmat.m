@@ -752,11 +752,15 @@ classdef Fixmat < Project
             end
             
         end                
-        function replaceXY(obj,x,y)
-            %As X, Y are read-only properties it is only possible to modify
-            %them via a method.
-            obj.x         = x;
-            obj.y         = y;            
+        function xy2map(obj,x,y);
+            %Get a map for an arbitrary set of X and Y points. it is
+            %basically a trick method to get the shit done easily.
+            FixMap        = accumarray([y(:)-obj.rect(1)+1 x(:)-obj.rect(2)+1],1,[obj.rect(3) obj.rect(4)]);
+            FixMap        = conv2(sum(obj.kernel),sum(obj.kernel,2),FixMap,'same');
+            if obj.unitize
+                FixMap            = FixMap./sum(FixMap(:));
+            end
+            obj.maps      = FixMap;
         end
         function replaceselection(obj,new_selection)            
             obj.selection         = new_selection;            
