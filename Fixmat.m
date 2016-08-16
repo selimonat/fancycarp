@@ -63,22 +63,24 @@ classdef Fixmat < Project
     methods        
         function obj = Fixmat(subjects,runs)%constructor
             %%
+            
             %initialize
             for run = runs(:)'
                 for subject = subjects(:)'                
 %                     if exist(regexprep(obj.path2data(subject,run,'eye'),'.mat','.edf')) ~= 0 %does the subject has an edf file?
-                    s = Subject(subject);
+                    
+                    path_eye  = sprintf('%seye/data.mat',obj.pathfinder(subject,run));                    
 					%% edf2mat conversion                    
-					if ~exist(s.path_data(run,'eye'))%is the edf file converted?
+					if ~exist(path_eye)%is the edf file converted?
 							fprintf('-edfread not yet ran (subject:%03d, run:%03d)\n-Roger that, will do it ASAP, sir!\n',subject,run);
-							[trials info] = edfread(regexprep(s.path_data(run,'eye'),'.mat','.edf'),'TRIALID');
-							save(s.path_data(run,'eye'),'trials','info');
+							[trials info] = edfread(regexprep(path_eye,'.mat','.edf'),'TRIALID');
+							save(path_eye,'trials','info');
 							%if the conversion fails the code will fail, it is recommended to rename the data.edf file to something else then.
 					else
 						fprintf('edf is converted (subject:%03d, run:%03d)\n',subject,run);
 					end
 
-                    dummy = load(s.path_data(run,'eye'));
+                    dummy = load(path_eye);
                     %this is necessary to expand the PTB message to
                     %something that is understandable by the fixations
                     %method.
