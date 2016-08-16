@@ -206,14 +206,20 @@ classdef Subject < Project
             %it seems the PTB was drawing the face circle from 11:00 oclock
             %clockwise.
         end
-        function [fg]=get_facecircle(self,partition)            
+        function [fg,A]=get_facecircle(self,partition)            
             %% get the masks to count the fixations as a f(cs+ distance)
             res      = self.screen_resolution;
             center   = res./2;%[y x]
+            wedge_angle = 135:-45:-180;%this is the midpoint of the wedge. This is in PTB register, i.e. WedgeIndex of 1 means 135 degrees.
             %% plot the fixation map with a mask            
-            fix      = Fixmat(self.id,3);
-            limits   = prctile(double(fix.start),linspace(0,100,partition+1));
-            counter  = 0;
+            fix         = Fixmat(self.id,3);
+            %
+%             limits   = prctile(double(fix.start),linspace(0,100,partition+1));
+            limits      = linspace(0,30000,partition+1);%in seconds
+            %
+            counter     = 0;
+            fg.duration = NaN(partition,8);            
+            fg.count    = zeros(partition,8);
             for limit = [limits(1:end-1);limits(2:end)]
                 %
                 counter  = counter + 1;
@@ -221,68 +227,59 @@ classdef Subject < Project
                 S        = fix.start;
                 %
                 valid    = (S >= limit(1))&(S < limit(2));%take only fixations which are within the limits.
-                fix.replaceselection(valid);
-                fix.ApplySelection;
-                %
-                X        = fix.x;
-                Y        = fix.y;
-                X        = (X-center(2));%center X and Y
-                Y        = (Y-center(1));
-                W        = double(abs(fix.stop - fix.start));
-                Rank     = double(fix.fix);
-%                 W        = W./sum(W);%weights which are proportional to fixation duration.
-                %
-                wedge_angle = 135:-45:-180;%this is the midpoint of the wedge.
-                if length(unique(fix.trialid)) == 1;%%sanity check: there should be only one trial here.
-                    [theta, rho]                = cart2pol(X,Y);%transform X and Y to
-                    [theta]                     = rad2deg(theta);%angle of the fixation point in degrees
-                    shift_angle                 = -mod(theta+22.5-45,360);%shift the angles so that we can get the wedge index.
-                    wedge_index                 = mod(ceil(shift_angle./45)+3-1,8)+1;%moves together the same as PTB drawing
+                if sum(valid) > 0;
+                    fix.replaceselection(valid);
+                    fix.ApplySelection;%remove the unwanted fixations.
+                    %
+                    X        = fix.x;
+                    Y        = res(1)-fix.y;%image to cartesian coordinates for the y-axis.
+                    X        = (X-center(2));%center X and Y
+                    Y        = (Y-center(1));
+                    W        = double(abs(fix.stop - fix.start));
+                    Rank     = double(fix.fix);
+                    %                 W        = W./sum(W);%weights which are proportional to fixation duration.
+                    %                    
+                    if length(unique(fix.trialid)) == 1;%%sanity check: there should be only one trial here.
+                        [theta, rho]                = cart2pol(X,Y);%transform X and Y to
+                        [theta]                     = rad2deg(theta);%angle of the fixation point in degrees
+                        shift_angle                 = -mod(theta+22.5-45,360);%shift the angles so that we can get the wedge index.
+                        wedge_index                 = mod(ceil(shift_angle./45)+3-1,8)+1;%moves together the same as PTB drawing
+                    end
+                    face_angle                      = self.paradigm{1}.stim.circle_order(wedge_index)';%drawn condition in the wedge
+                    face_index                      = face_angle./45+4;
+                    A                               = [res(2)+X;res(1)+Y;double(W);theta;rho;wedge_index;wedge_angle(wedge_index);face_angle;face_index;Rank];
+%                     A is [ 1/X coor;
+%                            2/Y coor
+%                            3/duration of fixation
+%                            4/Angle of the fixation
+%                            5/distance to center
+%                            6/Wedge Index, meaning position that PTB used to draw
+%                            7/Wedge Angle, the angle in PTB definition,
+%                            basically rounded fixation angles.
+%                            8/Face angle, this is the angular distance to CS+
+%                            9/Face Index, this is the filename of the stimulus
+%                            10/Rank; this is the order of the fixation along the 30 seconds
+%                            11/angle of fixation maps aligned to CS+.
+%                            12/old amp.
+%                            13/subject index.
+                    
+                    %A is still in register with fixmat
+                    valid                           = (A(5,:) > 190)&(A(5,:) < 380);%take only those fixations which are on the faces.
+                    A(:,~valid)                     = [];%remove also fixations from the fixmat
+                    fix.replaceselection(valid);
+                    fix.ApplySelection;
+                    %
+                    [~,i]                           = sort(A(6,:));%sort according to wedge_index i.e. drawing order.
+                    A                               = A(:,i);                    
+                    [A(11,:),A(12,:)]               = pol2cart(deg2rad(A(8,:)+(A(4,:)-A(7,:))),A(5,:));%(new theta, old amp)
+                    A(13,:)                         = self.id;
+                    for nface = 1:8
+                        fg.duration(counter,nface)  = sum(A(3,A(9,:) == nface));%4 is CS+.
+                        fg.count(counter,nface)     = sum(A(9,:) == nface);
+                    end                    
+                else
+                    cprintf([1 1 0],'no fix found\n');
                 end
-                face_angle          = self.paradigm{1}.stim.circle_order(wedge_index)';%drawn condition in the wedge
-                face_index          = face_angle./45+4;                
-                A                   = [X;Y;double(W);theta;rho;wedge_index;wedge_angle(wedge_index);face_angle;face_index;Rank];
-                %A is still in register with fixmat
-                valid               = (A(5,:) > 190)&(A(5,:) < 380);%take only those fixations which are on the faces.
-                A(:,~valid)         = [];%remove also fixations from the fixmat
-                fix.replaceselection(valid);
-                fix.ApplySelection;
-                %
-                [~,i]               = sort(A(6,:));%sort according to wedge_index i.e. drawing order.
-                A                   = A(:,i);                
-                
-                [A(11,:),A(12,:)]   = pol2cart(deg2rad(A(8,:)+(A(4,:)-A(7,:))),A(5,:));%(new theta, old amp)
-%                 figure(333);
-%                 imagesc(A);
-%                 set(gca,'ytick',1:size(A,1),'yticklabel',{'X' 'Y' 'W' 'angle' 'amp' 'wedge index' 'wedge angle' 'face angle' 'face index' 'Rank' 'NewX' 'NewY' });
-%                 %                                
-%                 %
-%                 figure(3333);
-%                 fix.kernel_fwhm = 30;
-%                 subplot(2,1,1)
-%                 fix.getcondmaps;
-%                 M = fix.maps;
-%                 imagesc(M);
-%                 subplot(2,1,2);
-%                 fix.duration_weight = 0;                
-%                 fix.replaceXY(min(round(A(11,:)+center(2)),1023),min(round(A(12,:)+center(1)),767));
-%                 fix.getcondmaps;
-%                 M=fix.maps;
-%                 imagesc(M)
-                %
-%                 figure(8);
-                for nface = 1:8
-                    fg.duration(counter,nface)  = sum(A(3,A(9,:) == nface));                    
-                    fg.count(counter,nface)     = sum(A(9,:) == nface);
-                end                
-                ranks = unique(A(10,:));
-                fg.Y = zeros(100,8);
-                for rank = ranks(ranks<=100)
-                    i                 = A(10,:) == rank;
-                    fg.Y(rank,A(9,i)) = fg.Y(rank,A(9,i)) + 1;
-                end
-%                 figure;
-%                 imagesc(fg.Y);drawnow
             end
         end
         function [o]        = get.total_run(self)
@@ -506,6 +503,75 @@ classdef Subject < Project
                 fprintf('The data in\n %s\n doesn''t have same orientations...',file);
             end            
         end
+        function [K]=get_highpassfilter(self)
+            % Get high-pass filter a la SPM.                         
+            run_borders              = [[0 910 910+895]+1;[910 910+895  self.get_total_volumes(1)]];
+            %
+            K(1:size(run_borders,2)) = struct('HParam', self.HParam, 'row',    [] , 'RT',     self.TR ,'X0',[]);
+            c = 0;
+            for b = run_borders
+                c        = c + 1;
+                K(c).row = b(1):b(2);
+                K(c)     = spm_filter(K(c));
+                K(c).X0  = [ones(length(K(c).row),1)*std(K(c).X0(:)) K(c).X0];
+            end
+        end
+        function C = get_constant_terms(self)
+            %return the constant terms for a GLM.
+            total_volume = self.get_total_volumes(1);
+            C            = [[ones(910,1);zeros(total_volume-910,1)] [zeros(910,1);ones(895,1);zeros(total_volume-910-895,1)] [zeros(910+895,1);ones(total_volume-895-910,1)]];
+        end
+        function [X]    = get_designmatrix(self,varargin)
+            %%
+            %will return the design matrix used by spm for a given model at
+            %a given run. If nargin == 2, then get_modelonsets is called,
+            %one can also directly feed in a cond structure. This would be
+            %useful in the case of a mumfordian analysis.
+            if nargin == 3
+                fprintf('Will read model %i from run %i...\n',varargin{2},varargin{1});                
+                cond                  = self.get_modelonsets(varargin{1},varargin{2});            
+            elseif nargin == 2
+                fprintf('Cond structure is directly fed into...\n');
+                cond                  = varargin{1};
+            end
+                
+            fMRI_T                = 16;
+            fMRI_T0               = 1;
+            xBF.T                 = fMRI_T;
+            xBF.T0                = fMRI_T0;
+            xBF.dt                = self.TR/xBF.T;
+            xBF.UNITS             = 'scans';
+            xBF.Volterra          = 1;
+            xBF.name              = 'hrf';
+            xBF                   = spm_get_bf(xBF);            
+            %
+            for i = 1:length(cond);%one regressor for each condition
+                Sess.U(i).dt     = xBF.dt;%- time bin (seconds)                
+                Sess.U(i).ons    = cond(i).onset;%- onsets    (in SPM.xBF.UNITS)
+                Sess.U(i).name   = {sprintf('%02d',i)};%- cell of names for each input or cause                
+                %no parametric modulation here
+                Sess.U(i).dur    =  repmat(0,length(Sess.U(i).ons),1);%- durations (in SPM.xBF.UNITS)
+                Sess.U(i).P.name =  'none';
+                Sess.U(i).P.P    =  'none';
+                Sess.U(i).P.h    =  0;%- order of polynomial expansion
+                Sess.U(i).P.i    =  1;%- sub-indices of u pertaining to P
+            end
+            %
+            k                       = self.get_total_volumes(1);
+            SPM.xBF                 = xBF;
+            SPM.nscan               = k;
+            SPM.Sess                = Sess;
+            SPM.Sess.U              = spm_get_ons(SPM,1);            
+            %
+            % Convolve stimulus functions with basis functions
+            [X,Xn,Fc]               = spm_Volterra(SPM.Sess.U,SPM.xBF.bf,SPM.xBF.Volterra);
+            % Resample regressors at acquisition times (32 bin offset)
+            X                       = X((0:(k - 1))*fMRI_T + fMRI_T0 + 32,:);
+% % %             %sanity checks, the difference to SPM.xX.X should be 0.            
+% % %             load(self.path_spmmat(nrun,model_num));
+% % %             d = abs(SPM.xX.X(:,1:size(X,2)) - X);
+% % %             fprintf('SanityCheck: Difference to SPM''s own DM is %i\n',sum(d(:)));
+        end
     end
     
     methods %(preprocessing))              
@@ -668,75 +734,22 @@ classdef Subject < Project
         end
     end
     methods %(analysis)        
-        function [X,N,K]    = analysis_designmatrix(self,nrun,model_num)
-            %will return the same design matrix used by spm in an efficient
-            %way. see also: GetTimeSeries, spm_GetBetas
-
-            %% Design matrix X
-            cond                  = self.get_modelonsets(nrun,model_num);            
-            fMRI_T                = 16;
-            fMRI_T0               = 1;
-            xBF.T                 = fMRI_T;
-            xBF.T0                = fMRI_T0;
-            xBF.dt                = self.TR/xBF.T;
-            xBF.UNITS             = 'scans';
-            xBF.Volterra          = 1;
-            xBF.name              = 'hrf';
-            xBF                   = spm_get_bf(xBF);            
-            %
-            for i = 1:length(cond);%one regressor for each condition
-                Sess.U(i).dt        = xBF.dt;%- time bin (seconds)                
-                Sess.U(i).ons       = cond(i).onset;%- onsets    (in SPM.xBF.UNITS)
-                Sess.U(i).name      = {sprintf('%02d',i)};%- cell of names for each input or cause                
-                %no parametric modulation here
-                Sess.U(i).dur    =  repmat(0,length(Sess.U(i).ons),1);%- durations (in SPM.xBF.UNITS)
-                Sess.U(i).P.name =  'none';
-                Sess.U(i).P.P    =  'none';
-                Sess.U(i).P.h    =  0;%- order of polynomial expansion
-                Sess.U(i).P.i    =  1;%- sub-indices of u pertaining to P
-            end
-            %
-            k                       = self.get_total_volumes(nrun);
-            SPM.xBF                 = xBF;
-            SPM.nscan               = k;
-            SPM.Sess                = Sess;
-            SPM.Sess.U              = spm_get_ons(SPM,1);            
-            %
-            % Convolve stimulus functions with basis functions
-            [X,Xn,Fc]               = spm_Volterra(SPM.Sess.U,SPM.xBF.bf,SPM.xBF.Volterra);
-            % Resample regressors at acquisition times (32 bin offset)
-            X                       = X((0:(k - 1))*fMRI_T + fMRI_T0 + 32,:);
-            %% Nuissance Parameters
-            N                       = self.get_param_nuissance(nrun);
-            %% Get high-pass filter
-            %this is how it should be, but due to fearamy specificities, we
-            %have to make work around. Note that this cannot be merge to
-            %/mrt/xx or                        
-            % get the filtering strcture a la spm. 
-            run_borders              = [[0 910 910+895]+1;[910 910+895  self.get_total_volumes(nrun)]];
-            %
-            K(1:size(run_borders,2)) = struct('HParam', self.HParam, 'row',    [] , 'RT',     self.TR ,'X0',[]);
-            c = 0;            
-            for b = run_borders
-                c        = c + 1;
-                K(c).row = b(1):b(2);
-                K(c)     = spm_filter(K(c));
-                K(c).X0  = [ones(length(K(c).row),1)*std(K(c).X0(:)) K(c).X0];                
-            end
-            
-        end        
+                
         function beta       = analysis_firstlevel(self,nrun,model_num,mask_id)
-            %will compute beta weights "manually" without calling SPM.
+            %will compute beta weights "manually" without calling SPM, and
+            %will make a sanity check comparing both betas values.
             
             
-            [X N K]   = self.spm_DesignMatrix(nrun,model_num);%returns the Design Matrix, Nuissance Matrix, and High-pass Filtering Matrix                        
+            X         = self.get_designmatrix(nrun,model_num);%returns the Design Matrix, Nuissance Matrix, and High-pass Filtering Matrix                        
+            % Nuissance and high-pass filter Parameters
+            N         = self.get_param_nuissance(nrun);
+            K         = self.get_highpassfilter;
+            %            
             Y         = self.get_data(self.path_epi(nrun,'r'),mask_id);%return the realigned data.
-            
-%             GM        = 100;
-%             g         = spm_global(spm_vol(self.path_epi(nrun)));    
-%             factor    = GM./mean(g);
-%             Y         = Y*factor;
+            %this is a little bit spm unorthodox: it will make the beta
+            %value to be interpretable in units of z-score.
             Y         = (Y-mean(Y(:)))./std(Y(:));                        
+            %
             Y         = spm_filter(K,Y);%high-pass filtering.
             %            
             DM        = [X N ones(size(X,1),1)];%append together Onsets, Nuissances and a constant
@@ -744,109 +757,109 @@ classdef Subject < Project
             DM        = spm_sp('Set',DM);
             DM        = spm_sp('x-',DM);% projector;
             beta      = DM*Y;
-            beta      = beta';%(voxels x betas)
+            beta      = beta';%(voxels x betas);
+%             %sanity check with real betas.
+%             path_beta = self.path_beta(nrun,model_num,'',1:8);
+%             Y2        = self.get_data(path_beta,mask_id);%return the realigned data.
+            
         end                
-        function beta       = analysis_mumfordian(self,nrun,mask_id)
+        function beta       = analysis_mumfordian(self)
+            %This will run a GLM on all single trials one by one while
+            %keeping all the other trials in another regressor.
             
-            %% get the nuissance and highpass filtering matrices.
-            N                       = self.get_param_nuissance(nrun);            
-            run_borders             = [[0 910 910+895]+1;[910 910+895  self.get_total_volumes(nrun)]];
+            
+            model     = 1;
+            nrun      = 1;
+            
+            % get the nuissance and highpass filtering matrices.
+            fprintf('Getting design ingredients...\n')
+            N         = self.get_param_nuissance(nrun);
+            X         = self.get_designmatrix(nrun,model);
+            K         = self.get_highpassfilter;
+            C         = self.get_constant_terms;
+            % get the data and highpass filter right away.
+%             Y         = self.get_data(self.path_epi(nrun,'r'),mask_id);%return the realigned data.%Y is [time x voxels];                                    
+            fprintf('Loading the data and global correction...\n')
+            volh      = spm_vol(self.path_epi(nrun,'r'));
+            Y         = spm_read_vols(volh);%read the whole volume
+            GM        = 100;
+            g         = spm_global(volh);
+            factor    = GM./mean(g);
+            Y         = Y*factor;
+            
+            %% now we run across all trials and get a specific design matrix for each trial.
+            L                            = self.get_log(nrun);
+            [onsets,stim_id,mbi]         = self.analysis_StimTime2ScanUnit(L);
+            stim_id(stim_id<500)         = stim_id(stim_id<500)./45+4;
+            stim_id(stim_id == 1000)     = 9;
+            stim_id(stim_id == 1001)     = 10;
+            stim_id(stim_id == 1002)     = 11;
+%             plot(stim_id,mbi,'o');
             %
-            K(1:size(run_borders,2)) = struct('HParam', self.HParam, 'row',    [] , 'RT',     self.TR ,'X0',[]);
-            c = 0;            
-            for b = run_borders
-                c        = c + 1;
-                K(c).row = b(1):b(2);
-                K(c)     = spm_filter(K(c));
-                K(c).X0  = [ones(length(K(c).row),1)*std(K(c).X0(:)) K(c).X0];                
-            end   
-            %% get the data and highpass filter right away.
-            Y                        = self.get_data(self.path_epi(nrun,'r'),mask_id);%return the realigned data.
-            Y                        = (Y-mean(Y(:)))./std(Y(:));                        
-            Y                        = spm_filter(K,Y);%high-pass filtering.
-            %% now we run across all trials and get a specific design matrix for each trial.                        
-            L                        = self.get_log(1);
-            [onsets,stim_id,mbi]     = self.analysis_StimTime2ScanUnit(L);            
-            stim_id(stim_id<500)     = stim_id(stim_id<500)./45+4;
-            stim_id(stim_id == 1000) = 9;
-            stim_id(stim_id == 1001) = 10;
-            stim_id(stim_id == 1002) = 11;                       
-            %%
-            new_cond                 = [];
-            ttrial                   = length(stim_id);
+            cond                         = [];
+            ttrial                       = length(stim_id);
             for ntrial = 1:ttrial
-                new_cond{ntrial}(1).name     = num2str(stim_id(ntrial));
-                new_cond{ntrial}(1).onset    = onsets(ntrial);
-                new_cond{ntrial}(1).duration = 0;
-                new_cond{ntrial}(1).tmod     = [];
-                new_cond{ntrial}(1).pmod     = struct('name',{},'param',{},'poly',{});
+                cond{ntrial}(1).name     = num2str(stim_id(ntrial));
+                cond{ntrial}(1).onset    = onsets(ntrial);
+                cond{ntrial}(1).duration = 0;
+                cond{ntrial}(1).tmod     = [];
+                cond{ntrial}(1).pmod     = struct('name',{},'param',{},'poly',{});
                 %
-                new_cond{ntrial}(2).name     = 'all_other_stims';%exclude Null trials, UCS and oddball
-                new_cond{ntrial}(2).onset    = setdiff(onsets(stim_id < 9),onsets(ntrial));%everything else
-                new_cond{ntrial}(2).duration = 0;
-                new_cond{ntrial}(2).tmod     = [];
-                new_cond{ntrial}(2).pmod     = struct('name',{},'param',{},'poly',{});
+                cond{ntrial}(2).name     = 'all_other_stims';%exclude Null trials, UCS and oddball
+                cond{ntrial}(2).onset    = setdiff(onsets(stim_id < 9),onsets(ntrial));%everything else
+                cond{ntrial}(2).duration = 0;
+                cond{ntrial}(2).tmod     = [];
+                cond{ntrial}(2).pmod     = struct('name',{},'param',{},'poly',{});
                 %
-                new_cond{ntrial}(3).name     = 'ucs_oddballs';
-                new_cond{ntrial}(3).onset    = setdiff(onsets(stim_id > 9),onsets(ntrial));%everything else;%everything else
-                new_cond{ntrial}(3).duration = 0;
-                new_cond{ntrial}(3).tmod     = [];
-                new_cond{ntrial}(3).pmod     = struct('name',{},'param',{},'poly',{});
-            end            
-            %%
-            
-            for ntrial = 1:ttrial
-                fMRI_T                = 16;
-                fMRI_T0               = 1;
-                xBF.T                 = fMRI_T;
-                xBF.T0                = fMRI_T0;
-                xBF.dt                = self.TR/xBF.T;
-                xBF.UNITS             = 'scans';
-                xBF.Volterra          = 1;
-                xBF.name              = 'hrf';
-                xBF                   = spm_get_bf(xBF);
-                %
-                for i = 1:length(new_cond{ntrial});%one regressor for each condition
-                    Sess.U(i).dt        = xBF.dt;%- time bin (seconds)
-                    Sess.U(i).ons       = new_cond{ntrial}(i).onset;%- onsets    (in SPM.xBF.UNITS)
-                    Sess.U(i).name      = {sprintf('%02d',i)};%- cell of names for each input or cause
-                    %no parametric modulation here
-                    Sess.U(i).dur    =  repmat(0,length(Sess.U(i).ons),1);%- durations (in SPM.xBF.UNITS)
-                    Sess.U(i).P.name =  'none';
-                    Sess.U(i).P.P    =  'none';
-                    Sess.U(i).P.h    =  0;%- order of polynomial expansion
-                    Sess.U(i).P.i    =  1;%- sub-indices of u pertaining to P
-                end
-                %
-                k                       = self.get_total_volumes(nrun);
-                SPM.xBF                 = xBF;
-                SPM.nscan               = k;
-                SPM.Sess                = Sess;
-                SPM.Sess.U              = spm_get_ons(SPM,1);
-                %
-                % Convolve stimulus functions with basis functions
-                [X,Xn,Fc]               = spm_Volterra(SPM.Sess.U,SPM.xBF.bf,SPM.xBF.Volterra);
-                % Resample regressors at acquisition times (32 bin offset)
-                X                       = X((0:(k - 1))*fMRI_T + fMRI_T0 + 32,:);                
-                %%
-                DM                     = [X N ones(size(X,1),1)];%append together Onsets, Nuissances and a constant
-                DM                     = spm_filter(K,DM);%filter also the design matrix
-                DM                     = spm_sp('Set',DM);
-                DM                     = spm_sp('x-',DM);% projector;
-                fprintf('Fitting Subject %03d''s %03dth trial (stim_id:%02d, onset:%3.5g) of %i (%2.3g percent))\n',self.id,ntrial,stim_id(ntrial),onsets(ntrial),ttrial,ntrial./ttrial*100)
-                dummy                  = DM*Y;
-                if ntrial == 1
-                    beta = nan(max(mbi),11,length(dummy));
-                end
-                beta(mbi(ntrial),stim_id(ntrial),:)       = dummy(1);%(microblock,stim,voxel)                    
+                cond{ntrial}(3).name     = 'ucs_oddballs';
+                cond{ntrial}(3).onset    = setdiff(onsets(stim_id > 9),onsets(ntrial));%everything else;%everything else
+                cond{ntrial}(3).duration = 0;
+                cond{ntrial}(3).tmod     = [];
+                cond{ntrial}(3).pmod     = struct('name',{},'param',{},'poly',{});
             end
+            %%
+            %we will go slice by slice otherwise single subject data is
+            %about 12 GB, it stuffes the computer
+            beta       = nan(size(Y,1),size(Y,2),size(Y,3),max(mbi),11);
+            tslice     = size(Y,3);
+            for nslice = 1:tslice                
+                Ys        = squeeze(Y(:,:,nslice,:));
+                Ys        = reshape(Ys,size(Ys,1)*size(Ys,2),size(Ys,3))';
+                Ys        = spm_filter(K,Ys);%high-pass filtering.
+                for ntrial = 1:ttrial
+                    fprintf('Fitting Subject %03d''s %03dth trial (stim_id:%02d, onset:%3.5g) of %i, slice %i of slice %i (%2.3g percent)\n',self.id,ntrial,stim_id(ntrial),onsets(ntrial),ttrial,nslice,tslice,ntrial./ttrial*(nslice./tslice)*100);
+                    X         = self.get_designmatrix(cond{ntrial});%returns the Design Matrix, Nuissance Matrix, and High-pass Filtering Matrix
+                    %
+                    DM        = [X N C];%append together Onsets, Nuissances and a constant
+                    DM        = spm_filter(K,DM);%filter also the design matrix
+                    DM        = spm_sp('Set',DM);
+                    DM        = spm_sp('x-',DM);% projector;
+                    dummy     = DM*Ys;%(voxels x betas);
+                    beta(:,:,nslice,mbi(ntrial),stim_id(ntrial))    = reshape(dummy(1,:),size(Y,1),size(Y,2));
+                    %(x,y,z,microblock,stim,voxel)
+                end
+            end
+            %%
+            self.default_model_name = [self.default_model_name '_mumfordian'];
+            write_folder            = sprintf('%s',fileparts(self.path_spmmat(1,0)));
+            if exist(write_folder) == 0
+                mkdir(write_folder);
+            end
+            %%
+            fprintf('Writing volumes to the disk...\n');
+            Vo                      = volh(1);
+            Vo.dt                   = [64 0];
+            c = 0;
+            for y = 1:size(beta,5)%stim_id
+                for x = 1:size(beta,4)%mbi
+                    c               = c + 1;
+                    Vo.fname        = sprintf('%sbeta_%04d.nii',write_folder,c);                    
+                    spm_write_vol(Vo,beta(:,:,:,x,y));
+                end
+            end
+            
         end
-        function [result]   = analysis_roi_average(self,beta_files,mask_id)
-            %returns interesting statistics with the roi MASK_ID on
-            %activity maps specified in BETA_FILES.            
-            D               = self.get_data(beta_files,mask_id)';
-            result.mean     = mean(D);
-        end
+
     end
     methods %sanity checks
         function sanity_realignement(self)
@@ -1316,7 +1329,7 @@ classdef Subject < Project
             %NRUN can be a vector, but then care has to be taken that
             %model_num is correctly set for different runs.
             
-            self.default_model_name                                 = 'fir_20_20';
+            self.default_model_name                                 = 'fir_13_13';
             spm_dir                                                 = self.dir_spmmat(nrun,model_num);
             spm_path                                                = self.path_spmmat(nrun,model_num);
             
@@ -1375,7 +1388,7 @@ classdef Subject < Project
             beta_images                                                    = self.path_beta(nrun(1),model_num,'w_');%smooth the normalized images too.
             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
         end
-        function                                     analysis_spm_fourier(self,nrun,model_num)
+        function                                     analysis_spm_fourier(self,nrun,model_num,order)
             %run the model MODEL_NUM for data in NRUN.
             %NRUN can be a vector, but then care has to be taken that
             %model_num is correctly set for different runs.
@@ -1545,23 +1558,35 @@ classdef Subject < Project
         end
     end
     methods %(clearly fearamy specific)
-        function analysis_CreateModel01(self,runs)
-            %creates a model based on the stimulus onsets and logged pulses
-            %in the log file. This model doesn't remove the microblocks
-            %where an UCS event has occured but removes the transition
-            %blocks. It is best suited for mumfordian single trial
+        function analysis_CreateModel01(self)
+            %create a model that separates conditions. It pools odd and ucs
+            %condition into the same label. discards transition
+            %microblocks. This will be used for multicondition mumfordian
             %analysis.
             model_num  = 1;
-            for run = runs
+            for run = 1
                 model_path               = self.path_model(run,model_num);%path to the model
                 if ~exist(fileparts(model_path));
                     mkdir(fileparts(model_path));
                 end
-                L                        = self.get_log(run);
+                L                 = self.get_log(run);
+                stim_onsets       = L(:,2) == 3;
+                mbi               = L(:,end);                
+                i                 = ismember(mbi,[22 23 45 46])&stim_onsets;%transition mbi are 22, 23, 45, 46
+                L(i,3)            = L(i,3)+1500; 
+                L(L(:,3) == 1000,3) = 200
+
+                L(L(:,3) == 1001,3) = 201;
+                L(L(:,3) == 1002,3) = 201;
+                
+                %
+                [scan,stim_id,stim_mbi]           = self.analysis_StimTime2ScanUnit(L);
+                % sanity plot
+                figure(1);i=L(:,2)==3;plot(L(i,3),L(i,end),'k.','markersize',20);title(mat2str(self.id));hold on;
+                figure(1);;plot(stim_id,stim_mbi,'ro','markersize',10);title(mat2str(self.id));hold off
                 %%
-                [scan,stim_id]           = self.analysis_StimTime2ScanUnit(L);
                 counter                  = 0;
-                for current_condition = unique(stim_id(:))'
+                for current_condition = unique(stim_id(stim_id(:) <= 500))'
                     counter                = counter + 1;
                     cond(counter).name     = mat2str(current_condition);
                     cond(counter).onset    = scan(stim_id == current_condition);
@@ -1576,21 +1601,22 @@ classdef Subject < Project
             %will generate stim onsets ignoring all microblocks where UCS
             %is delivered as well as transition microblocks..
             model_num      = 2;
-            L              = self.get_log(1);%get the log file.
+            L              = self.get_log(1);%get the log file, will discards all events before/after first/last scan.
             stim_onsets    = L(:,2) == 3;%all stim events.
             scan_onsets    = L((L(:,2) == 0),1);%all scan events.
             ucs_events     = L(:,2) == 5;%all ucs events
             odd_events     = L(:,3) == 1002;%recover oddball events from the stim id as they are not logged in a specific channel.
             %
-            mbi            = L(:,end);%microblock identity for all events.
+            mbi            = L(:,end);%microblock identity for all events, this is inserted in the get_log
+            
             %now we have to discard mbi where stimuli occured during a
             %transition. This can be achieved by search mbi indices that
-            %occured between scans 910-911 and 1805-1806
+            %occured between scans 910-911 and 1805-1806.
             % micro blocks during transition:
             transition_events = (L(:,1)>scan_onsets(910) & L(:,1)<scan_onsets(911))|(L(:,1)>scan_onsets(1805) & L(:,1)<scan_onsets(1806));
             %
-            % find stim events which are appearing in a microblock where
-            % there is an UCS (number 5);
+            %find all indices of microblocks that are either a transition
+            %event, oddball or ucs microblock
             i               = ismember(mbi,mbi(ucs_events|odd_events|transition_events))&stim_onsets;
             %%
             %add 500 degrees to "bad stimulus events".
@@ -1603,13 +1629,14 @@ classdef Subject < Project
             i               = L(:,3) ==1502;%shifted oddball trials: put them back to 1002.
             L(i,3)          = 1002;
             i               = L(:,3) ==1000;%shifted oddball trials: put them back to 1002.
-            L(i,3)          = 200;
-            %sanity check plot
-            figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));
+            L(i,3)          = 200;            
             %from this point on it is the same as
             %self.analysis_CreateModels01
             model_path      = self.path_model(1,model_num);
-            [scan,stim_id]  = self.analysis_StimTime2ScanUnit(L);
+            [scan,stim_id,stim_mbi]  = self.analysis_StimTime2ScanUnit(L);%will discard all transition stimuli
+            %sanity check plot
+            figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));hold on;
+            figure(1);;plot(stim_id,stim_mbi,'ro','markersize',10);title(mat2str(self.id));hold off
             counter         = 0;
             for current_condition = unique(stim_id(:)')
                 counter                = counter + 1;
@@ -1625,16 +1652,14 @@ classdef Subject < Project
             save(model_path,'cond');
         end
         function analysis_CreateModel03(self)
-            %this model discards condition information and treat all
-            %stimuli as if one single type, however add different pmod
-            %values based on their condition labels. It relies on Model02,
-            %which consists of "clean" microblocks. 
-            %cond(1) = 'Valid stim onsets" based on conditions
+            %same labelling as in MODEL02, but all stimuli from the clean
+            %microblocks are added to a single regressor with pmods.
+            %Corrupted microblock are treated the same but separately.
+            %Nulls and odds are there too but not pmoded.
             %
             
             %this initial part is exactly the same as model_02
-            model_num      = 3;
-            
+            model_num      = 3;            
             L              = self.get_log(1);%get the log file.
             stim_onsets    = L(:,2) == 3;%all stim events.
             scan_onsets    = L((L(:,2) == 0),1);%all scan events.
@@ -1661,12 +1686,13 @@ classdef Subject < Project
             L(i,3)            = 360;
             i                 = L(:,3) ==1362;%shifted oddball trials: put them back to 1002.
             L(i,3)            = 1002;
-            i                 = L(:,3) ==1000;%shifted oddball trials: put them back to 1002.            
-            %sanity check plot
-            figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));
+            i                 = L(:,3) ==1000;%shifted oddball trials: put them back to 1002.                        
             %from this point on it is the same as
             %self.analysis_CreateModels01            
             [scan,stim_id,mbi_id]  = self.analysis_StimTime2ScanUnit(L);            
+            %sanity check plot
+            figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));hold on;
+            figure(1);;plot(stim_id,mbi_id,'ro','markersize',10);title(mat2str(self.id));hold off
             %%
             kappa   = .5;
             %create a weight vector for the derivative.
@@ -1723,11 +1749,8 @@ classdef Subject < Project
             save(model_path,'cond');
         end        
         function analysis_CreateModel04(self)
-            %this model discards condition information and treat all
-            %stimuli as if one single type, however add different pmod
-            %values based on their condition labels. It relies on Model02,
-            %which consists of "clean" microblocks. 
-            %cond(1) = 'Valid stim onsets" based on conditions
+            %same as 03, but with more pmod, namely damp/dkappa and its
+            %time interactions.
             %
             
             %this initial part is exactly the same as model_02
@@ -1758,12 +1781,13 @@ classdef Subject < Project
             L(i,3)            = 360;
             i                 = L(:,3) ==1362;%shifted oddball trials: put them back to 1002.
             L(i,3)            = 1002;
-            i                 = L(:,3) ==1000;%shifted oddball trials: put them back to 1002.            
-            %sanity check plot
-            figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));
+            i                 = L(:,3) ==1000;%shifted oddball trials: put them back to 1002.                        
             %from this point on it is the same as
             %self.analysis_CreateModels01            
             [scan,stim_id,mbi_id]  = self.analysis_StimTime2ScanUnit(L);            
+            %sanity check plot
+            figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));hold on;
+            figure(1);;plot(stim_id,mbi_id,'ro','markersize',10);title(mat2str(self.id));hold off
             %%
             kappa   = .1;
             %create a weight vector for the derivative.
@@ -1820,10 +1844,10 @@ classdef Subject < Project
             model_path       = self.path_model(1,model_num);
             model_dir        = fileparts(model_path);
             if ~exist(model_dir);mkdir(model_dir);end
-            save(model_path,'cond');
+%             save(model_path,'cond');
         end        
         function analysis_CreateModel05(self)
-            %same as 04, but with quadratic terms on pmods.
+            %same as 04, but with quadratic terms on time pmods.
             %
             
             %this initial part is exactly the same as model_02
@@ -1854,12 +1878,13 @@ classdef Subject < Project
             L(i,3)            = 360;
             i                 = L(:,3) ==1362;%shifted oddball trials: put them back to 1002.
             L(i,3)            = 1002;
-            i                 = L(:,3) ==1000;%shifted oddball trials: put them back to 1002.            
-            %sanity check plot
-            figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));
+            i                 = L(:,3) ==1000;%shifted oddball trials: put them back to 1002.                        
             %from this point on it is the same as
             %self.analysis_CreateModels01            
-            [scan,stim_id,mbi_id]  = self.analysis_StimTime2ScanUnit(L);            
+            [scan,stim_id,mbi_id]  = self.analysis_StimTime2ScanUnit(L);                        
+            %sanity check plot
+            figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));hold on;
+            figure(1);;plot(stim_id,mbi_id,'ro','markersize',10);title(mat2str(self.id));hold off
             %%
             kappa   = .1;
             %create a weight vector for the derivative.
@@ -1876,8 +1901,7 @@ classdef Subject < Project
                     pmod(ntrial,5) = deriv(mod(stim_id(ntrial)./45+4-1,8)+1);%dsigma
                 end
             end
-            %            
-            
+            %                        
             pmod(:,2:3)      = nandemean(pmod(:,2:3));%mean correct
             pmod(:,7)        = nandemean(pmod(:,2).^2);%poly expansion time;
             
@@ -1923,7 +1947,67 @@ classdef Subject < Project
             model_dir        = fileparts(model_path);
             if ~exist(model_dir);mkdir(model_dir);end
             save(model_path,'cond');
-        end        
+        end          
+        function analysis_CreateModel06(self)
+            %will generate single trial based conditions sorted by
+            %condition, will not discard mbi with UCS, so that once the
+            %model is estimated I can simply plot the whole timexcond
+            %microblock. However it discards microblocks during a transition period. 
+            %%
+            model_num       = 6;
+            model_path      = self.path_model(1,model_num);
+            L               = self.get_log(1);%get the log file.
+            stim_onsets     = L(:,2) == 3;%all stim events.
+            scan_onsets     = L((L(:,2) == 0),1);%all scan events.
+            ucs_events      = L(:,2) == 5;%all ucs events
+            odd_events      = L(:,3) == 1002;%recover oddball events from the stim id as they are not logged in a specific channel.
+            %
+            mbi             = L(:,end);%microblock identity for all events.
+            %now we have to DELETE MBI's where stimuli occured during a transition.              
+                        
+            %
+            % find stim events which are appearing in a microblock where
+            % there is an UCS (number 5);
+            i                 = ismember(mbi,[22 23 45 46])&stim_onsets;%transition mbi are 22, 23, 45, 46
+            L(i,3)            = L(i,3)+1500;
+%             i               = ismember(mbi,[10]);%&stim_onsets;%transition blocks;
+%             L(i,:)          = [];
+            
+            i               = L(:,3) ==1001;%shifted ucs trials: put them to 500, which is the cond_id for CS+ with shock.
+            L(i,3)          = 0;
+            i               = L(:,3) ==1002;%shifted oddball trials: put them back to 1002.
+            L(i,3)          = 0;                        
+            %%
+            %from this point on it is the same as            
+            [scan,stim_id,stim_mbi]  = self.analysis_StimTime2ScanUnit(L);
+            %sanity check plot
+            figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));hold on;
+            figure(1);plot(stim_id,stim_mbi,'ro','markersize',10);title(mat2str(self.id));hold off
+            %we dont want to add additional collinearity on the DM by
+            %modelling the null trials, so we just remove it
+            invalid          = stim_id > 500;
+            stim_id(invalid) = [];
+            scan(invalid)    = [];            
+            cond = [];       
+            c = 0;
+            for ncond = unique(stim_id)'
+                for trial = find(stim_id == ncond)';%make a regressors for each single stimulus
+                    c                 = c +1;
+                    cond(c).name     = sprintf('cond: %i,mbi: %i',ncond,ceil(c./9));
+                    cond(c).onset    = scan(trial);
+                    cond(c).duration = 0;
+                    cond(c).tmod     = 0;
+                    cond(c).pmod     = struct('name',{},'param',{},'poly',{});
+                end
+            end
+            %%
+            if ~exist(fileparts(model_path));
+                mkdir(fileparts(model_path));
+            end            
+            save(model_path,'cond');
+        end
+        
+        
         function [out] = fit_pmf(self,varargin)
             %will load the pmf fit (saved in runXXX/pmf) if computed other
             %wise will read the raw pmf data (saved in runXXX/stimulation)
