@@ -38,13 +38,14 @@ classdef Subject < Project
         path
         csp
         csn
-        scr        
+        scr
+        eye
         pmf_param     = [];
         rating_param  = [];
         trio_session  = [];
         ratings       = [];
         total_run     = [];
-        pmf
+        pmf        
     end
     %%
     methods
@@ -67,6 +68,9 @@ classdef Subject < Project
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
                 end
                 s.scr = SCR(s);
+                try
+                    s.eye = Fixmat(id,0);
+                end
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path);
                 fprintf('Your path might also be wrong...\n');
@@ -779,14 +783,10 @@ classdef Subject < Project
             C         = self.get_constant_terms;
             % get the data and highpass filter right away.
 %             Y         = self.get_data(self.path_epi(nrun,'r'),mask_id);%return the realigned data.%Y is [time x voxels];                                    
-            fprintf('Loading the data and global correction...\n')
-            volh      = spm_vol(self.path_epi(nrun,'r'));
-            Y         = spm_read_vols(volh);%read the whole volume
-            GM        = 100;
-            g         = spm_global(volh);
-            factor    = GM./mean(g);
-            Y         = Y*factor;
-            
+            fprintf('Loading the data and global correction...\n')            
+            load(self.path_spmmat(nrun,2));%any SPM model will contain the VY and the global mean normalized values;
+            VY        = SPM.xY.VY;
+            clear SPM;       
             %% now we run across all trials and get a specific design matrix for each trial.
             L                            = self.get_log(nrun);
             [onsets,stim_id,mbi]         = self.analysis_StimTime2ScanUnit(L);
@@ -819,13 +819,13 @@ classdef Subject < Project
             end
             %%
             %we will go slice by slice otherwise single subject data is
-            %about 12 GB, it stuffes the computer
-            beta       = nan(size(Y,1),size(Y,2),size(Y,3),max(mbi),11);
-            tslice     = size(Y,3);
-            for nslice = 1:tslice                
-                Ys        = squeeze(Y(:,:,nslice,:));
-                Ys        = reshape(Ys,size(Ys,1)*size(Ys,2),size(Ys,3))';
-                Ys        = spm_filter(K,Ys);%high-pass filtering.
+            %about 12 GB, it stuffes the computer            
+            beta       = nan(VY(1).dim(1),VY(1).dim(2),VY(1).dim(3),max(mbi),11);
+            tslice     = VY(1).dim(3);
+            for nslice = 1:tslice                                
+                Y         = squeeze(spm_data_read(VY,'slice',nslice));                
+                Y         = reshape(Y,size(Y,1)*size(Y,2),size(Y,3))';
+                Ys        = spm_filter(K,Y);%high-pass filtering.
                 for ntrial = 1:ttrial
                     fprintf('Fitting Subject %03d''s %03dth trial (stim_id:%02d, onset:%3.5g) of %i, slice %i of slice %i (%2.3g percent)\n',self.id,ntrial,stim_id(ntrial),onsets(ntrial),ttrial,nslice,tslice,ntrial./ttrial*(nslice./tslice)*100);
                     X         = self.get_designmatrix(cond{ntrial});%returns the Design Matrix, Nuissance Matrix, and High-pass Filtering Matrix
@@ -835,7 +835,7 @@ classdef Subject < Project
                     DM        = spm_sp('Set',DM);
                     DM        = spm_sp('x-',DM);% projector;
                     dummy     = DM*Ys;%(voxels x betas);
-                    beta(:,:,nslice,mbi(ntrial),stim_id(ntrial))    = reshape(dummy(1,:),size(Y,1),size(Y,2));
+                    beta(:,:,nslice,mbi(ntrial),stim_id(ntrial))    = reshape(dummy(1,:),VY(1).dim(1),VY(1).dim(2));
                     %(x,y,z,microblock,stim,voxel)
                 end
             end
@@ -847,8 +847,9 @@ classdef Subject < Project
             end
             %%
             fprintf('Writing volumes to the disk...\n');
-            Vo                      = volh(1);
+            Vo                      = VY(1);
             Vo.dt                   = [64 0];
+            Vo.pinfo                = [1 0 352]';
             c = 0;
             for y = 1:size(beta,5)%stim_id
                 for x = 1:size(beta,4)%mbi
