@@ -456,8 +456,193 @@ classdef Project < handle
                 B        = cat(3,B,mean(beta,3));
             end
         end
+        function LatencyMap(self,midlevel_path,xBF)
+            %Will read all beta images in midlevel_path consisting of a FIR
+            %model.
+            beta_files      = strvcat(FilterF(sprintf('%smidlevel/',self.path_project),midlevel_path,'beta'));
+            total_beta      = size(beta_files,1);
+            target_path     = strvcat(regexp(fileparts(beta_files(1,:)),'run0.*','match'));
+            target_path     = sprintf('%smidlevel/%s/',self.path_project,target_path);
+            target_path     = regexprep(target_path,'spm','latencymaps');
+            if exist(target_path) == 0
+                mkdir(target_path);
+            end                
+            fprintf('Found %i beta files here...\n',total_beta);
+            if total_beta == 0
+                fprintf('Found 0 beta files here...\n');
+                keyboard
+            end
+            %% read the data [x,y,z,time,cond], and put it into a [x*y*z,time,cond];
+            time_points     = size(xBF.bf,2);
+            total_condition = total_beta/time_points;
+            D               = spm_read_vols(spm_vol(beta_files));%[x,y,z,time,cond]
+            ori_size        = size(D);
+            D               = reshape(D,size(D,1)*size(D,2)*size(D,3),total_beta/total_condition,total_condition);%[x*y*z,time,cond]
+            D               = mean(D,3)';%average across conditions for more reliable estimation, this is the first step in this line.
+            cprintf([1 0 0],'ATTENTION ONLY FIRST 13 values are taken...\n');
+            D               = xBF.bf(:,1:13)*D(1:13,:);
+            %%
+            Time            = linspace(0,xBF.order*self.TR,xBF.order*xBF.T+1)-5;
+            pre_stim        = Time <= 0;
+            pre_std         = std(D(pre_stim,:));
+            post_std        = std(D(~pre_stim,:));
+            post_amp        = mean(D(~pre_stim,:));
+            for p = linspace(10,90,10)
+                threshold  = prctile(post_amp,p);
+                for factor = linspace(1,5,10)
+                    valid           = post_std > (pre_std*factor);%valid voxels with high SNR
+                    valid           = valid & (post_amp > threshold);                    
+                    [~,Latency]     = max(D);%sample with peak value.
+                    Latency         = Time(Latency);
+                    valid           = valid & (Latency<7);
+                    Latency(~valid) = 0;
+                    %cancel all voxels with low SNR
+                    Latency         = reshape(Latency,ori_size(1),ori_size(2),ori_size(3));
+                    %%
+                    dummy           = spm_vol(beta_files(1,:));
+                    dummy.fname     = sprintf('%s/latency_map_factor_%1.2g_%1.2g.nii',target_path,factor,p);
+                    spm_write_vol(dummy,Latency);
+                end
+            end
+        end
+        function nface = analysis_selected_face(self,varargin)
+            %will plot an histogram of detected faces 
+            subjects = self.subject_indices
+            if nargin > 1
+                subjects = varargin{1};
+            end
+            nface = [];            
+            for ns = subjects;
+                s     = Subject(ns);
+                nface = [nface s.paradigm{1}.out.selectedface];                
+            end
+            
+            self.plot_bar(histc(nface,linspace(-135,180,8)));
+        end
+        function [count_facewc,count_facew]=analysis_facecircle(self)
+            viz = 1;
+            A   = [];%will contain fix by fix all the info
+            for ns = 5:44;
+                s         = Subject(ns);
+                [~,dummy] = s.get_facecircle(1);%with no partition.
+                A         = [A dummy];
+            end
+            %                     A is [ 1/X coor;
+            %                            2/Y coor
+            %                            3/duration of fixation
+            %                            4/Angle of the fixation
+            %                            5/distance to center
+            %                            6/Wedge Index, meaning position that PTB used to draw
+            %                            7/Wedge Angle, the angle in PTB definition,
+            %                            basically rounded fixation angles.
+            %                            8/Face angle, this is the angular distance to CS+
+            %                            9/Face Index, this is the filename of the stimulus
+            %                            10/Rank; this is the order of the fixation along the 30 seconds
+            %                            11/angle of fixation maps aligned to CS+.
+            %                            12/old amp.
+            %                            13/subject index.
+            counts       = histc( A(10,:) , 1:100);
+            limit        = 60;
+            fprintf('I will take the first %i fixations\n',limit)
+            %delete all fixations above LIMIT
+            valid        = A(10,:) <= limit;
+            A            = A(:,valid);
+            PositionBias = accumarray(A(6,:)',1);
+            W            = 1./PositionBias;
+            %%
+            if viz
+                figure(1);set(gcf,'position',[67   350   327   752]);
+                bar(circshift(PositionBias,[2 0]),.9,'k')
+                set(gca,'color','none','xticklabel',{'' '' '' '12 Uhr' '' '' '' '6 Uhr'});xlabel('positions');box off;ylabel('# fixations');xlim([.5 8.5]);ylim([0 700]);SetTickNumber(gca,3,'y');                            
+                % sanity check
+                figure(2);set(gcf,'position',[67   350   327   752]);
+                bar(accumarray(A(6,:)',W(A(6,:)')),.9,'k');
+                set(gca,'color','none','xticklabel',{'' '' '' '12 Uhr' '' '' '' '6 Uhr'},'ytick',1);xlabel('positions');box off;ylabel('# wfixations');xlim([.5 8.5]);ylim([0 1.5]);
+                % overall saliency profile            
+                figure(3);set(gcf,'position',[67   350   327   752]);
+                h=bar(accumarray(A(9,:)',W(A(6,:)')),.9);
+                SetFearGenBarColors(h)
+                set(gca,'color','none','xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'},'ytick',1,'ygrid','on');xlabel('positions');box off;ylabel('# wfixations');xlim([.5 8.5]);ylim([0 1.5]);
+                set(get(h,'Children'),'FaceAlpha',1)
+            end
+            %%  
+            count_facew=[];
+            count_posw =[];
+            for nrank = 1:limit;
+                valid                = A(10,:) == nrank;                       
+                count_facew(nrank,:)  = accumarray(A(9,valid)',W(A(6,valid)'),[8 1]);
+                count_posw(nrank,:)  = accumarray(A(6,valid)',W(A(6,valid)'),[8 1]);                
+            end
+            %%
+            if viz
+                figure(4);set(gcf,'position',[680         681        1001         417]);
+                subplot(1,4,1);
+                imagesc(1:8,1:60,count_facew);thincolorbar;axis xy;ylabel('fixation order');xlabel('condition');
+                set(gca,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'},'xtick',1:8);                
+                subplot(1,4,2);
+                count_facewc = conv2([count_facew count_facew count_facew],ones(2,2),'same');
+                count_facewc = count_facewc(:,9:16);
+                imagesc(count_facewc);axis xy;set(gca,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'},'xtick',1:8,'yticklabel',{});                
+                subplot(1,4,3);
+                imagesc(1:8,1:60,cumsum(count_facewc));axis xy;set(gca,'yticklabel',{''});set(gca,'xticklabel',{'CS+'  'CS-'},'xtick',[4 8],'xgrid','on');
+                subplot(1,4,4);
+                contour(1:8,1:60,cumsum(count_facewc),30);axis xy;set(gca,'yticklabel',{''});set(gca,'xticklabel',{'CS+' 'CS-'},'xtick',[4 8],'xgrid','on');
+            end
+            %% model comparison
+            data.y           = cumsum(count_facewc);
+            data.x           = repmat(linspace(-135,180,8),size(data.y,1),1);
+            data.ids         = 1:size(data.y,1);
+            t2               = Tuning(data);
+            t2.visualization = 0;
+            t2.gridsize      = 10;
+            t2.SingleSubjectFit(8);
+            t2.SingleSubjectFit(7);
+            winfun = [8 7];
+            if viz
+                figure(5);clf;
+                for nfix = 1:limit
+                    hold on;
+                    X = t2.fit_results{7}.x_HD(1,:);
+                    
+                    if (t2.fit_results{8}.pval(nfix) > t2.fit_results{7}.pval(nfix))%Gaussian wins
+                        winfun = 8
+                        Est    = t2.fit_results{winfun}.params(nfix,:);
+                        Est(4) = 0;
+                        c = 'r';
+                    else% cosine wins
+                        winfun = 7
+                        Est    = t2.fit_results{winfun}.params(nfix,:);
+                        Est(3) = Est(1);
+                        c = 'b';
+                    end
+                    Y      = t2.fit_results{winfun}.fitfun(X,Est);
+                    plot3(X,repmat(nfix,1,size(X,2)),Y,'color',c,'linewidth',1);
+                end
+                hold off;
+                view(43,32)
+                ylim([0 60])
+                DrawPlane(gcf,.4);
+                
+                set(gca,'xtick',[0 180],'xticklabel',{'high' 'low'},'xgrid','on','ytick',[0 30 60],'ztick',[0 .35 .7],'ygrid','on','color','none')
+                xlabel('similarity');
+                ylabel('fixation');
+                figure(6)
+                plot(t2.fit_results{7}.pval,'linewidth',3);
+                hold on;
+                plot(t2.fit_results{8}.pval,'r','linewidth',3);
+                box off;
+                xlabel('fixations');
+                ylabel('LRT (-log(p))');
+                ylim([0 8])
+                legend({'Cosine vs. Null','Gaussian vs. Null'});legend boxoff;
+                set(gca,'color','none')
+            end
+        end
     end
     methods %plotters
+        function plot_normalized_surface(self);
+            cat_surf_display(struct('data',{{'/Volumes/feargen2/project_fearamy/data/midlevel/run000/mrt/surf/lh.central.w_ss_data.gii' '/Volumes/feargen2/project_fearamy/data/midlevel/run000/mrt/surf/rh.central.w_ss_data.gii'}},'multisurf',0))
+        end
         function plot_ss_ratings(self)
             %will plot all single subject ratings in a big subplot
             tsubject = length(self.subject_indices);
@@ -564,6 +749,161 @@ classdef Project < handle
             spm_orthviews('AddContext',h(1));
 %             keyboard
         end
+        function plot_bar(self,Y)
+            
+            figure;set(gcf,'position',[671   462   506   477]);
+            X = linspace(-135,180,8);
+            h=bar(X,Y,.9);
+            SetFearGenBarColors(h)
+            set(gca,'xtick',X,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
+            box off;
+            set(gca,'color','none');
+            xlim([-155.2500  200.2500]);
+        end
+        function test3(self)
+            
+            global st;
+            try               
+                coor   = (st.centre);                                
+                betas  = self.path_beta(1,6,'s_w_',1:488);                
+                tbeta  = size(betas,1);
+                XYZvox = self.get_mm2vox([coor ;1],spm_vol(betas(1,:)));
+                d = spm_get_data(betas,XYZvox);
+                d = reshape(d,tbeta/8,8);                
+                d = conv2([d d d],ones(2,2),'same');
+                d = d(:,9:16);
+                figure(10005);
+                set(gcf,'position',[919        1201         861        1104])                
+                subplot(1,3,1)
+                imagesc(d);colorbar;axis xy;
+                subplot(1,3,2)
+                imagesc(cumsum(d));colorbar
+                axis xy;
+                subplot(1,3,3);
+                bar(mean(d));                
+                
+                
+            catch
+                fprintf('call back doesn''t run\n')
+            end
+        end
+        
+        function cb_fir_vs_hrf(self)
+            global st
+            try               
+                coor                   = (st.centre);
+                figure(10002);
+                set(gcf,'position',[950        1201         416        1104])                
+                set(gca, 'ColorOrder', GetFearGenColors, 'NextPlot', 'replacechildren');
+                %% get BF for FIR and HRF, this should be exactly the same
+                %ones we used for the first-levels
+                TR              = self.TR;
+                xBF.T           = 16;
+                xBF.T0          = 1;
+                xBF.dt          = TR/xBF.T;
+                xBF.UNITS       = 'scans';
+                xBF.Volterra    = 1;
+                xBF.name        = 'Finite Impulse Response';
+                xBF.order       = 15;
+                xBF.length      = 15*TR;
+                fir_xBF         = spm_get_bf(xBF);
+                %
+                TR              = self.TR;
+                xBF.T           = 16;
+                xBF.T0          = 1;
+                xBF.dt          = TR/xBF.T;
+                xBF.UNITS       = 'scans';
+                xBF.Volterra    = 1;
+                xBF.name        = 'hrf';
+                xBF.order       = 1;
+                xBF.length      = 15*TR;
+                hrf_xBF         = spm_get_bf(xBF);
+                %
+                %% now load the betas for both the FIR and HRF models.
+                betas           = FilterF(sprintf('%s/midlevel/run001/spm/model_02_fir_15_15/s_w_beta_*',self.path_project));
+                betas           = vertcat(betas{:});                
+                XYZvox          = self.get_mm2vox([coor ;1],spm_vol(betas(1,:)));
+                d               = spm_get_data(betas,XYZvox);
+                d               = reshape(d,15,9);%this is the FIR model fit.
+                subplot(2,1,1);
+                set(gca, 'ColorOrder', GetFearGenColors, 'NextPlot', 'replacechildren');
+                plot(d);
+                %% now load the hrf model
+                betas           = FilterF(sprintf('%s/midlevel/run001/spm/model_02_chrf_0_0/s_w_beta_*',self.path_project));
+                betas           = vertcat(betas{:});
+                XYZvox          = self.get_mm2vox([coor ;1],spm_vol(betas(1,:)));
+                B               = spm_get_data(betas,XYZvox);%these are 9 betas images
+                Fit             = hrf_xBF.bf(:,1:16:end,:)*B';
+                subplot(2,1,2);
+                set(gca, 'ColorOrder', GetFearGenColors, 'NextPlot', 'replacechildren');
+                Time            = [1:518]*hrf_xBF.dt;                
+                plot(Time,Fit);xlim([0 15]);
+
+            end
+        end
+        
+        function test2(self)
+            
+            global st;
+            try
+                TR                     =.99;
+                xBF.T                  = 16;
+                xBF.T0                 = 1;
+                xBF.dt                 = TR/xBF.T;
+                xBF.UNITS              = 'scans';
+                xBF.Volterra           = 1;
+                xBF.name               = 'Fourier set';
+                xBF.order              = 20;
+                xBF.length             = 20*TR;
+                xBF                    = spm_get_bf(xBF);
+                %
+                Time                   = linspace(0,20*TR,20*16+1)-5;
+                %
+                
+                coor = (st.centre);
+                self.default_model_name                                 = 'fourier_20_20';
+                %betas = self.path_beta(1,2,'s_',1:135);
+                betas  = FilterF(sprintf('%s/midlevel/run001/spm/model_02_fourier_20_20/s_w_beta_*',self.path_project));
+                betas  = vertcat(betas{:});
+                XYZvox = self.get_mm2vox([coor ;1],spm_vol(betas(1,:)))
+                d = spm_get_data(betas,XYZvox);
+                d = reshape(d,41,9);
+                d(13:end,:) = 0;
+                d = xBF.bf*d;                
+                figure(10002);
+                set(gcf,'position',[950        1201         416        1104])                
+                subplot(3,1,1)
+                set(gca, 'ColorOrder', GetFearGenColors, 'NextPlot', 'replacechildren');
+                plot(Time,d);
+                box off;
+                hold on;
+                plot(Time,mean(d(:,1:8),2),'k--','linewidth',3);                
+                plot([0 0], ylim,'k');
+                xlabel('time (s)');
+                hold off;
+                subplot(3,1,2)
+                imagesc(d);colormap jet;
+                subplot(3,1,3)                
+                set(gca, 'ColorOrder', [linspace(0,1,15);zeros(1,15);1-linspace(0,1,15)]', 'NextPlot', 'replacechildren');
+                data = [];
+                data.x   = repmat(linspace(-135,180,8),15,1);
+                data.y   = d(:,1:8);
+                data.ids = 1:15;
+                Y = repmat([1:15]',1,8);
+                h=bar(mean(d));
+%                 SetFearGenBarColors(h);
+                grid on;
+                self.default_model_name                                 = 'chrf_0_0';
+                %
+                betas  = FilterF(sprintf('%s/second_level/run001/spm/model_05_chrf_0_0/beta_*',self.path_project));
+                betas  = vertcat(betas{:});
+                XYZvox = self.get_mm2vox([coor(:); 1],spm_vol(betas(1,:)));
+                d      = spm_get_data(betas,XYZvox);
+                Weights2Dynamics(d(:)');
+            catch
+                fprintf('call back doesn''t run\n')
+            end
+        end
         function test(self)
             
             global st;
@@ -581,7 +921,7 @@ classdef Project < handle
                 subplot(3,1,1)
                 set(gca, 'ColorOrder', GetFearGenColors, 'NextPlot', 'replacechildren');
                 plot(d);box off;
-                hold on;plot(mean(d(:,1:8),2)-d(:,9),'k--','linewidth',3);                
+                hold on;plot(mean(d(:,1:8),2),'k--','linewidth',3);                
                 hold off;
                 subplot(3,1,2)
                 imagesc(d);colormap jet;
