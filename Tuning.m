@@ -38,24 +38,23 @@ classdef Tuning < handle
                 fprintf('Fitting subject %03d of %03d, id: %03d\n',ns,ts,self.ids(ns));
                 self.singlesubject_data{ns} = self.Fit(self.x(ns,:),self.y(ns,:),funtype);
             end
-            self.FitGetParam;
+            self.FitGetParam(funtype);
         end
         
-        function FitGetParam(self)
+        function FitGetParam(self,fun_type)
             %this is just a lame method that collects whatever is needed
             %from the main fitting method, which has notoriously high
-            %number of fields.
-            self.fit_results = [];
+            %number of fields.            
             for unit = 1:length(self.singlesubject_data)
                 if ~isempty(self.singlesubject_data{unit})
-                    self.fit_results.params(unit,:)      = self.singlesubject_data{unit}.Est;
-                    self.fit_results.ExitFlag(unit,1)    = self.singlesubject_data{unit}.ExitFlag;
-                    self.fit_results.pval(unit,1)        = self.singlesubject_data{unit}.pval;
-                    self.fit_results.x(unit,:)           = self.singlesubject_data{unit}.x;
-                    self.fit_results.y_fitted(unit,:)    = self.singlesubject_data{unit}.fit;
-                    self.fit_results.x_HD(unit,:)        = self.singlesubject_data{unit}.x_HD;
-                    self.fit_results.y_fitted_HD(unit,:) = self.singlesubject_data{unit}.fit_HD;
-                    self.fit_results.fitfun              = self.singlesubject_data{1}.fitfun;
+                    self.fit_results{fun_type}.params(unit,:)      = self.singlesubject_data{unit}.Est;
+                    self.fit_results{fun_type}.ExitFlag(unit,1)    = self.singlesubject_data{unit}.ExitFlag;
+                    self.fit_results{fun_type}.pval(unit,1)        = self.singlesubject_data{unit}.pval;
+                    self.fit_results{fun_type}.x(unit,:)           = self.singlesubject_data{unit}.x;
+                    self.fit_results{fun_type}.y_fitted(unit,:)    = self.singlesubject_data{unit}.fit;
+                    self.fit_results{fun_type}.x_HD(unit,:)        = self.singlesubject_data{unit}.x_HD;
+                    self.fit_results{fun_type}.y_fitted_HD(unit,:) = self.singlesubject_data{unit}.fit_HD;
+                    self.fit_results{fun_type}.fitfun              = self.singlesubject_data{1}.fitfun;
                 end
             end            
         end
@@ -115,9 +114,9 @@ classdef Tuning < handle
                 result.dof    = 4;
                 result.funname= 'gabor';
             elseif funtype == 7
-                result.fitfun = @(x,p) p(1)*cos(x*p(2)) + p(3);%amp std freq baseline
-                L           = [ -range(y)*2  1  -range(y)*2    .01    ];
-                U           = [  range(y)*2  4   range(y)*2 std(y(:)+rand(length(y),1).*eps)*2 ];
+                result.fitfun = @(x,p) p(1)*cos(deg2rad(x)*p(2)) + p(3);%amp freq baseline std
+                L           = [ -range(y)*2  2  -mean(y)*2     .01    ];
+                U           = [  range(y)*2  2.1   mean(y)*2     std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
                 result.funname= 'cosine';
             elseif funtype == 8
