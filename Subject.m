@@ -525,16 +525,20 @@ classdef Subject < Project
             total_volume = self.get_total_volumes(1);
             C            = [[ones(910,1);zeros(total_volume-910,1)] [zeros(910,1);ones(895,1);zeros(total_volume-910-895,1)] [zeros(910+895,1);ones(total_volume-895-910,1)]];
         end
-        function [X]    = get_designmatrix(self,varargin)
+        function [X,nbasis]    = get_designmatrix(self,name,varargin)
             %%
             %will return the design matrix used by spm for a given model at
             %a given run. If nargin == 2, then get_modelonsets is called,
             %one can also directly feed in a cond structure. This would be
-            %useful in the case of a mumfordian analysis.
-            if nargin == 3
+            %useful in the case of a mumfordian analysis. NAME is the type
+            %of basis functions. NBASIS is the number of basis functions in
+            %the current set. For HRF is 1, for Fourier it depends on the
+            %order.
+            
+            if nargin == 4
                 fprintf('Will read model %i from run %i...\n',varargin{2},varargin{1});                
                 cond                  = self.get_modelonsets(varargin{1},varargin{2});            
-            elseif nargin == 2
+            elseif nargin == 3
                 fprintf('Cond structure is directly fed into...\n');
                 cond                  = varargin{1};
             end
@@ -545,9 +549,17 @@ classdef Subject < Project
             xBF.T0                = fMRI_T0;
             xBF.dt                = self.TR/xBF.T;
             xBF.UNITS             = 'scans';
-            xBF.Volterra          = 1;
-            xBF.name              = 'hrf';
-            xBF                   = spm_get_bf(xBF);            
+            xBF.Volterra          = 1;            
+            xBF.name              = name;
+            nbasis = 1;
+                        
+            if strcmp(name,'Fourier set (Hanning)')                
+                xBF.order                  = 4;
+                xBF.length                 = self.TR*20;
+                self.default_model_name    = sprintf('fourier_%d_%d',4,20);
+                nbasis                     = xBF.order*2+1;
+            end            
+            xBF                   = spm_get_bf(xBF);
             %
             for i = 1:length(cond);%one regressor for each condition
                 Sess.U(i).dt     = xBF.dt;%- time bin (seconds)                
@@ -767,22 +779,21 @@ classdef Subject < Project
 %             Y2        = self.get_data(path_beta,mask_id);%return the realigned data.
             
         end                
-        function beta       = analysis_mumfordian(self)
+        function beta       = analysis_mumfordian(self,design_name)
             %This will run a GLM on all single trials one by one while
-            %keeping all the other trials in another regressor.
+            %keeping all the other trials in another regressor. DESIGN_NAME
+            %goes directly to the xBF.name. 'Fourier set (Hanning)' or
+            %'hrf' are your choices.
             
             
             model     = 1;
-            nrun      = 1;
-            
+            nrun      = 1;            
             % get the nuissance and highpass filtering matrices.
             fprintf('Getting design ingredients...\n')
-            N         = self.get_param_nuissance(nrun);
-            X         = self.get_designmatrix(nrun,model);
+            N         = self.get_param_nuissance(nrun);            
             K         = self.get_highpassfilter;
-            C         = self.get_constant_terms;
+            C         = self.get_constant_terms;            
             % get the data and highpass filter right away.
-%             Y         = self.get_data(self.path_epi(nrun,'r'),mask_id);%return the realigned data.%Y is [time x voxels];                                    
             fprintf('Loading the data and global correction...\n')            
             load(self.path_spmmat(nrun,2));%any SPM model will contain the VY and the global mean normalized values;
             VY        = SPM.xY.VY;
@@ -820,22 +831,24 @@ classdef Subject < Project
             %%
             %we will go slice by slice otherwise single subject data is
             %about 12 GB, it stuffes the computer            
-            beta       = nan(VY(1).dim(1),VY(1).dim(2),VY(1).dim(3),max(mbi),11);
+            [~,nbasis]   = self.get_designmatrix(design_name,cond{1});%run this once to get the number of basis functions
+            beta       = nan(VY(1).dim(1),VY(1).dim(2),VY(1).dim(3),nbasis,max(mbi),11,'single');
             tslice     = VY(1).dim(3);
             for nslice = 1:tslice                                
                 Y         = squeeze(spm_data_read(VY,'slice',nslice));                
                 Y         = reshape(Y,size(Y,1)*size(Y,2),size(Y,3))';
                 Ys        = spm_filter(K,Y);%high-pass filtering.
                 for ntrial = 1:ttrial
-                    fprintf('Fitting Subject %03d''s %03dth trial (stim_id:%02d, onset:%3.5g) of %i, slice %i of slice %i (%2.3g percent)\n',self.id,ntrial,stim_id(ntrial),onsets(ntrial),ttrial,nslice,tslice,ntrial./ttrial*(nslice./tslice)*100);
-                    X         = self.get_designmatrix(cond{ntrial});%returns the Design Matrix, Nuissance Matrix, and High-pass Filtering Matrix
+                    fprintf('Fitting Subject %03d''s %03dth trial (stim_id:%02d, onset:%3.5g) of %i, slice %i of slice %i (%2.3g percent)\n',self.id,ntrial,stim_id(ntrial),onsets(ntrial),ttrial,nslice,tslice,ntrial./ttrial*(nslice./tslice)*100);                    
+                    [X]   = self.get_designmatrix(design_name,cond{ntrial});%returns the Design Matrix, Nuissance Matrix, and High-pass Filtering Matrix
+                    imagesc(X);drawnow
                     %
                     DM        = [X N C];%append together Onsets, Nuissances and a constant
                     DM        = spm_filter(K,DM);%filter also the design matrix
                     DM        = spm_sp('Set',DM);
                     DM        = spm_sp('x-',DM);% projector;
                     dummy     = DM*Ys;%(voxels x betas);
-                    beta(:,:,nslice,mbi(ntrial),stim_id(ntrial))    = reshape(dummy(1,:),VY(1).dim(1),VY(1).dim(2));
+                    beta(:,:,nslice,:,mbi(ntrial),stim_id(ntrial))    = reshape(dummy(1:nbasis,:)',VY(1).dim(1),VY(1).dim(2),nbasis);
                     %(x,y,z,microblock,stim,voxel)
                 end
             end
@@ -847,17 +860,19 @@ classdef Subject < Project
             end
             %%
             fprintf('Writing volumes to the disk...\n');
-            Vo                      = VY(1);
-            Vo.dt                   = [64 0];
-            Vo.pinfo                = [1 0 352]';
-            c = 0;
-            for y = 1:size(beta,5)%stim_id
-                for x = 1:size(beta,4)%mbi
-                    c               = c + 1;
-                    Vo.fname        = sprintf('%sbeta_%04d.nii',write_folder,c);                    
-                    spm_write_vol(Vo,beta(:,:,:,x,y));
-                end
-            end
+            save(sprintf('%s/betas.mat',write_folder),'beta','-v7.3');
+            
+%             Vo                      = VY(1);
+%             Vo.dt                   = [16 0];
+%             Vo.pinfo                = [1 0 352]';
+%             c = 0;
+%             for y = 1:size(beta,5)%stim_id
+%                 for x = 1:size(beta,4)%mbi
+%                     c               = c + 1;
+%                     Vo.fname        = sprintf('%sbeta_%04d.nii',write_folder,c);                    
+%                     spm_write_vol(Vo,beta(:,:,:,x,y));
+%                 end
+%             end
             
         end
 
