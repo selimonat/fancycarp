@@ -784,8 +784,7 @@ classdef Subject < Project
             %keeping all the other trials in another regressor. DESIGN_NAME
             %goes directly to the xBF.name. 'Fourier set (Hanning)' or
             %'hrf' are your choices.
-            
-            
+                        
             model     = 1;
             nrun      = 1;            
             % get the nuissance and highpass filtering matrices.
@@ -840,8 +839,7 @@ classdef Subject < Project
                 Ys        = spm_filter(K,Y);%high-pass filtering.
                 for ntrial = 1:ttrial
                     fprintf('Fitting Subject %03d''s %03dth trial (stim_id:%02d, onset:%3.5g) of %i, slice %i of slice %i (%2.3g percent)\n',self.id,ntrial,stim_id(ntrial),onsets(ntrial),ttrial,nslice,tslice,ntrial./ttrial*(nslice./tslice)*100);                    
-                    [X]   = self.get_designmatrix(design_name,cond{ntrial});%returns the Design Matrix, Nuissance Matrix, and High-pass Filtering Matrix
-                    imagesc(X);drawnow
+                    [X]   = self.get_designmatrix(design_name,cond{ntrial});%returns the Design Matrix, Nuissance Matrix, and High-pass Filtering Matrix                    
                     %
                     DM        = [X N C];%append together Onsets, Nuissances and a constant
                     DM        = spm_filter(K,DM);%filter also the design matrix
@@ -852,27 +850,28 @@ classdef Subject < Project
                     %(x,y,z,microblock,stim,voxel)
                 end
             end
-            %%
+            %%            
             self.default_model_name = [self.default_model_name '_mumfordian'];
             write_folder            = sprintf('%s',fileparts(self.path_spmmat(1,0)));
+            write_folder            = regexprep(write_folder,'/projects','/Volumes/VeryBigHardDick');
             if exist(write_folder) == 0
                 mkdir(write_folder);
             end
             %%
-            fprintf('Writing volumes to the disk...\n');
-            save(sprintf('%s/betas.mat',write_folder),'beta','-v7.3');
             
-%             Vo                      = VY(1);
-%             Vo.dt                   = [16 0];
-%             Vo.pinfo                = [1 0 352]';
-%             c = 0;
-%             for y = 1:size(beta,5)%stim_id
-%                 for x = 1:size(beta,4)%mbi
-%                     c               = c + 1;
-%                     Vo.fname        = sprintf('%sbeta_%04d.nii',write_folder,c);                    
-%                     spm_write_vol(Vo,beta(:,:,:,x,y));
-%                 end
-%             end
+            Vo                      = VY(1);
+            Vo.dt                   = [16 0];
+            Vo.pinfo                = [1 0 352]';
+            c = 0;
+            for nbetas = 1:size(beta,4)
+                for y = 1:size(beta,6)%stim_id
+                    for x = 1:size(beta,5)%mbi
+                        c               = c + 1;
+                        Vo.fname        = sprintf('%sbeta_%04d.nii',write_folder,c);
+                        spm_write_vol(Vo,beta(:,:,:,nbetas,x,y));
+                    end
+                end
+            end
             
         end
 
