@@ -2,6 +2,8 @@ classdef Subject < Project
     properties (Hidden)
         paradigm
         default_run  = 2;
+        mean_correction = 0;%decides if mean correction should be applied
+        align           = 1;%should ratings be aligned to CS+ face
     end
     properties (SetAccess = private)
         id
@@ -10,6 +12,7 @@ classdef Subject < Project
         csn
         scr    
         pmf
+        feargen
 		trio_name    =[];
 		trio_folder  =[];
     end
@@ -23,9 +26,11 @@ classdef Subject < Project
                 end
                 s.csp = s.paradigm{s.default_run}.stim.cs_plus;
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
-                s.scr = SCR(s);
+%                 s.scr = SCR(s);
                 try
                     s.pmf = s.getPMF;
+                    s.feargen = s.getFearGen;
+                    s.scrZ    = s.getSCR;
                 end
 
             else
@@ -175,14 +180,60 @@ classdef Subject < Project
         function out = getPMF(self)
             load(sprintf('%smidlevel%sweibull%sdata.mat',Project.path_project,filesep,filesep));
             out = data(self.id);
-            %lines in the output are 
+            %lines in this loaded output are (this is different from our
+            %logic we use everywhere else (e.g. in the parameterMat, mean([1 3]) is inital alpha)
             %1/ CS+ before
             %2/ CS- before
             %3/ CS+ after
             %4/ CS- after
             out.subject_alpha = mean(out.params1(1:2,1),1);
-            out.subject_beta  = mean(out.params1(1:2,2),1);
-        end        
+        end
+        function feargen    = getFearGen(self) % output is a struct with feargen(phase) indexing
+            for ph = 3:4
+                phpath = sprintf('%s%sp0%g%smidlevel%sfeargenfit.mat',self.path,filesep,ph,filesep,filesep);
+                if exist(phpath)
+                   load(phpath)
+                   feargen(ph) = fit_results;
+                else
+                    method = 8;
+                    fprintf('No FearGen Fit found for phase %g, will do it now with method No %g...\n',ph,method)
+                    t = Tuning(self.GetRating(ph));t.SingleSubjectFit(method);
+                    fit_results = t.fit_results;
+                    save(phpath,'fit_results')
+                end
+            end
+        end
+        function [mat, tags] = parameterMat(self)
+            tags = {'csp_before_alpha' 'csp_after_alpha' 'csn_before_alpha' 'csn_after_alpha' ...
+                      'csp_before_beta' 'csp_after_beta' 'csn_before_beta' 'csn_after_beta' ...                     
+                      'csp_improvmt' 'csn_improvmnt' ...
+                      'csp_imprvmtn_cted' ...
+                      'kappa_cond' ... 
+                      'kappa_test' ... 
+                      'kapp_SI'...
+                      'mu_cond'...
+                      'mu_test'...
+                      'initial_alpha'...
+                      'fwhm_cond'...
+                      'fwhm_test'...
+                      'fwhm_SI'...
+                      };
+             mat = [self.pmf.params1([1 3 2 4],1)'... % alpha in the order we know it (csp_bef csp_after csn_bef csn_after)
+                self.pmf.params1([1 3 2 4],2)' ...   % beta in the order we know it (csp_bef csp_after csn_bef csn_after)
+                self.pmf.params1(1,1)-self.pmf.params1(2,1)... %csp impr
+                self.pmf.params1(3,1)-self.pmf.params1(4,1)... %csn impr
+                self.pmf.params1(1,1)-self.pmf.params1(2,1) - (self.pmf.params1(3,1)-self.pmf.params1(4,1))... % corr impr
+                self.feargen(3).params(2)... %Kappa Cond
+                self.feargen(4).params(2)... %Kappa Test
+                self.feargen(4).params(2) - self.feargen(3).params(2) ... %SI kappa: test - cond
+                self.feargen(3).params(3)... %Mu Cond
+                self.feargen(4).params(3)... %Mu Test
+                self.pmf.subject_alpha      ...% mean alpha before CSP/CSN
+                vM2FWHM(self.feargen(3).params(2))... %FWHM Cond
+                vM2FWHM(self.feargen(4).params(2))... %FWHM Test
+                vM2FWHM(self.feargen(3).params(2)) - vM2FWHM(self.feargen(4).params(2))... %SI in FWHM
+                ];
+        end
         function pmfplot(self)
             plotpath = sprintf('%s%sp05%sfigures%sfearcloud_FitPMFs_RE.fig',self.path,filesep,filesep,filesep);
             if exist(plotpath)
@@ -223,25 +274,26 @@ classdef Subject < Project
         function color     = condition2color(self,cond_id)
             cond_id/45+4;
         end
-        function rating    = GetRating(self,run,align)
-            %align optional, default = 1;
-            if nargin < 3
-                align = 1;
-            end
+        function rating    = GetRating(self,run)
             % s is a subject instance
-            rating = [];
+            rating.y  = [];
+            rating.x  = [];
+            rating.ids = self.id;
             if ~isempty(self.paradigm{run})
                 rating.y      = self.paradigm{run}.out.rating';
-                if align
+                if self.align
                     rating.y  = circshift(rating.y,[1 4-self.csp ]);
+                end                
+                rating.y      = rating.y(:)';
+                rating.x      = sort(repmat([-135:45:180],1,size(self.paradigm{run}.out.rating,2)));
+                if self.mean_correction
+                    rating.y = rating.y - mean(rating.y);
                 end
-                rating.x      = repmat([-135:45:180],size(self.paradigm{run}.out.rating,2),1);
-                rating.i      = repmat(run          ,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
-                rating.y_mean = mean(rating.y);
             else
                 fprintf('no rating present for this subject and run (%d) \n',run);
             end            
         end
+        
         function out    = GetSubSCR(self,run,cond)
             if nargin < 3
                 cond=1:8;
@@ -264,6 +316,27 @@ classdef Subject < Project
             o      = cellfun( @(x) ~isempty(x), regexp({a(:).name},'run[0-9][0-9][0-9]')).*cellfun( @(x) isempty(x), regexp({a(:).name},'run000'));
             o      = sum(o);
         end
-        
+            function fwhm = vM2FWHM(kappa)
+                %fwhm = vM2FWHM(amp,centerX,kappa,offset)
+                %transforms a given vonMises function's kappa parameter to FWHM. Kappa
+                %parameter has no intuition, however FWHM is easily understandable.
+                amp     = 1;
+                centerX = 0;
+                offset  = 0;
+                
+                X           = linspace(-180,180,100000);%degrees
+                Y           = Tuning.VonMises(X,amp,kappa,centerX,offset);%requires degrees, converts to rads inside.
+                
+                half_height = [max(Y)-min(Y)]./2+min(Y);%
+                d           = abs(Y - half_height);
+                
+                [~,i]       =  min(d(X > centerX));
+                i = i+sum(X < centerX);
+                [~,i2]      =  min(d(X < centerX));
+                
+                % plot(abs(Y-half_height));
+                
+                fwhm        =  abs(diff(X([i i2])));
+            end
+        end
     end
-end
