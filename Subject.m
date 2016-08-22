@@ -4,6 +4,7 @@ classdef Subject < Project
         default_run  = 2;
         mean_correction = 0;%decides if mean correction should be applied
         align           = 1;%should ratings be aligned to CS+ face
+        fit_method      = 8;%defines method for Tuning Fit on feargen profiles
     end
     properties (SetAccess = private)
         id
@@ -188,17 +189,27 @@ classdef Subject < Project
             %4/ CS- after
             out.subject_alpha = mean(out.params1(1:2,1),1);
         end
-        function feargen    = getFearGen(self) % output is a struct with feargen(phase) indexing
-            for ph = 3:4
+        function feargen    = getFearGen(self,varargin) % output is a struct with feargen(phase) indexing
+            if nargin > 1
+                forcefit = varargin{:};
+            else
+                forcefit = 0;
+            end
+            for ph = 2:4
                 phpath = sprintf('%s%sp0%g%smidlevel%sfeargenfit.mat',self.path,filesep,ph,filesep,filesep);
-                if exist(phpath)
+                if exist(phpath)&&~forcefit
                    load(phpath)
                    feargen(ph) = fit_results;
-                else
-                    method = 8;
-                    fprintf('No FearGen Fit found for phase %g, will do it now with method No %g...\n',ph,method)
-                    t = Tuning(self.GetRating(ph));t.SingleSubjectFit(method);
+                elseif ~exist(phpath)||forcefit
+                    if forcefit
+                        fprintf('Forced refitting data, starting procedure with method %g...\n',self.fit_method)
+                    end
+                    if ~exist(phpath)
+                        fprintf('No feargen parameters found for phase %g, starting fitting procedure with method %g...\n',ph,self.fit_method)
+                    end
+                    t = Tuning(self.GetRating(ph));fprintf('Phase %g... ',ph);t.SingleSubjectFit(self.fit_method);
                     fit_results = t.fit_results;
+                    feargen(ph) = fit_results;
                     save(phpath,'fit_results')
                 end
             end
@@ -220,8 +231,8 @@ classdef Subject < Project
                       };
              mat = [self.pmf.params1([1 3 2 4],1)'... % alpha in the order we know it (csp_bef csp_after csn_bef csn_after)
                 self.pmf.params1([1 3 2 4],2)' ...   % beta in the order we know it (csp_bef csp_after csn_bef csn_after)
-                self.pmf.params1(1,1)-self.pmf.params1(2,1)... %csp impr
-                self.pmf.params1(3,1)-self.pmf.params1(4,1)... %csn impr
+                self.pmf.params1(1,1)-self.pmf.params1(3,1)... %csp impr
+                self.pmf.params1(2,1)-self.pmf.params1(4,1)... %csn impr
                 self.pmf.params1(1,1)-self.pmf.params1(2,1) - (self.pmf.params1(3,1)-self.pmf.params1(4,1))... % corr impr
                 self.feargen(3).params(2)... %Kappa Cond
                 self.feargen(4).params(2)... %Kappa Test
@@ -231,13 +242,13 @@ classdef Subject < Project
                 self.pmf.subject_alpha      ...% mean alpha before CSP/CSN
                 vM2FWHM(self.feargen(3).params(2))... %FWHM Cond
                 vM2FWHM(self.feargen(4).params(2))... %FWHM Test
-                vM2FWHM(self.feargen(3).params(2)) - vM2FWHM(self.feargen(4).params(2))... %SI in FWHM
+                vM2FWHM(self.feargen(3).params(2)) - vM2FWHM(self.feargen(4).params(2))... %SI in FWHM: cond - test
                 ];
         end
         function pmfplot(self)
             plotpath = sprintf('%s%sp05%sfigures%sfearcloud_FitPMFs_RE.fig',self.path,filesep,filesep,filesep);
             if exist(plotpath)
-            openfig(plotpath);
+                openfig(plotpath);
             else
                 fprintf('no figure found!')
             end
