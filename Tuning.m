@@ -21,6 +21,7 @@ classdef Tuning < handle
     methods
         function tuning = Tuning(data,varargin)
             %data is anything that has a x and y fields.
+            %X and Y has rows for different subjects.
             tuning.x   = data.x;
             tuning.y   = data.y;
             tuning.ids = data.ids;
