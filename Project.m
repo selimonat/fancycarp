@@ -335,28 +335,63 @@ classdef Project < handle
         end                        
     end
     methods %getters
+        function out        = getgroup_all_param(self)
+            %
+            out = self.getgroup_pmf_param;
+            out = join(out,self.getgroup_rating_param);
+            out = join(out,self.getgroup_facecircle);
+            out = join(out,self.getgroup_detected_oddballs);
+            out = join(out,self.getgroup_detected_face);                        
+            
+        end
         function out        = getgroup_pmf_param(self)
             %collects the pmf parameters for all subjects in a table.
             out = [];
             for ns = self.subject_indices
                 s       = Subject(ns);
                 if ~isempty(s.pmf)
-                    out = [out;[s.id s.pmf_param(:)']];
+                    out = [out;[s.id s.pmf_param(:)' s.fit_pmf.LL']];
+                else
+                    out = [out;[s.id NaN(1,size(out,2)-1)]];
                 end
             end
-            out = array2table(out,'variablenames',{'subject_id' 'csp_alpha' 'csn_alpha' 'pooled_alpha' 'csp_beta' 'csn_beta' 'pooled_beta' 'csp_gamma' 'csn_gamma' 'pooled_gamma' 'csp_lamda'    'csn_lamda'    'pooled_lamda' });
+            out = array2table(out,'variablenames',{'subject_id' 'pmf_csp_alpha' 'pmf_csn_alpha' 'pmf_pooled_alpha' 'pmf_csp_beta' 'pmf_csn_beta' 'pmf_pooled_beta' 'pmf_csp_gamma' 'pmf_csn_gamma' 'pmf_pooled_gamma' 'pmf_csp_lamda'    'pmf_csn_lamda'    'pmf_pooled_lamda' 'pmf_csp_LL' 'pmf_csn_LL' 'pmf_pooled_LL' });
         end
         function out        = getgroup_rating_param(self)
             %collects the rating parameters for all subjects in a table.
             out = [];
             for ns = self.subject_indices
                 s   = Subject(ns);
-                if ~isempty(s.pmf)%if there is no pmf data
-                    out = [out;[s.id s.rating_param]];
-                end
+                out = [out;[s.id s.rating_param s.fit_rating.LL]];                
             end            
-            out = array2table(out,'variablenames',{'subject_id' 'amp' 'fwhm' 'mu' 'offset' 'std' });
-        end        
+            out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_offset' 'rating_std' 'rating_LL'});
+        end       
+        function out        = getgroup_facecircle(self)
+            %collects the rating parameters for all subjects in a table.
+            out = [];
+            for ns = self.subject_indices
+                s   = Subject(ns);                
+                out = [out;[s.id s.fit_facecircle(1,8).params s.fit_facecircle(1,8).LL]];                
+            end            
+            out = array2table(out,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_mu' 'facecircle_offset' 'facecircle_std' 'facecircle_LL'});
+        end       
+        function out        = getgroup_detected_oddballs(self)            
+            odd = [];
+            for ns = self.subject_indices
+                s       = Subject(ns);
+                odd     = [odd ;[s.id sum(s.detected_oddballs)]];
+            end
+            out = array2table(odd,'variablenames',{'subject_id' 'detection_oddball'});
+        end
+        function out        = getgroup_detected_face(self)            
+            face = [];
+            for ns = self.subject_indices
+                s      = Subject(ns);
+                face   = [face ;[s.id s.detected_face]];                
+            end
+            out = array2table(face,'variablenames',{'subject_id' 'detection_face'});
+        end
+        
         function out        = path_beta_group(self,nrun,model_num,prefix,varargin)
             %returns the path for beta images for the second level
             %analysis. it simply loads single subjects' beta images and
@@ -406,7 +441,7 @@ classdef Project < handle
             matlabbatch{1}.spm.spatial.smooth.im     = 0;
             matlabbatch{1}.spm.spatial.smooth.prefix = 's_';            
             spm_jobman('run', matlabbatch);
-        end
+        end        
         function SecondLevel_ANOVA(self,run,model,beta_image_index)
             % This method runs a second level analysis for a model defined in MODEL using beta images indexed in BETA_IMAGE_INDEX.
             
@@ -514,20 +549,28 @@ classdef Project < handle
             nface = [];            
             for ns = subjects;
                 s     = Subject(ns);
-                nface = [nface s.paradigm{1}.out.selectedface];                
-            end
-            
+                nface = [nface s.detected_face];                
+            end  
+            self.plot_newfigure;
             self.plot_bar(histc(nface,linspace(-135,180,8)));
         end
         function [count_facewc,count_facew]=analysis_facecircle(self)
+            % will conduct a group level face saliency analysis, will also
+            % save the weights associated to each position. The analysis is
+            % limited to the first 60 fixations, this seems to be the
+            % number of fixations where everybody has equal numbers i.e.
+            % number of participants with 70, 80, 90 fixations drops
+            % linearly with number of fixations.
+            %
             viz = 1;
-            A   = [];%will contain fix by fix all the info
-            for ns = 5:44;
+            raw   = [];%will contain fix by fix all the info
+            for ns = self.subject_indices;
                 s         = Subject(ns);
-                [~,dummy] = s.get_facecircle(1);%with no partition.
-                A         = [A dummy];
+                [dummy] = s.get_facecircle(1);%with no partition.
+                raw         = [raw dummy.raw];
             end
-            %                     A is [ 1/X coor;
+                        %                     .RAW field is [ 
+            %                            1/X coor;
             %                            2/Y coor
             %                            3/duration of fixation
             %                            4/Angle of the fixation
@@ -538,17 +581,19 @@ classdef Project < handle
             %                            8/Face angle, this is the angular distance to CS+
             %                            9/Face Index, this is the filename of the stimulus
             %                            10/Rank; this is the order of the fixation along the 30 seconds
-            %                            11/angle of fixation maps aligned to CS+.
-            %                            12/old amp.
-            %                            13/subject index.
-            counts       = histc( A(10,:) , 1:100);
+            %                            11/START time
+            %                            12/angle of fixation maps aligned to CS+.
+            %                            13/old amp.
+            %                            14/subject index.
+            counts       = histc( raw(10,:) , 1:100);
             limit        = 60;
-            fprintf('I will take the first %i fixations\n',limit)
+            fprintf('I will take the first %i fixations\n',limit);
             %delete all fixations above LIMIT
-            valid        = A(10,:) <= limit;
-            A            = A(:,valid);
-            PositionBias = accumarray(A(6,:)',1);
+            valid        = raw(10,:) <= limit;
+            raw          = raw(:,valid);
+            PositionBias = accumarray(raw(6,:)',1);
             W            = 1./PositionBias;
+            save(sprintf('%smidlevel/facecircle_position_weights_limit_%i.mat',s.path_project,limit),'W');
             %%
             if viz
                 figure(1);set(gcf,'position',[67   350   327   752]);
@@ -556,22 +601,28 @@ classdef Project < handle
                 set(gca,'color','none','xticklabel',{'' '' '' '12 Uhr' '' '' '' '6 Uhr'});xlabel('positions');box off;ylabel('# fixations');xlim([.5 8.5]);ylim([0 700]);SetTickNumber(gca,3,'y');                            
                 % sanity check
                 figure(2);set(gcf,'position',[67   350   327   752]);
-                bar(accumarray(A(6,:)',W(A(6,:)')),.9,'k');
+                bar(accumarray(raw(6,:)',W(raw(6,:)')),.9,'k');
                 set(gca,'color','none','xticklabel',{'' '' '' '12 Uhr' '' '' '' '6 Uhr'},'ytick',1);xlabel('positions');box off;ylabel('# wfixations');xlim([.5 8.5]);ylim([0 1.5]);
                 % overall saliency profile            
                 figure(3);set(gcf,'position',[67   350   327   752]);
-                h=bar(accumarray(A(9,:)',W(A(6,:)')),.9);
-                SetFearGenBarColors(h)
+                h=bar(accumarray(raw(9,:)',W(raw(6,:)')),.9);
+                SetFearGenBarColors(h);
                 set(gca,'color','none','xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'},'ytick',1,'ygrid','on');xlabel('positions');box off;ylabel('# wfixations');xlim([.5 8.5]);ylim([0 1.5]);
                 set(get(h,'Children'),'FaceAlpha',1)
+                % overall saliency without correction
+                figure(4);set(gcf,'position',[67   350   327   752]);
+                h=bar(accumarray(raw(9,:)',1),.9);
+                SetFearGenBarColors(h)                
+                set(gca,'color','none','xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'},'ygrid','on');xlabel('positions');box off;ylabel('# wfixations');xlim([.5 8.5]);
+                set(get(h,'Children'),'FaceAlpha',1)
             end
-            %%  
+            %%  sort fixations rank by rank
             count_facew=[];
             count_posw =[];
             for nrank = 1:limit;
-                valid                = A(10,:) == nrank;                       
-                count_facew(nrank,:)  = accumarray(A(9,valid)',W(A(6,valid)'),[8 1]);
-                count_posw(nrank,:)  = accumarray(A(6,valid)',W(A(6,valid)'),[8 1]);                
+                valid                = raw(10,:) == nrank;                       
+                count_facew(nrank,:)  = accumarray(raw(9,valid)',W(raw(6,valid)'),[8 1]);
+                count_posw(nrank,:)   = accumarray(raw(6,valid)',W(raw(6,valid)'),[8 1]);                
             end
             %%
             if viz
@@ -638,12 +689,27 @@ classdef Project < handle
                 set(gca,'color','none')
             end
         end
+        function Yc = circconv2(self,Y,varargin)
+            %circularly smoothes data using a 2x2 boxcar kernel;
+            
+            if nargin == 2
+                kernel = make_gaussian2D(3,3,3,1.5,2,2);
+                kernel = kernel./sum(kernel(:));
+            elseif nargin == 3
+                kernel = varargin{1};
+            end            
+            [Yc]= conv2([Y Y Y],kernel,'same');
+            Yc  = Yc(:,9:16);
+        end
+        
     end
+    
     methods %plotters
         function plot_normalized_surface(self);
             cat_surf_display(struct('data',{{'/Volumes/feargen2/project_fearamy/data/midlevel/run000/mrt/surf/lh.central.w_ss_data.gii' '/Volumes/feargen2/project_fearamy/data/midlevel/run000/mrt/surf/rh.central.w_ss_data.gii'}},'multisurf',0))
         end
         function plot_ss_ratings(self)
+            figure;set(gcf,'position',[5           1        1352        1104]);
             %will plot all single subject ratings in a big subplot
             tsubject = length(self.subject_indices);
             [y x]    = GetSubplotNumber(tsubject);
@@ -657,6 +723,7 @@ classdef Project < handle
             supertitle(self.path_project,1)
         end
         function plot_ss_pmf(self,chains)
+            figure;set(gcf,'position',[5           1        1352        1104]);
             %will plot all single subject ratings in a big subplot
             tsubject = length(self.subject_indices);
             [y x]    = GetSubplotNumber(tsubject);
@@ -668,6 +735,32 @@ classdef Project < handle
                 s.plot_pmf(chains);                
             end
             supertitle(self.path_project,1)
+        end
+        function plot_ss_facecircle(self,partition,fun)
+            figure;set(gcf,'position',[5           1        1352        1104]);
+            %will plot all single subject ratings in a big subplot
+            tsubject = length(self.subject_indices);
+            [y x]    = GetSubplotNumber(tsubject);
+            c =0;
+            for ns = self.subject_indices                
+                c        = c+1;
+                s        = Subject(ns);
+                subplot(y,x,c)                
+                s.plot_facecircle(partition,fun);
+            end
+            supertitle(self.path_project,1)
+        end
+        function plot_ss_detected_oddballs(self)
+            o = self.getgroup_detected_oddballs;
+            o = o.detection_oddball;
+            bar(1:40,o,.9,'k');
+            xlabel('subjects');
+            ylabel('# detected oddballs out of 2');
+            box off;
+            ylim([0 3]);
+            xlim([0 41]);
+            set(gca,'ytick',[0 1 2],'xtick',1:40,'xticklabel',5:44);
+            title('oddball performace');
         end
         function plot_activitymap_normalized(self,files)
             %plots the data in a volume as average intensity projection, as
@@ -748,17 +841,10 @@ classdef Project < handle
             spm_orthviews('AddColourBar',h(1),1);
             spm_orthviews('AddContext',h(1));
 %             keyboard
-        end
-        function plot_bar(self,Y)
-            
-            figure;set(gcf,'position',[671   462   506   477]);
-            X = linspace(-135,180,8);
-            h=bar(X,Y,.9);
-            SetFearGenBarColors(h)
-            set(gca,'xtick',X,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
-            box off;
-            set(gca,'color','none');
-            xlim([-155.2500  200.2500]);
+        end        
+        function plot_newfigure(self)
+            figure;
+            set(gcf,'position',[671   462   506   477]);
         end
         function test3(self)
             
@@ -786,8 +872,7 @@ classdef Project < handle
             catch
                 fprintf('call back doesn''t run\n')
             end
-        end
-        
+        end        
         function cb_fir_vs_hrf(self)
             global st
             try               
@@ -840,8 +925,7 @@ classdef Project < handle
                 plot(Time,Fit);xlim([0 15]);
 
             end
-        end
-        
+        end        
         function test2(self)
             
             global st;
@@ -945,9 +1029,7 @@ classdef Project < handle
             catch
                 fprintf('call back doesn''t run\n')
             end
-        end
-        
-        
+        end        
         function plot_overlay(self,file1,file2)
             spm_image('init',file1)
             spm_clf;
@@ -1007,6 +1089,33 @@ classdef Project < handle
                 plot([M M],ylim,'r');
                 hold off;
                 title(sprintf('%s: %3.4g ± %3.4g (M±SEM)',fields{1},M,S),'interpreter','none');
+            end
+        end
+    end
+    methods (Static)
+        function plot_bar(Y)
+            % Fear tuning are stored in columns.
+            %%            
+            tcol = size(Y,2);
+            X    = linspace(-135,180,8)';
+            X    = repmat(X,1,tcol) + repmat([0:360:360*(tcol-1)],8,1);
+            h    = bar(X(:),Y(:),.9);
+            cmap = GetFearGenColors;
+            cmap = cmap(1:8,:);
+            SetFearGenBarColors(h,repmat(cmap,tcol,1)');
+            %
+            hold on;
+            set(gca,'xtick',X(:),'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
+            box off;
+            set(gca,'color','none');
+            xlim([-155.2500  200.2500+360*(tcol-1)]);            
+            drawnow;            
+            axis tight;box off;axis square;drawnow;alpha(.5);
+            if tcol > 1
+                mx = max(X)
+                for ncol = 1:tcol
+                    plot(repmat(mx(ncol)+45/2,1,2),ylim,'k-.')
+                end
             end
         end
     end

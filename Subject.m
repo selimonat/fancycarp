@@ -43,9 +43,11 @@ classdef Subject < Project
         pmf_param     = [];
         rating_param  = [];
         trio_session  = [];
-        ratings       = [];
+        rating       = [];
         total_run     = [];
         pmf        
+        detected_oddballs;
+        detected_face;%
     end
     %%
     methods
@@ -65,12 +67,12 @@ classdef Subject < Project
                 end
                 try
                 s.csp = s.paradigm{s.default_run}.stim.cs_plus;
-                s.csn = s.paradigm{s.default_run}.stim.cs_neg;
+                s.csn = s.paradigm{s.default_run}.stim.cs_neg;                
                 end
                 s.scr = SCR(s);
-                try
-                    s.eye = Fixmat(id,0);
-                end
+%                 try
+%                     s.eye = Fixmat(id,0);
+%                 end
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path);
                 fprintf('Your path might also be wrong...\n');
@@ -146,8 +148,8 @@ classdef Subject < Project
             end
                 
         end
-        function rating     = get.ratings(self)
-            %returns the CS+-aligned ratings for all the runs.
+        function rating     = get.rating(self)
+            %returns the CS+-aligned rating for all the runs.
             for run = unique(self.dicom2run(:))';%don't count the first run
                 if isfield(self.paradigm{run}.out,'rating')
                     if ~isempty(self.paradigm{run});
@@ -163,6 +165,10 @@ classdef Subject < Project
                 end
             end
         end
+        function [out]    = get.rating_param(self)
+            %returns the parameters of the pmf fit (1 x parameter);
+            out      = [self.fit_rating.params(1,:)];            
+        end           
         function out        = get_scr(self,run,cond)
             if nargin < 3
                 cond=1:8;
@@ -177,114 +183,106 @@ classdef Subject < Project
             out.y     = self.scr.fear_tuning;
             out.x     = conddummy(cond);
             out.ind   = cutnum;
-        end   
-        function plot_facecircle(self)
-            %plots the ptb screen during the face circle "task".
-            
+        end           
+        function out        = get_facecircle(self,partition)            
+            %%
+            % fixation data are partitioned into PARTITION many partitions,
+            % this is done based on the start time of fixations. If you
+            % want to get the grand-mean average, use PARTITION = 1. This
+            % method deals with aligning fixation points from PTB space to
+            % a CS+ aligned space. Fixations are both spatially and
+            % temporally cleaned. Each fixation is assigned to a wedge 
+            % index. Based on the wedge angle the fixation points are
+            % rotated for alignment. The .RAW field contains for each
+            % single fixation different information, like position on the
+            % screen etc, see the list below.
+            %                     .RAW field is [ 
+            %                            1/X coor;
+            %                            2/Y coor
+            %                            3/duration of fixation
+            %                            4/Angle of the fixation
+            %                            5/distance to center
+            %                            6/Wedge Index, meaning position that PTB used to draw
+            %                            7/Wedge Angle, the angle in PTB definition,
+            %                            basically rounded fixation angles.
+            %                            8/Face angle, this is the angular distance to CS+
+            %                            9/Face Index, this is the filename of the stimulus
+            %                            10/Rank; this is the order of the fixation along the 30 seconds
+            %                            11/START time
+            %                            12/angle of fixation maps aligned to CS+.
+            %                            13/old amp.
+            %                            14/subject index.
+            %
+            % mind that the .RAW field interacts with PARTITION, if you
+            % need to have all fixations in the .RAW fields you have to
+            % have PARTITION set to 1.
             %%            
-            %A rect in the Psychophysics Toolbox is a set of rectangular
-            %coordinates [x1 y1 x2 y2] specifying the upper left (x1, y1)
-            %and lower right (x2, y2) coordinates of a rectangle. The
-            %origin (0, 0) of the screen is in the upper left, so y
-            %increases from the top to the bottom of the screen, and x
-            %increases from left to right.        
-            figure(7);clf;
-            C = round([self.paradigm{1}.stim.circle_rect(:,1:2) self.paradigm{1}.stim.circle_rect(:,3)-self.paradigm{1}.stim.circle_rect(:,1)   self.paradigm{1}.stim.circle_rect(:,4)-self.paradigm{1}.stim.circle_rect(:,2)]);
-            axis ij;
-            for n = 1:8;
-                rectangle('position',[C(n,:)]);
-                text(C(n,1),C(n,2),sprintf('%s\nfile:%d\ndelta:%d',mat2str(n),self.paradigm{1}.stim.circle_file_id(n),self.paradigm{1}.stim.circle_order(n)),'fontsize',20);
+            %%
+            % get the masks to count the fixations as a f(cs+ distance)            
+            res                               = self.screen_resolution;%resolution of the screen needed to get the center
+            center                            = res./2;%[y x]
+            wedge_angle                       = 135:-45:-180;%this is the midpoint of the wedge. This is in PTB register, i.e. WedgeIndex of 1 means 135 degrees.
+            %
+            fix                               = Fixmat(self.id,3);%get the eye data from that face
+            valid                             = (fix.start >= 0)&(fix.start < 30000);%take only fixations which are within the limits.                        
+            x                                 = fix.x(valid)-center(2);%center X and Y
+            y                                 = res(1)-fix.y(valid)-center(1);%image to cartesian coordinates for the y-axis.
+            W                                 = double(abs(fix.stop(valid) - fix.start(valid)));%duration
+            rank                              = double(fix.fix(valid));%rank of the fixation                        
+            start                             = double(fix.start(valid));%start of the fixation point.
+            %extract parameter from x and y on the ptb coordinates            
+            [theta, rho]                      = cart2pol(x,y);%transform X and Y to
+            [theta]                           = rad2deg(theta);%angle of the fixation point in degrees
+            shift_angle                       = -mod(theta+22.5-45,360);%shift the angles so that we can get the wedge index.
+            wedge_index                       = mod(ceil(shift_angle./45)+3-1,8)+1;%moves together the same as PTB drawing            
+            face_angle                        = self.paradigm{1}.stim.circle_order(wedge_index)';%drawn condition in the wedge
+            face_index                        = face_angle./45+4;
+            out.raw                           = [res(2)+x;res(1)+y;double(W);theta;rho;wedge_index;wedge_angle(wedge_index);face_angle;face_index;rank;start];
+            %remove fixations wrt the annulus (spatial cleaning)
+            valid                             = (out.raw(5,:) > 190)&(out.raw(5,:) < 380);%take only those fixations which are on an annulus containing face stimuli.
+            out.raw(:,~valid)                 = [];%remove also fixations from the fixmat
+            %sort fixation based on their drawing order
+            [~,i]                             = sort(out.raw(6,:));%sort according to wedge_index i.e. drawing order.
+            out.raw                           = out.raw(:,i);
+            %get aligned angles
+            [out.raw(12,:),out.raw(13,:)]     = pol2cart(deg2rad(out.raw(8,:)+(out.raw(4,:)-out.raw(7,:))),out.raw(5,:));%(new theta, old amp)
+            %save the subject's index.
+            out.raw(14,:)                     = self.id;                 
+            %%          
+            %get the weight business
+            W1           = ones(1,8);            
+            try
+                filename     = sprintf('%smidlevel/facecircle_position_weights_limit_%i.mat',self.path_project,60);
+                load(filename);
+                W2           = W;
+            catch
+                W2 = W1;
             end
-            hold on;
-            rectangle('position',self.paradigm{1}.ptb.rect)
-            hold on;
-            axis tight;            
-            xlim([0 1024]);
-            ylim([0 768]);
-            set(gca,'Color','none','xticklabel',[],'yticklabel',[],'xtick',linspace(1,1024,3),'ytick',linspace(1,768,3),'xgrid','on','ygrid','on')            
-            circle(1024/2,768/2,190,'r');
-            hold on
-            circle(1024/2,768/2,380,'r');
-            hold off;
-            supertitle(mat2str(self.id));
-            %it seems the PTB was drawing the face circle from 11:00 oclock
-            %clockwise.
+            %compute two counts based on weights
+            tfix        = double(max(fix.fix));
+            limits      = linspace(0,tfix,partition+1)+1;
+            [a b]       = histc(out.raw(10,:),limits);
+            for P   = 1:partition
+                i                         = b == P;
+                out.count(P,:)    = accumarray(out.raw(9,i)',1,[8 1] );%no weight
+                out.countw(P,:)   = accumarray(out.raw(9,i)',W2(out.raw(6,i)'),[8 1] );%posiiton weights                                       
+                out.x(P,:)        = [-135:45:180];
+                out.ids(P,:)      = repmat(P,1,8);
+            end
+            
+        end        
+        function [detected] = get.detected_oddballs(self)
+            %returns number of oddbals that are detected.
+                        
+            keypresses  = find(self.paradigm{1}.out.response);
+            oddballs    = find(self.paradigm{1}.presentation.oddball);
+            detected    = ismember(oddballs,keypresses);
+%             detected    = sum(detected);
+            
         end
-        function [fg,A]=get_facecircle(self,partition)            
-            %% get the masks to count the fixations as a f(cs+ distance)
-            res      = self.screen_resolution;
-            center   = res./2;%[y x]
-            wedge_angle = 135:-45:-180;%this is the midpoint of the wedge. This is in PTB register, i.e. WedgeIndex of 1 means 135 degrees.
-            %% plot the fixation map with a mask            
-            fix         = Fixmat(self.id,3);
-            %
-%             limits   = prctile(double(fix.start),linspace(0,100,partition+1));
-            limits      = linspace(0,30000,partition+1);%in seconds
-            %
-            counter     = 0;
-            fg.duration = NaN(partition,8);            
-            fg.count    = zeros(partition,8);
-            for limit = [limits(1:end-1);limits(2:end)]
-                %
-                counter  = counter + 1;
-                fix      = Fixmat(self.id,3);
-                S        = fix.start;
-                %
-                valid    = (S >= limit(1))&(S < limit(2));%take only fixations which are within the limits.
-                if sum(valid) > 0;
-                    fix.replaceselection(valid);
-                    fix.ApplySelection;%remove the unwanted fixations.
-                    %
-                    X        = fix.x;
-                    Y        = res(1)-fix.y;%image to cartesian coordinates for the y-axis.
-                    X        = (X-center(2));%center X and Y
-                    Y        = (Y-center(1));
-                    W        = double(abs(fix.stop - fix.start));
-                    Rank     = double(fix.fix);
-                    %                 W        = W./sum(W);%weights which are proportional to fixation duration.
-                    %                    
-                    if length(unique(fix.trialid)) == 1;%%sanity check: there should be only one trial here.
-                        [theta, rho]                = cart2pol(X,Y);%transform X and Y to
-                        [theta]                     = rad2deg(theta);%angle of the fixation point in degrees
-                        shift_angle                 = -mod(theta+22.5-45,360);%shift the angles so that we can get the wedge index.
-                        wedge_index                 = mod(ceil(shift_angle./45)+3-1,8)+1;%moves together the same as PTB drawing
-                    end
-                    face_angle                      = self.paradigm{1}.stim.circle_order(wedge_index)';%drawn condition in the wedge
-                    face_index                      = face_angle./45+4;
-                    A                               = [res(2)+X;res(1)+Y;double(W);theta;rho;wedge_index;wedge_angle(wedge_index);face_angle;face_index;Rank];
-%                     A is [ 1/X coor;
-%                            2/Y coor
-%                            3/duration of fixation
-%                            4/Angle of the fixation
-%                            5/distance to center
-%                            6/Wedge Index, meaning position that PTB used to draw
-%                            7/Wedge Angle, the angle in PTB definition,
-%                            basically rounded fixation angles.
-%                            8/Face angle, this is the angular distance to CS+
-%                            9/Face Index, this is the filename of the stimulus
-%                            10/Rank; this is the order of the fixation along the 30 seconds
-%                            11/angle of fixation maps aligned to CS+.
-%                            12/old amp.
-%                            13/subject index.
-                    
-                    %A is still in register with fixmat
-                    valid                           = (A(5,:) > 190)&(A(5,:) < 380);%take only those fixations which are on the faces.
-                    A(:,~valid)                     = [];%remove also fixations from the fixmat
-                    fix.replaceselection(valid);
-                    fix.ApplySelection;
-                    %
-                    [~,i]                           = sort(A(6,:));%sort according to wedge_index i.e. drawing order.
-                    A                               = A(:,i);                    
-                    [A(11,:),A(12,:)]               = pol2cart(deg2rad(A(8,:)+(A(4,:)-A(7,:))),A(5,:));%(new theta, old amp)
-                    A(13,:)                         = self.id;
-                    for nface = 1:8
-                        fg.duration(counter,nface)  = sum(A(3,A(9,:) == nface));%4 is CS+.
-                        fg.count(counter,nface)     = sum(A(9,:) == nface);
-                    end                    
-                else
-                    cprintf([1 1 0],'no fix found\n');
-                end
-            end
+        function selected   = get.detected_face(self)
+            %returns the face that is selected as paired with UCS in aligned coordinates.            
+            selected   = self.paradigm{1}.out.selectedface;                            
         end
         function [o]        = get.total_run(self)
             % returns the total number of ALL (epi+others) runs in a folder.
@@ -405,16 +403,12 @@ classdef Subject < Project
             %returns the parameters of the pmf fit (chain x parameter);            
             
             if ~isempty(self.pmf)
-                out      = self.fit_pmf.params;
+                out      = [self.fit_pmf.params];
             else
                 out = [];
                 cprintf([1 0 0],'No pmf data for this subject.\n')
             end
-        end         
-        function out        = get.rating_param(self)
-            %returns the parameters of the pmf fit (1 x parameter);            
-            out      = [self.fit_rating.params(1,:)];
-        end           
+        end                 
         function o          = get_param_motion(self,run)
             %will load the realignment parameters, of course you have to
             %realign the EPIs first.
@@ -507,7 +501,7 @@ classdef Subject < Project
                 fprintf('The data in\n %s\n doesn''t have same orientations...',file);
             end            
         end
-        function [K]=get_highpassfilter(self)
+        function [K]        = get_highpassfilter(self)
             % Get high-pass filter a la SPM.                         
             run_borders              = [[0 910 910+895]+1;[910 910+895  self.get_total_volumes(1)]];
             %
@@ -520,12 +514,12 @@ classdef Subject < Project
                 K(c).X0  = [ones(length(K(c).row),1)*std(K(c).X0(:)) K(c).X0];
             end
         end
-        function C = get_constant_terms(self)
+        function C          = get_constant_terms(self)
             %return the constant terms for a GLM.
             total_volume = self.get_total_volumes(1);
             C            = [[ones(910,1);zeros(total_volume-910,1)] [zeros(910,1);ones(895,1);zeros(total_volume-910-895,1)] [zeros(910+895,1);ones(total_volume-895-910,1)]];
         end
-        function [X,nbasis]    = get_designmatrix(self,name,varargin)
+        function [X,nbasis] = get_designmatrix(self,name,varargin)
             %%
             %will return the design matrix used by spm for a given model at
             %a given run. If nargin == 2, then get_modelonsets is called,
@@ -749,8 +743,7 @@ classdef Subject < Project
             movefile(target_file,self.path_native_atlas);
         end
     end
-    methods %(analysis)        
-                
+    methods %(analysis)                        
         function beta       = analysis_firstlevel(self,nrun,model_num,mask_id)
             %will compute beta weights "manually" without calling SPM, and
             %will make a sanity check comparing both betas values.
@@ -874,7 +867,6 @@ classdef Subject < Project
             end
             
         end
-
     end
     methods %sanity checks
         function sanity_realignement(self)
@@ -1250,24 +1242,21 @@ classdef Subject < Project
             end
             
         end        
-        function plot_rating(self)
+        function plot_rating(self,fun)
             %plot subjects rating as a bar plot.
-            h = bar(mean(self.ratings.x),self.ratings.y_mean,1);%plot the data
-            set(gca,'xtick',[0 180],'xticklabel',{'cs+' 'cs-'},'xgrid','on');%add labels
-            SetFearGenBarColors(h);%colorize it.
+            self.plot_bar(self.rating.y_mean(:));%plot the data
             hold on;
-            errorbar(mean(self.ratings.x),self.ratings.y_mean,self.ratings.y_std,'ko');%add error bars
+            errorbar(mean(self.rating.x),self.rating.y_mean,self.rating.y_std,'ko');%add error bars
+            
             %if the fit is better than flat line, paint accordingly.
-            if  (self.fit_rating.LL < -log10(.05))%plot simply a blue line if the fit is not significant.
-                PlotTransparentLine(self.fit_rating.x(:),repmat(mean(self.ratings.y(:)),100,1),.35,'b','linewidth',2.5);                
-            elseif self.fit_rating.fitfun(0,self.fit_rating.params) < self.fit_rating.fitfun(180,self.fit_rating.params);%if CS- > CS+, paint it blue too.
-                PlotTransparentLine(self.fit_rating.x(:),self.fit_rating.y(:),.35,'b','linewidth',2.5);                                
+            if  (self.fit_rating(fun).LL < -log10(.05))%plot simply a blue line if the fit is not significant.
+                PlotTransparentLine(self.fit_rating(fun).x(:),repmat(mean(self.rating.y(:)),100,1),.5,'k','linewidth',2.5);
             else
-                PlotTransparentLine(self.fit_rating.x(:),self.fit_rating.y(:),.35,'r','linewidth',2.5);%this is the fit.
+                PlotTransparentLine(self.fit_rating(fun).x(:),self.fit_rating(fun).y(:),.5,'k','linewidth',2.5);%this is the fit.
             end
             hold off;
+            ylim([0 10]);
             title(sprintf('id:%02d (+:%d)',self.id,self.csp),'fontsize',12);%subject and face id
-            axis tight;box off;axis square;drawnow;ylim([0 10]);alpha(.5);
         end
         function plot_pmf(self,chains)
             % plot the fits
@@ -1284,6 +1273,58 @@ classdef Subject < Project
             axis tight;box off;axis square;ylim([-0.1 1.2]);xlim([0 135]);drawnow;
             title(sprintf('id:%02d (+:%d)',self.id,self.csp),'fontsize',12);%subject and face id            
             hold on;plot(xlim,[0 0 ],'k-');plot(xlim,[0.5 0.5 ],'k:');plot(xlim,[1 1 ],'k-');hold off;%plot grid lines            
+        end
+        function plot_facecircle(self,partition,fun)
+            %plot subjects face_circle performance as a bar plot.
+            %%
+            out  = self.get_facecircle(partition);
+            Y = out.countw;
+            Y    = self.circconv2(out.countw,[1 1]/2);
+            self.plot_bar(Y');%plot the data            
+            hold on;
+            %if the fit is better than flat line, paint accordingly.
+            for P = 1:partition
+                if  (self.fit_facecircle(partition,fun).LL(P) < -log10(.05))%plot simply a blue line if the fit is not significant.
+                    PlotTransparentLine(self.fit_facecircle(partition,fun).x(P,:)+360*(P-1),repmat(mean(out.countw(P,:)),100,1),.35,'b','linewidth',2.5);
+                else
+                    PlotTransparentLine(self.fit_facecircle(partition,fun).x(P,:)+360*(P-1),self.fit_facecircle(partition,fun).y(P,:)',.35,'k','linewidth',2.5);%this is the fit.
+                end
+            end
+            hold off;
+            axis tight;
+            title(sprintf('id:%02d (+:%d)',self.id,self.csp),'fontsize',12);%subject and face id                        
+        end
+        function plot_facecircle_ptb(self)
+            %plots the ptb screen during the face circle "task".
+            
+            %%            
+            %A rect in the Psychophysics Toolbox is a set of rectangular
+            %coordinates [x1 y1 x2 y2] specifying the upper left (x1, y1)
+            %and lower right (x2, y2) coordinates of a rectangle. The
+            %origin (0, 0) of the screen is in the upper left, so y
+            %increases from the top to the bottom of the screen, and x
+            %increases from left to right.        
+            figure(7);clf;
+            C = round([self.paradigm{1}.stim.circle_rect(:,1:2) self.paradigm{1}.stim.circle_rect(:,3)-self.paradigm{1}.stim.circle_rect(:,1)   self.paradigm{1}.stim.circle_rect(:,4)-self.paradigm{1}.stim.circle_rect(:,2)]);
+            axis ij;
+            for n = 1:8;
+                rectangle('position',[C(n,:)]);
+                text(C(n,1),C(n,2),sprintf('%s\nfile:%d\ndelta:%d',mat2str(n),self.paradigm{1}.stim.circle_file_id(n),self.paradigm{1}.stim.circle_order(n)),'fontsize',20);
+            end
+            hold on;
+            rectangle('position',self.paradigm{1}.ptb.rect)
+            hold on;
+            axis tight;            
+            xlim([0 1024]);
+            ylim([0 768]);
+            set(gca,'Color','none','xticklabel',[],'yticklabel',[],'xtick',linspace(1,1024,3),'ytick',linspace(1,768,3),'xgrid','on','ygrid','on')            
+            circle(1024/2,768/2,190,'r');
+            hold on
+            circle(1024/2,768/2,380,'r');
+            hold off;
+            supertitle(mat2str(self.id));
+            %it seems the PTB was drawing the face circle from 11:00 oclock
+            %clockwise.
         end
     end
     methods %(fmri analysis)
@@ -2020,9 +2061,7 @@ classdef Subject < Project
                 mkdir(fileparts(model_path));
             end            
             save(model_path,'cond');
-        end
-        
-        
+        end               
         function [out] = fit_pmf(self,varargin)
             %will load the pmf fit (saved in runXXX/pmf) if computed other
             %wise will read the raw pmf data (saved in runXXX/stimulation)
@@ -2067,42 +2106,83 @@ classdef Subject < Project
                 save(self.path_data(2,'pmf'),'out')
             end
         end
-        function [out] = fit_rating(self,varargin)
+        function [out] = fit_rating(self,fun)
             %will load the rating fit (saved in runXXX/rating) if computed other
-            %wise will read the raw ratingsdata (saved in runXXX/stimulation)
+            %wise will read the raw ratingdata (saved in runXXX/stimulation)
             %and compute a fit.
             
-            if exist(self.path_data(1,'rating')) && isempty(varargin)
+            force      = 0;%repeat the analysis or load from cache            
+            write_path = sprintf('%s/midlevel/rating_fun_%i.mat',self.pathfinder(self.id,1),fun);            
+            
+            if exist(write_path) && force ==0
                 %load directly or
-                load(self.path_data(1,'rating'));
+                load(write_path);
 %                 fprintf('Rating Fit found and loaded successfully for subject %i...\n',self.id);
                 
-            elseif ~isempty(varargin) || ~exist(self.path_data(2,'rating'))
+            elseif force == 1 || ~exist(write_path)
                 %compute and save it.
                 fprintf('Fitting Ratings...\n')                
-                R                            = self.ratings;
+                R                            = self.rating;
                 %adapt to what Tuning.m wants to have.
                 R.y                          = R.y(:)';
                 R.x                          = R.x(:)';
                 R.ids                        = R.ids(1);                
                 %create a tuning object and make a single subject fit
-                T                            = Tuning(R);
-                fun = 8;
+                T                            = Tuning(R);                
                 T.SingleSubjectFit(fun);                               
                 %prepare data for outputting.
-                out.params                   = T.fit_results.params(1,:);                
-                out.LL                       = T.fit_results.pval(1,:);
-                out.exitflag                 = T.fit_results.ExitFlag(1,:);
-                out.y                        = T.fit_results.y_fitted_HD(1,:);
-                out.x                        = T.fit_results.x_HD(1,:);
-                out.fitfun                   = T.fit_results.fitfun;
+                out.params                   = T.fit_results{fun}.params(1,:);                
+                out.LL                       = T.fit_results{fun}.pval(1,:);
+                out.exitflag                 = T.fit_results{fun}.ExitFlag(1,:);
+                out.y                        = T.fit_results{fun}.y_fitted_HD(1,:);
+                out.x                        = T.fit_results{fun}.x_HD(1,:);
+                out.fitfun                   = T.fit_results{fun}.fitfun;                
+                %
                 if fun == 8%if vM, then transform kappa to FWHM.
                     fprintf('Kappa to FWHM transformation + absolute(peakshift).\n');
-                    out.params(2)            = vM2FWHM(out.params(2));
-                    out.params(3)            = abs(out.params(3));
+                    out.params(:,2)            = vM2FWHM(out.params(:,2));
+                    out.params(:,3)            = abs(out.params(:,3));
                 end
+                save(write_path,'out')
             end
-            save(self.path_data(1,'rating'),'out')
+            
+        end        
+        function [out] = fit_facecircle(self,partition,fun)
+            %will fit function FUN to facecircle data with PARTITION
+            %partitions.
+            
+            force = 0;%repeat the analysis or load from cache            
+            write_path = sprintf('%s/midlevel/facecircle_fun_%i_partition_%i.mat',self.pathfinder(self.id,1),fun,partition);
+            if exist(write_path) && force == 0
+                %load directly or
+                load(write_path);
+%                 fprintf('Rating Fit found and loaded successfully for subject %i...\n',self.id);
+                
+            elseif force == 1 || ~exist(write_path)
+                %compute and save it.
+                fprintf('Fitting Ratings...\n')                
+                R                            = self.get_facecircle(partition);
+                %adapt to what Tuning.m wants to have.                
+                R.y                          = self.circconv2(R.countw,[1 1]/2);;                                
+                %create a tuning object and make a single subject fit
+                T                            = Tuning(R);
+                
+                T.SingleSubjectFit(fun);
+                %prepare data for outputting.
+                out.params                   = T.fit_results{fun}.params; 
+                out.LL                       = T.fit_results{fun}.pval;
+                out.exitflag                 = T.fit_results{fun}.ExitFlag;
+                out.y                        = T.fit_results{fun}.y_fitted_HD;
+                out.x                        = T.fit_results{fun}.x_HD;
+                out.fitfun                   = T.fit_results{fun}.fitfun;
+                if fun == 8%if vM, then transform kappa to FWHM.
+                    fprintf('Kappa to FWHM transformation + absolute(peakshift).\n');
+                    out.params(:,2)            = vM2FWHM(out.params(:,2));
+                    out.params(:,3)            = abs(out.params(:,3));
+                end
+                save(write_path,'out');
+            end
+            
         end        
     end
 end
