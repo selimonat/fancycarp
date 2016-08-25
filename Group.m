@@ -44,20 +44,11 @@ classdef Group < Project
         end
         function ModelSCR(self,run,funtype)
             %create a tuning object and fits FUNTYPE to it.
-            self.tunings.scr = Tuning(self.getSCRs(run));%create a tuning object for the RUN for SCRS.
+            self.tunings.scr = Tuning(self.getSCRbars(run));%create a tuning object for the RUN for SCRS.
 %             self.tunings.scr.SingleSubjectFit(funtype);%call fit method from the tuning object
         end
         function getSCRtunings(self,run,funtype)
             self.ModelSCR(run,funtype);
-        end
-        
-        function [out] = getSCRmeans(self,phase)
-            for n = 1:length(self.ids)
-                    ind = self.subject{n}.scr.findphase(phase);
-                    self.subject{n}.scr.cut(ind);
-                    self.subject{n}.scr.run_ledalab;
-                    out(n,:) = mean(self.subject{n}.scr.ledalab.mean(1:800,:));
-            end
         end
         function [out] = loadmises(self)
             a = load(sprintf('%smidlevel%smisesmat.mat',self.path_project,filesep));
@@ -242,17 +233,38 @@ classdef Group < Project
             hold off
         end
         %%
-        function [scr] = getSCRs(self,run)
-            %will collect the ratings from single subjects 
+        function [scr] = getSCRbars(self,run)
+            %will collect the SCR tunings from single subjects 
             scr.y = [];
             scr.x = [];
             scr.ids = [];
             for s = 1:length(self.subject)
                 if ~isempty(self.subject{s})
-                  dummy = self.subject{s}.GetSubSCR(run);
+                  dummy = self.subject{s}.GetSubSCRbars(run);
                     if ~isempty(dummy)
                         scr.y   = [scr.y; dummy.y];
                         scr.x   = [scr.x; dummy.x];
+                        scr.ids = [scr.ids; self.ids(s)];
+                    end
+                end
+            end
+        end
+        function [scr] = getSCRgraphs(self,run,cond)
+            %will collect the SCR response over time from single subjects 
+            if nargin < 3
+                cond = 1:8;
+            end
+            scr.y = [];
+            scr.conds = [];
+            scr.phase = [];
+            scr.ids = [];
+            for s = 1:length(self.subject)
+                if ~isempty(self.subject{s})
+                  dummy = self.subject{s}.GetSubSCRgraphs(run,cond);
+                    if ~isempty(dummy)
+                        scr.y   = cat(3,scr.y,dummy.y(1:800,:));
+                        scr.conds   = [scr.conds; dummy.conds];
+                        scr.phase   = [scr.phase; dummy.phase];
                         scr.ids = [scr.ids; self.ids(s)];
                     end
                 end

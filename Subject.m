@@ -27,7 +27,7 @@ classdef Subject < Project
                 end
                 s.csp = s.paradigm{s.default_run}.stim.cs_plus;
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
-%                 s.scr = SCR(s);
+                s.scr = SCR(s);
                 try
                     s.pmf = s.getPMF;
                     s.feargen = s.getFearGen;
@@ -301,11 +301,11 @@ classdef Subject < Project
                     rating.y = rating.y - mean(rating.y);
                 end
             else
-                fprintf('no rating present for this subject and run (%d) \n',run);
+                warning('no rating present for this subject and run (%d) \n',run);
             end            
         end
         
-        function out    = GetSubSCR(self,run,cond)
+        function out    = GetSubSCRgraphs(self,run,cond)
             if nargin < 3
                 cond=1:8;
             end
@@ -313,13 +313,35 @@ classdef Subject < Project
             % s is a subject instance
             out = [];
             cutnum = self.scr.findphase(run);
-            self.scr.cut(cutnum);
+            if length(self.scr.BlockNames)> 1
+                self.scr.cut(cutnum);
+            else
+                warning('SCR was already cut, please check if correct phase!')
+            end
+            self.scr.run_ledalab;
+            out.y = self.scr.ledalab.mean(:,cond);
+            out.conds = conddummy(cond);
+            out.phase = run;
+        end
+        function out    = GetSubSCRbars(self,run,cond)
+            if nargin < 3
+                cond=1:8;
+            end
+            conddummy=[-135:45:180 500 1000 3000];
+            % s is a subject instance
+            out = [];
+            cutnum = self.scr.findphase(run);
+            if length(self.scr.BlockNames)> 1
+                self.scr.cut(cutnum);
+            else
+                warning('SCR was already cut, please check if correct phase!')
+            end
             self.scr.run_ledalab;
             self.scr.plot_tuning_ledalab(cond);
             out.y = self.scr.fear_tuning;
             out.x = conddummy(cond);
             out.ind = cutnum;
-        end        
+        end     
         function [o]=tRuns(self)
             %% returns the total number of runs in a folder
             a      = dir(self.path);
