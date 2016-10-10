@@ -342,9 +342,13 @@ classdef Project < handle
                 inversion = 1;%will select good subjects            
             end
             
-            if     criteria == 1
+            if criteria == 0
+                sub.name = 'all';
+                sub.list = self.subject_indices;
+            
+            elseif     criteria == 1
                 %
-                sub.name   = 'rating+';
+                sub.name   = 'rating';
                 %
                 out        = self.getgroup_rating_param;%load the ratings of all subjects
                 select     = (out.rating_LL > -log10(.05))&(out.rating_mu > -90)&(out.rating_mu < 90);%select based on tuning
@@ -353,7 +357,7 @@ classdef Project < handle
                 %               
             elseif criteria == 2
                 %
-                sub.name = 'detection+'; 
+                sub.name = 'detection'; 
                 out      = self.getgroup_detected_face;
                 select   = abs(out.detection_face) <= 45;
                 select   = select==inversion;
@@ -362,7 +366,7 @@ classdef Project < handle
             elseif criteria == 3
                 
                 %same as rating tuning, but with saliency data.
-                sub.name = 'saliency+';
+                sub.name = 'saliency';
                 out      = self.getgroup_facecircle;                
                 select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -90)&(out.facecircle_mu < 90);%select based on tuning                
                 select   = select==inversion;
@@ -370,7 +374,7 @@ classdef Project < handle
                 
             elseif criteria == 4
                 
-                sub.name    = 'perception+';                
+                sub.name    = 'perception';                
                 out     = self.getgroup_pmf_param;%all threshoild values
                 m       = nanmedian(out.pmf_pooled_alpha);
                 select  = out.pmf_pooled_alpha <= m;%subjects with sharp pmf
@@ -381,16 +385,16 @@ classdef Project < handle
             
             %invert the group name necessary.
             if ~inversion
-                sub.name(end) = '-';
+                sub.name = [sub.name '_minus'];
             end
         end
-        function out        = path_spmmat_SecondLevel_ANOVA(self,run,model,sk)
-            %returns the path to second level analysis for a given
-            %smoothening kernel.
-            
-            out = regexprep(self.path_spmmat(run,model),'sub...',sprintf('second_level_%02dmm',sk));
-            
-        end
+% % %         function out        = path_spmmat_SecondLevel_ANOVA(self,run,model,sk)
+% % %             %returns the path to second level analysis for a given
+% % %             %smoothening kernel.
+% % %             
+% % %             out = regexprep(self.path_spmmat(run,model),'sub...',sprintf('second_level_%02dmm',sk));
+% % %             
+% % %         end
     end    
     methods %getters
         function out        = getgroup_all_param(self)
@@ -495,7 +499,7 @@ classdef Project < handle
         end
     end
     methods %methods that does something on all subjects one by one
-        function VolumeGroupAverage(self,selector)
+        function              VolumeGroupAverage(self,selector)
             %Averages all IMAGES across all subjects. This can only be done
             %on normalized images. The result will be saved to the
             %project/midlevel/. The string SELECTOR is appended to the
@@ -514,7 +518,7 @@ classdef Project < handle
             mkdir(fileparts(target_path));
             spm_write_vol(dummy,V);
         end   
-        function VolumeSmooth(self,files)
+        function              VolumeSmooth(self,files)
             %will smooth the files by the factor defined as Project
             %property.
             for sk = self.smoothing_factor
@@ -526,80 +530,82 @@ classdef Project < handle
                 spm_jobman('run', matlabbatch);
             end
         end        
-        function [xSPM] = SecondLevel_ANOVA(self,run,model,beta_image_index)
+        function [xSPM]     = SecondLevel_ANOVA(self,ngroup,run,model,beta_image_index,sk)
             % This method runs a second level analysis for a model defined
             % in MODEL using beta images indexed in BETA_IMAGE_INDEX. The
-            % same model is ran for different smoothening kernels as well
-            % as all the different subject groups (see
-            % self.get_selected_subjects.
+            % same model can be ran at different smoothening levels (SK) as well
+            % as for different subject groups (NGROUP, see
+            % self.get_selected_subjects).
+            %
+            % Results are saved at the project root. xSPM structure is also
+            % saved in the analysis SPM dir. If this file is present, it is
+            % directly loaded, so the second level analysis is not reran.
+            %
+            %
             
             
-            for sk = self.smoothing_factor(3)
-                %store all the beta_images in a 3D array
-                tgroups    = 4;
-                for ngroup = 1:tgroups;
-                    subjects   = self.get_selected_subjects(ngroup);
-                    beta_files = [];
-                    
-                    spm_dir    = regexprep(self.dir_spmmat(run,model),'sub...','second_level');%convert to second-level path, replace the sub... to second-level.
-                    spm_dir    = sprintf('%s%02dmm/group_%s/',spm_dir,sk,subjects.name);
-                    xspm_path  = sprintf('%sxSPM.mat',spm_dir);
-                    if exist(xspm_path) == 0;
-                        
-                        for ns = subjects.list(:)'
-                            s          = Subject(ns);
-                            beta_files = cat(3,beta_files,s.path_beta(run,model,sprintf('s%02d_w_',sk),beta_image_index)');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
-                        end
-                        %
-                        c = 0;
-                        for ind = 1:length(beta_image_index)
-                            %take single beta_images across all subjects and store them
-                            %in a cell
-                            c                                                                  = c +1;
-                            files                                                              = squeeze(beta_files(:,ind,:))';
-                            matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files);
-                        end
-                        %depending on subject group and smoothening, generate
-                        %a directory name for this spm analysis.
-                        matlabbatch{1}.spm.stats.factorial_design.dir                    = cellstr(spm_dir);
-                        matlabbatch{1}.spm.stats.factorial_design.des.anova.dept         = 0;
-                        matlabbatch{1}.spm.stats.factorial_design.des.anova.variance     = 1;
-                        matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca        = 0;
-                        matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova       = 0;
-                        matlabbatch{1}.spm.stats.factorial_design.cov                    = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
-                        matlabbatch{1}.spm.stats.factorial_design.multi_cov              = struct('files', {}, 'iCFI', {}, 'iCC', {});
-                        matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none     = 1;
-                        matlabbatch{1}.spm.stats.factorial_design.masking.im             = 1;
-                        matlabbatch{1}.spm.stats.factorial_design.masking.em             = {''};
-                        matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit         = 1;
-                        matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
-                        matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm        = 1;
-                        %
-                        matlabbatch{2}.spm.stats.fmri_est.spmmat                         = {[spm_dir '/SPM.mat']};
-                        matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
-                        %
-                        spm_jobman('run', matlabbatch);
-                        %UPDATE THE SPM.mat with the contrast
-                        %create the contrast that we are interested in, this could
-                        %be later extended into a for loop
-                        load(sprintf('%s/SPM.mat',spm_dir))
-                        SPM = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3)]',SPM.xX.xKXs);
-                        save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
-                        %xSPM is used to threshold according to a contrast.
-                        xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');
-                        %replace 'none' to make FWE corrections.
-                        [SPM xSPM] = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
-                        save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field                        
-                        save(xspm_path,'xSPM');
-                    else
-                        load(xspm_path);
-                    end
-                    % %
-                end%smoothing
-            end%subject groups
-        end
-        function B = SecondLevel_Mumfordian(self,nrun,mask_id)
+            
+            subjects   = self.get_selected_subjects(ngroup);                        
+            spm_dir    = regexprep(self.dir_spmmat(run,model),'sub...','second_level');%convert to second-level path, replace the sub... to second-level.
+            spm_dir    = sprintf('%s%02dmm/group_%s/',spm_dir,sk,subjects.name);
+            xspm_path  = sprintf('%sxSPM.mat',spm_dir);
+            if exist(xspm_path) == 0;
+                                
+                beta_files = [];
+                for ns = subjects.list(:)'
+                    s          = Subject(ns);
+                    %store all the beta_images in a 3D array
+                    beta_files = cat(3,beta_files,s.path_beta(run,model,sprintf('s%02d_w_',sk),beta_image_index)');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
+                end
+                %
+                c = 0;
+                for ind = 1:length(beta_image_index)
+                    %take single beta_images across all subjects and store them
+                    %in a cell
+                    c                                                                  = c +1;
+                    files                                                              = squeeze(beta_files(:,ind,:))';
+                    matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files);
+                end
+                %depending on subject group and smoothening, generate
+                %a directory name for this spm analysis.
+                matlabbatch{1}.spm.stats.factorial_design.dir                    = cellstr(spm_dir);
+                matlabbatch{1}.spm.stats.factorial_design.des.anova.dept         = 0;
+                matlabbatch{1}.spm.stats.factorial_design.des.anova.variance     = 1;
+                matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca        = 0;
+                matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova       = 0;
+                matlabbatch{1}.spm.stats.factorial_design.cov                    = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
+                matlabbatch{1}.spm.stats.factorial_design.multi_cov              = struct('files', {}, 'iCFI', {}, 'iCC', {});
+                matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none     = 1;
+                matlabbatch{1}.spm.stats.factorial_design.masking.im             = 1;
+                matlabbatch{1}.spm.stats.factorial_design.masking.em             = {''};
+                matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit         = 1;
+                matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
+                matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm        = 1;
+                %
+                matlabbatch{2}.spm.stats.fmri_est.spmmat                         = {[spm_dir '/SPM.mat']};
+                matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
+                %
+                spm_jobman('run', matlabbatch);
+                %UPDATE THE SPM.mat with the contrast
+                %create the contrast that we are interested in, this could
+                %be later extended into a for loop
+                load(sprintf('%s/SPM.mat',spm_dir))
+                SPM = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any
+                SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3)]',SPM.xX.xKXs);
+                save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
+                %xSPM is used to threshold according to a contrast.
+                xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');
+                %replace 'none' to make FWE corrections.
+                [SPM xSPM] = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
+                save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
+                save(xspm_path,'xSPM');
+            else
+                load(xspm_path);                
+%                 t                                 = spm_list('table',xSPM{2}.rating);
+            end            
+
+        end        
+        function B          = SecondLevel_Mumfordian(self,nrun,mask_id)
             %
             B = [];
             for ns = self.subject_indices
@@ -608,7 +614,7 @@ classdef Project < handle
                 B        = cat(3,B,mean(beta,3));
             end
         end
-        function LatencyMap(self,midlevel_path,xBF)
+        function              LatencyMap(self,midlevel_path,xBF)
             %Will read all beta images in midlevel_path consisting of a FIR
             %model.
             beta_files      = strvcat(FilterF(sprintf('%smidlevel/',self.path_project),midlevel_path,'beta'));
@@ -657,7 +663,7 @@ classdef Project < handle
                 end
             end
         end
-        function nface = analysis_selected_face(self,varargin)
+        function nface      = analysis_selected_face(self,varargin)
             %will plot an histogram of detected faces 
             subjects = self.subject_indices
             if nargin > 1

@@ -598,8 +598,7 @@ classdef Subject < Project
                 out = [];
                 cprintf([1 0 0],'No pmf data for this subject.\n')
             end
-        end  
-        
+        end          
         function out        = get_bold_fourier_spacetime(self,sk)
             
             out      = [];
@@ -641,9 +640,7 @@ classdef Subject < Project
                 fprintf('Loading from cache...\n');
                 load(filename);
             end
-        end
-                
-        
+        end                
         function out        = get_bold_spacetime(self,sk)
             %returns the bold responses in time x condition format
                        
@@ -668,14 +665,12 @@ classdef Subject < Project
                 fprintf('Loading from cache...\n');
                 load(filename);
             end
-        end
-        
+        end        
         function out        = get_pupil_spacetime(self)
                 fprintf('Collecting pupil timexcondition maps\n');
                 dummy  = self.pupil.get_singletrials(self.id,'clean');
                 out    = dummy(self.id).mean(:,1:8);
-        end
-        
+        end        
         function out = get_all_spacetime(self,sk)
             out        = [];            
             out        = cat(4,out,self.get_bold_spacetime(sk));                   
