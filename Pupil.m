@@ -16,8 +16,7 @@ classdef Pupil < Project
                         0.0784    0.0784    0.0784]
         clean      = 1;
         
-    end
-    
+    end    
     properties
         time =[];        
         pupil  =[];
@@ -35,8 +34,7 @@ classdef Pupil < Project
         tnan    =[];
         discarded_trials=NaN;
     end
-    
-    
+        
     methods        
         function [obj]=Pupil(subjects,runs)
             for run = runs(:)'                                
@@ -188,7 +186,7 @@ classdef Pupil < Project
                     obj.file           = [obj.file     [trials(:).file]+1];
                     obj.blink          = [obj.blink    tBlink];
                     obj.tnan           = [obj.tnan     tnan];
-                    obj.mbi            = [obj.mbi      [trials(:).mblock]];                    
+                    obj.mbi            = [obj.mbi      [trials(:).mblock]];
                     %sanity check
                     if length(obj.tnan) ~= length(obj.ucs)
                         keyboard
@@ -198,7 +196,7 @@ classdef Pupil < Project
             %at this point data can still contain NaN, as we did not have
             %extrapolation.
             if obj.clean
-                figure(1);imagesc(data);drawnow;hold on;[y x] = find(isnan(data) == 1);plot(x,y,'ko');hold off;
+%                 figure(1);imagesc(data);drawnow;hold on;[y x] = find(isnan(data) == 1);plot(x,y,'ko');hold off;
                 invalid = obj.tnan > 0;
                 obj.time(:,invalid)      = [];
                 obj.pupil(:,invalid)     = [];
@@ -225,8 +223,35 @@ classdef Pupil < Project
             for ns = unique(obj.subject)
                 obj.discarded_trials(ns) = 585-sum(obj.subject == ns);%discarded trials
             end
+        end        
+        function D = get_singletrials(obj,subjects,varargin)
+            %returns trial amplitudes together with trial identifiers in a
+            %structure. MEAN is taken across time points.            
+            D = [];
+            for subject = subjects(:)'              
+                D(subject).mean   = nan(65,9);
+                D(subject).median = nan(65,9);
+                D(subject).count  = zeros(65,9);                
+                D(subject).x      = repmat(-135:45:180,65,1);
+                for i = find(obj.subject == subject)%subject mask
+                    mbi_counter          = 0;
+                    mbi                  = obj.mbi(i);
+                    cond                 = obj.deltacsp(i)./45+4;
+                    if cond < 10
+                        D(subject).mean(mbi,cond)     = nanmean(nanmean(obj.pupil(:,i),2));
+                        D(subject).median(mbi,cond)   = nanmedian(nanmedian(obj.pupil(:,i),2));
+                        D(subject).count(mbi,cond)    = 1;
+                    end                
+                end
+                if nargin > 1
+                    cprintf([1 0 0], 'Will clean invalid microblocks.\n')
+                    D(subject).mean     = D(subject).mean(obj.mbi_valid,:);
+                    D(subject).median   = D(subject).median(obj.mbi_valid,:);
+                    D(subject).count    = D(subject).count(obj.mbi_valid,:);
+                    D(subject).x        = D(subject).x(obj.mbi_valid,:);
+                end
+            end
         end
-        
         function D = get_evoked(obj,subjects)
             %returns data of SUBJECT in a struct D. Different fields of D
             %contains data as [time,condition].                        
@@ -242,28 +267,7 @@ classdef Pupil < Project
                     end
                 end
             end
-        end
-        
-        function D = get_singletrials(obj,subjects)
-            %returns trial amplitudes together with trial identifiers in a
-            %structure. MEAN is taken across time points.            
-            D = [];
-            for subject = subjects(:)'              
-                D(subject).mean   = nan(65,9);
-                D(subject).median = nan(65,9);
-                D(subject).count  = zeros(65,9);                
-                for i = find(obj.subject == subject)                    
-                    mbi                  = obj.mbi(i);
-                    cond                 = obj.deltacsp(i)./45+4;
-                    if cond < 10
-                        D(subject).mean(mbi,cond)     = nanmean(nanmean(obj.pupil(:,i),2));
-                        D(subject).median(mbi,cond)   = nanmedian(nanmedian(obj.pupil(:,i),2));
-                        D(subject).count(mbi,cond)    = 1;
-                    end
-                end
-            end
-        end
-            
+        end    
         function plot_evoked(obj,subject)
             %will plot pupil responses overlaid on the average y
             %position of the eyes for subject SUBJECT.
@@ -279,7 +283,7 @@ classdef Pupil < Project
             Y = cat(3,Y(:).median);%store the evoked across 3 dimension
             Y = demean(nanmean(nanmean(Y,3),2));%average                        
             set(gca,'colororder',obj.color_order,'NextPlot', 'replacechildren','fontsize',12);
-            plot(t,P(:,1:10));            
+            plot(t,P);            
             hold on;
             plot(t,Y,'k--');
             xlim([min(t) max(t)]);                        
@@ -290,20 +294,29 @@ classdef Pupil < Project
             title(sprintf('id:%i',subject));
             drawnow
         end        
-        function plot_group_average(obj)
-            %will plot the group average
-            %%
+        function plot_group_average(obj,varargin)
+            %will plot the group averaged time-course. VARARGIN can be used
+            %to restrict subjects, default is all subjects
+            %
             t = obj.time(:,1);
+            if nargin == 1
+                subjects = unique(obj.subject);
+            else
+                subjects = varargin{1};
+            end
+                
             %get the data
-            D = obj.get_evoked(unique(obj.subject));
+            D = obj.get_evoked(subjects);
             P = [D(:).pupil];%get the pupil out from valid subjects
             P = cat(3,P(:).mean);%store the evoked across 3 dimension
             P = nanmean(P,3);%average                        
             Y = [D(:).y];%get the pupil out from valid subjects
             Y = cat(3,Y(:).median);%store the evoked across 3 dimension
             Y = demean(nanmean(nanmean(Y,3),2));%average                        
+            %%
+            subplot(1,2,1)
             set(gca,'colororder',obj.color_order,'NextPlot', 'replacechildren','fontsize',12);
-            plot(t,P(:,1:10),'linewidth',3);            
+            plot(t,P(:,1:8),'linewidth',3);            
             hold on;
             plot(t,Y,'k--','linewidth',3);            
             axis tight;
@@ -318,9 +331,94 @@ classdef Pupil < Project
             legend({'-135' '-90' '-45' 'CS+' '+45' '+90' '+135' '+180' 'Null' 'UCS' 'y pos'},'location','southwest','fontsize',12)
             legend boxoff          
             axis square
-            title('Group Average')            
+            title('Group Average')    
+            %
+            subplot(1,2,2);
+            imagesc(demean(P(:,1:8)')');
+            axis xy;
+            axis square;
+            ylabel('time');
+            xlabel('Conditions')
+            set(gca,'xtick',[4 8],'xticklabel',{'CS+' 'CS-'});
+            title('Group Average')
+            colorbar
         end        
-        function [out]=timecourse_difference(obj,subjects)            
+        function image_subject_timecourse(obj,varargin)
+            subjects = unique(obj.subject)
+            [y x]    = GetSubplotNumber(length(subjects));
+            c = 0;
+            for ns = subjects;                
+                %get the data
+                D = obj.get_evoked(ns);
+                P = [D(:).pupil];%get the pupil out from valid subjects                
+                P = P.median(:,1:8);
+                P = demean(P')';
+                %
+                c = c +1;
+                figure(1)
+                subplot(y,x,c);
+                imagesc(P);
+                axis xy;
+                axis square;
+                axis off;
+                title(sprintf('sub:%02d',ns));
+                figure(2);
+                subplot(y,x,c);
+                obj.plot_bar(mean(P)');
+            end
+        end
+        function [out]=get_feartuning(obj,subject)
+            D = obj.get_evoked(subject);
+            P = [D(:).pupil];%get the pupil out from valid subjects
+            P = P.median(:,1:8);
+            P = demean(P')';
+            out = mean(P);
+        end
+        function H      = histogram(obj)
+            %computes for each subject and condition the number of recorded
+            %trials in .Count. In .BLINK the number of detected blinks.
+            %
+            subjects = unique(obj.subject);
+            for nsubject = subjects;
+                i = obj.subject == nsubject;
+                for ncond = unique(obj.deltacsp(i));
+                    index                                         = logical(i.*(obj.deltacsp==ncond));
+                    H.Count(nsubject-min(subjects)+1,ncond./45+4) = sum(double(index));%number of trials
+                    H.Blink(nsubject-min(subjects)+1,ncond./45+4) = sum(obj.blink(index));
+                end
+            end
+            %% plot the count as a bar plot
+            figure(1);clf
+            subplot(3,1,1)
+            set(gcf,'position',[0 0       1406         900]);
+            bar(5:44,sum(H.Count(:,1:8),2),.9,'k');
+            set(gca,'ytick',linspace(0,585,4),'xtick',subjects,'xticklabel',subjects);
+            box off
+            set(gca,'ytick',linspace(0,585,4),'xtick',subjects,'xticklabel',subjects);
+            set(gca,'ytick',linspace(0,585,4),'xtick',subjects,'xticklabel',subjects,'ygrid','on');
+            xlabel('Conditions')
+            xlabel('Subjects')
+            ylabel('Trials')
+            subplot(3,1,2)
+            bar(1:44,obj.discarded_trials,.9,'k');
+            set(gca,'ytick',linspace(0,585,4),'xtick',subjects,'xticklabel',subjects);
+            box off
+            set(gca,'ytick',linspace(0,585,4),'xtick',subjects,'xticklabel',subjects);
+            set(gca,'ytick',linspace(0,585,4),'xtick',subjects,'xticklabel',subjects,'ygrid','on');
+            xlabel('Conditions');
+            xlabel('Subjects');
+            ylabel('# Discarded Trials');
+            subplot(3,1,3)
+            bar(5:44,mean(H.Blink,2),.9,'k');
+            set(gca,'ytick',linspace(0,21,4),'xtick',subjects,'xticklabel',subjects);
+            box off
+            set(gca,'ytick',linspace(0,21,4),'xtick',subjects,'xticklabel',subjects);
+            set(gca,'ytick',linspace(0,21,4),'xtick',subjects,'xticklabel',subjects,'ygrid','on');
+            xlabel('Conditions');
+            xlabel('Subjects');
+            ylabel('# Blinks');
+        end
+        function [out]  = timecourse_difference(obj,subjects)            
             % plots the difference between relevant and control conditions.
             out1 = [];out2 = [];
             for subject = subjects
@@ -354,112 +452,6 @@ classdef Pupil < Project
             legend boxoff;
             title('Group Average');
             hold off;            
-        end
-        
-        function D = plot_tuning_subject(obj,subject)
-                  
-            keyboard
-            D = obj.get_evoked(subject);
-            M = mean(D(subject).pupil.mean(:,1:8));
-            Project.plot_bar(M');
-            title(sprintf('id:%02d',subject),'fontsize',12);%subject and face id
-            set(gca,'fontsize',12);
-        end
-        
-
-        
-
-
-        function [mat]=plot_subject_matrix(obj,subject)
-            ffigure(subject);
-            i     = obj.subject == subject;
-            mat   = obj.pupil(:,i);
-            mat   = mat';
-            [d u] = GetColorMapLimits(mat(:),2);
-            subplot(1,3,1)
-            imagesc(obj.time(:,1),1:size(mat,1),mat,[d u]);            
-            colorbar
-            subplot(1,3,2)
-            imagesc(isnan(mat));
-            fprintf('%i trials with detected blinks...\n',sum(sum(isnan(mat),2) > 0));
-            subplot(1,3,3)
-            plot(obj.tnan(:,i),1:sum(i),'r');axis ij;            
-        end        
-%         function [mat] = clean_outlier(obj,subject)
-%             %
-%             outlier = 1;
-%             blink   = 1;
-%             i       = obj.subject == subject;
-%             mat     = obj.pupil(:,i);
-%             %remove outliers
-%             if outlier
-%                 ave     = nanmean(mat);
-%                 m       = nanmean(ave);
-%                 s       = nanstd(ave);
-%                 invalid = (ave > (m+s))|(ave < (m-s));
-%                 mat(:,invalid) = [];            
-%             end
-%             if blink
-%                 i = sum(isnan(mat)) == 0;
-%                 mat(:,~i) = [];
-%             end     
-%             mat = detrend(mat);
-%         end
-      
-        
-        
-        
-              
-        function D = plot_group_tuning(obj,time)
-                 
-            D = [];
-            for ncond = unique(obj.deltacsp)
-                i  = obj.deltacsp==ncond;
-                D  = [D nanmean(obj.pupil(:,i),2)];
-            end
-            set(gca,'colororder',GetFearGenColors,'NextPlot', 'replacechildren');
-            [~,i]=min(abs(obj.time(:,1)-time));
-            o = D(i,1:9);
-            bar(o);                      
-        end
-        
-        
-        
-        
-        function H = histogram(obj)
-            %computes for each subject and condition the number of recorded
-            %trials in .Count. In .BLINK the number of detected blinks.
-            %
-            subjects = unique(obj.subject);
-            for nsubject = subjects;
-                i = obj.subject == nsubject;
-                for ncond = unique(obj.deltacsp(i));
-                    index                                         = logical(i.*(obj.deltacsp==ncond));
-                    H.Count(nsubject-min(subjects)+1,ncond./45+4) = sum(double(index));%number of trials
-                    H.Blink(nsubject-min(subjects)+1,ncond./45+4) = sum(obj.blink(index));
-                end                
-            end                        
-            %% plot the count as a bar plot
-            figure(1);clf
-            subplot(2,1,1)
-            set(gcf,'position',[275         276        1406         679]);
-            bar(5:44,mean(H.Count(:,1:8),2),.9,'k');
-            set(gca,'ytick',linspace(0,64,5),'xtick',subjects,'xticklabel',subjects);
-            box off
-            set(gca,'ytick',linspace(0,64,5),'xtick',subjects,'xticklabel',subjects);
-            set(gca,'ytick',linspace(0,64,5),'xtick',subjects,'xticklabel',subjects,'ygrid','on');
-            xlabel('Conditions')
-            xlabel('Subjects')
-            ylabel('Trials')                        
-            subplot(2,1,2)
-            bar(1:44,obj.discarded_trials,.9,'k');
-            set(gca,'ytick',linspace(0,585,4),'xtick',subjects,'xticklabel',subjects);
-            box off
-            set(gca,'ytick',linspace(0,585,4),'xtick',subjects,'xticklabel',subjects);
-            set(gca,'ytick',linspace(0,585,4),'xtick',subjects,'xticklabel',subjects,'ygrid','on');
-            xlabel('Conditions')
-            xlabel('Subjects')
-            ylabel('# Discarded Trials')                        
-        end
+        end                
     end
 end

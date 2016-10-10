@@ -1,8 +1,8 @@
 classdef Tuning < handle
     properties (Hidden)
-        visualization = 0;%visualization of fit results
+        visualization = 1;%visualization of fit results
         gridsize      = 20;%resolution per parameter for initial estimation.
-        options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-5,'tolfun',10^-5,'MaxIter',10000,'Algorithm','interior-point');
+        options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-8,'tolfun',10^-8,'MaxIter',10000,'Algorithm','interior-point');
         singlesubject_data = [];%will contain the fit results for individual subjects
     end
     %tuning object, can contain any kind of fear-tuning SCR, rating etc.
