@@ -309,7 +309,10 @@ classdef Subject < Project
             %will read the data specified in FILE 
             %FILE is the absolute path to a 3/4D .nii file.            
             %
-            %MASK_ID is used to select voxels.
+            %MASK_ID is used to select voxels in the native space, so this
+            %only makes sense when the file is also in the native space.
+            %
+            %This relies on get_XYZmmNative and get_mm2vox methods.
             %                        
             
             vh      = spm_vol(file);
@@ -671,12 +674,12 @@ classdef Subject < Project
                 dummy  = self.pupil.get_singletrials(self.id,'clean');
                 out    = dummy(self.id).mean(:,1:8);
         end        
-        function out = get_all_spacetime(self,sk)
+        function out        = get_all_spacetime(self,sk)
             out        = [];            
             out        = cat(4,out,self.get_bold_spacetime(sk));                   
             out        = cat(4,out,self.get_pupil_spacetime);
-        end
-        
+        end        
+            
     end
     
     methods %(preprocessing))              
@@ -961,6 +964,62 @@ classdef Subject < Project
             end
             
         end
+        function epi    = analysis_rsa(self)
+            
+            force    = 0;
+            filename = sprintf('%sanalysis_rsa.mat',self.path_midlevel(1))
+            if exist(filename) == 0 | force
+                %get the beta, these are mumford analysis in native space
+                self.default_model_name  ='chrf_0_0_mumfordian';
+                betas                    = self.path_beta(1,0,'w_');
+                sk_counter               = 0;
+                for sk = self.smoothing_factor
+                    sk_counter          = sk_counter  +1;
+                    epi(sk_counter).sk  = sk;
+                    %load and smooth the data.
+                    vol                 = spm_vol(betas);
+                    vol                 = spm_smoothto16bit(vol,sk);%smooth on the fly, slow but disk efficient.
+                    roi_counter         = 0;
+                    for nroi = [64 103 120 101 102 126 165 182 163 164]%more or less where the univariate peaks
+                        roi_counter                                                          = roi_counter + 1;
+                        %load the current roi and detect voxels in steps of 10th percentile
+                        d                                                                    = spm_read_vols(spm_vol(self.path_atlas(nroi)));
+                        i                                                                    = d>0;
+                        borders                                                              = prctile((d(i(:))),linspace(10,100,11));
+                        threshold_counter                                                    = 0;
+                        for threshold = borders(1:end-1);
+                            threshold_counter                                                = threshold_counter +1;
+                            fprintf('Subject: %02d, Smooth: %02d, Roi: %03d, Threshold: %03d\n',self.id,sk,nroi,threshold);
+                            epi(sk_counter).roi(roi_counter,threshold_counter).name          = self.get_atlasROIname(nroi);
+                            epi(sk_counter).roi(roi_counter,threshold_counter).threshold     = threshold;
+                            %get the coordinates for ROI and THRESHOLD
+                            self.atlas2mask_threshold                                        = threshold;
+                            XYZmm                                                            = self.get_XYZmmNormalized(nroi);
+                            XYZvox                                                           = self.get_mm2vox(XYZmm,vol(1));%in EPI voxel space.
+                            %get the BOLD at these coordinates.
+                            D                                                                = spm_get_data(vol,XYZvox);
+                            %sanity check: f there a column full of NaN it must
+                            %be outside of the FOV, kill it;
+                            invalid                                                          = sum(isnan(D)) == size(D,1);
+                            D(:,invalid)                                                     = [];
+                            %get the similarity metric.
+                            D                                                                = reshape(D,[65 11 size(D,2)]);%[mbi condition voxel]
+                            D                                                                = D(self.mbi_valid,1:8,:);
+                            for nmbi = 1:size(D,1)
+                                RRR = corrcoef(squeeze(D(nmbi,:,:))');
+%                                 if any(isnan(RRR(:)));
+%                                     keyboard
+%                                 end
+                                epi(sk_counter).roi(roi_counter,threshold_counter).rsa(:,:,nmbi) = RRR;
+                            end
+                        end
+                    end
+                    save(filename,'epi');
+                end
+            else
+                load(filename);
+            end
+        end
     end
     methods %sanity checks
         function sanity_realignement(self)
@@ -1083,12 +1142,12 @@ classdef Subject < Project
             %MODEL_NUM. Use VARARGIN to select a subset by indexing.
             %Actually spm_select is not even necessary here.
            
-            out = self.dir_spmmat(nrun,model_num);
-            fprintf('Searching for beta images in:\n%s\n',out)
-            out = spm_select('FPList',out,sprintf('^%sbeta_*',prefix'));
+            out1 = self.dir_spmmat(nrun,model_num);
+            fprintf('Searching for beta images in:\n%s\n',out1)
+            out = spm_select('FPList',out1,sprintf('^%sbeta_*',prefix'));
             if isempty(out)
-                cprintf([1 0 0],'No beta images found, probably wrong prefix/run/etc is entered...\n');
-                fprintf('%s\n',out)
+                cprintf([1 0 0],'No beta images found, probably wrong prefix/run/etc is entered...\n');                
+                fprintf('Here:\n%s\n',out1);
                 keyboard%sanity check
             end
             %select if VARARGIN provided

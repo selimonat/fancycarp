@@ -55,7 +55,7 @@ classdef Project < handle
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
-        smoothing_factor      = [0 1 2 3 5 7 9];%[4 6 8 10];%how many mm images should be smoothened when calling the SmoothVolume method        
+        smoothing_factor      = 0:10;%how many mm images should be smoothened when calling the SmoothVolume method        
         path_smr              = sprintf('%s%ssmrReader%s',fileparts(which('Project')),filesep,filesep);%path to .SMR importing files in the fancycarp toolbox.
         gs                    = [5 6 7 8 9 12 14 16 17 18 19 20 21 24 25 27 28 30 32 34 35 37 39 40 41 42 43 44];
         subjects              = [];
@@ -343,12 +343,12 @@ classdef Project < handle
             end
             
             if criteria == 0
-                sub.name = 'all';
+                sub.name = '00_all';
                 sub.list = self.subject_indices;
             
             elseif     criteria == 1
                 %
-                sub.name   = 'rating';
+                sub.name   = '01_rating';
                 %
                 out        = self.getgroup_rating_param;%load the ratings of all subjects
                 select     = (out.rating_LL > -log10(.05))&(out.rating_mu > -90)&(out.rating_mu < 90);%select based on tuning
@@ -357,7 +357,7 @@ classdef Project < handle
                 %               
             elseif criteria == 2
                 %
-                sub.name = 'detection'; 
+                sub.name = '02_detection'; 
                 out      = self.getgroup_detected_face;
                 select   = abs(out.detection_face) <= 45;
                 select   = select==inversion;
@@ -366,7 +366,7 @@ classdef Project < handle
             elseif criteria == 3
                 
                 %same as rating tuning, but with saliency data.
-                sub.name = 'saliency';
+                sub.name = '03_saliency';
                 out      = self.getgroup_facecircle;                
                 select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -90)&(out.facecircle_mu < 90);%select based on tuning                
                 select   = select==inversion;
@@ -374,7 +374,7 @@ classdef Project < handle
                 
             elseif criteria == 4
                 
-                sub.name    = 'perception';                
+                sub.name    = '04_perception';                
                 out     = self.getgroup_pmf_param;%all threshoild values
                 m       = nanmedian(out.pmf_pooled_alpha);
                 select  = out.pmf_pooled_alpha <= m;%subjects with sharp pmf
@@ -487,7 +487,7 @@ classdef Project < handle
                 end
             end            
         end
-        function out        = getgroup_pupil_spacetime(self,who)            
+        function out        = getgroup_pupil_spacetime(self,who)
             %set WHO to select subject groups, 1:good, 0:bad;
             out = [];
             for ns = self.get_selected_subjects(who)'
@@ -495,7 +495,57 @@ classdef Project < handle
                 s     = Subject(ns,'pupil');
                 dummy = s.get_pupil_spacetime;
                 out   = cat(4,out,dummy);
-            end            
+            end
+        end
+        function  name      = get_atlasROIname(self,roi_index)
+            %get_atlasROIname(self,roi_index)
+            %
+            %returns the name of the probabilistic atlas at ROI_INDEX along
+            %the 4th dimension of the atlas data.            
+            cmd           = sprintf('sed "%dq;d" %s/data.txt',roi_index,fileparts(self.path_atlas));
+            [~,name]      = system(cmd);
+            name          = deblank(name);
+        end
+        function roi        = get_atlaslabel(self,XYZmm)
+            %returns the label of the ROI at location XYZmm using the
+            %Project's atlas.
+                        
+            atlas_labels = regexprep(self.path_atlas,'nii','txt');
+            roi.name     = {};
+            roi.prob     = {};
+            %            
+            V            = spm_vol(self.path_atlas);
+            V            = V(63:end);%take only the bilateral ones.
+            %get the probabilities at that point
+            [p i]    = sort(-spm_get_data( V, V(1).mat\[XYZmm(:);1]));
+            %black list some useless areas
+            [~,a]      = system(sprintf('cat %s | grep Cerebral',atlas_labels));
+            black_list = strsplit(a);
+            %list the first 6 ROIs
+%             fprintf('Cursor located at (mm): %g %g %g\n', x,y,z);
+            counter = 0;
+            while counter <= 3
+                counter               = counter + 1;
+                %get the current ROI name
+                current_name = self.get_atlasROIname(i(counter)+62);%the first 62 are bilateral rois, not useful.          
+                %include if the probability is bigger than zero and also if the current roi is not
+                %one of the stupid ROI names, e.g. cerebral cortex or so...             
+                if -p(counter) > 0 & isempty(cell2mat( regexp(current_name,black_list)))
+                    %isempty == 1 when there is no match, which is good
+                    %                    
+                    roi.name     = [roi.name current_name];
+                    roi.prob     = [roi.prob -p(counter)];
+                    fprintf('ROI: %d percent chance for %s.' , roi.prob{end}, roi.name{end}(1:end-1));
+                    fprintf('\n');                    
+                end
+            end
+            %if at the end of the loop we are still poor, we say it
+            if isempty(roi.prob)
+                roi.name{1} = 'NotFound';
+                roi.prob(1) = NaN;
+            end
+            
+            fprintf('\n\n');
         end
     end
     methods %methods that does something on all subjects one by one
