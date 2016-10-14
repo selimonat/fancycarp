@@ -47,7 +47,7 @@ classdef Project < handle
         path_project          = '/home/onat/mysuperproject/data/';        
         path_spm              = '/common/apps/spm12-6685/';        
         trio_sessions         = {  'TRIO_18528' 'TRIO_18529' };
-        dicom_serie_selector  = {  [1:3] [1:3]};
+        dicom_serie_selector  = {  [6 8] [6 8]};
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
         dicom2run             = repmat({[1 2 3]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
