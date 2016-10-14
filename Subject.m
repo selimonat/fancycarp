@@ -964,14 +964,14 @@ classdef Subject < Project
             end
             
         end
-        function epi    = analysis_rsa(self)
+        function epi        = analysis_mumfordian_rsa(self)
             
             force    = 0;
-            filename = sprintf('%sanalysis_rsa.mat',self.path_midlevel(1))
+            filename = sprintf('%sanalysis_mumfordian_rsa.mat',self.path_midlevel(1));
             if exist(filename) == 0 | force
                 %get the beta, these are mumford analysis in native space
                 self.default_model_name  ='chrf_0_0_mumfordian';
-                betas                    = self.path_beta(1,0,'w_');
+                betas                    = self.path_beta(1,0,'w_');%(run, model)
                 sk_counter               = 0;
                 for sk = self.smoothing_factor
                     sk_counter          = sk_counter  +1;
@@ -1010,6 +1010,56 @@ classdef Subject < Project
 %                                 if any(isnan(RRR(:)));
 %                                     keyboard
 %                                 end
+                                epi(sk_counter).roi(roi_counter,threshold_counter).rsa(:,:,nmbi) = RRR;
+                            end
+                        end
+                    end
+                    save(filename,'epi');
+                end
+            else
+                load(filename);
+            end
+        end
+        function epi        = analysis_rsa(self)
+            
+            force    = 0;
+            filename = sprintf('%sanalysis_rsa.mat',self.path_midlevel(1));
+            if exist(filename) == 0 | force
+                %get the beta, these are mumford analysis in native space                
+                betas                    = self.path_beta(1,2,'w_',1:8);%(run, model)
+                sk_counter               = 0;
+                for sk = self.smoothing_factor(2:2:end)
+                    sk_counter          = sk_counter  +1;
+                    epi(sk_counter).sk  = sk;
+                    %load and smooth the data.
+                    vol                 = spm_vol(betas);
+                    vol                 = spm_smoothto16bit(vol,sk);%smooth on the fly, slow but disk efficient.
+                    roi_counter         = 0;
+                    for nroi = [64 103 120 101 102 126 165 182 163 164]%more or less where the univariate peaks
+                        roi_counter                                                          = roi_counter + 1;
+                        %load the current roi and detect voxels in steps of 10th percentile
+                        d                                                                    = spm_read_vols(spm_vol(self.path_atlas(nroi)));
+                        i                                                                    = d>0;
+                        borders                                                              = prctile((d(i(:))),linspace(10,100,4));
+                        threshold_counter                                                    = 0;
+                        for threshold = borders(1:end-1);
+                            threshold_counter                                                = threshold_counter +1;
+                            fprintf('Subject: %02d, Smooth: %02d, Roi: %03d, Threshold: %03d\n',self.id,sk,nroi,threshold);
+                            epi(sk_counter).roi(roi_counter,threshold_counter).name          = self.get_atlasROIname(nroi);
+                            epi(sk_counter).roi(roi_counter,threshold_counter).threshold     = threshold;
+                            %get the coordinates for ROI and THRESHOLD
+                            self.atlas2mask_threshold                                        = threshold;
+                            XYZmm                                                            = self.get_XYZmmNormalized(nroi);
+                            XYZvox                                                           = self.get_mm2vox(XYZmm,vol(1));%in EPI voxel space.
+                            %get the BOLD at these coordinates.
+                            D                                                                = spm_get_data(vol,XYZvox);                                                                                    
+                            D   = D';
+                            for nmbi = 1:size(D,1)
+                                RRR = corrcoef(D);
+                                imagesc(RRR);drawnow;title(sprintf('Subject: %02d, Smooth: %02d, Roi: %03d, Threshold: %03d\n',self.id,sk,nroi,threshold));
+                                if any(isnan(RRR(:)));
+                                    keyboard
+                                end
                                 epi(sk_counter).roi(roi_counter,threshold_counter).rsa(:,:,nmbi) = RRR;
                             end
                         end
@@ -1841,11 +1891,11 @@ classdef Subject < Project
             L(i,3)          = 200;            
             %from this point on it is the same as
             %self.analysis_CreateModels01
-            model_path      = self.path_model(1,model_num);
+            model_path               = self.path_model(1,model_num);
             [scan,stim_id,stim_mbi]  = self.analysis_StimTime2ScanUnit(L);%will discard all transition stimuli
             %sanity check plot
             figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));hold on;
-            figure(1);;plot(stim_id,stim_mbi,'ro','markersize',10);title(mat2str(self.id));hold off
+            figure(1);plot(stim_id,stim_mbi,'ro','markersize',10);title(mat2str(self.id));hold off
             counter         = 0;
             for current_condition = unique(stim_id(:)')
                 counter                = counter + 1;

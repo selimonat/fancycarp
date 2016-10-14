@@ -55,7 +55,7 @@ classdef Project < handle
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
-        smoothing_factor      = 0:10;%how many mm images should be smoothened when calling the SmoothVolume method        
+        smoothing_factor      = 1:10;%how many mm images should be smoothened when calling the SmoothVolume method        
         path_smr              = sprintf('%s%ssmrReader%s',fileparts(which('Project')),filesep,filesep);%path to .SMR importing files in the fancycarp toolbox.
         gs                    = [5 6 7 8 9 12 14 16 17 18 19 20 21 24 25 27 28 30 32 34 35 37 39 40 41 42 43 44];
         subjects              = [];
@@ -641,7 +641,17 @@ classdef Project < handle
                 %be later extended into a for loop
                 load(sprintf('%s/SPM.mat',spm_dir))
                 SPM = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any
-                SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3)]',SPM.xX.xKXs);
+                tbetas = length(beta_image_index);
+                if model == 7
+                    SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3)]',SPM.xX.xKXs);
+                elseif model == 2
+                    SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[eye(8)]',SPM.xX.xKXs);
+                    kappa       = .5;
+                    SPM.xCon(2) = spm_FcUtil('set','tuning','F','c',[zscore(Tuning.VonMises( linspace(-135,180,8),1,kappa,0,0))]',SPM.xX.xKXs);
+                else
+                    keyboard
+                end
+                
                 save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
                 %xSPM is used to threshold according to a contrast.
                 xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');
