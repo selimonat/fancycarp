@@ -79,7 +79,7 @@ classdef Project < handle
     end    
     properties (Hidden)
         atlas2mask_threshold  = 20;%where ROI masks are computed, this threshold is used.        
-    end
+    end    
 	methods
         function DU         = SanityCheck(self,runs,measure,varargin)
             %DU = SanityCheck(self,runs,measure,varargin)
@@ -313,6 +313,15 @@ classdef Project < handle
             XYZmm       = mask_handle.mat*XYZ;%this is world space.            
             XYZmm       = unique(XYZmm','rows')';%remove repetititons.
         end
+        function XYZvox     = get_mm2vox(self,XYZmm,vh)
+            %brings points in the world space XYZmm to voxel space XYZvox
+            %of the image in VH.
+            XYZvox  = vh.mat\XYZmm;
+            XYZvox  = unique(XYZvox','rows')';%remove repetitions
+            XYZvox  = round(XYZvox);%remove decimals as these are going to be matlab indices.
+        end
+        
+        
         function D          = getgroup_data(self,file,mask_id)
             %will read the data specified in FILE 
             %FILE is the absolute path to a 3/4D .nii file. Important point
@@ -344,7 +353,7 @@ classdef Project < handle
             
             if criteria == 0
                 sub.name = '00_all';
-                sub.list = self.subject_indices;
+                sub.list = self.subject_indices(:);
             
             elseif     criteria == 1
                 %
@@ -382,7 +391,9 @@ classdef Project < handle
                 sub.list= out.subject_id(select);
                 
             end
-            
+            %
+            sub.list = sub.list(:)';
+            %
             %invert the group name necessary.
             if ~inversion
                 sub.name = [sub.name '_minus'];

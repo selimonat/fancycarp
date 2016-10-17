@@ -297,14 +297,7 @@ classdef Subject < Project
             mask_handle          = spm_vol(self.path_native_atlas(1));
             mask_handle.fname    = path2mask;            
             spm_write_vol(mask_handle,V);        
-        end
-        function XYZvox     = get_mm2vox(self,XYZmm,vh)
-            %brings points in the world space XYZmm to voxel space XYZvox
-            %of the image in VH.
-            XYZvox  = vh.mat\XYZmm;
-            XYZvox  = unique(XYZvox','rows')';%remove repetitions
-            XYZvox  = round(XYZvox);%remove decimals as these are going to be matlab indices.
-        end
+        end        
         function D          = get_data(self,file,mask_id)
             %will read the data specified in FILE 
             %FILE is the absolute path to a 3/4D .nii file.            
@@ -1028,7 +1021,7 @@ classdef Subject < Project
                 %get the beta, these are mumford analysis in native space                
                 betas                    = self.path_beta(1,2,'w_',1:8);%(run, model)
                 sk_counter               = 0;
-                for sk = self.smoothing_factor(2:2:end)
+                for sk = self.smoothing_factor
                     sk_counter          = sk_counter  +1;
                     epi(sk_counter).sk  = sk;
                     %load and smooth the data.
@@ -1040,7 +1033,7 @@ classdef Subject < Project
                         %load the current roi and detect voxels in steps of 10th percentile
                         d                                                                    = spm_read_vols(spm_vol(self.path_atlas(nroi)));
                         i                                                                    = d>0;
-                        borders                                                              = prctile((d(i(:))),linspace(10,100,4));
+                        borders                                                              = prctile((d(i(:))),linspace(10,100,11));
                         threshold_counter                                                    = 0;
                         for threshold = borders(1:end-1);
                             threshold_counter                                                = threshold_counter +1;
@@ -1053,15 +1046,15 @@ classdef Subject < Project
                             XYZvox                                                           = self.get_mm2vox(XYZmm,vol(1));%in EPI voxel space.
                             %get the BOLD at these coordinates.
                             D                                                                = spm_get_data(vol,XYZvox);                                                                                    
-                            D   = D';
-                            for nmbi = 1:size(D,1)
-                                RRR = corrcoef(D);
-                                imagesc(RRR);drawnow;title(sprintf('Subject: %02d, Smooth: %02d, Roi: %03d, Threshold: %03d\n',self.id,sk,nroi,threshold));
-                                if any(isnan(RRR(:)));
-                                    keyboard
-                                end
-                                epi(sk_counter).roi(roi_counter,threshold_counter).rsa(:,:,nmbi) = RRR;
+                            D                                                                = D';
+                            
+                            RRR                                                              = corrcoef(D);
+                            imagesc(RRR);drawnow;title(sprintf('Subject: %02d, Smooth: %02d, Roi: %03d, Threshold: %03d\n',self.id,sk,nroi,threshold));
+                            if any(isnan(RRR(:)));
+                                keyboard
                             end
+                            epi(sk_counter).roi(roi_counter,threshold_counter).rsa = RRR;
+                            
                         end
                     end
                     save(filename,'epi');

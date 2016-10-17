@@ -1,0 +1,73 @@
+classdef ROI < Project
+    
+    properties
+        hash
+        base_atlas
+        index
+        name
+        model
+        pattern_evoked %evoked spatial pattern of activity in this roi
+        pattern %spatial pattern of activity for single subjects.
+        similarity
+        sk   = 6;
+        threshold = 50;
+        beta = [];
+        selected_subjects
+    end
+    
+    
+    
+    methods
+        function roi = ROI(roi_index,model,subjects)
+            %collects the data for the roi and construct the ROI object.
+            
+            %create variables
+            roi.index              = roi_index;
+            roi.model              = model;
+            roi.beta               = 1:5;%p.model2validbetas;
+            roi.selected_subjects  = subjects;
+            roi.base_atlas         = roi.path_atlas(roi.index);%path to the atlas
+            roi.name               = roi.get_atlasROIname(roi.index);%the name of the roi
+            %
+            roi.hash               = DataHash([roi.index roi.threshold roi.model roi.beta roi.sk roi.selected_subjects.list(:)']);            
+            filename               = sprintf('%smidlevel/ROI_%s.mat',roi.path_project,roi.hash);
+            if exist(filename) == 0;
+                sc                     =  0;
+                for ns = roi.selected_subjects.list
+                    sc                 = sc + 1;
+                    %
+                    s                  = Subject(ns);
+                    betas              = s.path_beta(1,roi.model,'w_',roi.beta);%(run, model)
+                    vol                = spm_vol(betas);
+                    vol                = spm_smoothto16bit(vol,roi.sk);%smooth on the fly, slow but disk efficient.
+                    
+                    XYZmm              = roi.get_XYZmmNormalized(roi.index);
+                    XYZvox             = roi.get_mm2vox(XYZmm,vol(1));%in EPI voxel space.
+                    %get the BOLD at these coordinates.
+                    roi.pattern(:,:,sc)= spm_get_data(vol,XYZvox)';%[voxel condition];                    
+                end
+                save(filename,'roi');
+            else
+                load(filename)                
+            end
+        end        
+    end
+    methods
+        function out = get.pattern_evoked(self)
+            %this only makes sense if the data is normalized.
+            %so check here if the beta images have a w_ prefix, otherwise
+            %return an empty matrix.
+            out = mean(self.pattern,3);%compute a mean across subjects.
+        end
+        
+        function out     = get.similarity(self)
+            Patterns
+            out.euclidian   = squareform(pdist(Patterns,'euclidean'));
+            out.seuclidian  = squareform(pdist(Patterns,'seuclidean'));
+            out.cov         = cov(Patterns);
+            out.corr        = corr(Patterns);
+            out.mean        = mean(Patterns);
+            out.var         = var(Patterns);
+        end
+    end
+end
