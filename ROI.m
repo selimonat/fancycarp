@@ -9,8 +9,7 @@ classdef ROI < Project
         pattern_evoked %evoked spatial pattern of activity in this roi
         pattern %spatial pattern of activity for single subjects.
         similarity
-        sk   = 6;
-        threshold = 50;
+        sk   = 6;        
         beta = [];
         selected_subjects
     end
@@ -18,18 +17,20 @@ classdef ROI < Project
     
     
     methods
-        function roi = ROI(roi_index,model,subjects)
+        function roi = ROI(roi_index,model,betas,subjects)
             %collects the data for the roi and construct the ROI object.
             
-            %create variables
-            roi.index              = roi_index;
-            roi.model              = model;
-            roi.beta               = 1:5;%p.model2validbetas;
-            roi.selected_subjects  = subjects;
-            roi.base_atlas         = roi.path_atlas(roi.index);%path to the atlas
-            roi.name               = roi.get_atlasROIname(roi.index);%the name of the roi
+            %create variables            
+            roi.index                = roi_index;
+            roi.model                = model;
+            roi.beta                 = betas;%p.model2validbetas;
+            roi.selected_subjects    = subjects;
+            roi.base_atlas           = roi.path_atlas(roi.index);%path to the atlas
+            roi.name                 = roi.get_atlasROIname(roi.index);%the name of the roi
+            roi.atlas2mask_threshold = 50;
             %
-            roi.hash               = DataHash([roi.index roi.threshold roi.model roi.beta roi.sk roi.selected_subjects.list(:)']);            
+            
+            roi.hash               = DataHash([roi.index roi.atlas2mask_threshold roi.model roi.beta roi.sk roi.selected_subjects.list(:)']);            
             filename               = sprintf('%smidlevel/ROI_%s.mat',roi.path_project,roi.hash);
             if exist(filename) == 0;
                 sc                     =  0;
