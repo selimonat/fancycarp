@@ -62,12 +62,16 @@ classdef ROI < Project
         end
         
         function out     = get.similarity(self)
-            Patterns
-            out.euclidian   = squareform(pdist(Patterns,'euclidean'));
-            out.seuclidian  = squareform(pdist(Patterns,'seuclidean'));
+            Patterns        = self.pattern_evoked;
+            out.euclidian   = squareform(pdist(Patterns','euclidean'));
+            out.seuclidian  = squareform(pdist(Patterns','seuclidean'));
+%             out.maha        = squareform(pdist(Patterns','mahalanobis',cov));
+%             out.cosine      = squareform(pdist(Patterns','cosine'));
+            out.rank = squareform(pdist(Patterns','spearman'));
             out.cov         = cov(Patterns);
             out.corr        = corr(Patterns);
             out.mean        = mean(Patterns);
+            out.median      = median(Patterns);
             out.var         = var(Patterns);
         end
     end
