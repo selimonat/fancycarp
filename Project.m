@@ -592,6 +592,7 @@ classdef Project < handle
             end
         end        
         function [xSPM]     = SecondLevel_ANOVA(self,ngroup,run,model,beta_image_index,sk)
+            %%
             % This method runs a second level analysis for a model defined
             % in MODEL using beta images indexed in BETA_IMAGE_INDEX. The
             % same model can be ran at different smoothening levels (SK) as well
@@ -882,8 +883,7 @@ classdef Project < handle
                 legend({'Cosine vs. Null','Gaussian vs. Null'});legend boxoff;
                 set(gca,'color','none')
             end
-        end        
-        
+        end                
     end
     
     methods %plotters
