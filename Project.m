@@ -301,104 +301,6 @@ classdef Project < handle
                 out = sprintf('%s,%d',out,varargin{1});
             end
         end
-        function XYZmm      = get_XYZmmNormalized(self,mask_id)
-            %Will return XYZ coordinates from ROI specified by MASK_INDEX
-            %thresholded by the default value. XYZ values are in world 
-            %space, so they will need to be brought to the voxel space of
-            %the EPIs.            
-            mask_handle = spm_vol(self.path_atlas(mask_id));%read the mask
-            mask_ind    = spm_read_vols(mask_handle) > self.atlas2mask_threshold;%threshold it            
-            [X Y Z]     = ind2sub(mask_handle.dim,find(mask_ind));%get voxel indices
-            XYZ         = [X Y Z ones(sum(mask_ind(:)),1)]';%this is in hr's voxels space.
-            XYZmm       = mask_handle.mat*XYZ;%this is world space.            
-            XYZmm       = unique(XYZmm','rows')';%remove repetititons.
-        end
-        function XYZvox     = get_mm2vox(self,XYZmm,vh)
-            %brings points in the world space XYZmm to voxel space XYZvox
-            %of the image in VH.
-            XYZvox  = vh.mat\XYZmm;
-            XYZvox  = unique(XYZvox','rows')';%remove repetitions
-            XYZvox  = round(XYZvox);%remove decimals as these are going to be matlab indices.
-        end
-        
-        
-        function D          = getgroup_data(self,file,mask_id)
-            %will read the data specified in FILE 
-            %FILE is the absolute path to a 3/4D .nii file. Important point
-            %is that the file should be in the normalized space, as MASK_ID
-            %refers to a normalized atlas.
-            %
-            %MASK_ID is used to select voxels.
-            %                                    
-            vh      = spm_vol(file);
-            if spm_check_orientations(vh)
-                XYZmm   = self.get_XYZmmNormalized(mask_id);
-                XYZvox  = self.get_mm2vox(XYZmm,vh(1));%in EPI voxel space.
-                D       = spm_get_data(vh,XYZvox);
-            else
-                fprintf('The data in\n %s\n doesn''t have same orientations...',file);
-            end            
-        end
-        function sub        = get_selected_subjects(self,criteria,inversion)
-            %will select subjects based on different CRITERIA. Use
-            %INVERSION to invert the selection, i.e. use the unselected
-            %subjects. LIST is the indices of subjects, NAME is the name of
-            %the group, used to write folder names, identifying a given
-            %group of subjects. So dont get confused, when INVERSION is 0,
-            %you get the selected subjects (generaly performing better).
-            
-            if nargin == 2
-                inversion = 1;%will select good subjects            
-            end
-            
-            if criteria == 0
-                sub.name = '00_all';
-                sub.list = self.subject_indices(:);
-            
-            elseif     criteria == 1
-                %
-                sub.name   = '01_rating';
-                %
-                out        = self.getgroup_rating_param;%load the ratings of all subjects
-                select     = (out.rating_LL > -log10(.05))&(out.rating_mu > -90)&(out.rating_mu < 90);%select based on tuning
-                select     = select == inversion;
-                sub.list   = out.subject_id(select);%subject indices.
-                %               
-            elseif criteria == 2
-                %
-                sub.name = '02_detection'; 
-                out      = self.getgroup_detected_face;
-                select   = abs(out.detection_face) <= 45;
-                select   = select==inversion;
-                sub.list = out.subject_id(select);
-                
-            elseif criteria == 3
-                
-                %same as rating tuning, but with saliency data.
-                sub.name = '03_saliency';
-                out      = self.getgroup_facecircle;                
-                select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -90)&(out.facecircle_mu < 90);%select based on tuning                
-                select   = select==inversion;
-                sub.list = out.subject_id(select);
-                
-            elseif criteria == 4
-                
-                sub.name    = '04_perception';                
-                out     = self.getgroup_pmf_param;%all threshoild values
-                m       = nanmedian(out.pmf_pooled_alpha);
-                select  = out.pmf_pooled_alpha <= m;%subjects with sharp pmf
-                select  = select==inversion;
-                sub.list= out.subject_id(select);
-                
-            end
-            %
-            sub.list = sub.list(:)';
-            %
-            %invert the group name necessary.
-            if ~inversion
-                sub.name = [sub.name '_minus'];
-            end
-        end
 % % %         function out        = path_spmmat_SecondLevel_ANOVA(self,run,model,sk)
 % % %             %returns the path to second level analysis for a given
 % % %             %smoothening kernel.
@@ -463,8 +365,7 @@ classdef Project < handle
                 face   = [face ;[s.id s.detected_face]];                
             end
             out = array2table(face,'variablenames',{'subject_id' 'detection_face'});
-        end
-        
+        end        
         function out        = path_beta_group(self,nrun,model_num,prefix,varargin)
             %returns the path for beta images for the second level
             %analysis. it simply loads single subjects' beta images and
@@ -553,10 +454,106 @@ classdef Project < handle
             %if at the end of the loop we are still poor, we say it
             if isempty(roi.prob)
                 roi.name{1} = 'NotFound';
-                roi.prob(1) = NaN;
+                roi.prob{1} = NaN;
             end
             
             fprintf('\n\n');
+        end
+        function XYZmm      = get_XYZmmNormalized(self,mask_id)
+            %Will return XYZ coordinates from ROI specified by MASK_INDEX
+            %thresholded by the default value. XYZ values are in world 
+            %space, so they will need to be brought to the voxel space of
+            %the EPIs.            
+            mask_handle = spm_vol(self.path_atlas(mask_id));%read the mask
+            mask_ind    = spm_read_vols(mask_handle) > self.atlas2mask_threshold;%threshold it            
+            [X Y Z]     = ind2sub(mask_handle.dim,find(mask_ind));%get voxel indices
+            XYZ         = [X Y Z ones(sum(mask_ind(:)),1)]';%this is in hr's voxels space.
+            XYZmm       = mask_handle.mat*XYZ;%this is world space.            
+            XYZmm       = unique(XYZmm','rows')';%remove repetititons.
+        end
+        function XYZvox     = get_mm2vox(self,XYZmm,vh)
+            %brings points in the world space XYZmm to voxel space XYZvox
+            %of the image in VH.
+            XYZvox  = vh.mat\XYZmm;
+            XYZvox  = unique(XYZvox','rows')';%remove repetitions
+            XYZvox  = round(XYZvox);%remove decimals as these are going to be matlab indices.
+        end               
+        function D          = getgroup_data(self,file,mask_id)
+            %will read the data specified in FILE 
+            %FILE is the absolute path to a 3/4D .nii file. Important point
+            %is that the file should be in the normalized space, as MASK_ID
+            %refers to a normalized atlas.
+            %
+            %MASK_ID is used to select voxels.
+            %                                    
+            vh      = spm_vol(file);
+            if spm_check_orientations(vh)
+                XYZmm   = self.get_XYZmmNormalized(mask_id);
+                XYZvox  = self.get_mm2vox(XYZmm,vh(1));%in EPI voxel space.
+                D       = spm_get_data(vh,XYZvox);
+            else
+                fprintf('The data in\n %s\n doesn''t have same orientations...',file);
+            end            
+        end
+        function sub        = get_selected_subjects(self,criteria,inversion)
+            %will select subjects based on different CRITERIA. Use
+            %INVERSION to invert the selection, i.e. use the unselected
+            %subjects. LIST is the indices of subjects, NAME is the name of
+            %the group, used to write folder names, identifying a given
+            %group of subjects. So dont get confused, when INVERSION is 0,
+            %you get the selected subjects (generaly performing better).
+            
+            if nargin == 2
+                inversion = 1;%will select good subjects            
+            end
+            
+            if criteria == 0
+                sub.name = '00_all';
+                sub.list = self.subject_indices(:);
+            
+            elseif     criteria == 1
+                %
+                sub.name   = '01_rating';
+                %
+                out        = self.getgroup_rating_param;%load the ratings of all subjects
+                select     = (out.rating_LL > -log10(.05))&(out.rating_mu > -90)&(out.rating_mu < 90);%select based on tuning
+                select     = select == inversion;
+                sub.list   = out.subject_id(select);%subject indices.
+                %               
+            elseif criteria == 2
+                %
+                sub.name = '02_detection'; 
+                out      = self.getgroup_detected_face;
+                select   = abs(out.detection_face) <= 45;
+                select   = select==inversion;
+                sub.list = out.subject_id(select);
+                
+            elseif criteria == 3
+                
+                %same as rating tuning, but with saliency data.
+                sub.name = '03_saliency';
+                out      = self.getgroup_facecircle;                
+                select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -90)&(out.facecircle_mu < 90);%select based on tuning                
+                select   = select==inversion;
+                sub.list = out.subject_id(select);
+                
+            elseif criteria == 4
+                
+                sub.name    = '04_perception';                
+                out     = self.getgroup_pmf_param;%all threshoild values
+                m       = nanmedian(out.pmf_pooled_alpha);
+                select  = out.pmf_pooled_alpha <= m;%subjects with sharp pmf
+                select  = select==inversion;
+                sub.list= out.subject_id(select);
+                
+            end
+            %
+            sub.list = sub.list(:)';
+            %
+            %invert the group name necessary.
+            if ~inversion
+                sub.name = [sub.name '_minus'];
+            end
         end
     end
     methods %methods that does something on all subjects one by one
@@ -654,7 +651,7 @@ classdef Project < handle
                 load(sprintf('%s/SPM.mat',spm_dir))
                 SPM = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any
                 tbetas = length(beta_image_index);
-                if model == 7
+                if model == 7 | model == 3
                     SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3)]',SPM.xX.xKXs);
                 elseif model == 2
                     SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[eye(8)]',SPM.xX.xKXs);
@@ -666,7 +663,8 @@ classdef Project < handle
                 
                 save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
                 %xSPM is used to threshold according to a contrast.
-                xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');
+%                 xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');
+                xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.05,'k',0,'thresDesc','FWE');
                 %replace 'none' to make FWE corrections.
                 [SPM xSPM] = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
                 save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
