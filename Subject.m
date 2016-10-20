@@ -637,24 +637,28 @@ classdef Subject < Project
                 load(filename);
             end
         end                
-        function out        = get_bold_spacetime(self,sk)
-            %returns the bold responses in time x condition format
+        function out        = get_bold_spacetime(self,nroi,sk)
+            %out        = get_bold_spacetime(self,nroi,sk)
+            %
+            %returns the BOLD response in time x condition format with
+            %smoothing kernel of SK at roi NROI.
+            %
+            %
                        
             run      = 1;
-            out = [];
-            filename = sprintf('%sget_bold_spacetime_%02d.mat',self.path_midlevel(run),sk);
-            if exist(filename) == 0
-                fprintf('Collecting bold timexcondition maps: SK:%02d\n',sk);
+            out      = [];
+            filename = sprintf('%sget_bold_spacetime_roi_%03d_sk_%02d.mat',self.path_midlevel(run),nroi,sk);
+            if exist(filename) == 0                
+                fprintf('Collecting bold timexcondition maps: SK:%02d, ROI:%03d, ROIthreshold:%03d\n',sk,nroi,self.atlas2mask_threshold);
                 self.default_model_name = 'chrf_0_0_mumfordian';
                 beta_files              = self.path_beta(run,0,'w_');
                 vol                     = spm_vol(beta_files);
                 vol                     = spm_smoothto16bit(vol,sk);
-                for nroi = 1:length(self.roi)
-                    XYZ                    = vol(1).mat\[self.roi(nroi).xyz 1]';
-                    data                   = spm_get_data(vol,XYZ);
-                    data                   = reshape(data,[65,11 length(vol)/65/11]);
-                    out(:,:,1,nroi)          = data(self.mbi_valid,1:8,:);
-                end
+                XYZ_mm                  = self.get_XYZmmNormalized(nroi);
+                XYZ_vx                  = self.get_mm2vox(XYZ_mm,vol(1));                                
+                data                    = spm_get_data(vol,XYZ_vx);%[volume x voxels]
+                data                    = reshape(data,[65,11 size(data,2)]);%distribute to condition and mbi
+                out(:,:,:)              = data(self.mbi_valid,1:8,:);%discard bad mbi                
                 fprintf('Saving...\n');
                 save(filename,'out');
             else
@@ -834,7 +838,7 @@ classdef Subject < Project
             movefile(target_file,self.path_native_atlas);
         end
     end
-    methods %(analysis)                        
+    methods %(fmri analysis)                        
         function beta       = analysis_firstlevel(self,nrun,model_num,mask_id)
             %will compute beta weights "manually" without calling SPM, and
             %will make a sanity check comparing both betas values.
@@ -1524,7 +1528,7 @@ classdef Subject < Project
             %clockwise.
         end
     end
-    methods %(fmri analysis)
+    methods %(spm_fmri analysis)
         function [stim_scanunit,stim_ids,stim_mbi] = analysis_StimTime2ScanUnit(self,L)
             %will return stim onsets in units of scan. Will check the Log
             %for stim onsets, it will discard those trials occuring outside

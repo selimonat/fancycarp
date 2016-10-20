@@ -78,7 +78,7 @@ classdef Project < handle
         path_stim             = sprintf('%sstim/data.png',Project.path_project); %path to the TPM images, needed by segment.         
     end    
     properties (Hidden)
-        atlas2mask_threshold  = 20;%where ROI masks are computed, this threshold is used.        
+        atlas2mask_threshold  = 15;%where ROI masks are computed, this threshold is used.        
     end    
 	methods
         function DU         = SanityCheck(self,runs,measure,varargin)
@@ -496,13 +496,15 @@ classdef Project < handle
             end            
         end
         function sub        = get_selected_subjects(self,criteria,inversion)
+            %sub        = get_selected_subjects(self,criteria,inversion)
+            %
             %will select subjects based on different CRITERIA. Use
             %INVERSION to invert the selection, i.e. use the unselected
             %subjects. LIST is the indices of subjects, NAME is the name of
             %the group, used to write folder names, identifying a given
             %group of subjects. So dont get confused, when INVERSION is 0,
             %you get the selected subjects (generaly performing better).
-            
+            cprintf([0 1 0],'Selecting subjects, must loop over once...\n');
             if nargin == 2
                 inversion = 1;%will select good subjects            
             end
@@ -1288,20 +1290,21 @@ classdef Project < handle
     methods (Static)
         function plot_bar(Y)
             % Fear tuning are stored in columns.
-            %%            
+           cmap = GetFearGenColors;
             tcol = size(Y,2);
+            tbar = size(Y,1);
             X    = linspace(-135,180,8)';
             X    = repmat(X,1,tcol) + repmat([0:360:360*(tcol-1)],8,1);
-            h    = bar(X(:),Y(:),.9);
-            cmap = GetFearGenColors;
-            cmap = cmap(1:8,:);
-            SetFearGenBarColors(h,repmat(cmap,tcol,1)');
-            %
-            hold on;
-            set(gca,'xtick',X(:),'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
+            for i = 1:tbar
+                h(i)    = bar(i,Y(i),.9,'facecolor',cmap(i,:),'edgecolor','none','facealpha',.8);
+                hold on;
+            end
+            hold off
+            %%                                    
+            set(gca,'xtick',1:8,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
             box off;
             set(gca,'color','none');
-            xlim([-155.2500  200.2500+360*(tcol-1)]);            
+            xlim([0 tbar+1])
             drawnow;            
             axis tight;box off;axis square;drawnow;alpha(.5);
             if tcol > 1
@@ -1309,7 +1312,7 @@ classdef Project < handle
                 for ncol = 1:tcol
                     plot(repmat(mx(ncol)+45/2,1,2),ylim,'k-.')
                 end
-            end
+            end                      
         end
         function Yc = circconv2(Y,varargin)
             %circularly smoothes data using a 2x2 boxcar kernel;
