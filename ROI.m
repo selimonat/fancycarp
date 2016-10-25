@@ -1,5 +1,6 @@
 classdef ROI < Project
-    
+    %ROI object. Can collect betas values for different atlas based or
+    %voxel based specified areas.
     properties
         hash        
         index
@@ -7,7 +8,7 @@ classdef ROI < Project
         model
         evoked_pattern%evoked spatial pattern of activity in this roi
         pattern %spatial pattern of activity for single subjects.        
-        sk   = 10;        
+        sk   = [];
         beta = [];
         selected_subjects
         evoked_similarity
@@ -18,7 +19,7 @@ classdef ROI < Project
     
     
     methods
-        function roi = ROI(voxel_selection,ROI_OR_Voxels,default_model,model_number,betas,subjects)
+        function roi = ROI(voxel_selection,ROI_OR_Voxels,default_model,model_number,betas,subjects,sk)
             %roi = ROI(voxel_selection,ROI_OR_Voxels,default_model,model_number,betas,subjects)            
             %
             %input_type: roi_based or voxel_based as a string.
@@ -33,10 +34,11 @@ classdef ROI < Project
             tic;
             %store some variables
             roi.model                = model_number;
+            roi.sk                   = sk;
             roi.beta                 = betas;%p.model2validbetas;
-            roi.selected_subjects    = subjects(:)';
+            roi.selected_subjects    = subjects(:)';            
             %get a cache name            
-            roi.hash                 = DataHash([uint8(voxel_selection),ROI_OR_Voxels(:)',uint8(default_model),roi.atlas2mask_threshold roi.model roi.beta(:)' roi.sk roi.selected_subjects(:)']);            
+            roi.hash                 = DataHash([uint8(voxel_selection),ROI_OR_Voxels(:)',uint8(default_model),roi.atlas2mask_threshold roi.model roi.beta(:)' roi.sk roi.selected_subjects(:)'])
             filename                 = sprintf('%smidlevel/run001/ROI/ROI_%s.mat',roi.path_project,roi.hash);
             cprintf([0 1 0],'File name:\n%s\n',filename);
             if exist(filename) == 0;                
