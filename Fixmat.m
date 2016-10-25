@@ -25,19 +25,16 @@ classdef Fixmat < Project
         %internal
         query
         all_queries
-        map_titles
-        selection
+        map_titles        
         realcond%all conditions that are not ucs,odd,or nulltrial
     end
     
-    properties (SetAccess = private,Dependent,Hidden)
-        %rect: [y x y_size x_size]
-        rect       %the aperture
+    properties (SetAccess = private,Dependent,Hidden)        
         binedges   %bin edges for binned fixation maps        
         stimulus   %contains average stimulus              
     end
     
-    properties (SetAccess = private)
+    properties %(SetAccess = private)
         %experimental observations
         subject = [];
         phase   = [];
@@ -54,6 +51,9 @@ classdef Fixmat < Project
         fix     = [];
         chain   = [];
         isref   = [];
+        %rect: [y x y_size x_size]
+        rect       %the aperture
+        selection
     end
     
     events
@@ -438,7 +438,7 @@ classdef Fixmat < Project
                 title(t,'interpreter','none');
                 end
             end
-            thincolorbar('vert');            
+%            thincolorbar('vert');            
         end
         function getmaps(obj,varargin)
             %will populate the maps property based on the filter in
