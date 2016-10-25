@@ -435,6 +435,35 @@ classdef Subject < Project
             out.x     = conddummy(cond);
             out.ind   = cutnum;
         end        
+        function f        = get_facecircle_fixmat(self)
+            %out        = get_facemaps(self)
+            %
+            %   generates a fixmat objects after aligning the fixation
+            %   points during the facecircle task.            
+            partition = 1;
+            out       = self.get_facecircle(partition);            
+            x         = out.raw(1,:);%x
+            y         = out.raw(2,:);%y
+            wedge     = out.raw(6,:);%in line with ptb rects 
+            rects     = self.paradigm{1}.stim.circle_rect;
+            for w = unique(wedge);
+                i    = (wedge == w);                
+                x(i) = x(i) - rects(w,1) + rects(2,1);
+                y(i) = y(i) - rects(w,2);
+            end
+            %% start a new fixmat here
+            f          = Fixmat([],[]);
+            f.kernel_fwhm = 5;
+            t          = length(x);
+            f.x        = round(x);
+            f.y        = round(y);
+            f.rect     = [0 0 500 500];
+            f.subject  = repmat(self.id,1,t);
+            f.phase    = repmat(3,1,t);
+            f.deltacsp = out.raw(8,:);
+            f.selection = ~(f.x < f.rect(2) | f.x > (f.rect(2)+f.rect(4)-1) | f.y < f.rect(1) | f.y > (f.rect(1)+f.rect(3)-1) );                        
+            
+        end
         function out        = get_facecircle(self,partition)
             %
             % fixation data are partitioned into PARTITION many partitions,
@@ -470,9 +499,8 @@ classdef Subject < Project
             
             out                               = [];
             filename                          = sprintf('%sfacecircle_%02d.mat',self.path_midlevel(3),partition);%facecircle is recorded in run 3.
-            force = 0;
-            
-            if exist(filename) == 0 | force;
+            force = 0;            
+            if exist(filename) == 0 || force;
                 
                 % get the masks to count the fixations as a f(cs+ distance)
                 res                               = self.screen_resolution;%resolution of the screen needed to get the center
@@ -493,10 +521,10 @@ classdef Subject < Project
                 wedge_index                       = mod(ceil(shift_angle./45)+3-1,8)+1;%moves together the same as PTB drawing
                 face_angle                        = self.paradigm{1}.stim.circle_order(wedge_index)';%drawn condition in the wedge
                 face_index                        = face_angle./45+4;
-                out.raw                           = [res(2)+x;res(1)+y;double(W);theta;rho;wedge_index;wedge_angle(wedge_index);face_angle;face_index;rank;start];
+                out.raw                           = [x+center(2);-y+res(1)-center(1);double(W);theta;rho;wedge_index;wedge_angle(wedge_index);face_angle;face_index;rank;start];
                 %remove fixations wrt the annulus (spatial cleaning)
                 valid                             = (out.raw(5,:) > 190)&(out.raw(5,:) < 380);%take only those fixations which are on an annulus containing face stimuli.
-                out.raw(:,~valid)                 = [];%remove also fixations from the fixmat
+                out.raw(:,~valid)                 = [];%remove again
                 %sort fixation based on their drawing order
                 [~,i]                             = sort(out.raw(6,:));%sort according to wedge_index i.e. drawing order.
                 out.raw                           = out.raw(:,i);
@@ -525,7 +553,7 @@ classdef Subject < Project
                     out.x(P,:)        = [-135:45:180];
                     out.ids(P,:)      = repmat(P,1,8);
                 end
-                cprintf([1 0 0],'facecircle for partition %03d is cached...\n',partition);
+                cprintf([1 0 0],'facecircle for partition %03d is now cached...\n',partition);
                 save(filename,'out');
             else
                 fprintf('facecircle for partition %03d loading from cache...\n',partition);
@@ -549,7 +577,7 @@ classdef Subject < Project
             %will load the raw pmf data.
             
             %first a double check for hiwi-fakups
-            if self.csp == (self.paradigm{2}.stim.cs_plus)./45+1                
+            if 1 || self.csp == (self.paradigm{2}.stim.cs_plus)./45+1               
                 out               = self.paradigm{2}.psi;
                 %create a third chain by pooling responses of thefirst 2
                 %chains
@@ -1486,9 +1514,9 @@ classdef Subject < Project
             %if the fit is better than flat line, paint accordingly.
             for P = 1:partition
                 if  (self.fit_facecircle(partition,fun).LL(P) < -log10(.05))%plot simply a blue line if the fit is not significant.
-                    PlotTransparentLine(self.fit_facecircle(partition,fun).x(P,:)+360*(P-1),repmat(mean(out.countw(P,:)),100,1),.35,'b','linewidth',2.5);
+                    PlotTransparentLine(linspace(1,8,100)+9*(P-1),repmat(mean(out.countw(P,:)),100,1),.35,'b','linewidth',2.5);
                 else
-                    PlotTransparentLine(self.fit_facecircle(partition,fun).x(P,:)+360*(P-1),self.fit_facecircle(partition,fun).y(P,:)',.35,'k','linewidth',2.5);%this is the fit.
+                    PlotTransparentLine(linspace(1,8,100)+9*(P-1),self.fit_facecircle(partition,fun).y(P,:)',.35,'k','linewidth',2.5);%this is the fit.
                 end
             end
             hold off;
@@ -2439,7 +2467,7 @@ classdef Subject < Project
                 if fun == 8%if vM, then transform kappa to FWHM.
                     fprintf('Kappa to FWHM transformation + absolute(peakshift).\n');
                     out.params(:,2)            = vM2FWHM(out.params(:,2));
-                    out.params(:,3)            = abs(out.params(:,3));
+                    %out.params(:,3)            = abs(out.params(:,3));
                 end
                 save(write_path,'out')
             end
@@ -2476,7 +2504,7 @@ classdef Subject < Project
                 if fun == 8%if vM, then transform kappa to FWHM.
                     fprintf('Kappa to FWHM transformation + absolute(peakshift).\n');
                     out.params(:,2)            = vM2FWHM(out.params(:,2));
-                    out.params(:,3)            = abs(out.params(:,3));
+                    %out.params(:,3)            = abs(out.params(:,3));
                 end
                 save(write_path,'out');
             end
