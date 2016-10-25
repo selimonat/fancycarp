@@ -557,6 +557,38 @@ classdef Project < handle
                 sub.name = [sub.name '_minus'];
             end
         end
+        function [c sub ]   = get_covariate(self,covariate_id)
+            %covariates = get_covariate(self,covariate_id,varargin);
+            %
+            %will create a covariate matrix in the midlevel folder where a
+            %value for every subject is saved. USE VARARGIN to select few
+            %subjects. This can be conceived as a mapping from behavioral
+            %readouts to another format.
+            
+            if covariate_id == 1;
+                %loadings on behavior
+                out       = self.getgroup_all_param;%get all group parameters                
+                %assemble the important behavioral readouts.
+                d         = [out.pmf_pooled_alpha abs(out.detection_face) (out.rating_amp./out.rating_fwhm) (out.facecircle_fwhm./out.rating_fwhm)];
+                d         = nanzscore(d);
+                [e v]     = eig(nancov(d));
+                loadings  = d*e(:,end:-1:end-1);
+                for n = 1:size(loadings,2)
+                    c(:,n)   = (loadings(:,n));                    
+                    sub      = out.subject_id;
+                end              
+            elseif covariate_id == 2;                
+                all  = self.get_selected_subjects(0);%get all group parameters                
+                good = self.get_selected_subjects(3);%get all group parameters                
+                vec       = ismember(all.list,good.list);
+                %assemble the important behavioral readouts.                
+                c        = vec;    
+                c = c(:);
+                sub      = all.list(:);
+            else
+                c = []
+            end
+        end                
     end
     methods %methods that does something on all subjects one by one
         function              VolumeGroupAverage(self,selector)
@@ -590,25 +622,33 @@ classdef Project < handle
                 spm_jobman('run', matlabbatch);
             end
         end        
-        function [xSPM]     = SecondLevel_ANOVA(self,ngroup,run,model,beta_image_index,sk)
+        function [xSPM]     = SecondLevel_ANOVA(self,ngroup,run,model,beta_image_index,sk,covariate_id)
             %%
+            %[xSPM]     = SecondLevel_ANOVA(self,ngroup,run,model,beta_image_index,sk,covariate_id)
+            %
+            %
             % This method runs a second level analysis for a model defined
             % in MODEL using beta images indexed in BETA_IMAGE_INDEX. The
             % same model can be ran at different smoothening levels (SK) as well
             % as for different subject groups (NGROUP, see
             % self.get_selected_subjects).
             %
+            % Covariate_id = 0 means no covariate
+            %
             % Results are saved at the project root. xSPM structure is also
             % saved in the analysis SPM dir. If this file is present, it is
             % directly loaded, so the second level analysis is not reran.
             %
+            % Example:
+            % for sk=0:10;for ngroup = 0:4;s.SecondLevel_ANOVA(ngroup,1,3,1:4,sk,0);end;end
             %
-            
+            % Monkey business: if you add covariates change the folder name
+            % aswell.            
             
             
             subjects   = self.get_selected_subjects(ngroup);                        
             spm_dir    = regexprep(self.dir_spmmat(run,model),'sub...','second_level');%convert to second-level path, replace the sub... to second-level.
-            spm_dir    = sprintf('%s%02dmm/group_%s/',spm_dir,sk,subjects.name);
+            spm_dir    = sprintf('%scov_id_%02d/%02dmm/group_%s/',spm_dir,covariate_id,sk,subjects.name);
             xspm_path  = sprintf('%sxSPM.mat',spm_dir);
             if exist(xspm_path) == 0;
                                 
@@ -626,7 +666,7 @@ classdef Project < handle
                     c                                                                  = c +1;
                     files                                                              = squeeze(beta_files(:,ind,:))';
                     matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files);
-                end
+                end                                
                 %depending on subject group and smoothening, generate
                 %a directory name for this spm analysis.
                 matlabbatch{1}.spm.stats.factorial_design.dir                    = cellstr(spm_dir);
@@ -636,6 +676,29 @@ classdef Project < handle
                 matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova       = 0;
                 matlabbatch{1}.spm.stats.factorial_design.cov                    = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
                 matlabbatch{1}.spm.stats.factorial_design.multi_cov              = struct('files', {}, 'iCFI', {}, 'iCC', {});
+                %overwrite with the covariates if entered
+                if covariate_id ~= 0
+                    [c sub]                                                      = self.get_covariate(covariate_id);%this is for all subjects, however NGROUP might be non-zero, so we have to select the same subjects here too                    
+                    valid                                                        = ismember(sub,subjects.list);
+                    valid                                                        = ~isnan(sum(c,2)).*valid;
+                    valid                                                        = logical(valid);
+                    %register beta images and covariate values.                    
+                    tcell = length(matlabbatch{1}.spm.stats.factorial_design.des.anova.icell);
+                    ccc =0;
+                    for ncov = 1:size(c,2)
+                        mat = kron(eye(4),c(valid,ncov));
+                        for ncell = 1:tcell
+                            ccc = ccc +1;
+                            matlabbatch{1}.spm.stats.factorial_design.cov(ccc)           = ...
+                                struct('c', mat(:,ncell), 'cname', sprintf('%cov:02d-cell:%02d',ncov,ncell), 'iCFI', 1, 'iCC', 1);
+                        end
+                    end                    
+                    %clean
+                    for ncell = 1:tcell
+                        matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(ncell).scans(~valid) = [];
+                    end
+                    
+                end                
                 matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none     = 1;
                 matlabbatch{1}.spm.stats.factorial_design.masking.im             = 1;
                 matlabbatch{1}.spm.stats.factorial_design.masking.em             = {''};
@@ -645,32 +708,34 @@ classdef Project < handle
                 %
                 matlabbatch{2}.spm.stats.fmri_est.spmmat                         = {[spm_dir '/SPM.mat']};
                 matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
-                %
+                %                                
                 spm_jobman('run', matlabbatch);
-                %UPDATE THE SPM.mat with the contrast
-                %create the contrast that we are interested in, this could
-                %be later extended into a for loop
-                load(sprintf('%s/SPM.mat',spm_dir))
-                SPM = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any
-                tbetas = length(beta_image_index);
-                if model == 7 | model == 3
-                    SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3)]',SPM.xX.xKXs);
-                elseif model == 2
-                    SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[eye(8)]',SPM.xX.xKXs);
-                    kappa       = .5;
-                    SPM.xCon(2) = spm_FcUtil('set','tuning','F','c',[zscore(Tuning.VonMises( linspace(-135,180,8),1,kappa,0,0))]',SPM.xX.xKXs);
-                else
-                    keyboard
+                if covariate_id == 0
+                    %UPDATE THE SPM.mat with the contrast
+                    %create the contrast that we are interested in, this could
+                    %be later extended into a for loop
+                    load(sprintf('%s/SPM.mat',spm_dir))
+                    SPM = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any
+                    tbetas = length(beta_image_index);
+                    if model == 7 | model == 3
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3)]',SPM.xX.xKXs);
+                    elseif model == 2
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[eye(8)]',SPM.xX.xKXs);
+                        kappa       = .5;
+                        SPM.xCon(2) = spm_FcUtil('set','tuning','F','c',[zscore(Tuning.VonMises( linspace(-135,180,8),1,kappa,0,0))]',SPM.xX.xKXs);
+                    else
+                        keyboard
+                    end
+                    
+                    save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
+                    %xSPM is used to threshold according to a contrast.
+                    %                 xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');
+                    xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.05,'k',0,'thresDesc','FWE');
+                    %replace 'none' to make FWE corrections.
+                    [SPM xSPM] = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
+                    save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
+                    save(xspm_path,'xSPM');
                 end
-                
-                save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
-                %xSPM is used to threshold according to a contrast.
-%                 xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');
-                xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.05,'k',0,'thresDesc','FWE');
-                %replace 'none' to make FWE corrections.
-                [SPM xSPM] = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
-                save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
-                save(xspm_path,'xSPM');
             else
                 load(xspm_path);                
 %                 t                                 = spm_list('table',xSPM{2}.rating);
