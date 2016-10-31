@@ -74,8 +74,8 @@ classdef Project < handle
 		current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
         PixelPerDegree        = 29;
-        screen_resolution     = [768 1024];
-        path_stim             = sprintf('%sstim/data.png',Project.path_project); %path to the TPM images, needed by segment.         
+        screen_resolution     = [212 212];%this is the size of the face on the facecircle
+        path_stim             = sprintf('%sstim/ave.png',Project.path_project);
     end    
     properties (Hidden)
         atlas2mask_threshold  = 15;%where ROI masks are computed, this threshold is used.        
@@ -366,6 +366,22 @@ classdef Project < handle
             end
             out = array2table(face,'variablenames',{'subject_id' 'detection_face'});
         end        
+        function fixmat     = getgroup_facecircle_fixmat(self,subjects)
+            %will collect all the fixmats for all subjects from the
+            %SUBJECTS.
+            
+            for ns = subjects(:)';
+                s = Subject(ns);
+                if ns == subjects(1)
+                    fixmat = s.get_facecircle_fixmat;                    
+                else                
+                    dummy  = s.get_facecircle_fixmat;                                                                                                  
+                    for nf = fieldnames(dummy)'         
+                        fixmat.(nf{1}) = [fixmat.(nf{1}) dummy.(nf{1})];
+                    end
+                end
+            end
+        end
         function out        = path_beta_group(self,nrun,model_num,prefix,varargin)
             %returns the path for beta images for the second level
             %analysis. it simply loads single subjects' beta images and
@@ -589,6 +605,7 @@ classdef Project < handle
                 c = []
             end
         end                
+        
     end
     methods %methods that does something on all subjects one by one
         function              VolumeGroupAverage(self,selector)
@@ -948,7 +965,7 @@ classdef Project < handle
                 legend({'Cosine vs. Null','Gaussian vs. Null'});legend boxoff;
                 set(gca,'color','none')
             end
-        end                
+        end                        
     end
     
     methods %plotters

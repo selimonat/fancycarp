@@ -435,10 +435,10 @@ classdef Subject < Project
             out.x     = conddummy(cond);
             out.ind   = cutnum;
         end        
-        function f        = get_facecircle_fixmat(self)
+        function f          = get_facecircle_fixmat(self)
             %out        = get_facemaps(self)
             %
-            %   generates a fixmat objects after aligning the fixation
+            %   generates a fixmat object after aligning the fixation
             %   points during the facecircle task.            
             partition = 1;
             out       = self.get_facecircle(partition);            
@@ -447,21 +447,22 @@ classdef Subject < Project
             wedge     = out.raw(6,:);%in line with ptb rects 
             rects     = self.paradigm{1}.stim.circle_rect;
             for w = unique(wedge);
-                i    = (wedge == w);                
-                x(i) = x(i) - rects(w,1) + rects(2,1);
+                i    = (wedge == w);%here we subtract from each fixation the [0 0] coordinate the stimuli it was directed at...
+                x(i) = x(i) - rects(w,1);% + rects(2,1);
                 y(i) = y(i) - rects(w,2);
             end
             %% start a new fixmat here
-            f          = Fixmat([],[]);
+            f             = Fixmat([],[]);
             f.kernel_fwhm = 5;
-            t          = length(x);
-            f.x        = round(x);
-            f.y        = round(y);
-            f.rect     = [0 0 500 500];
-            f.subject  = repmat(self.id,1,t);
-            f.phase    = repmat(3,1,t);
-            f.deltacsp = out.raw(8,:);
-            f.selection = ~(f.x < f.rect(2) | f.x > (f.rect(2)+f.rect(4)-1) | f.y < f.rect(1) | f.y > (f.rect(1)+f.rect(3)-1) );                        
+            t             = length(x);
+            f.x           = round(x);
+            f.y           = round(y);
+            f.rect        = [0 0 500 500];
+            f.subject     = repmat(self.id,1,t);
+            f.phase       = repmat(3,1,t);
+            f.deltacsp    = out.raw(8,:);
+            f.selection   = ~(f.x < f.rect(2) | f.x > (f.rect(2)+f.rect(4)-1) | f.y < f.rect(1) | f.y > (f.rect(1)+f.rect(3)-1) );                        
+            f.trialid     = ones(1,length(x));
             
         end
         function out        = get_facecircle(self,partition)

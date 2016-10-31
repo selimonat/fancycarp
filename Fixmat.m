@@ -1,15 +1,15 @@
 classdef Fixmat < Project
     properties (Hidden,Constant)                
-        window       = [768 1024]./2;%half size of the fixation maps        
+        window       = [212 212]./2;%half size of the fixation maps        
     end
     
     properties (Hidden,SetAccess = public)
         %related to map computation
          bc                  = 0;%cocktail blank correction
          unitize             = 1;%sums to 1 or not         
-         maptype             = 'conv';%conv or bin         
+         maptype             = 'bin';%conv or bin         
          kernel_fwhm         = Fixmat.PixelPerDegree*.8;
-         binsize             = 25;
+         binsize             = 12;
          linkage_method      = 'average';
          linkage_metric      = 'correlation';
          similarity_metric   = 'correlation';         
@@ -420,7 +420,7 @@ classdef Fixmat < Project
                 M = log10(M);            
             end
             %
-            ffigure;
+            figure(10001);
             clf                        
             nsp     = obj.subplot_number;
             for nc = 1:size(M,3)
@@ -487,7 +487,9 @@ classdef Fixmat < Project
             try
                 bild    = imread(obj.path_stim);            
 %                 bild    = bild( obj.rect(1):obj.rect(1)+obj.rect(3)-1,  obj.rect(2):obj.rect(2)+obj.rect(4)-1);
-%                 bild    = repmat(bild,[1 1 3]);
+                if size(bild,3) == 1
+                    bild    = repmat(bild,[1 1 3]);
+                end
             catch
                 bild = [];
                 fprintf('No background image found...\n')
@@ -547,6 +549,7 @@ classdef Fixmat < Project
             %computes number of trials included in the current selection
             ttrial = length(unique([obj.trialid(obj.selection) ;obj.subject(obj.selection)]','rows'));
         end
+        
         function out = get.rect(obj)
             out = [obj.screen_resolution(1)/2-obj.window(1) obj.screen_resolution(2)/2-obj.window(2) obj.window*2];            
         end
