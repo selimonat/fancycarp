@@ -74,7 +74,7 @@ classdef Project < handle
 		current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
         PixelPerDegree        = 29;
-        screen_resolution     = [212 212];%this is the size of the face on the facecircle
+        screen_resolution     = [212 212];%[768 1024]%;%this is the size of the face on the facecircle
         path_stim             = sprintf('%sstim/ave.png',Project.path_project);
     end    
     properties (Hidden)

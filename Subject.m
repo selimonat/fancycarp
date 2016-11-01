@@ -452,8 +452,7 @@ classdef Subject < Project
                 y(i) = y(i) - rects(w,2);
             end
             %% start a new fixmat here
-            f             = Fixmat([],[]);
-            f.kernel_fwhm = 5;
+            f             = Fixmat([],[]);            
             t             = length(x);
             f.x           = round(x);
             f.y           = round(y);
@@ -461,9 +460,17 @@ classdef Subject < Project
             f.subject     = repmat(self.id,1,t);
             f.phase       = repmat(3,1,t);
             f.deltacsp    = out.raw(8,:);
+            f.realcond    = f.deltacsp;
             f.selection   = ~(f.x < f.rect(2) | f.x > (f.rect(2)+f.rect(4)-1) | f.y < f.rect(1) | f.y > (f.rect(1)+f.rect(3)-1) );                        
             f.trialid     = ones(1,length(x));
-            
+            f.start       = out.raw(11,:);
+            f.stop        = out.raw(15,:);
+            %% remove fixations outside of the image border
+            f.selection = ~(f.x < f.rect(2) | f.x > (f.rect(2)+f.rect(4)-1) | f.y < f.rect(1) | f.y > (f.rect(1)+f.rect(3)-1) );
+            f.ApplySelection;
+            %% round coordinates to pixels
+            f.x = round(f.x);
+            f.y = round(f.y);
         end
         function out        = get_facecircle(self,partition)
             %
@@ -493,6 +500,7 @@ classdef Subject < Project
             %                            12/angle of fixation maps aligned to CS+.
             %                            13/old amp.
             %                            14/subject index.
+            %                            15/STOP time
             %
             % mind that the .RAW field interacts with PARTITION, if you
             % need to have all fixations in the .RAW fields you have to
@@ -500,7 +508,7 @@ classdef Subject < Project
             
             out                               = [];
             filename                          = sprintf('%sfacecircle_%02d.mat',self.path_midlevel(3),partition);%facecircle is recorded in run 3.
-            force = 0;            
+            force = 0;
             if exist(filename) == 0 || force;
                 
                 % get the masks to count the fixations as a f(cs+ distance)
@@ -515,6 +523,7 @@ classdef Subject < Project
                 W                                 = double(abs(fix.stop(valid) - fix.start(valid)));%duration
                 rank                              = double(fix.fix(valid));%rank of the fixation
                 start                             = double(fix.start(valid));%start of the fixation point.
+                stop                              = double(fix.stop(valid));%start of the fixation point.
                 %extract parameter from x and y on the ptb coordinates
                 [theta, rho]                      = cart2pol(x,y);%transform X and Y to
                 [theta]                           = rad2deg(theta);%angle of the fixation point in degrees
@@ -533,14 +542,18 @@ classdef Subject < Project
                 [out.raw(12,:),out.raw(13,:)]     = pol2cart(deg2rad(out.raw(8,:)+(out.raw(4,:)-out.raw(7,:))),out.raw(5,:));%(new theta, old amp)
                 %save the subject's index.
                 out.raw(14,:)                     = self.id;
+                %add the stop later to conserve compatbility of indices 
+                stop(~valid)                      = [];
+                out.raw(15,:)                     = stop(i);
                 %
                 %get the weight business
-                W1           = ones(1,8);
+                W1                                = ones(1,8);
                 try
                     filename2     = sprintf('%smidlevel/facecircle_position_weights_limit_%i.mat',self.path_project,60);
                     load(filename2);
                     W2           = W;
                 catch
+                    cprintf([1 0 0],'ouups!!!\n');
                     W2 = W1;
                 end
                 %compute two counts based on weights
@@ -554,7 +567,7 @@ classdef Subject < Project
                     out.x(P,:)        = [-135:45:180];
                     out.ids(P,:)      = repmat(P,1,8);
                 end
-                cprintf([1 0 0],'facecircle for partition %03d is now cached...\n',partition);
+                cprintf([0 1 0],'facecircle for partition %03d is now cached...\n',partition);
                 save(filename,'out');
             else
                 fprintf('facecircle for partition %03d loading from cache...\n',partition);

@@ -7,9 +7,9 @@ classdef Fixmat < Project
         %related to map computation
          bc                  = 0;%cocktail blank correction
          unitize             = 1;%sums to 1 or not         
-         maptype             = 'bin';%conv or bin         
+         maptype             = 'conv';%conv or bin         
          kernel_fwhm         = Fixmat.PixelPerDegree*.8;
-         binsize             = 12;
+         binsize             = 24;
          linkage_method      = 'average';
          linkage_metric      = 'correlation';
          similarity_metric   = 'correlation';         
@@ -18,15 +18,14 @@ classdef Fixmat < Project
          dendro_leafOrder    = [];
          maps%current maps;
          mds%mds results
-         duration_weight     = 0;
+         duration_weight     = 1;
     end
    
     properties (Hidden,SetAccess = private)
         %internal
         query
         all_queries
-        map_titles        
-        realcond%all conditions that are not ucs,odd,or nulltrial
+        map_titles                
     end
     
     properties (SetAccess = private,Dependent,Hidden)        
@@ -54,6 +53,7 @@ classdef Fixmat < Project
         %rect: [y x y_size x_size]
         rect       %the aperture
         selection
+        realcond%all conditions that are not ucs,odd,or nulltrial
     end
     
     events
@@ -274,7 +274,7 @@ classdef Fixmat < Project
             c = 0;
             for sub = subjects
                 c    = c+1;
-                v{c} = {'subject' sub 'deltacsp' obj.realcond};
+                v{c} = {'subject' sub };
             end
             obj.getmaps(v{:});
         end
@@ -410,7 +410,7 @@ classdef Fixmat < Project
             end
             %get colormap limits.
             if strcmp(cmap,'linear')
-                [d u] = GetColorMapLimits(M,10);
+                [d u] = GetColorMapLimits(M,6);
                 if sum(obj.maps(:) < 0) == 0%if there are no negative values
                     d = 0;
                 end                                      
@@ -424,19 +424,27 @@ classdef Fixmat < Project
             clf                        
             nsp     = obj.subplot_number;
             for nc = 1:size(M,3)
-                h   = subplot(nsp(1),nsp(2),nc);          
-                
-                %plot the image;                                       
+                h   = subplot(nsp(1),nsp(2),nc);
+                %plot the image;
                 imagesc(obj.bincenters_x(obj.window(1)),obj.bincenters_y(obj.window(2)),obj.stimulus);
                 hold on;
                 h     = imagesc(obj.bincenters_x,obj.bincenters_y,M(:,:,nc),[d u]);
-                set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.7+.3);               
+                set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.9+.1 );               
                 axis image;
                 axis off;
+                [X Y] = meshgrid(linspace(min(obj.bincenters_x),max(obj.bincenters_x),size(M,2)),linspace(min(obj.bincenters_y),max(obj.bincenters_y),size(M,2)));
+                [~,h] = contourf(X,Y,obj.maps(:,:,nc),2);
+                h.Fill = 'off';
+                
                 try
-                t     = sprintf('%s%d/',obj.map_titles{nc}{1:2});                
-                title(t,'interpreter','none');
+                    t     = sprintf('%s%d/',obj.map_titles{nc}{1:2});                
+                    if length(t) < 15
+                        title(t,'interpreter','none');
+                    else
+                        fprintf('title too long, not showing...\n');
+                    end
                 end
+                colormap jet;
             end
 %            thincolorbar('vert');            
         end
