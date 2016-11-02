@@ -1,6 +1,6 @@
 classdef Fixmat < Project
     properties (Hidden,Constant)                
-        window       = [768 1024];%[212 212]./2;%half size of the fixation maps        
+        window       = [212 212]./2;%[768 1024]./2;%%half size of the fixation maps        
     end
     
     properties (Hidden,SetAccess = public)
@@ -464,7 +464,7 @@ classdef Fixmat < Project
                 if strcmp(obj.maptype,'conv')
                     %accum and conv
                     if obj.duration_weight
-                        fprintf('Weighing fixations by durations...\n');
+                        cprintf([0 1 0],'Weighing fixations by durations...\n');
                         dur_weight    = obj.stop(obj.selection)-obj.start(obj.selection);
 %                         dur_weight    = dur_weight./sum(dur_weight);
                         FixMap        = accumarray([obj.current_y-obj.rect(1)+1 obj.current_x-obj.rect(2)+1],dur_weight        ,[obj.rect(3) obj.rect(4)]);
@@ -482,6 +482,7 @@ classdef Fixmat < Project
                 end
                 %
                 if obj.unitize
+                    cprintf([0 1 0],'Will Unitize\n');
                     FixMap            = FixMap./sum(FixMap(:));
                 end
                 obj.maps(:,:,c)       = FixMap;
@@ -555,7 +556,7 @@ classdef Fixmat < Project
             %returns the current x y coordinates
             y = obj.y(obj.selection)';            
         end
-        function w = current_w(obj)
+        function w = current_weight(obj)
             %returns the weights for the current selection
             w = obj.weight(obj.selection)';
         end
@@ -771,7 +772,7 @@ classdef Fixmat < Project
             end
             
         end                
-        function xy2map(obj,x,y);
+        function xy2map(obj,x,y)
             %Get a map for an arbitrary set of X and Y points. it is
             %basically a trick method to get the shit done easily.
             FixMap        = accumarray([y(:)-obj.rect(1)+1 x(:)-obj.rect(2)+1],1,[obj.rect(3) obj.rect(4)]);
@@ -783,6 +784,20 @@ classdef Fixmat < Project
         end
         function replaceselection(obj,new_selection)            
             obj.selection         = new_selection;            
+        end
+        function [count]=EyeNoseMouth(obj,map)
+
+           [x y] = meshgrid(1:size(obj.stimulus,2),1:size(obj.stimulus,1));
+           %% build rois.
+           %coordinates of ROI centers.
+           coor = [[80 85 5 5];[132 85 5 5];[106 110 3.5 5]; [107 145 6 3.8]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.
+           for n = 1:size(coor,1)
+               roi(:,:,n) = sqrt(((x-coor(n,1))./coor(n,3)).^2 + ((y-coor(n,2))./coor(n,4)).^2)<4;
+           end
+%            roi(:,:,5) = sum(roi(:,:,1:4),3);
+%            for n = 1:size(roi,3);figure(n);h=imagesc(obj.stimulus);set(h,'alphaData',roi(:,:,n));drawnow;end
+           %% count number of fixations in each roi.
+           count = map(:)'*reshape(roi,size(roi,1)*size(roi,2),size(roi,3));
         end
     end    
 end
