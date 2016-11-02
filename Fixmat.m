@@ -1,6 +1,6 @@
 classdef Fixmat < Project
     properties (Hidden,Constant)                
-        window       = [212 212]./2;%half size of the fixation maps        
+        window       = [768 1024];%[212 212]./2;%half size of the fixation maps        
     end
     
     properties (Hidden,SetAccess = public)
@@ -54,6 +54,7 @@ classdef Fixmat < Project
         rect       %the aperture
         selection
         realcond%all conditions that are not ucs,odd,or nulltrial
+        weight  = [];%weight for each fixation, default is one.
     end
     
     events
@@ -115,9 +116,10 @@ classdef Fixmat < Project
             obj.selection = ~(obj.x < obj.rect(2) | obj.x > (obj.rect(2)+obj.rect(4)-1) | obj.y < obj.rect(1) | obj.y > (obj.rect(1)+obj.rect(3)-1) );
             obj.ApplySelection;
             %% round coordinates to pixels
-            obj.x = round(obj.x);
-            obj.y = round(obj.y);
+            obj.x        = round(obj.x);
+            obj.y        = round(obj.y);
             obj.realcond = unique(obj.deltacsp(~ismember(obj.deltacsp,[500 1000 3000]))); %500 UCS, 1000 Odd, 3000 Null
+            obj.weight   = ones(1,length(obj.x));%weight for fixations
         end
         function UpdateSelection(obj,varargin)
             %takes VARARGIN pairs to update the selection vektor            
@@ -465,9 +467,9 @@ classdef Fixmat < Project
                         fprintf('Weighing fixations by durations...\n');
                         dur_weight    = obj.stop(obj.selection)-obj.start(obj.selection);
 %                         dur_weight    = dur_weight./sum(dur_weight);
-                        FixMap        = accumarray([obj.current_y-obj.rect(1)+1 obj.current_x-obj.rect(2)+1],dur_weight,[obj.rect(3) obj.rect(4)]);
+                        FixMap        = accumarray([obj.current_y-obj.rect(1)+1 obj.current_x-obj.rect(2)+1],dur_weight        ,[obj.rect(3) obj.rect(4)]);
                     else
-                        FixMap        = accumarray([obj.current_y-obj.rect(1)+1 obj.current_x-obj.rect(2)+1],1,[obj.rect(3) obj.rect(4)]);
+                        FixMap        = accumarray([obj.current_y-obj.rect(1)+1 obj.current_x-obj.rect(2)+1],obj.current_weight,[obj.rect(3) obj.rect(4)]);
                     end
                     FixMap            = conv2(sum(obj.kernel),sum(obj.kernel,2),FixMap,'same');
                 elseif strcmp(obj.maptype,'bin')
@@ -552,6 +554,10 @@ classdef Fixmat < Project
         function [y] = current_y(obj)
             %returns the current x y coordinates
             y = obj.y(obj.selection)';            
+        end
+        function w = current_w(obj)
+            %returns the weights for the current selection
+            w = obj.weight(obj.selection)';
         end
         function ttrial = current_ttrial(obj)
             %computes number of trials included in the current selection
