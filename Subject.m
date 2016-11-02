@@ -465,6 +465,7 @@ classdef Subject < Project
             f.trialid     = ones(1,length(x));
             f.start       = out.raw(11,:);
             f.stop        = out.raw(15,:);
+            f.weight      = out.raw(16,:);
             %% remove fixations outside of the image border
             f.selection = ~(f.x < f.rect(2) | f.x > (f.rect(2)+f.rect(4)-1) | f.y < f.rect(1) | f.y > (f.rect(1)+f.rect(3)-1) );
             f.ApplySelection;
@@ -494,13 +495,15 @@ classdef Subject < Project
             %                            7/Wedge Angle, the angle in PTB definition,
             %                            basically rounded fixation angles.
             %                            8/Face angle, this is the angular distance to CS+
-            %                            9/Face Index, this is the filename of the stimulus
+            %                            9/Aligned Face Index computed based on 8, CS+:4
             %                            10/Rank; this is the order of the fixation along the 30 seconds
             %                            11/START time
             %                            12/angle of fixation maps aligned to CS+.
             %                            13/old amp.
             %                            14/subject index.
             %                            15/STOP time
+            %                            16/Weight for fixations based on their wedge index.
+            %
             %
             % mind that the .RAW field interacts with PARTITION, if you
             % need to have all fixations in the .RAW fields you have to
@@ -509,6 +512,9 @@ classdef Subject < Project
             out                               = [];
             filename                          = sprintf('%sfacecircle_%02d.mat',self.path_midlevel(3),partition);%facecircle is recorded in run 3.
             force = 0;
+            %if you like to recache the Project.screen_size and
+            %Fixmat.window has to be readjusted to original values, cache
+            %it and change back to aligned settings.
             if exist(filename) == 0 || force;
                 
                 % get the masks to count the fixations as a f(cs+ distance)
@@ -547,19 +553,20 @@ classdef Subject < Project
                 out.raw(15,:)                     = stop(i);
                 %
                 %get the weight business
-                W1                                = ones(1,8);
+                W1                                = ones(1,8);%weight for each wedge indices.
                 try
-                    filename2     = sprintf('%smidlevel/facecircle_position_weights_limit_%i.mat',self.path_project,60);
+                    filename2     = sprintf('%smidlevel/run003/facecircle_position_weights_limit_%i.mat',self.path_project,60);
                     load(filename2);
                     W2           = W;
                 catch
-                    cprintf([1 0 0],'ouups!!!\n');
+                    cprintf([1 0 0],'ouups!!! weights cannot be loaded correctly\n');
                     W2 = W1;
                 end
+                out.raw(16,:) = W2(out.raw(6,:));%store the weights, this will be used for the fixmat
                 %compute two counts based on weights
-                tfix        = double(max(fix.fix));
-                limits      = linspace(0,tfix,partition+1)+1;
-                [a b]       = histc(out.raw(10,:),limits);
+                tfix          = double(max(fix.fix));
+                limits        = linspace(0,tfix,partition+1)+1;
+                [a b]         = histc(out.raw(10,:),limits);
                 for P   = 1:partition
                     i                         = b == P;
                     out.count(P,:)    = accumarray(out.raw(9,i)',1,[8 1] );%no weight
@@ -567,6 +574,7 @@ classdef Subject < Project
                     out.x(P,:)        = [-135:45:180];
                     out.ids(P,:)      = repmat(P,1,8);
                 end
+                %add these weights to the raw data matrix also.
                 cprintf([0 1 0],'facecircle for partition %03d is now cached...\n',partition);
                 save(filename,'out');
             else
