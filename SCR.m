@@ -77,6 +77,12 @@ classdef SCR < handle
                 stim_times             = a.chan3     - first_sample;
                 stim_times(stim_times<0) = [];
                 stim_times(stim_times>max(pulse_times)) =[];
+                if length(stim_times) == 584
+                    mbi_times                             = a.chan2    - first_sample;                    
+                    mbi_times(mbi_times<0)                = [];
+                    mbi_times(mbi_times>max(pulse_times)) = [];
+                    stim_times                            = [mbi_times(1) ;stim_times];
+                end
                 %% store the stuff
                 scr.hdr                = a.FileInfo;
                 scr.time               = time;
