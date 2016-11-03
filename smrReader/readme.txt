@@ -1,4 +1,4 @@
-FUNCTIONS COPIED FROM sigTOOL http://sigtool.sourceforge.net/ on 18th of April 2013
+ediFUNCTIONS COPIED FROM sigTOOL http://sigtool.sourceforge.net/ on 18th of April 2013
 Modified By Timo Rantalainen tjrantal (at) gmail.com 2013
 
 

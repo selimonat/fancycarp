@@ -422,8 +422,8 @@ classdef Fixmat < Project
                 M = log10(M);            
             end
             %
-            figure(10001);
-            clf                        
+            figure;
+            set(gcf,'position',[2723         616         570         450]);            
             nsp     = obj.subplot_number;
             for nc = 1:size(M,3)
                 h   = subplot(nsp(1),nsp(2),nc);
@@ -465,8 +465,12 @@ classdef Fixmat < Project
                     %accum and conv
                     if obj.duration_weight
                         cprintf([0 1 0],'Weighing fixations by durations...\n');
+                        %sanity check
+                        if length(unique(obj.subject(obj.selection))) > 1
+                            cprintf([1 0 0],'Mind that this only makes sense on the single subject level\n')
+                        end                        
                         dur_weight    = obj.stop(obj.selection)-obj.start(obj.selection);
-%                         dur_weight    = dur_weight./sum(dur_weight);
+                        dur_weight    = dur_weight./sum(dur_weight);%this is the same as unitize, this is necessary as different people have different averages durations, we would like to avoid contaminating group maps with longer fixation people.
                         FixMap        = accumarray([obj.current_y-obj.rect(1)+1 obj.current_x-obj.rect(2)+1],dur_weight        ,[obj.rect(3) obj.rect(4)]);
                     else
                         FixMap        = accumarray([obj.current_y-obj.rect(1)+1 obj.current_x-obj.rect(2)+1],obj.current_weight,[obj.rect(3) obj.rect(4)]);

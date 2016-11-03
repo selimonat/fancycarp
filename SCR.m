@@ -1,7 +1,7 @@
 classdef SCR < handle
     
     properties (Constant = true, Hidden)
-        default_run = 4;%at which run the scr data is located.
+        default_run = 1;%at which run the scr data is located.
     end
     properties (Hidden)
         ledalab_defaults      = {'open', 'mat','downsample', 5, 'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1};%
@@ -11,7 +11,8 @@ classdef SCR < handle
         p         = 0.0001;
         nfreq     = 20;
         FIR_delay = 15000;%in milliseconds
-        path_acqfile;%path to the file
+        path_scr;%path to the file
+        plot_style
     end
     properties
         ledalab
@@ -45,110 +46,97 @@ classdef SCR < handle
         function scr = SCR(varargin)
             %s is either the subject number of block id.
             if length(varargin) == 1%construct
-                s = varargin{1};
-                scr.path_acqfile  = s.path_data(s.id,SCR.default_run,'scr','acq');
-                if exist(scr.path_acqfile);
-                    if ~exist(sprintf('%s.mat',scr.path_acqfile))
-                        dummy     = load_acq(scr.path_acqfile);
-                        save(sprintf('%s.mat',scr.path_acqfile),'dummy')
+                %
+                s                 = varargin{1};
+                path_scr          = s.path_scr;
+                path_scrmat       = regexprep(path_scr,'.smr','.mat');
+                %
+                if ~exist(path_scrmat)
+                    a    = SONImport(fopen(path_scr),'milliseconds','scale');%will cache it.
+                    if a == 0
+                        cprintf([0 1 0],'SON Import OK.\n');
                     else
-                        load(sprintf('%s.mat',scr.path_acqfile));%will spawn dummy
+                        cprintf([1 0 0],'SON Import failed!\n')
+                        keyboard
                     end
-                    scr.hdr       = dummy.hdr;
-                    data          = dummy.data;
-                    data          = data(1:end-10,:);%remove the ends, coz of big jumps
-                    scr.y         = data(:,1);
-                    scr.markers   = dummy.markers;
-                    scr.tsample   = length(data);
-                    %% add some goodies
-                    chan_names        = {scr.hdr.per_chan_data(:).comment_text};
-                    %             'SCR'    'FixOnset'    'StimOnset'    'ShockOnset'    'Oddball'    'InitPhase'    'Keypress'
-                    scr.sampling_rate     = 1000/scr.hdr.graph.sample_time;%Hz
-                    scr.sampling_period   = scr.hdr.graph.sample_time;%ms
-                    scr.time              = [0:scr.sampling_period:(scr.tsample-1)*scr.sampling_period]';%ms
-                    %% add also the start of sub-phases.
-                    %find the channel where phase starts are stored
-                    c                     = find(strcmp(chan_names,'InitPhase'));
-                    %and detect the time index
-                    i                      = find(diff(data(:,c)) > 0);
-                    %most probably 2 pulses faster than 30s is a falschbeginn
-                    i(diff(scr.time(i)/1000) < 40)            = [];
-                    %%
-                    scr.BlockBorders_index = [i [i(2:end); scr.tsample]];
-                    scr.BlockBorders_time  = scr.time(scr.BlockBorders_index);
-                    tblock                 = length(i);
-                    % give names to blocks (end to start)
-                    block_names            = s.scr_blocknames;%inherited from the Project
-                    %append UCS calibration blocks as much as necessary
-                    while length(block_names) ~= tblock
-                        block_names      = [block_names {sprintf('calibration%02d',tblock - length(block_names))}];
-                    end
-                    block_names    = fliplr(block_names);%correct for the order.
-                    %% label each SCR block in terms of experimental phase
-                    scr.block2phase                                     = nan(1,tblock);
-                    scr.block2phase([(tblock-5) (tblock-3) (tblock-1)]) = [2 3 4];
-                    scr.BlockNames                                      = block_names;
-                    %%
-                    for nblock = find(~isnan(scr.block2phase))
-                        % event times in units of samples
-                        i                      = scr.BlockBorders_index(nblock,1):scr.BlockBorders_index(nblock,2);%range of the block
-                        onset_sample           = find(data(:,3));%all stim onsets
-                        onset_sample           = onset_sample(ismember(onset_sample,i));%take only this blocks's onsets
-                        onset_sample           = onset_sample(diff([-Inf; onset_sample]) > 1);%clean repeats
-                        onset_sample           = onset_sample(ismember(onset_sample,i));%take only this phase's onsets
-                        % get stimulus indices for the above onsets
-                        current_phase          = scr.block2phase(nblock);
-                        cond_seq               = s.paradigm{current_phase}.presentation.dist;
-                        if length(cond_seq) ~= length(onset_sample);keyboard;end;%if problem then stoPPP
-                        cond_ids               = unique(cond_seq);
-                        t_stim_id              = length(cond_ids);%total stim id
-                        % run through different stimulus indices
-                        zero_vec               = false(scr.tsample,t_stim_id);
-                        for ii = 1:t_stim_id
-                            ind                            = ismember(cond_seq,cond_ids(ii));%samples for this stim_id
-                            zero_vec(onset_sample(ind),ii) = true;%
-                            %replace stimall with face index
-                            scr.event_name                 = [ scr.event_name         sprintf('%s_%04d',block_names{nblock},cond_ids(ii))];
-                            scr.event_plotting             = [ scr.event_plotting     s.plot_style(cond_ids(ii))];
-                        end
-                        scr.event                          = logical([scr.event zero_vec]);
-                    end
-                    %% create event channels also for the UCS during the calibration
-                    %these are not in the paradigm file.
-                    for nblock = 1:tblock-6%run through the calibration blocks
-                        zero_vec               = false(scr.tsample,1);
-                        %samples where this phase recorded
-                        i                      = scr.BlockBorders_index(nblock,1) : scr.BlockBorders_index(nblock,2);
-                        onsets                 = data(:,4);%UCS onsets
-                        onset_sample           = find(onsets);
-                        onset_sample           = onset_sample(diff([-Inf; onset_sample]) > 1);%clean repeats
-                        onset_sample           = onset_sample(ismember(onset_sample,i));%take only this phase's onsets
-                        zero_vec(onset_sample) = true;
-                        scr.event              = logical([scr.event logical(zero_vec)]);
-                        scr.event_name         = [scr.event_name         sprintf('%s_%s',block_names{nblock},'1001')];
-                        scr.event_plotting     = [scr.event_plotting            {s.plot_style(cond_ids(ii))}];
-                    end
-                    %% make a channel based on all the UCSs
-                    zero_vec               = false(scr.tsample,1);
-                    onsets                 = data(:,4);
-                    onset_sample           = find(onsets);
-                    onset_sample           = onset_sample(diff([-Inf; onset_sample]) > 1);%clean repeats
-                    zero_vec(onset_sample) = true;
-                    scr.event              = logical([scr.event              zero_vec]);
-                    scr.event_name         = [ scr.event_name         sprintf('1001')];
-                    scr.event_plotting     = [ scr.event_plotting            {s.plot_style(1001)}];
-                    %% make a channel based on all the ODDs
-                    zero_vec               = false(scr.tsample,1);
-                    onsets                 = data(:,5);
-                    onset_sample           = find(onsets);
-                    onset_sample           = onset_sample(diff([-Inf; onset_sample]) > 1);%clean repeats
-                    zero_vec(onset_sample) = true;
-                    scr.event              = logical([scr.event              zero_vec]);
-                    scr.event_name         = [scr.event_name         sprintf('1002')];
-                    scr.event_plotting     = [scr.event_plotting            {s.plot_style(1002)}];
-                else
-                    fprintf('No acq file found, :(.\n');
                 end
+                a           = load(path_scrmat);
+                data        = a.chan1;
+                time        = [a.head1.start:1:a.head1.stop]';
+                %discard all time before the first and after the last pulses.
+                pulse_times = a.chan6;
+                last_pulse  = max(pulse_times);
+                first_pulse = min(pulse_times);
+                i           = (time >= (first_pulse-10000)) & (time <= (last_pulse +100000));
+                time(~i)    = [];
+                data(~i)    = [];
+                % now shift all so that the first time sample is 0.
+                first_sample           = time(1);
+                time                   = time        - first_sample;
+                pulse_times            = pulse_times - first_sample;
+                stim_times             = a.chan3     - first_sample;
+                stim_times(stim_times<0) = [];
+                stim_times(stim_times>max(pulse_times)) =[];
+                %% store the stuff
+                scr.hdr                = a.FileInfo;
+                scr.time               = time;
+                scr.y                  = data;
+                scr.tsample            = length(time);
+                scr.sampling_period    = (a.head1.sampleinterval/1000);%in ms
+                scr.sampling_rate      = 1000/scr.sampling_period;%in hertz.
+                scr.BlockBorders_time  = time([1 end])';
+                scr.BlockBorders_index = [1 length(scr.y)];
+                scr.block2phase        = 1;
+                scr.BlockNames         = {'all'};
+                scr.path_scr           = path_scr;
+                %
+                c = 0;
+                scr.event = [];
+                for distance = unique(s.paradigm{1}.presentation.dist)
+                    c                                    = c + 1;
+                    scr.event(:,c)                       = zeros(length(scr.y),1,'logical');
+                    ii                                   = find(s.paradigm{1}.presentation.dist == distance);
+                    
+                    %transform distance to cond id
+                    if distance == -135
+                        cond_id = 1;
+                    elseif distance == -90
+                        cond_id = 2;
+                    elseif distance == -45
+                        cond_id = 3;
+                    elseif distance == 0
+                        cond_id = 4;
+                    elseif distance == 45
+                        cond_id = 5;
+                    elseif distance == 90
+                        cond_id = 6;
+                    elseif distance == 135
+                        cond_id = 7;
+                    elseif distance == 180
+                        cond_id = 8;
+                    elseif distance == 1000
+                        cond_id = 9;
+                    elseif distance == 1001
+                        cond_id = 10;
+                    elseif distance == 1002
+                        cond_id = 11;
+                    end
+                    
+                    event_times                          = stim_times(ii);
+                    event_index                          = event_times;
+                    scr.event(round(event_times/1000),c) = true;
+                    scr.event_name{c}                    = sprintf('%03d',cond_id);
+                    scr.event_plotting{c}.line_width     = {{'linewidth', 2}};
+                    scr.event_plotting{c}.marker_size    = {{'markersize', 2}};
+                    scr.event_plotting{c}.symbol         = {{'symbol','+'}};
+                    scr.event_plotting{c}.line           = {{'line',{'line' '-'}}};
+                    scr.event_plotting{c}.color          = {{'color',Project.colors(:,cond_id)}};
+                end
+                scr.event = logical(scr.event);
+                
+                
+                
+                
             elseif length(varargin) == 2 %cut
                 %% will extract SCR data of a given block or blocks
                 block                     = varargin{2};
@@ -184,20 +172,21 @@ classdef SCR < handle
             out = cellfun(@(x) ~isempty(regexp(x,filter_string)), self.BlockNames );
             out = find(out);
         end
+        
         function plot(self)
             %% plot different event channels
             
-            hhfigure;            
+            hhfigure;
             % plot the SCR
-            plot(self.time./1000,self.y,'color','k','linewidth',1);            
+            plot(self.time./1000,self.y,'color','k','linewidth',1);
             hold on;
             % mark stimulus onsets
             level = mean(self.y);
             for n = 1:length(self.event_name)
                 i  = self.event(:,n);
-                plot(self.time(i)./1000,self.y(i), self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} );
+                plot(self.time(i),self.y(i), self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} );
                 if ~isempty(self.phasic)
-                    plot(self.time(i)./1000,self.phasic(i), self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} )
+                    plot(self.time(i),self.phasic(i), self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} )
                 end
             end
             
@@ -218,7 +207,7 @@ classdef SCR < handle
             legend boxoff
             axis tight;
         end
-        function plot_decomposition(self)            
+        function plot_decomposition(self)
             self.plot
             hold on;
             plot(self.time./1000,self.phasic,'k');
@@ -243,7 +232,7 @@ classdef SCR < handle
             if isempty(self.data);self.data=self.y;end
             self.data         = diff(self.data);
             self.data(end+1)  = self.data(end);
-        end       
+        end
         function self = tonic_lowpass(self)
             %computes the low-pass version of the signal supposed to
             %represent the tonic response.
@@ -252,7 +241,7 @@ classdef SCR < handle
             Hd           = design(d, 'ellip');
             self.tonic   = filtfilt(Hd.sosMatrix,Hd.ScaleValues,self.data);
             self.phasic  = self.data - self.tonic;
-        end        
+        end
         function xcorr(self,block)
             %%
             self.data = [];
@@ -444,7 +433,7 @@ classdef SCR < handle
             self.model.fit_tonic    = self.tonic;
             self.model.r2           = corr2(self.model.fit, self.data);
             self.model.r2_phasic    = corr2(self.phasic   , FIR*self.model.betas);
-        end     
+        end
         function plot_model(self)
             
             self.plot;
@@ -475,9 +464,9 @@ classdef SCR < handle
         function run_ledalab(self)
             %will run ledalab on all the data. Use cut method to restrict
             %the analysis to a single block phase or so.
-%             addpath('/Users/onat/Documents/Code/Matlab/ledalab/');
+            %             addpath('/Users/onat/Documents/Code/Matlab/ledalab/');
             %
-            foldername            = regexprep(self.path_acqfile,'data.acq','ledalab');%storage of ledalab related files
+            foldername            = regexprep(self.path_scr,'data.smr','ledalab');%storage of ledalab related files
             if exist(foldername) == 0;mkdir(foldername);end%create it if necessary.
             filename              = sprintf(['%s%sdata_' repmat('%s_',1,length(self.BlockNames))],foldername,filesep,self.BlockNames{:});%used by ledalab
             filename(end)         = [];
@@ -510,6 +499,7 @@ classdef SCR < handle
                 end
                 save(filename,'data');
                 %%
+                addpath('/home/onat/Documents/Code/Matlab/ledalab/');
                 Ledalab({filename},self.ledalab_defaults{:});
             end
             leda         = load(filename_results);
@@ -519,12 +509,12 @@ classdef SCR < handle
             self.phasic  = interp1(leda.data.time.data,leda.analysis.driver,(self.time-self.time(1))./1000);
             self.tonic   = interp1(leda.data.time.data,leda.analysis.tonicData,(self.time-self.time(1))./1000);
             self.ledalab = leda.analysis.split_driver;
-        end        
+        end
         function plot_tuning_ledalab(self,varargin)
             if nargin > 1
                 conds = varargin{1};
             else
-               
+                
                 conds = 1:(length(find(sum(self.event)~=0))-2);
             end
             %will return average SCR values for conditions CONDS
@@ -545,27 +535,27 @@ classdef SCR < handle
             
             %run the ML estimation
             params = [];
-%             if length(self.BlockNames) == 1
-                
-                filter_string                            = self.BlockNames{1};
-                event_id                                 = cellfun(@(x) ~isempty( regexp(x,filter_string)), self.event_name );%detect the relevant event column
-                [onset_sample x]                         = find(self.event(:,event_id));%in samples
-                ml.onsets                                   = self.time(onset_sample)./1000;%onset times in s
-                ml.data                                  = self.phasic(:);%data we want to model
-                ml.time                                  = self.time(:)./1000;
-                ml.data(ml.time < (min(ml.onsets)-10))      = 0;
-                ml.data(ml.time > (max(ml.onsets)+10))      = 0;
-                
-                ml.funlsq                             = @(params) (abs(ml.data - scr_model( ml.time , ml.onsets(:), params ))).^2;%squared deviations
-                ml.params0                            = [rand(1,length(ml.onsets)) 2 6 2];%initial values.
-                ml.LB                                 = [zeros(1,length(ml.onsets)) 0 0 0];%lower boundaries
-%                 options                            = optimset('algorithm',{'levenberg-marquardt',.01},'display','iter','MaxFunEvals',50000,'maxiter',50000,'tolx',10^-12,'tolfun',10^-12,'OutputFcn',@scr_optimizer_plot);
-                ml.options                            = optimset('algorithm',{'levenberg-marquardt',.01},'display','iter','MaxFunEvals',2500,'maxiter',2500,'tolx',10^-12,'tolfun',10^-12);
-                ml.params                             = lsqnonlin(ml.funlsq,ml.params0,ml.LB,[],ml.options);
-                self.ml = ml;
-%             else
-%                 fprintf('Please cut me so that I have exactly one block\n');
-%             end
+            %             if length(self.BlockNames) == 1
+            
+            filter_string                            = self.BlockNames{1};
+            event_id                                 = cellfun(@(x) ~isempty( regexp(x,filter_string)), self.event_name );%detect the relevant event column
+            [onset_sample x]                         = find(self.event(:,event_id));%in samples
+            ml.onsets                                   = self.time(onset_sample)./1000;%onset times in s
+            ml.data                                  = self.phasic(:);%data we want to model
+            ml.time                                  = self.time(:)./1000;
+            ml.data(ml.time < (min(ml.onsets)-10))      = 0;
+            ml.data(ml.time > (max(ml.onsets)+10))      = 0;
+            
+            ml.funlsq                             = @(params) (abs(ml.data - scr_model( ml.time , ml.onsets(:), params ))).^2;%squared deviations
+            ml.params0                            = [rand(1,length(ml.onsets)) 2 6 2];%initial values.
+            ml.LB                                 = [zeros(1,length(ml.onsets)) 0 0 0];%lower boundaries
+            %                 options                            = optimset('algorithm',{'levenberg-marquardt',.01},'display','iter','MaxFunEvals',50000,'maxiter',50000,'tolx',10^-12,'tolfun',10^-12,'OutputFcn',@scr_optimizer_plot);
+            ml.options                            = optimset('algorithm',{'levenberg-marquardt',.01},'display','iter','MaxFunEvals',2500,'maxiter',2500,'tolx',10^-12,'tolfun',10^-12);
+            ml.params                             = lsqnonlin(ml.funlsq,ml.params0,ml.LB,[],ml.options);
+            self.ml = ml;
+            %             else
+            %                 fprintf('Please cut me so that I have exactly one block\n');
+            %             end
         end
     end
 end

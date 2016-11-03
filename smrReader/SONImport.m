@@ -44,7 +44,7 @@ function flag=SONImport(fid,varargin)
 % Mac or other big-endian platforms.
 %
 % Malcolm Lidierth 07/06
-% Copyright © The Author & King's College London 2006
+% Copyright ï¿½ The Author & King's College London 2006
 
 % Check there is no 'mat' or 'progress' option in varargin
 if nargin>1
@@ -77,13 +77,13 @@ save(matfilename,'FileInfo',fv)
 % get list of valid channels
 c=SONChanList(fid);
 
-progbar=progressbar(0,'','Name', fopen(fid));
+%progbar=progressbar(0,'','Name', fopen(fid));
 
 % Import the data.
 for i=1:length(c)
     chan=c(i).number;
-    progressbar(chan/length(c), progbar, ...
-        sprintf('Importing data on Channel %d',chan));
+%    progressbar(chan/length(c), progbar, ...
+%         sprintf('Importing data on Channel %d',chan));
     try
         [data,header]=SONGetChannel(fid, chan,'progress',varargin{:});
     catch
@@ -109,7 +109,7 @@ for i=1:length(c)
     
 
     if ~isempty(data)
-        progressbar(i/length(c), progbar,sprintf('Saving Channel %d',chan));
+%        progressbar(i/length(c), progbar,sprintf('Saving Channel %d',chan));
         temp=['chan' num2str(chan)];
         eval(sprintf('%s=data;',temp));
         save(matfilename,temp,'-append',fv);
@@ -125,7 +125,7 @@ for i=1:length(c)
     clear('data');
 
 end
-close(progbar);
+%close(progbar);
 flag=0;
 
 

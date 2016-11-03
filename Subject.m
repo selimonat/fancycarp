@@ -466,6 +466,7 @@ classdef Subject < Project
             f.start       = out.raw(11,:);
             f.stop        = out.raw(15,:);
             f.weight      = out.raw(16,:);
+            f.fix         = out.raw(10,:);
             %% remove fixations outside of the image border
             f.selection = ~(f.x < f.rect(2) | f.x > (f.rect(2)+f.rect(4)-1) | f.y < f.rect(1) | f.y > (f.rect(1)+f.rect(3)-1) );
             f.ApplySelection;
@@ -1352,6 +1353,10 @@ classdef Subject < Project
         function out        = dir_hr(self)
             %the directory where hr is located
             out = sprintf('%smrt%s',self.pathfinder(self.id,0),filesep);
+        end
+        function out        = path_scr(self)
+            %the directory where SCR is located
+            out = sprintf('%sscr%sdata.smr',self.pathfinder(self.id,1),filesep);
         end
     end      
     methods %(plotters)

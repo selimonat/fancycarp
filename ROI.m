@@ -64,10 +64,10 @@ classdef ROI < Project
                     cprintf([1 0 0],'Not doing anything here\n');
                 end
             else
-                cprintf([0 1 0],'Loading from cache...\n',roi.hash);
+                cprintf([0 0 1],'Loading from cache...\n',roi.hash);
                 load(filename);
             end            
-            cprintf([1 0 0],'Finished in %1.2g seconds.\n',toc);
+            cprintf([0 0 1],'Finished in %1.2g seconds.\n',toc);
             
             function ok = GetVoxelsXYZmm
                 %returns voxels in MM space.
