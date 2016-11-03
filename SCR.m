@@ -482,14 +482,10 @@ classdef SCR < handle
                 data.samplingrate           = self.sampling_rate;%Hz
                 data.samplingperiod         = self.sampling_period/1000;%in s
                 %% transform events to ledalab format
-                %find all conditions that are in this batch
-                conditions = [];
-                for bnames = self.BlockNames;
-                    conditions                  = [conditions find(cellfun(@(x) ~isempty(regexp(x,bnames{1})), self.event_name ))];%detect only the required conditions
-                end
+
                 %store
                 c = 0;
-                for ncond = conditions
+                for ncond = 1:11
                     for nEvent = find(self.event(:,ncond))'
                         c                   = c+1;
                         data.event(c).time  = (nEvent*data.samplingperiod);%in ms
