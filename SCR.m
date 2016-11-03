@@ -94,7 +94,7 @@ classdef SCR < handle
                 scr.event = [];
                 for distance = unique(s.paradigm{1}.presentation.dist)
                     c                                    = c + 1;
-                    scr.event(:,c)                       = zeros(length(scr.y),1,'logical');
+                    scr.event(:,c)                       = zeros(length(scr.y),1);
                     ii                                   = find(s.paradigm{1}.presentation.dist == distance);
                     
                     %transform distance to cond id
@@ -124,7 +124,7 @@ classdef SCR < handle
                     
                     event_times                          = stim_times(ii);
                     event_index                          = event_times;
-                    scr.event(round(event_times/1000),c) = true;
+                    scr.event(round(event_times),c) = true;
                     scr.event_name{c}                    = sprintf('%03d',cond_id);
                     scr.event_plotting{c}.line_width     = {{'linewidth', 2}};
                     scr.event_plotting{c}.marker_size    = {{'markersize', 2}};
@@ -184,9 +184,9 @@ classdef SCR < handle
             level = mean(self.y);
             for n = 1:length(self.event_name)
                 i  = self.event(:,n);
-                plot(self.time(i),self.y(i), self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} );
+                plot(self.time(i)./1000,self.y(i), self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} );
                 if ~isempty(self.phasic)
-                    plot(self.time(i),self.phasic(i), self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} )
+                    plot(self.time(i)./1000,self.phasic(i), self.event_plotting{n}.symbol{1}{2} , self.event_plotting{n}.color{1}{:} , self.event_plotting{n}.marker_size{1}{:} )
                 end
             end
             
