@@ -65,6 +65,10 @@ classdef SCR < handle
                 time        = [a.head1.start:1:a.head1.stop]';
                 %discard all time before the first and after the last pulses.
                 pulse_times = a.chan6;
+                %remove pulses if they are like too far
+                invalid     = max(find(diff(pulse_times) > 100000));
+                pulse_times(1:invalid) = [];
+                
                 last_pulse  = max(pulse_times);
                 first_pulse = min(pulse_times);
                 i           = (time >= (first_pulse-10000)) & (time <= (last_pulse +100000));
@@ -133,7 +137,7 @@ classdef SCR < handle
                     scr.event(round(event_times),c) = true;
                     scr.event_name{c}                    = sprintf('%03d',cond_id);
                     scr.event_plotting{c}.line_width     = {{'linewidth', 2}};
-                    scr.event_plotting{c}.marker_size    = {{'markersize', 2}};
+                    scr.event_plotting{c}.marker_size    = {{'markersize', 5}};
                     scr.event_plotting{c}.symbol         = {{'symbol','+'}};
                     scr.event_plotting{c}.line           = {{'line',{'line' '-'}}};
                     scr.event_plotting{c}.color          = {{'color',Project.colors(:,cond_id)}};
