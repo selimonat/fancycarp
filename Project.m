@@ -402,30 +402,81 @@ classdef Project < handle
                 out(n,:) = strrep(dummy(n,:),sprintf('sub%03d',self.id),'second_level');
             end
         end        
-        function out        = getgroup_all_spacetime(self,who,sk)            
+        function [out,name ] = getgroup_all_spacetime(self,ngroup)
+
             
-            out = [];
-            for ns = self.get_selected_subjects(who)'
-                if ns ~= 28
-                    fprintf('Collecting subject %03d\n',ns);
-                    s     = Subject(ns,'pupil');
-                    dummy = s.get_all_spacetime(sk);
-                    out   = cat(5,out,dummy);
-                else
-                    fprintf('28 excluded~~~\n')
-                end
+            
+            sk          = 6;
+            [out, name] = self.getgroup_bold_spacetime(ngroup,sk);
+            %[o1, o2]    = self.getgroup_pupil_spacetime(ngroup);
+            %out         = cat(4,out,o1);
+            %name        = [name o2];
+            [o1, o2]    = self.getgroup_scr_spacetime(ngroup);                        
+            out         = cat(4,out,o1);
+            name        = [name o2];
+                        
+        end
+        function [out, name] = getgroup_bold_spacetime(self,ngroup,sk)
+            %out        = getgroup_bold_spacetime(self,ngroup,sk)
+            % GROUP is fed to get_selected_subjects
+            % SK is fed to the ROI object.
+            %
+            %loads the Second-level anova which I used to select ROIs and
+            %extracts the coordinates from there.
+            %
+            % see also getgroup_pupil_spacetime
+            %                              
+            list    = self.get_selected_subjects(ngroup,0).list;
+            t       = spm_list('table',self.SecondLevel_ANOVA(3,1,3,1:4,8,0));
+            betas   = reshape(1:715,65,11)';
+            betas   = betas(1:8,self.mbi_valid);
+            %%            
+            c = 0;
+            for coor = [t.dat{:,end};ones(1,3)];
+                c            = c+1;
+                r            = ROI('voxel_based',coor ,'chrf_0_0_mumfordian',0,betas(:)',list,sk);
+                dummy        = reshape(r.pattern(1,:,:),[8 47 size(r.pattern,3)]);%[condition microbock subject area];
+                out(:,:,:,c) = permute(dummy,[2 1 3]);
+                name{c}      = self.get_atlaslabel(coor(1:3)).name{1};                    
             end            
         end
-        function out        = getgroup_pupil_spacetime(self,who)
-            %set WHO to select subject groups, 1:good, 0:bad;
+        
+        function [out,name] = getgroup_pupil_spacetime(self,ngroup)
+            %will load the group pupil data for the NGROUPth subjects.
+            %
+            % see also getgroup_bold_spacetime
+            
             out = [];
-            for ns = self.get_selected_subjects(who)'
+            c = 0;
+            for ns = self.get_selected_subjects(ngroup,1).list
+                c = c +1;
                 fprintf('Collecting subject %03d\n',ns);
-                s     = Subject(ns,'pupil');
-                dummy = s.get_pupil_spacetime;
-                out   = cat(4,out,dummy);
+                s            = Subject(ns,'pupil');
+                out(:,:,c,1) = inpaint_nans(s.get_pupil_spacetime);
+%                 out(:,:,c,1) = (s.get_pupil_spacetime);
             end
+%             out  = nanmean(out,3);
+            name{1} = 'pupil';
+        end        
+        
+        function [out,name] = getgroup_scr_spacetime(self,ngroup)
+            %will load the group pupil data for the NGROUPth subjects.
+            %
+            % see also getgroup_bold_spacetime, getgroup_pupil_spacetime
+            out = [];
+            c = 0;
+            for ns = self.get_selected_subjects(ngroup,0).list;                
+                c            = c + 1;
+                s            = Subject(ns);
+                scr          = SCR(s);
+                scr.run_ledalab;                
+                dummy        = reshape(mean(scr.ledalab.y(150:200,:)),65,9);
+                out(:,:,c,1) = dummy(self.mbi_valid,1:8,:);
+            end
+            %out  = out(self.mbi_valid,1:8,:);
+            name{1} = 'scr';
         end
+        
         function  name      = get_atlasROIname(self,roi_index)
             %get_atlasROIname(self,roi_index)
             %
@@ -1356,18 +1407,145 @@ classdef Project < handle
                 title(sprintf('%s: %3.4g ? %3.4g (M?SEM)',fields{1},M,S),'interpreter','none');
             end
         end
-        function plot_spacetime(self,Y)
-            
+        function plot_spacetime(self,varargin)
+            ffigure(10);clf;
+            baseline = 1;
+            zs = 1;
+            %%each varargin is one condition x time plot
+            Y     = varargin{1};
+            name  = varargin{2};
+            %            
+            tarea = size(Y,4);
+            tcol  = 6;
+            nplot = 0;
+            for narea = 1:tarea
+                y      = Y(:,:,:,narea);
+                y      = permute(y,[2 1 3 4]);
+                if baseline
+                   y = y - repmat(mean(y(:,1:5,:),2),[1 size(y,2) 1]);
+                end
+                if zs
+                    y = zscore(y,1,1);
+                end
+                for ns = 1:size(y,3)
+                    ys(:,:,ns) = self.circconv2(y(:,:,ns)');
+                end
+                ymean = mean(ys,3);%average across subjects;                                
+                dp    = ymean(:,4)-ymean(:,8);
+                ci    = bootci(1000,@mean,squeeze(diff(ys(:,[8 4],:),1,2))');
+                %                
+                for ns = 1:size(ys,3)
+                    param     = self.fit_spacetime(ys(:,:,ns));                
+                    amp(:,ns) = param.fit_results{3}.params(:,1);
+                    sd(:,ns)  = param.fit_results{3}.params(:,2);
+                end                
+                rank                                 = 1:size(ymean,1);
+                
+                %1
+                nplot = nplot+1;
+                subplot(tarea,tcol,nplot)             
+                imagesc(mean(y,3)');axis xy;                
+                title(sprintf('%s-raw',name{narea}),'interpreter','none');
+                colorbar
+                set(gca,'xticklabel',{'' '' '' 'cs+' '' '' '' 'cs-'},'xtick',1:8,'ytick',5:10:50);
+                box off;                
+                ylabel('non-shocked microblock');                
+                xlabel('faces');
+                hold on
+                plot(xlim,[4 4],'r')
+                ii = self.paradigm{1}.presentation.mblock(self.paradigm{1}.presentation.ucs);
+                ii = ii - (1:length(ii));
+                plot(8.5,ii,'kp','markersize',4)
+                
+                %2
+                nplot = nplot+1
+                subplot(tarea,tcol,nplot)                             
+                imagesc(ymean);axis xy
+                if narea == 1;
+                    title(sprintf('circ.\nsmooth'),'interpreter','none');
+                end
+                  hold on
+                plot(xlim,[4 4],'r')
+                ii = self.paradigm{1}.presentation.mblock(self.paradigm{1}.presentation.ucs);
+                ii = ii - (1:length(ii));
+                plot(8.5,ii,'kp','markersize',4)
+                axis off;;colorbar
+                
+                %3
+                nplot = nplot+1;
+                subplot(tarea,tcol,nplot)             
+                contourf(ymean,4);axis xy;
+                if narea == 1;
+                title(sprintf('spline'),'interpreter','none');
+                end
+                  hold on
+                plot(xlim,[4 4],'r')
+                ii = self.paradigm{1}.presentation.mblock(self.paradigm{1}.presentation.ucs);
+                ii = ii - (1:length(ii));
+                plot(8.5,ii,'kp','markersize',4)
+                axis off;colorbar
+                
+                
+                %4
+                nplot = nplot+1;
+                subplot(tarea,tcol,nplot)             
+                plot(dp,rank,'k','linewidth',2);hold on;                
+                hold on
+                plot(ci',rank','k--');                
+                hold off
+                if narea == tarea
+                    xlabel('\Delta amplitude');
+                end                
+                grid on;
+                box off;
+                if narea == 1;
+                title('Differences','interpreter','none');
+                end
+                ylim([0 max(rank)]);
+                
+                %5
+                nplot = nplot+1;                
+                subplot(tarea,tcol,nplot)                             
+                plot(mean(amp,2),rank,'k-','linewidth',2);hold on;
+                ci    = bootci(1000,@mean,amp');
+                plot(ci,rank,'k--');hold off;                
+                if narea == tarea
+                    xlabel('\alpha');                
+                end
+                grid on;
+                box off;
+                if narea == 1;
+                title('vM \alpha');
+                end
+                ylim([0 max(rank)]);                
+                %     
+                %6
+                nplot = nplot+1;                
+                subplot(tarea,tcol,nplot)                             
+                plot(mean(sd,2),rank,'k-','linewidth',2);hold on;
+                ci    = bootci(1000,@mean,sd');
+                plot(ci,rank,'k--');hold off;                
+                if narea == tarea
+                    xlabel('\alpha');                
+                end
+                grid on;
+                box off;
+                if narea == 1;
+                title('vM \alpha');
+                end
+                ylim([0 max(rank)]);                
+                %     
+                drawnow;
+            end
+            %Ys  = self.circconv2(Y);%smooth
+            %Ycs = cumsum(Ys);%./repmat([1:size(Ys,1)]',1,8);            
+            %t   = self.fit_spacetime(zscore(Ycs')');
             %%
-            Ys  = self.circconv2(Y);%smooth
-            Ycs = cumsum(Ys)./repmat([1:size(Ys,1)]',1,8);            
-            t   = self.fit_spacetime(Ycs);
-            %%
-            figure;set(gcf,'position',[25 7 831 918]);
-            subplot(2,2,1);imagesc((Ys')');colorbar;axis xy;set(gca,'xtick',[4 8],'xticklabel',{'CS+' 'CS-'});
-            subplot(2,2,2);imagesc((Ycs')');colorbar;axis xy;set(gca,'xtick',[4 8],'xticklabel',{'CS+' 'CS-'});
-            subplot(2,2,3);bar(((t.fit_results{8}.params(:,1))));box off;title('amplitude')
-            subplot(2,2,4);bar(((vM2FWHM(t.fit_results{8}.params(:,2)))));box off;title('fwhm')
+%             figure;set(gcf,'position',[25 7 831 918]);
+%             subplot(2,2,1);imagesc((Ys')');colorbar;axis xy;set(gca,'xtick',[4 8],'xticklabel',{'CS+' 'CS-'});
+%             subplot(2,2,2);imagesc((Ycs')');colorbar;axis xy;set(gca,'xtick',[4 8],'xticklabel',{'CS+' 'CS-'});
+%             subplot(2,2,3);bar(((t.fit_results{8}.params(:,1))));box off;title('amplitude')
+%             subplot(2,2,4);bar(((vM2FWHM(t.fit_results{8}.params(:,2)))));box off;title('fwhm')
         end
     end
     methods (Static)
@@ -1401,18 +1579,16 @@ classdef Project < handle
             %circularly smoothes data using a 2x2 boxcar kernel;
             
             if nargin == 1
-%                 kernel = make_gaussian2D(3,3,3,1.5,3,2);
-%                   kernel = make_gaussian2D(7,3,4,1.5,7,2);
-                  kernel = make_gaussian2D(7,3,10,1.5,7,2);
-%                 kernel = make_gaussian2D(3,3,3,1.5,2,2);
-%                 kernel = make_gaussian2D(5,3,4,1.5,3,2);
-                kernel = kernel./sum(kernel(:));
-                kernel = flipud(kernel);
+                kernel   = make_gaussian2D(11,7,6,2.5,6,4);
+                
+                kernel                   = kernel./sum(kernel(:));
+                
+%                 kernel = [kernel ; zeros(size(kernel))];
             elseif nargin == 2
                 kernel = varargin{1};
             end            
-            [Yc]= conv2([Y Y Y],kernel);
-            Yc  = Yc(size(kernel,1):end,10:17);
+            [Yc]= conv2([Y Y Y],kernel,'same');
+            Yc  = Yc(:,(size(Yc,2)/3+1):(size(Yc,2)/3+1)+8-1)            
 
         end
         function [t2]=fit_spacetime(Y);
@@ -1420,9 +1596,9 @@ classdef Project < handle
             data.x           = repmat(linspace(-135,180,8),size(data.y,1),1);
             data.ids         = 1:size(data.y,1);
             t2               = Tuning(data);
-            t2.visualization = 1;
+            t2.visualization = 0;
             t2.gridsize      = 10;
-            t2.SingleSubjectFit(8);
+            t2.SingleSubjectFit(3);
 %             t2.SingleSubjectFit(7);
 %             t2.SingleSubjectFit(3);
         end

@@ -694,7 +694,7 @@ classdef Subject < Project
             %returns the BOLD response in time x condition format with
             %smoothing kernel of SK at roi NROI.
             %
-            %
+            %this part has to be adapted to the ROI object convention
                        
             run      = 1;
             out      = [];

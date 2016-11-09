@@ -4,7 +4,7 @@ classdef SCR < handle
         default_run = 1;%at which run the scr data is located.
     end
     properties (Hidden)
-        ledalab_defaults      = {'open', 'mat','downsample', 5, 'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1};%
+        ledalab_defaults      = {'open', 'mat','downsample', 20, 'smooth',{'gauss' 100} 'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1};%
         hdr
         markers
         block2phase
@@ -60,37 +60,76 @@ classdef SCR < handle
                         keyboard
                     end
                 end
-                a           = load(path_scrmat);
-                data        = a.chan1;
-                time        = [a.head1.start:1:a.head1.stop]';
+                %%
+                a                      = load(path_scrmat);
+                data                   = a.chan1;
+                time                   = [a.head1.start:1:a.head1.stop]';
                 %discard all time before the first and after the last pulses.
-                pulse_times = a.chan6;
-                %remove pulses if they are like too far
-                invalid     = max(find(diff(pulse_times) > 100000));
-                pulse_times(1:invalid) = [];
-                
-                last_pulse  = max(pulse_times);
-                first_pulse = min(pulse_times);
-                i           = (time >= (first_pulse-10000)) & (time <= (last_pulse +100000));
+                pulse_times            = a.chan6;
+                stim_times             = a.chan3;    
+                mbi_times              = a.chan2;                
+                % make a robust fit for pulse times to find the intercept.
+                b                      = robustfit([ [1:length(pulse_times)]'],pulse_times);%b(1) is an estimation of the time experiment starts.                
+%                 plot(stim_times,'o-'),hold on;plot(pulse_times,'ro-');plot(mbi_times,'ko-');hold off;grid on
+                b                      = b(1);%start of the presentation
+                %
+                stim_times( stim_times < b)  = [];%delete all past samples
+                pulse_times( pulse_times< b) = [];%delete all past samples
+                mbi_times(mbi_times < b)     = [];%delete all past samples
+                %remove the last 16 stimuli 
+                stim_times(end-15:end)       = [];%delete all past samples
+                %if the first stimulus onset is missing, replace it with
+                %the mbi onset (which is the same)
+                if abs(stim_times(1)-mbi_times(1)) > 500;
+                    stim_times = [mbi_times(1) ; stim_times];
+                end
+                %check for ghosts in the stim timings
+                i = [diff(stim_times)] < 2000;
+                i = [0;i];
+                if any(i);
+                    cprintf([1 0 0],'Removed %d ghost pulses from stim onsets...\n',sum(i));
+                    stim_times(i==1) = [];
+                end
+                %check for ghosts in the stim timings
+                i = [diff(mbi_times)] < 20000;
+                i = [0;i];
+                if any(i)
+                    cprintf([1 0 0],'Removed %d ghost pulses from mbi...\n',sum(i));
+                    mbi_times(i==1) = [];
+                end                
+%                 figure;
+%                 plot(stim_times,'o-'),hold on;plot(pulse_times,'ro-');plot(mbi_times,'ko-');hold off;grid on
+                %sanity checks
+                if length(mbi_times) == 65
+                    cprintf([0 1 0],'MBI count, correct.\n');
+                else
+                    cprintf([1 0 0],'MBI count, incorrect.\n');
+                end
+                if length(stim_times) == 585
+                    cprintf([0 1 0],'STIM count, correct.\n');
+                else
+                    cprintf([1 0 0],'STIM count, incorrect.\n');
+                end                
+                %% now set the zero for the scr recordings
+                % first cut the unwanted parts based on first and last mbi
+                last_point  = max(stim_times);
+                first_point = min(mbi_times);
+                i           = (time >= (first_point - 15000)) & (time <= (last_point + 20000));
                 time(~i)    = [];
                 data(~i)    = [];
-                % now shift all so that the first time sample is 0.
-                first_sample           = time(1);
-                time                   = time        - first_sample;
-                pulse_times            = pulse_times - first_sample;
-                stim_times             = a.chan3     - first_sample;
-                stim_times(stim_times<0) = [];
-                stim_times(stim_times>max(pulse_times)) =[];
-                if length(stim_times) == 584
-                    mbi_times                             = a.chan2    - first_sample;                    
-                    mbi_times(mbi_times<0)                = [];
-                    mbi_times(mbi_times>max(pulse_times)) = [];
-                    stim_times                            = [mbi_times(1) ;stim_times];
-                end
+                % now shift everything so that first sample is zero.
+                first_sample                            = time(1);
+                time                                    = time        - first_sample;
+                pulse_times                             = pulse_times - first_sample;
+                mbi_times                               = mbi_times   - first_sample;
+                stim_times                              = stim_times  - first_sample;
+                
                 %% store the stuff
                 scr.hdr                = a.FileInfo;
                 scr.time               = time;
                 scr.y                  = data;
+                scr.y                  = [scr.y    ; repmat(scr.y(end),25000,1)];
+                scr.time               = [scr.time ; repmat(scr.time(end),25000,1) + [1:25000]'];                
                 scr.tsample            = length(time);
                 scr.sampling_period    = (a.head1.sampleinterval/1000);%in ms
                 scr.sampling_rate      = 1000/scr.sampling_period;%in hertz.
@@ -102,10 +141,11 @@ classdef SCR < handle
                 %
                 c = 0;
                 scr.event = [];
-                for distance = unique(s.paradigm{1}.presentation.dist)
-                    c                                    = c + 1;
-                    scr.event(:,c)                       = zeros(length(scr.y),1);
-                    ii                                   = find(s.paradigm{1}.presentation.dist == distance);
+                s.paradigm{1}.presentation.dist(ismember(s.paradigm{1}.presentation.dist, [1001 1002])) = 0;
+                for distance = unique(s.paradigm{1}.presentation.dist)                    
+                    c                  = c + 1;
+                    scr.event(:,c)     = zeros(length(scr.y),1); 
+                    ii                 = find(s.paradigm{1}.presentation.dist == distance);
                     
                     %transform distance to cond id
                     if distance == -135
@@ -134,10 +174,10 @@ classdef SCR < handle
                     
                     event_times                          = stim_times(ii);
                     event_index                          = event_times;
-                    scr.event(round(event_times),c) = true;
+                    scr.event(round(event_index),c)      = true;
                     scr.event_name{c}                    = sprintf('%03d',cond_id);
                     scr.event_plotting{c}.line_width     = {{'linewidth', 2}};
-                    scr.event_plotting{c}.marker_size    = {{'markersize', 5}};
+                    scr.event_plotting{c}.marker_size    = {{'markersize', 10}};
                     scr.event_plotting{c}.symbol         = {{'symbol','+'}};
                     scr.event_plotting{c}.line           = {{'line',{'line' '-'}}};
                     scr.event_plotting{c}.color          = {{'color',Project.colors(:,cond_id)}};
@@ -495,7 +535,7 @@ classdef SCR < handle
 
                 %store
                 c = 0;
-                for ncond = 1:11
+                for ncond = 1:9
                     for nEvent = find(self.event(:,ncond))'
                         c                   = c+1;
                         data.event(c).time  = (nEvent*data.samplingperiod);%in ms
