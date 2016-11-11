@@ -68,6 +68,7 @@ classdef Project < handle
         mbi_valid             = setdiff(1:65,Project.mbi_invalid);
         roi                   = struct('xyz',{[30 0 -24] [30 22 -8] [33 22 6] [39 22 -6] [44 18 -13] [-30 18 -6] [-9 4 4] [40 -62 -12]},'label',{'rAmy' 'rAntInsula' 'rAntInsula2' 'rAntInsula3' 'rFronOper' 'lAntInsula' 'BNST' 'IOC'} );%in mm
         colors                = [ circshift( hsv(8), [3 0] );[0 0 0];[.8 0 0];[.8 0 0]]';
+        valid_atlas_roi       = setdiff(1:63,[49 50 51]);%this excludes all the ROIs that are huge in number of voxels
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.         
@@ -1018,6 +1019,44 @@ classdef Project < handle
                 set(gca,'color','none')
             end
         end                        
+        function [names] =CacheROI(self)
+           %run this method to cache all the ROIs that are potentially interesting
+           
+           %% the mumfordian analysis at ROIs which are shown to be            
+           sk               = 6;           
+           ngroup           = 3;
+           run              = 1;
+           model            = 3;
+           beta_image_index = 1:4;
+           covariate_id     = 0;
+           t                = spm_list('table',self.SecondLevel_ANOVA(ngroup,run,model,beta_image_index,sk,covariate_id));%SecondLevel_ANOVA(ngroup,run,model,beta_image_index,sk,covariate_id)           
+           betas            = reshape(1:715,65,11)';
+           betas            = betas(1:8,self.mbi_valid);
+           names            = [];
+           list1            = self.get_selected_subjects(ngroup,1).list;
+           list0            = self.get_selected_subjects(ngroup,0).list;
+           for sk = [0];
+               for coor = [t.dat{:,end};ones(1,size(t.dat,1))];
+                   for ngroup = 3                             
+                       r = ROI('voxel_based',coor ,'chrf_0_0_mumfordian',0,betas(:)',list1,sk);                                                                     
+                       fprintf('-------------------------------------------------------------------------------------------\n');
+                       r = ROI('voxel_based',coor ,'chrf_0_0_mumfordian',0,betas(:)',list0,sk);                                              
+                   end
+               end
+           end           
+           fprintf('-------------------------------------------------------------------------------------------\n');
+           fprintf('-------------------------------------------------------------------------------------------\n');
+           fprintf('-------------------------------------------------------------------------------------------\n');
+           %% get rois for all the ROIs as well.
+           for sk = [0];
+               for ngroup = 3
+                   for nroi = self.valid_atlas_roi
+                       r = ROI('roi_based',nroi,'chrf_0_0_mumfordian',0,betas(:)',list1,sk);                                                                     
+                       r = ROI('roi_based',nroi,'chrf_0_0_mumfordian',0,betas(:)',list0,sk);
+                   end
+               end
+           end
+        end
     end
     
     methods %plotters
