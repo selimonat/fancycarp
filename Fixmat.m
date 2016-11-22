@@ -431,7 +431,7 @@ classdef Fixmat < Project
                 imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.stimulus);
                 hold on;
                 h     = imagesc(obj.bincenters_x,obj.bincenters_y,M(:,:,nc),[d u]);
-                set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.9+.1);
+                set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.5+.5);
                 axis image;
                 axis off;
 %                 try
@@ -785,6 +785,22 @@ classdef Fixmat < Project
             end
             obj.bc = old_value;
         end
+         function [count]=EyeNoseMouth(obj,map)           
+           %% count number of fixations in each roi.
+           count = map(:)'*reshape(roi,size(roi,1)*size(roi,2),size(roi,3));
+         end
+         function roi = GetFaceROIs(obj)
+             [x y] = meshgrid(1:size(obj.stimulus,2),1:size(obj.stimulus,1));
+             %% build rois.
+             %coordinates of ROI centers.
+             coor = [[133 172 20 20];[365 172 20 20];[255 269 15 25]; [257 425 25 15]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.
+             for n = 1:size(coor,1)
+                 roi(:,:,n) = sqrt(((x-coor(n,1))./coor(n,3)).^2 + ((y-coor(n,2))./coor(n,4)).^2)<4;
+             end
+             %            figure(2);imagesc(obj.stimulus);alpha(sum(roi,3));
+             %            roi(:,:,5) = sum(roi(:,:,1:4),3);
+             %            for n = 1:size(roi,3);figure(n);h=imagesc(obj.stimulus);set(h,'alphaData',roi(:,:,n));drawnow;end
+         end
     end
 end
 
