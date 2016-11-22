@@ -506,7 +506,8 @@ classdef SCR < handle
             index  = [1:8 12 16 17:24];
             for c = 1:length(condcollector)
                 timey = (self.ledalab.x(:,1) >= min(timeframe))&(self.ledalab.x(:,1) <= max(timeframe));%time window
-                dummy = mean(self.ledalab.y(timey,strcmp(condcollector{c},self.ledalab.condnames)'));
+                condy = strcmp(condcollector{c},self.ledalab.condnames)';
+                dummy = mean(self.ledalab.y(timey,condy));
                 out_raw(index(c),1)       = mean(dummy);
                 %out_rawsd(index(c),1)     = std(dummy)./sqrt(length(dummy));
             end
