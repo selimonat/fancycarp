@@ -18,6 +18,7 @@ classdef Fixmat < Project
         dendro_leafOrder    = [];
         maps%current maps;
         mds%mds results
+        cmap_limits         = 7;
     end
     
     properties (Hidden,SetAccess = private)
@@ -407,7 +408,7 @@ classdef Fixmat < Project
             end
             %get colormap limits.
             if strcmp(cmap,'linear')
-                [d u] = GetColorMapLimits(M,7);
+                [d u] = GetColorMapLimits(M,obj.cmap_limits);
                 if sum(obj.maps(:) < 0) == 0%if there are no negative values
                     d = 0;
                 end
@@ -434,6 +435,7 @@ classdef Fixmat < Project
                 set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.9+.1);
                 axis image;
                 axis off;
+                            
 %                 try
 %                     t     = sprintf('%s %d ',obj.map_titles{nc}{1:2});
 %                     title(t,'interpreter','none');
@@ -441,7 +443,7 @@ classdef Fixmat < Project
                 drawnow
             end
 %                         thincolorbar('vert');
-            colorbar
+colorbar
         end
         function getmaps(obj,varargin)
             %will populate the maps property based on the filter in
