@@ -498,7 +498,21 @@ classdef SCR < handle
                 fprintf('.data is empty honey\n')
             end
         end
-
+        function [out_z out_raw] = getTuning(self,timeframe)
+            out_raw = nan(3*8,1);
+            condcollector = { 'base_0045','base_0090','base_0135','base_0180','base_0225','base_0270','base_0315','base_0360',...
+                'cond_0180','cond_0360',...
+                'test_0045','test_0090','test_0135','test_0180','test_0225','test_0270','test_0315','test_0360'};
+            index  = [1:8 12 16 17:24];
+            for c = 1:length(condcollector)
+                timey = (self.ledalab.x(:,1) >= min(timeframe))&(self.ledalab.x(:,1) <= max(timeframe));%time window
+                condy = strcmp(condcollector{c},self.ledalab.condnames)';
+                dummy = mean(self.ledalab.y(timey,condy));
+                out_raw(index(c),1)       = mean(dummy);
+                %out_rawsd(index(c),1)     = std(dummy)./sqrt(length(dummy));
+            end
+            out_z = nanzscore(out_raw);
+        end
     end
     methods %plotters
         function plot(self)
@@ -568,7 +582,7 @@ classdef SCR < handle
             if ~isempty(self.ledalab)%if ledalab analysis is done
                 %detect time window, based on averaged data we take [1.5 4]
                 %seconds. Could be improved for single-subject variations
-                i                    = (self.ledalab.x(:,1) >= 1.5)&(self.ledalab.x(:,1) <= 4);%time window
+                i                    = (self.ledalab.x(:,1) >= 2)&(self.ledalab.x(:,1) <= 5.0);%time window
                 M = [];S=[];
                 for c = conds
                     dummy = mean(self.ledalab.y(i,self.ledalab.c == c));
