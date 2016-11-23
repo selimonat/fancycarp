@@ -8,10 +8,9 @@ classdef Group < Project
         ids
         pmf
         tunings
-        SI        
+        SI
         sigma_cond
         sigma_test
-        SCR_ampl
     end
     
     methods
@@ -34,9 +33,9 @@ classdef Group < Project
             for s = 1:length(self.subject)
                 csps = [csps self.subject{s}.csp];
             end
-        end        
+        end
         %
-       
+        
         function ModelRatings(self,run,funtype)
             %create a tuning object and fits FUNTYPE to it.
             self.tunings.rate{run} = Tuning(self.Ratings(run));%create a tuning object for the RUN for ratings.
@@ -45,14 +44,10 @@ classdef Group < Project
         function ModelSCR(self,run,funtype)
             %create a tuning object and fits FUNTYPE to it.
             self.tunings.scr = Tuning(self.getSCRbars(run));%create a tuning object for the RUN for SCRS.
-%             self.tunings.scr.SingleSubjectFit(funtype);%call fit method from the tuning object
+            %             self.tunings.scr.SingleSubjectFit(funtype);%call fit method from the tuning object
         end
         function getSCRtunings(self,run,funtype)
             self.ModelSCR(run,funtype);
-        end
-        function [out] = loadmises(self)
-            a = load(sprintf('%smidlevel%smisesmat.mat',self.path_project,filesep));
-            out = a.misesmat(self.ids,:);
         end
         function getSI(self,funtype)
             %fits FUNTYPE to behavioral ratings and computes Sharpening
@@ -100,7 +95,18 @@ classdef Group < Project
                 self.pmf.csn_after_beta(c,1)   = self.subject{s}.pmf.params1(4,2);
             end
         end
-       
+        function out = getSCR(self,varargin)
+            data = NaN(8*3,length(self.ids));
+            for sc = 1:length(self.ids)
+                if ~isempty(varargin)
+                    data(:,sc) = self.subject{sc}.getSCR(varargin{:});
+                else
+                    data(:,sc) = self.subject{sc}.getSCR; %take default timewindow defined in SCR object
+                end
+            end
+            out = nanzscore(data);
+        end
+        
         function plotPMFbars(self)
             means     = reshape(mean(self.pmf.params1(:,1,:),3),2,2);%compute the mean
             stds      = reshape(std(self.pmf.params1(:,1,:),0,3),2,2);
@@ -138,15 +144,15 @@ classdef Group < Project
         end
         function PlotRatingFit(self,subject)
             if ~isempty(self.tunings.rate)
-               
+                
                 i    =  find(self.ids == subject);
-                ave  = mean(reshape(self.tunings.rate{3}.y(i,:),2,8));                                             
+                ave  = mean(reshape(self.tunings.rate{3}.y(i,:),2,8));
                 x    = mean(reshape(self.tunings.rate{3}.x(i,:),2,8));
                 x_HD = linspace(min(x),max(x),1000);
                 h    = figure(100);clf
                 subplot(1,2,1)
                 title(sprintf('Sub: %i, Likelihood: %03g (p = %5.5g)',subject,self.tunings.rate{3}.singlesubject{i}.Likelihood,self.tunings.rate{3}.singlesubject{i}.pval));
-                hold on;               
+                hold on;
                 plot(x_HD,self.tunings.rate{3}.singlesubject{i}.fitfun(x_HD,self.tunings.rate{3}.singlesubject{i}.Est),'ro','linewidth',3);
                 plot(x,ave, 'b','linewidth', 3);
                 ylabel('Cond')
@@ -154,31 +160,31 @@ classdef Group < Project
                 grid on;
                 
                 subplot(1,2,2)
-                ave  = mean(reshape(self.tunings.rate{4}.y(i,:),2,8));  
+                ave  = mean(reshape(self.tunings.rate{4}.y(i,:),2,8));
                 title(sprintf('CSP: %i, Likelihood: %03g (p = %5.5g)',self.subject{i}.csp,self.tunings.rate{4}.singlesubject{i}.Likelihood,self.tunings.rate{4}.singlesubject{i}.pval));
                 hold on;
                 plot(x_HD,self.tunings.rate{4}.singlesubject{i}.fitfun(x_HD,self.tunings.rate{4}.singlesubject{i}.Est),'ro','linewidth',3);
-               
-                 plot(x,ave, 'b','linewidth', 3);
+                
+                plot(x,ave, 'b','linewidth', 3);
                 ylabel('Test')
-                EqualizeSubPlotYlim(h);               
+                EqualizeSubPlotYlim(h);
                 drawnow;
                 grid on;
                 pause
             else
                 fprintf('No tuning object found here yet...\n');
             end
-        end                                
-        %%       
-        function [rating] = PlotRatings(self,runs)            
+        end
+        %%
+        function [rating] = PlotRatings(self,runs)
             hvfigure;
             trun = length(runs);
             crun = 0;
             for run = runs(:)'%for each run make a subplot column
                 crun    = crun + 1;
                 %
-                subplot(2,trun,crun);                
-                rating  = self.Ratings(run);%collect group ratings                
+                subplot(2,trun,crun);
+                rating  = self.Ratings(run);%collect group ratings
                 imagesc(rating.y,[0 10]);thincolorbar('vert');%single subject data
                 set(gca,'xticklabel',{'CS+' 'CS-'},'xtick',[4 8],'fontsize',20,'yticklabel',{''});
                 colormap hot
@@ -188,10 +194,10 @@ classdef Group < Project
                 y     = y./repmat(sum(y),size(y,1),1)*100;%make it a percentage
                 imagesc(rating.x(1,:),x,y,[0 75]);axis xy;
                 thincolorbar('vert');
-                hold on                
+                hold on
                 h     = errorbar(mean(rating.x),mean(rating.y),std(rating.y),'g-');
                 axis xy;
-                set(gca,'xticklabel',{'CS+' 'CS-'},'xtick',[0 180]);                
+                set(gca,'xticklabel',{'CS+' 'CS-'},'xtick',[0 180]);
                 hold off;
             end
         end
@@ -207,9 +213,9 @@ classdef Group < Project
             set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
             x = linspace(self.tunings.rate{3}.x(1,1),self.tunings.rate{3}.x(1,end),100);
             plot(x ,  self.tunings.rate{3}.groupfit.fitfun( x,self.tunings.rate{3}.groupfit.Est(:,1:end-1)) ,'k--','linewidth',2);
-%             plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
+            %             plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
             hold off
-%             set(gca,'fontsize',14);
+            %             set(gca,'fontsize',14);
             axis square
             t=title('Conditioning');set(t,'FontSize',14);
             %
@@ -221,26 +227,51 @@ classdef Group < Project
             xlim([-160 200]);
             set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
             x = linspace(self.tunings.rate{4}.x(1,1),self.tunings.rate{4}.x(1,end),100);
-%             plot(x ,  self.tunings.rate{4}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{4}.params(:,1:end-1))) ,'k','linewidth',1);
+            %             plot(x ,  self.tunings.rate{4}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{4}.params(:,1:end-1))) ,'k','linewidth',1);
             plot(x ,  self.tunings.rate{4}.groupfit.fitfun( x,self.tunings.rate{4}.groupfit.Est(:,1:end-1)) ,'k','linewidth',2);
             x = linspace(self.tunings.rate{3}.x(1,1),self.tunings.rate{3}.x(1,end),100);
-% % %            plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
-%             plot(x , self.tunings.rate{3}.groupfit.fitfun( x,self.tunings.rate{3}.groupfit.Est(:,1:end-1)) ,'k--','linewidth',2);
-%             set(gca,'fontsize',14);
+            % % %            plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
+            %             plot(x , self.tunings.rate{3}.groupfit.fitfun( x,self.tunings.rate{3}.groupfit.Est(:,1:end-1)) ,'k--','linewidth',2);
+            %             set(gca,'fontsize',14);
             axis square
             t=title('Test');set(t,'FontSize',14);
             annotation(f,'textbox',[0.78 0.65 0.1 0.1],'String',['SI = ' num2str(nanmean(self.SI))],'FitBoxToText','off','LineStyle','none');
             hold off
         end
+        function PlotSCR(self)
+            out = self.getSCR;
+            M = mean(out,2);
+            S = std(out,0,2);
+            f=figure;
+            %
+            for ph = 1:3
+                ind = ph-1;
+                subplot(1,3,ph);
+                h = bar(-135:45:180,M([1:8]+8*ind));SetFearGenBarColors(h);
+                hold on;
+                errorbar(-135:45:180,M([1:8]+8*ind),S([1:8]+8*ind)./sqrt(length(self.ids)),'k.','LineWidth',2);
+                xlim([-180 225]);
+                box off
+                set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
+                hold off
+                axis square
+            end
+            subplot(1,3,1)
+            t=title('Base');set(t,'FontSize',14);
+            subplot(1,3,1)
+            t=title('Cond');set(t,'FontSize',14);
+            subplot(1,3,1)
+            t=title('Test');set(t,'FontSize',14);
+        end
         %%
         function [scr] = getSCRbars(self,run)
-            %will collect the SCR tunings from single subjects 
+            %will collect the SCR tunings from single subjects
             scr.y = [];
             scr.x = [];
             scr.ids = [];
             for s = 1:length(self.subject)
                 if ~isempty(self.subject{s})
-                  dummy = self.subject{s}.GetSubSCRbars(run);
+                    dummy = self.subject{s}.GetSubSCRbars(run);
                     if ~isempty(dummy)
                         scr.y   = [scr.y; dummy.y];
                         scr.x   = [scr.x; dummy.x];
@@ -250,7 +281,7 @@ classdef Group < Project
             end
         end
         function [scr] = getSCRgraphs(self,run,cond)
-            %will collect the SCR response over time from single subjects 
+            %will collect the SCR response over time from single subjects
             if nargin < 3
                 cond = 1:8;
             end
@@ -260,7 +291,7 @@ classdef Group < Project
             scr.ids = [];
             for s = 1:length(self.subject)
                 if ~isempty(self.subject{s})
-                  dummy = self.subject{s}.GetSubSCRgraphs(run,cond);
+                    dummy = self.subject{s}.GetSubSCRgraphs(run,cond);
                     if ~isempty(dummy)
                         scr.y   = cat(3,scr.y,dummy.y(1:800,:));
                         scr.conds   = [scr.conds; dummy.conds];
@@ -271,7 +302,7 @@ classdef Group < Project
             end
         end
         function [rating] = Ratings(self,run)
-            %will collect the ratings from single subjects 
+            %will collect the ratings from single subjects
             rating.y  = [];
             rating.x  = [];
             rating.ids = [];
