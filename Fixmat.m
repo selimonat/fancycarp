@@ -787,15 +787,18 @@ colorbar
             end
             obj.bc = old_value;
         end
-         function [count]=EyeNoseMouth(obj,map)           
+         function [count]=EyeNoseMouth(obj,map)                       
            %% count number of fixations in each roi.
-           count = map(:)'*reshape(roi,size(roi,1)*size(roi,2),size(roi,3));
+           roi = obj.GetFaceROIs;
+           for n = 1:size(roi,3)               
+            count(n) = nanmean(map(:).*Vectorize(roi(:,:,n)));
+           end
          end
          function roi = GetFaceROIs(obj)
              [x y] = meshgrid(1:size(obj.stimulus,2),1:size(obj.stimulus,1));
              %% build rois.
              %coordinates of ROI centers.
-             coor = [[133 172 20 20];[365 172 20 20];[255 269 15 25]; [257 425 25 15]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.
+             coor = [[140 172 20 15];[370 172 20 15];[255 269 16 25]; [257 425 30 15]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.
              for n = 1:size(coor,1)
                  roi(:,:,n) = sqrt(((x-coor(n,1))./coor(n,3)).^2 + ((y-coor(n,2))./coor(n,4)).^2)<4;
              end

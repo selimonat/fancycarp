@@ -101,7 +101,7 @@ classdef SCR < handle
                         % get stimulus indices for the above onsets
                         current_phase          = scr.block2phase(nblock);
                         cond_seq               = s.paradigm{current_phase}.presentation.dist;
-                        if length(cond_seq) ~= length(onset_sample);keyboard;end;%if problem then stoPPP
+                        if length(cond_seq) ~= length(onset_sample);error('');end;%if problem then stoPPP
                         cond_ids               = unique(cond_seq);
                         t_stim_id              = length(cond_ids);%total stim id
                         % run through different stimulus indices
