@@ -11,7 +11,7 @@ classdef Subject < Project
         path
         csp
         csn
-        scr    
+        scr
         pmf
         feargen
 		trio_name    =[];
@@ -31,7 +31,6 @@ classdef Subject < Project
                 try
                     s.pmf = s.getPMF;
                     s.feargen = s.getFearGen;
-                    s.scrZ    = s.getSCR;
                 end
 
             else
@@ -304,8 +303,16 @@ classdef Subject < Project
                 warning('no rating present for this subject and run (%d) \n',run);
             end            
         end
-        
-        function out    = GetSubSCRgraphs(self,run,cond)
+        function [outz, outraw] = getSCR(self,varargin)
+            %self.scr.cut(self.scr.findphase('base$'):self.scr.findphase('test$'))
+            self.scr.run_ledalab;
+            if ~isempty(varargin) %if timeframe is provided
+                [outz, outraw] = self.scr.getZscore(varargin{:});
+            else %take default from SCR object
+                [outz, outraw] = self.scr.getZscore;
+            end
+        end
+        function out = GetSubSCRgraphs(self,run,cond)
             if nargin < 3
                 cond=1:8;
             end
@@ -341,6 +348,7 @@ classdef Subject < Project
             out.y = self.scr.fear_tuning;
             out.x = conddummy(cond);
             out.ind = cutnum;
+            close(gcf);
         end     
         function [o]=tRuns(self)
             %% returns the total number of runs in a folder
