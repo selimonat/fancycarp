@@ -2,6 +2,7 @@ classdef SCR < handle
     
     properties (Constant = true, Hidden)
         default_run = 4;%at which run the scr data is located.
+        default_timeframe = 2.5:5;
     end
     properties (Hidden)
         ledalab_defaults      = {'open', 'mat','downsample', 5, 'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1 };%
@@ -498,7 +499,12 @@ classdef SCR < handle
                 fprintf('.data is empty honey\n')
             end
         end
-        function [out_z out_raw] = getTuning(self,timeframe)
+        function [out_z out_raw] = getZscore(self,varargin)
+            if ~isempty(varargin)
+                timeframe = varargin{:};
+            else
+                timeframe = self.default_timeframe;
+            end
             out_raw = nan(3*8,1);
             condcollector = { 'base_0045','base_0090','base_0135','base_0180','base_0225','base_0270','base_0315','base_0360',...
                 'cond_0180','cond_0360',...
