@@ -101,7 +101,7 @@ classdef SCR < handle
                         % get stimulus indices for the above onsets
                         current_phase          = scr.block2phase(nblock);
                         cond_seq               = s.paradigm{current_phase}.presentation.dist;
-                        if length(cond_seq) ~= length(onset_sample);error('');end;%if problem then stoPPP
+                        if length(cond_seq) ~= length(onset_sample);error('Number of triggers doesn''t match to paradigm file...');end;%if problem then stoPPP
                         cond_ids               = unique(cond_seq);
                         t_stim_id              = length(cond_ids);%total stim id
                         % run through different stimulus indices
@@ -499,26 +499,32 @@ classdef SCR < handle
                 fprintf('.data is empty honey\n')
             end
         end
-        function [out_z out_raw] = getZscore(self,varargin)
+        function [out_z, out_raw] = ledalab_summary(self,varargin)
+            
+            self.cut(self.findphase('base$'):self.findphase('test$'));
+            self.run_ledalab;%collects the ledalab struct
+            
             if ~isempty(varargin)
                 timeframe = varargin{:};
             else
                 timeframe = self.default_timeframe;
             end
+            %
             out_raw = nan(3*8,1);
             condcollector = { 'base_0045','base_0090','base_0135','base_0180','base_0225','base_0270','base_0315','base_0360',...
                 'cond_0180','cond_0360',...
                 'test_0045','test_0090','test_0135','test_0180','test_0225','test_0270','test_0315','test_0360'};
             index  = [1:8 12 16 17:24];
             for c = 1:length(condcollector)
-                timey = (self.ledalab.x(:,1) >= min(timeframe))&(self.ledalab.x(:,1) <= max(timeframe));%time window
-                condy = strcmp(condcollector{c},self.ledalab.condnames)';
-                dummy = mean(self.ledalab.y(timey,condy));
-                out_raw(index(c),1)       = mean(dummy);
+                timey                     = (self.ledalab.x(:,1) >= min(timeframe))&(self.ledalab.x(:,1) <= max(timeframe));%time window
+                condy                     = strcmp(condcollector{c},self.ledalab.condnames)';
+                dummy                     = mean(self.ledalab.y(timey,condy));%take average over time
+                out_raw(index(c),1)       = mean(dummy);%take average across trials
                 %out_rawsd(index(c),1)     = std(dummy)./sqrt(length(dummy));
             end
-            out_z = nanzscore(out_raw);
+            out_z = nanzscore(out_raw);            
         end
+        
     end
     methods %plotters
         function plot(self)
