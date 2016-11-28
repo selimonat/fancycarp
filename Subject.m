@@ -27,9 +27,11 @@ classdef Subject < Project
                 end
                 s.csp = s.paradigm{s.default_run}.stim.cs_plus;
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
-                s.scr = SCR(s);
                 try
-                    s.pmf = s.getPMF;
+                    %s.scr = SCR(s);
+                end
+                try
+%                     s.pmf = s.getPMF;
                     s.feargen = s.getFearGen;
                 end
 
@@ -303,15 +305,7 @@ classdef Subject < Project
                 warning('no rating present for this subject and run (%d) \n',run);
             end            
         end
-        function [outz, outraw] = getSCR(self,varargin)
-            %self.scr.cut(self.scr.findphase('base$'):self.scr.findphase('test$'))
-            self.scr.run_ledalab;
-            if ~isempty(varargin) %if timeframe is provided
-                [outz, outraw] = self.scr.getZscore(varargin{:});
-            else %take default from SCR object
-                [outz, outraw] = self.scr.getZscore;
-            end
-        end
+        
         function out = GetSubSCRgraphs(self,run,cond)
             if nargin < 3
                 cond=1:8;

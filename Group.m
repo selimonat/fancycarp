@@ -99,9 +99,9 @@ classdef Group < Project
             data = NaN(8*3,length(self.ids));
             for sc = 1:length(self.ids)
                 if ~isempty(varargin)
-                    data(:,sc) = self.subject{sc}.getSCR(varargin{:});
+                    data(:,sc) = self.subject{sc}.scr.ledalab_summary(varargin{:});
                 else
-                    data(:,sc) = self.subject{sc}.getSCR; %take default timewindow defined in SCR object
+                    data(:,sc) = self.subject{sc}.scr.ledalab_summary; %take default timewindow defined in SCR object
                 end
             end
             out = nanzscore(data);
