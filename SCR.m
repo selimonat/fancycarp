@@ -2,7 +2,7 @@ classdef SCR < handle
     
     properties (Constant = true, Hidden)
         default_run = 4;%at which run the scr data is located.
-        default_timeframe = 2.5:5;
+        default_timeframe = 2.5:5.5;
     end
     properties (Hidden)
         ledalab_defaults      = {'open', 'mat','downsample', 5, 'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1 };%
