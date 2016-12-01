@@ -10,20 +10,14 @@ classdef Project < handle
         PixelPerDegree    = 37;
     end
     properties (Hidden,Constant)
-       
-%         path_project        = '/Users/onat/Documents/BehavioralExperiments/fearcloud/';
-%         path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sBDNF%s',homedir,filesep,filesep,filesep,filesep);
-%         path_project      = sprintf('%s%sDocuments%sExperiments%sBDNF%sdata%s',homedir,filesep,filesep,filesep,filesep,filesep)
-        path_project      = sprintf('%s%sDocuments%sExperiments%sFearCloud_Eyelab%sdata%s',homedir,filesep,filesep,filesep,filesep,filesep)
-%          path_project      = sprintf('%s%sDocuments%sExperiments%sPlaPil%sdata%s',homedir,filesep,filesep,filesep,filesep,filesep)
+        path_project      = [];%refer to get function at the bottom
+
         scr_blocknames    = {'test_rating' 'test' 'cond_rating' 'cond' 'base_rating' 'base' };
 
         path_stimuli      = sprintf('%sstimuli%s',Project.path_project,filesep);
         ETMaskpath        = sprintf('%smidlevel%ssubjmasks%sETmask.mat',Project.path_project,filesep,filesep)
         condition_labels  = {'null' '1' '2' '3' '4' '5' '6' '7' '8' 'ucs' 'odd'};
-        plot_style
-        subjects_600      = [27,37:40,42:65];
-        subjects_1500     = [6:26,28,30:36];        
+        plot_style        
         BDNF              = [2 1 1 1 2 1 2 1 2 2   1  1  1  2 1  1  2  2  2  2  1  1  1  2  1  1  1  1  1  1  1  2  2    2  2  2  2  2  2     2  1  1  1  1  1  2  1  1  2  1  1  2   1  1  2  1  1  1  2  2  1  1  1  1  1  2  2  2  2  1  2  1  2  1  1  2  1  2  2  2  2];
         subjects_bdnf     = [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33   35 36 37 38 39 40   41 42 43 44 45 46 47 48 49  50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81  82];
         BDNFcsp           = [1 1 2 3 2 4 3 5 4  5 6   7  8  6  1  2  7 8  2  8  1  2   3  1  4  5  6  7  8  5 4  5  2    3   4  6  5  6  1    3  3  7  1  5  2  7  6  4   8  8  3  1  4  7  1  1  5  2  5  2  4  6  6  8  8  6  4  3  7  2  5  3  2  5  6  2  7  8  6  4   7]; 
@@ -32,6 +26,7 @@ classdef Project < handle
     end
     
     methods
+        
         function stim = find_stim(self,varargin)
             %will return the path to the Nth (varargin) stimulus. If not
             %specified the average stim will be returned.                       
@@ -102,7 +97,18 @@ classdef Project < handle
             [~, d] = spm_select('FPList',s.path,'^run');
             o      = length(d);
         end
-                
+    
+    
+        function o = get.path_project;
+            %
+            if isunix
+                o = '/mnt/data/project_bdnf/data/';
+            elseif ismac
+                o = '/Volumes/feargen2/project_bdnf/data';
+            else
+                %PUT YOUR PATH HERE, DELETE THIS LINE
+            end
+        end        
     end
     
 end
