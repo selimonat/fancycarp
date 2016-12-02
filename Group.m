@@ -35,20 +35,96 @@ classdef Group < Project
             end
         end
         %
+        function T = GroupTable(self)
+            
+            %%
+            T = table();sub = [];
+            for ns = 1:length(self.subject)
+                sub = [sub ns]
+                try
+                    T = [T;[self.subject{ns}.feargen_rating(:).param_table]];
+                catch
+                    T = [T;nan(1,size(T,2))];
+                end
+            end
+            T.subject = sub';
+            %%
+%             T2 = table();sub = [];
+%             for ns = 1:length(self.subject)
+%                 sub = [sub ns]
+%                 try
+%                     T2 = [T2;[self.subject{ns}.feargen_scr(:).param_table]];
+%                 catch
+%                     dummy = array2table(nan(1,size(T2,2)),'variablenames',T2.Properties.VariableNames);
+%                     T2 = [T2;dummy];
+%                 end
+%             end
+%             %%
+%             T3 = [T T2];
+        end
+        function FitStan(self)
+            %will fit data a VonMises function using the MLE estimates as
+            %initial values;            
+            %% raw data                   
+            data.x=[];data.y=[];data.m=[];c = 0;
+            for phase  = 2:4
+                c  = c+1;
+                for ns = 1:length(self.subject)                                                 
+                    data.y = [data.y self.subject{ns}.get_rating(phase).y(:)];
+                    data.x = [data.x self.subject{ns}.get_rating(phase).x(:)];                
+                    data.m = [data.m c];
+                end
+            end
+            data.X = size(data.x,1);
+            data.T = size(data.y,2);
+            data.M = length(unique(data.m));
+            data.x = data.x(:,1);
+            %% initial estimates            
+            T                = self.GroupTable;
+            init             = [];
+            init.amp         = [T.rating_amp_02'    T.rating_amp_03'      T.rating_amp_04'];
+            init.kappa       = max(0.01,([T.rating_kappa_02'  T.rating_kappa_03'    T.rating_kappa_04']));
+            init.offset      = [T.rating_offset_02' T.rating_offset_03'   T.rating_offset_04'];
+            init.sigma_y     = [T.rating_sigma_y_02' T.rating_sigma_y_03' T.rating_sigma_y_04'];
+            %
+            for m = unique(data.m)
+                init.sigma_y(m)     = median(init.sigma_y(data.m == m));                
+                init.mu_amp(m)      = median(init.amp(data.m == m));
+                init.mu_offset(m)   = median(init.offset(data.m == m));
+                init.mu_kappa(m)    = max(0.01,(median(init.kappa(data.m == m))));
+            end
+            %
+            init.sigma_amp   = repmat(0.5,1,length(unique(data.m)));
+            init.sigma_offset= repmat(0.5,1,length(unique(data.m)));
+            init.sigma_kappa = repmat(0.5,1,length(unique(data.m)));
+            init.sigma_y     = repmat(0.5,1,length(unique(data.m)));                                    
+            
+            %%            
+            addpath('/home/onat/Documents/Code/C++/cmdstan-2.12.0/');
+            addpath('/home/onat/Documents/Code/Matlab/MatlabProcessManager/');
+            addpath('/home/onat/Documents/Code/Matlab/MatlabStan/')
+            cd ~/Desktop/FitVonMises/;
+            !rm FitVonMises FitVonMises.hpp FitVonMises.cpp  output-* temp.*;
+            fit    = stan('file','FitVonMises.stan','data',data,'verbose',true,'iter',1000,'init',init);
+            cd ~/Desktop/fancycarp;
+        end
         
         function ModelRatings(self,run,funtype)
             %create a tuning object and fits FUNTYPE to it.
             self.tunings.rate{run} = Tuning(self.Ratings(run));%create a tuning object for the RUN for ratings.
             self.tunings.rate{run}.SingleSubjectFit(funtype);%call fit method from the tuning object
         end
+        
         function ModelSCR(self,run,funtype)
             %create a tuning object and fits FUNTYPE to it.
             self.tunings.scr = Tuning(self.getSCRbars(run));%create a tuning object for the RUN for SCRS.
             %             self.tunings.scr.SingleSubjectFit(funtype);%call fit method from the tuning object
         end
+        
         function getSCRtunings(self,run,funtype)
             self.ModelSCR(run,funtype);
         end
+        
         function getSI(self,funtype)
             %fits FUNTYPE to behavioral ratings and computes Sharpening
             %Index.
@@ -80,48 +156,27 @@ classdef Group < Project
             end
         end
         %%
-        function getPMF(self)
-            c = 0;
-            for s = 1:length(self.subject)
-                c = c + 1;
-                self.pmf.csp_before_alpha(c,1) = self.subject{s}.pmf.params1(1,1);
-                self.pmf.csp_after_alpha(c,1)  = self.subject{s}.pmf.params1(3,1);
-                self.pmf.csp_before_beta(c,1)  = self.subject{s}.pmf.params1(1,2);
-                self.pmf.csp_after_beta(c,1)   = self.subject{s}.pmf.params1(3,2);
-                %
-                self.pmf.csn_before_alpha(c,1) = self.subject{s}.pmf.params1(2,1);
-                self.pmf.csn_after_alpha(c,1)  = self.subject{s}.pmf.params1(4,1);
-                self.pmf.csn_before_beta(c,1)  = self.subject{s}.pmf.params1(2,2);
-                self.pmf.csn_after_beta(c,1)   = self.subject{s}.pmf.params1(4,2);
-            end
-        end
         function out = getSCR(self,varargin)
+            valid = [];
             data = NaN(8*3,length(self.ids));
-            for sc = 1:length(self.ids)
-                if ~isempty(varargin)
-                    data(:,sc) = self.subject{sc}.scr.ledalab_summary(varargin{:});
-                else
-                    data(:,sc) = self.subject{sc}.scr.ledalab_summary; %take default timewindow defined in SCR object
+            for sc = 1:length(self.ids)                
+                try
+                    if ~isempty(varargin)
+                        data(:,sc) = self.subject{sc}.scr.ledalab_summary(varargin{:});
+                    else
+                        data(:,sc) = self.subject{sc}.scr.ledalab_summary; %take default timewindow defined in SCR object
+                    end
+                    valid = [valid sc];
+                catch
+                    cprintf([1 0 0],'SCR failed for subject %03d...\n',sc);
                 end
+                
             end
-            out = nanzscore(data);
+            out.y   = data'; % comes already nanzscored from SCR object
+            out.x   = repmat([-135:45:180]',3,size(out.y,1))';
+            out.ids = self.ids;
         end
         
-        function plotPMFbars(self)
-            means     = reshape(mean(self.pmf.params1(:,1,:),3),2,2);%compute the mean
-            stds      = reshape(std(self.pmf.params1(:,1,:),0,3),2,2);
-            sem       = stds/sqrt(length(self.ids));
-            
-            fig=figure;
-            [h,e] = barwitherr(sem,means);
-            set(gca,'XTickLabel',{'CS+','CS-'})
-            set(e,'LineWidth',1.5)
-            set(h(1), 'FaceColor','r')
-            set(h(2), 'FaceColor',[143/255 0 0 ])
-            ylim([20 80])
-            ylabel('threshold \alpha (degrees)')
-            legend('before','after','orientation','horizontal','location','southoutside')
-        end
         function [out, tags] = parameterMat(self)
             tags = {'csp_before_alpha' 'csp_after_alpha' 'csn_before_alpha' 'csn_after_alpha' ...
                 'csp_before_beta' 'csp_after_beta' 'csn_before_beta' 'csn_after_beta' ...

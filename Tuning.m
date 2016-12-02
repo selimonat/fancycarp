@@ -57,6 +57,7 @@ classdef Tuning < handle
                     self.fit_results.y_fitted(unit,:) = self.singlesubject{unit}.fit;
                     self.fit_results.x_HD(unit,:)     = self.singlesubject{unit}.x_HD;
                     self.fit_results.y_fitted_HD(unit,:) = self.singlesubject{unit}.fit_HD;
+                    self.fit_results.param_table         = array2table(self.singlesubject{unit}.Est,'variablenames',self.singlesubject{unit}.paramname);
                 end
             end            
         end
@@ -80,12 +81,14 @@ classdef Tuning < handle
                 U           = [ max(y)  2*std(y)];
                 result.dof    = 1;
                 result.funname= 'null';
+                result.paramname = {'amp'  'sigma_y'};
             elseif funtype == 2
                 result.fitfun = @(x,p) make_gaussian_fmri(x,p(1),p(2),p(3));%2 amp, std, offset
                 L           = [-range(y)*2    0       mean(y)-range(y)*2          .01    ];
                 U           = [range(y)*2     180      mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];%                
                 result.dof    = 3;
                 result.funname= 'gaussian';
+                result.paramname = {'amp' 'std' 'offset' 'sigma_y'};
             elseif funtype == 3
                 result.fitfun = @(x,p) self.make_gaussian_fmri_zeromean(x,p(1),p(2));%2 amp fwhm
 
@@ -97,30 +100,35 @@ classdef Tuning < handle
                 %detect the mean, store it and subtract it
                 CONSTANT    = mean(y);
                 y           = y-CONSTANT;%we are not interested in the baseline, just remove it so we don't need to estimated it.
+                result.paramname = {'amp' 'fwhm' 'sigma_y'};
             elseif funtype == 4
                 result.fitfun = @(x,p) make_gaussian_fmri_tau(x,p(1),p(2),p(3));%amp, tau, offset
                 L           = [-range(y)*2    0    mean(y)-range(y)*2          .01    ];
                 U           = [range(y)*2     180  mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
                 result.funname= 'gaussian_tau';
+                result.paramname = {'amp' 'tau' 'offset' 'sigma_y'};
             elseif funtype == 5
-                result.fitfun = @(x,p) VonMises_fmri(x, p(1), p(2), p(3));
-                L           = [ -range(y)*2  10.^-16  mean(y)-range(y)*2   0];%amp kappa offset
-                U           = [  range(y)*2  180       mean(y)+range(y)*2   std(y)];
+                result.fitfun = @(x,p) self.VonMises_immobile(x, p(1), p(2), p(3));
+                L             = [ eps             eps       min(y(:))-std(y)   eps ];
+                U             = [ range(y(:))     15        max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
                 result.dof    = 3;
                 result.funname= 'vonmises';
+                result.paramname = {'amp' 'kappa' 'offset' 'sigma_y'};
             elseif funtype == 6
                 result.fitfun = @(x,p) make_gabor1d_ZeroMean(x,p(1),p(2),p(3),p(4));%amp std freq baseline
                 L           = [ -range(y)*2  0    1  -range(y)*2    .01    ];
                 U           = [  range(y)*2  180   4   range(y)*2  std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 4;
                 result.funname= 'gabor';
+                result.paramname = {'amp' 'sigma' 'freq' 'offset' 'sigma_y'};
             elseif funtype == 7
                 result.fitfun = @(x,p) p(1)*cos(x*p(2)+p(3)) + p(4);%amp freq phase baseline
                 L           = [ -range(y)*2  0    0      -range(y)*2    .01    ];
                 U           = [  range(y)*2  2    2*pi    range(y)*2     std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
                 result.funname= 'cosine';
+                result.paramname = {'amp' 'freq' 'phase' 'offset' 'sigma_y'};
             elseif funtype == 8
                 result.fitfun = @(x,p) self.VonMises(x,p(1),p(2),p(3),p(4));%amp,kappa,centerX,offset
                 L             = [ eps             eps         min(x)   min(y(:))-std(y)   eps ];
@@ -129,6 +137,7 @@ classdef Tuning < handle
                 %                 U      = [ min(10,range(y)*1.1)  20   2*pi   pi   10];
                 result.dof    = 4;
                 result.funname= 'vonmisses_mobile';
+                result.paramname = {'amp' 'kappa' 'center' 'offset' 'sigma_y'};
             end
             %% set the objective function
             result.likelihoodfun  = @(params) sum(-log( normpdf( y - result.fitfun( x,params(1:end-1)) , 0,params(end)) ));
@@ -241,6 +250,13 @@ classdef Tuning < handle
             out    =  (exp(kappa*cos(deg2rad(X-centerX)))-exp(-kappa))./(exp(kappa)-exp(-kappa));%put it btw [0 and 1]
             out    =  amp*out + offset;%and now scale it
         end
+        function  [out] = VonMises_immobile(X,amp,kappa,offset)
+            %[out] = VonMises_immobile(X,amp,centerX,kappa,offset)
+            %
+            out = Tuning.VonMises(X,amp,kappa,0,offset);
+        end
+        
+        
         function [out] = make_gaussian_fmri_zeromean(x,amp,sd)            
             %
             %	Generates a Gaussian with AMP, FWHM and offset parameters. The center location is

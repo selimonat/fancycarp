@@ -20,6 +20,7 @@ classdef SCR < handle
         data
         fear_tuning
         ml
+        ok = 1;%tells you if the SCR object is in good health, by default it is. below if the triggers dont match this is set to 0;
     end
     % The following properties can be set only by class methods
     properties (SetAccess = private)
@@ -45,7 +46,7 @@ classdef SCR < handle
         %add a method to compute FIR analysis and plot the results based on
         %the corrected phasic responses.
         function scr = SCR(varargin)
-            %s is either the subject number of block id.
+            %s is either the subject number of block id.            
             if length(varargin) == 1%construct
                 s = varargin{1};
                 scr.path_acqfile  = s.path2data(s.id,SCR.default_run,'scr','acq');
@@ -101,7 +102,7 @@ classdef SCR < handle
                         % get stimulus indices for the above onsets
                         current_phase          = scr.block2phase(nblock);
                         cond_seq               = s.paradigm{current_phase}.presentation.dist;
-                        if length(cond_seq) ~= length(onset_sample);error('Number of triggers doesn''t match to paradigm file...');end;%if problem then stoPPP
+                        if length(cond_seq) ~= length(onset_sample);warning('Number of triggers doesn''t match to paradigm file...');scr.ok = 0;break;end;%if problem then stoPPP
                         cond_ids               = unique(cond_seq);
                         t_stim_id              = length(cond_ids);%total stim id
                         % run through different stimulus indices
@@ -117,6 +118,7 @@ classdef SCR < handle
                     end
                     %% create event channels also for the UCS during the calibration
                     %these are not in the paradigm file.
+                    if scr.ok%continue only if the above block succeeded
                     for nblock = 1:tblock-6%run through the calibration blocks
                         zero_vec               = false(scr.tsample,1);
                         %samples where this phase recorded
@@ -148,7 +150,9 @@ classdef SCR < handle
                     scr.event              = logical([scr.event              zero_vec]);
                     scr.event_name         = [scr.event_name         sprintf('1002')];
                     scr.event_plotting     = [scr.event_plotting            {s.plot_style(1002)}];
+                    end
                 else
+                    scr.ok = 0;
                     fprintf('No acq file found, :(.\n');
                 end
             elseif length(varargin) == 2 %cut
