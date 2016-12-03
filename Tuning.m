@@ -131,8 +131,8 @@ classdef Tuning < handle
                 result.paramname = {'amp' 'freq' 'phase' 'offset' 'sigma_y'};
             elseif funtype == 8
                 result.fitfun = @(x,p) self.VonMises(x,p(1),p(2),p(3),p(4));%amp,kappa,centerX,offset
-                L             = [ eps             eps         min(x)   min(y(:))-std(y)   eps ];
-                U             = [ range(y(:))     15        max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
+                L             = [ eps            0.001         min(x)   min(y(:))-std(y)   eps ];
+                U             = [ range(y(:))    8             max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
                 %                 L      = [ eps                   0.1   eps     -pi   eps ];
                 %                 U      = [ min(10,range(y)*1.1)  20   2*pi   pi   10];
                 result.dof    = 4;
@@ -150,7 +150,7 @@ classdef Tuning < handle
                 Init = mean(y);
             end
             %% add some small noise in case of super-flat ratings
-            if sum(diff(y)) == 0;y = y + rand(length(y),1)*.001;end
+            if sum(diff(y)) == 0;y = y + randn(length(y),1)*.001;end
             %% estimate initial values for sigma_noise
             %based on the likelihood of sigma given the data points assuming a Gaussian normal distribution.
             tsample      = 1000;
@@ -159,10 +159,11 @@ classdef Tuning < handle
             [m i]        = max(PsigmaGiveny);
             Init         = [Init sigmas(i)];%
             %% Optimize!
-            try
+            try                
                 [result.Est, result.Likelihood, result.ExitFlag]  = fmincon(result.likelihoodfun, Init, [],[],[],[],L,U,[],self.options);
                 result.Likelihood = result.likelihoodfun(result.Est);                
             catch
+                cprintf([1 0 0],'fmincon failed, using initial values...\n')
                 result.Est        = Init;
                 result.Likelihood = result.likelihoodfun(result.Est);
                 result.ExitFlag   = 1;
