@@ -4,7 +4,7 @@ classdef Subject < Project
         default_run     = 2;
         mean_correction = 0;%decides if mean correction should be applied
         align           = 1;%should ratings be aligned to CS+ face
-        fit_method      = 5;%defines method for Tuning Fit on feargen profiles
+        fit_method      = 8;%defines method for Tuning Fit on feargen profiles
     end
     properties (SetAccess = private)
         id
@@ -30,7 +30,7 @@ classdef Subject < Project
                 
                 s.scr            = SCR(s);
                                 
-%                s.feargen_rating = s.get_fit('rating');
+%                 s.feargen_rating = s.get_fit('rating');
                 s.feargen_scr    = s.get_fit('scr');
                                 
             else
@@ -63,7 +63,7 @@ classdef Subject < Project
         end               
         function out    = get_fit(self,modality) 
             %returns fit results for ratings or scr, modality is a string.
-            forcefit = 0;
+            forcefit = 1;
             if strcmp(modality,'rating');
                 fun = @(x) self.get_rating(x);
                 phases = 2:4;
@@ -91,6 +91,7 @@ classdef Subject < Project
                     if ~isempty(data.y)
                         t               = Tuning(data);
                         t.visualization = 1;
+                        t.gridsize      = 10;
                         fprintf('Phase %g... ',ph);
                         t.SingleSubjectFit(self.fit_method);
                         fit_results     = t.fit_results;
@@ -137,10 +138,16 @@ classdef Subject < Project
             scr.ids    = self.id;
             scr.y      = [];
             if self.scr.ok;
-                indices          = {'' [1:8] [9:16] [17:24]};                                
-                [out_z, out_raw] = self.scr.ledalab_summary;
-                scr.y            = out_raw(indices{run});
-                scr.y            = scr.y(:)';                
+                indices                         = {'' [1:8] [9:16] [17:24]};
+                [out_z, out_raw, single_trials] = self.scr.ledalab_summary;
+                
+                %scr.y            = out_raw(indices{run});
+                scr.y    = single_trials(:,indices{run});                
+                scr.x    = repmat(scr.x,[size(scr.y,1) 1]);
+                scr.y    = scr.y(:)';
+                i        = isnan(scr.y);
+                scr.y(i) = [];
+                scr.x(i) = [];
             else                
                 scr.y            = [];                
                 warning('no scr present for this subject and run (%d) \n',run);
