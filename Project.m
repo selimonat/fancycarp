@@ -99,14 +99,19 @@ classdef Project < handle
         end
     
     
-        function o = get.path_project;
+        function o = get.path_project
             %
-            if isunix
+            if xor(isunix,ismac)
                 o = '/mnt/data/project_bdnf/data/';
             elseif ismac
-                o = '/Volumes/feargen2/project_bdnf/data';
+                o = '/Volumes/feargen2/project_bdnf/data/';
             else
                 %PUT YOUR PATH HERE, DELETE THIS LINE
+            end
+            %add a filesep if necessary
+            if ~strcmp(o(end),filesep)
+                cprintf([1 0 0],'Correcting project path...\n');
+                o(end+1) = filesep;
             end
         end        
     end
