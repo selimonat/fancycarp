@@ -503,7 +503,7 @@ classdef SCR < handle
                 fprintf('.data is empty honey\n')
             end
         end
-        function [out_z, out_raw] = ledalab_summary(self,varargin)
+        function [out_z, out_raw, out_singletrials] = ledalab_summary(self,varargin)
             
             self.cut(self.findphase('base$'):self.findphase('test$'));
             self.run_ledalab;%collects the ledalab struct
@@ -519,11 +519,13 @@ classdef SCR < handle
                 'cond_0180','cond_0360',...
                 'test_0045','test_0090','test_0135','test_0180','test_0225','test_0270','test_0315','test_0360'};
             index  = [1:8 12 16 17:24];
+            out_singletrials = nan(max(self.ledalab.n),length(self.ledalab.n));
             for c = 1:length(condcollector)
                 timey                     = (self.ledalab.x(:,1) >= min(timeframe))&(self.ledalab.x(:,1) <= max(timeframe));%time window
                 condy                     = strcmp(condcollector{c},self.ledalab.condnames)';
                 dummy                     = mean(self.ledalab.y(timey,condy));%take average over time
-                out_raw(index(c),1)       = mean(dummy);%take average across trials
+                out_singletrials(1:length(dummy),index(c))         = dummy(:);
+                out_raw(index(c),1)       = mean(dummy);%take average across trials                
                 %out_rawsd(index(c),1)     = std(dummy)./sqrt(length(dummy));
             end
             out_z = nanzscore(out_raw);            
