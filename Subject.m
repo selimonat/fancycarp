@@ -32,7 +32,7 @@ classdef Subject < Project
                 s.scr            = SCR(s);
                                 
 %                 s.feargen_rating = s.get_fit('rating');
-%                 s.feargen_scr    = s.get_fit('scr');
+                s.feargen_scr    = s.get_fit('scr');
                 
                 s.groupinfo = s.get_groupinfo;
                                 
