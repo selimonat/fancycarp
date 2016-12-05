@@ -71,6 +71,9 @@ classdef Tuning < handle
             %Fits FUNTYPE to a tuning defined in x and y
             
             %% set the function to be fitted
+            if ~isempty(regexp(which('normpdf'),'ledalab'))
+                rmpath('/home/onat/Documents/Code/Matlab/ledalab/main/util/');%ledalab has also a normpdf, clever!
+            end
             x        = x(:);
             y        = y(:);%make it sure to have columns
             y        = y + rand(length(y),1)*eps;
@@ -141,7 +144,8 @@ classdef Tuning < handle
             end
             %% set the objective function
             result.likelihoodfun  = @(params) sum(-log( normpdf( y - result.fitfun( x,params(1:end-1)) , 0,params(end)) ));
-            
+%             result.likelihoodfun  = @(params) sum(-log( tpdf( y - result.fitfun( x,params(1:end-1)) ,params(end)) ));
+%             result.likelihoodfun  = @(params) sum(-log( cauchypdf( y - result.fitfun( x,params(1:end-1)) ,0,params(end)) ));
             %% Initial estimation of the parameters  
             %if gabor or gaussian, make a grid-estimatation
             if funtype > 1
@@ -208,6 +212,7 @@ classdef Tuning < handle
                 hold on
                 plot(result.x_HD, result.fit_HD  ,'color',[.3 .3 .3] ,'linewidth',3);                                
                 errorbar(result.x, Y_ave+CONSTANT, Y_sem   , 'b'   ,'linewidth', 3);                                
+                plot(x,y,'mo','markersize',10);
                 hold off
                 if funtype > 1
                     title(sprintf('Likelihood: %03g (p = %5.5g)',result.Likelihood,result.pval));

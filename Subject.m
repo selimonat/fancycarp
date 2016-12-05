@@ -29,9 +29,7 @@ classdef Subject < Project
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
                 
                 s.scr            = SCR(s);
-                                
-%                 s.feargen_rating = s.get_fit('rating');
-                s.feargen_scr    = s.get_fit('scr');
+                                                
                                 
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path)
@@ -40,6 +38,29 @@ classdef Subject < Project
     end
     
     methods
+        function scr       = get_scr(self,run)
+            %similar function to get_rating it will return the scr data
+            %exactly in the same format suitable for Tuning object
+            
+            scr.x      = [-135:45:180];
+            scr.ids    = self.id;
+            scr.y      = [];
+            if self.scr.ok;
+                indices                         = {'' [1:8] [9:16] [17:24]};
+                [out_z, out_raw, single_trials] = self.scr.ledalab_summary;
+                
+                %scr.y            = out_raw(indices{run});
+                scr.y    = single_trials(:,indices{run});                
+                scr.x    = repmat(scr.x,[size(scr.y,1) 1]);
+                scr.y    = log10(10+scr.y(:)');
+                i        = isnan(scr.y);
+                scr.y(i) = [];
+                scr.x(i) = [];
+            else                
+                scr.y            = [];                
+                cprintf([1 0 0],'no scr present for subject %03d and run (%d) \n',self.id,run);
+            end
+        end
         
         function rating    = get_rating(self,run)
             % returns raw ratings in a format that is compatible with
@@ -58,60 +79,60 @@ classdef Subject < Project
                     rating.y = rating.y - mean(rating.y);
                 end
             else
-                warning('no rating present for this subject and run (%d) \n',run);
+                cprintf([1 0 0],'no rating present for this subject in run %d \n',run);
             end
         end               
-        function out    = get_fit(self,modality) 
+        function out    = get_fit(self,modality,ph) 
             %returns fit results for ratings or scr, modality is a string.
-            forcefit = 1;
+            forcefit = 0;
             if strcmp(modality,'rating');
                 fun = @(x) self.get_rating(x);
-                phases = 2:4;
             elseif strcmp(modality,'scr');
                 fun = @(x) self.get_scr(x);
-                phases = [2 4];
             end
             %
             fit_results =[];%will be filled in below;
-            for ph = phases
-                %
-                phpath          = sprintf('%s%sp0%g%smidlevel%s%sfit_method_%d.mat',self.path,filesep,ph,filesep,filesep,modality,self.fit_method);
-                if exist(phpath)&&~forcefit
-                    cprintf([0 1 0],'Rating data cached for phase %02d, modality %s, will load it...\n',ph,modality);
-                    load(phpath);
-                    out(ph)     = fit_results;
-                elseif ~exist(phpath) || forcefit
-                    if forcefit
-                        cprintf([1 0 0],'Forced refitting data, starting procedure with method %g...\n',self.fit_method)
-                    end
-                    if ~exist(phpath)
-                        fprintf('No parameters found for phase %d (modality: %s), starting fitting procedure with method %g...\n',ph,modality,self.fit_method)
-                    end
-                    data                = fun(ph);
-                    if ~isempty(data.y)
-                        t               = Tuning(data);
-                        t.visualization = 1;
-                        t.gridsize      = 10;
-                        fprintf('Phase %g... ',ph);
-                        t.SingleSubjectFit(self.fit_method);
-                        fit_results     = t.fit_results;
-                        save(phpath,'fit_results');
-                    end
-                else
-                    cprintf([1 0 0],'No %s data found for phase %02d to load or fit, doing nothing...\n',modality,ph);
+            %
+            phpath          = sprintf('%s%sp0%g%smidlevel%s%sfit_method_%d.mat',self.path,filesep,ph,filesep,filesep,modality,self.fit_method);
+            %% first compute the fit
+            if exist(phpath)&&~forcefit
+                cprintf([0 1 0],'%s data cached for phase %02d, modality %s, will load it...\n',modality,ph,modality);
+                load(phpath);
+                out     = fit_results;
+            elseif ~exist(phpath) || forcefit
+                fprintf('============================\n');
+                if forcefit
+                    cprintf([1 0 0],'Forced refitting data, starting procedure with method %g...\n',self.fit_method)
                 end
-                %store the results for outputting and prepare the table                
-                if ~isempty(fit_results)
-                    out(ph)  = fit_results;
-                    %adapt the parameter name to phase and modality;
-                    for nnn = out(ph).param_table.Properties.VariableNames;
-                        out(ph).param_table.Properties.VariableNames{nnn{1}} = sprintf('%s_%s_%02d',modality,nnn{1},ph);
-                    end                
-                else
-                    out(ph) = struct();
+                if ~exist(phpath)
+                    fprintf('No parameters found for phase %d (modality: %s), starting fitting procedure with method %g...\n',ph,modality,self.fit_method);
                 end
+                data                = fun(ph);
+                if ~isempty(data.y)
+                    t               = Tuning(data);
+                    t.visualization = 1;
+                    t.gridsize      = 10;
+                    fprintf('Phase %g... ',ph);
+                    t.SingleSubjectFit(self.fit_method);
+                    fit_results     = t.fit_results;
+                    save(phpath,'fit_results');
+%                 else
+%                     fit_results.
+                end
+            else
+                cprintf([1 0 0],'No %s data found for phase %02d to load or fit, doing nothing...\n',modality,ph);
             end
-        end        
+            %% and than store the results for outputting and prepare the table
+            if ~isempty(fit_results)
+                out  = fit_results;
+                %adapt the parameter name to phase and modality;
+                for nnn =   out.param_table.Properties.VariableNames;
+                    out.param_table.Properties.VariableNames{nnn{1}} = sprintf('%s_%s_%02d',modality,nnn{1},ph);
+                end
+            else
+                out.param_table = [];
+            end                        
+        end
         function p         = load_paradigm(self,nrun)
             %HAST TO GO TO THE PROJECT ACTUALLY TOGETHER WITH
             %CONDTION_>COLOR DESCRIPTION
@@ -130,29 +151,7 @@ classdef Subject < Project
                 end
             end
         end        
-        function scr       = get_scr(self,run)
-            %similar function to get_rating it will return the scr data
-            %exactly in the same format suitable for Tuning object
-            
-            scr.x      = [-135:45:180];
-            scr.ids    = self.id;
-            scr.y      = [];
-            if self.scr.ok;
-                indices                         = {'' [1:8] [9:16] [17:24]};
-                [out_z, out_raw, single_trials] = self.scr.ledalab_summary;
-                
-                %scr.y            = out_raw(indices{run});
-                scr.y    = single_trials(:,indices{run});                
-                scr.x    = repmat(scr.x,[size(scr.y,1) 1]);
-                scr.y    = scr.y(:)';
-                i        = isnan(scr.y);
-                scr.y(i) = [];
-                scr.x(i) = [];
-            else                
-                scr.y            = [];                
-                warning('no scr present for this subject and run (%d) \n',run);
-            end
-        end
+        
         function degree    = stimulus2degree(self,stim_id)
             %will transform condition indices to distances in degrees from
             %the csp face. stim_id is a cell array. This is a subject

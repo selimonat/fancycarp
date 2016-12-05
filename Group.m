@@ -38,16 +38,18 @@ classdef Group < Project
         function T = GroupTable(self)
             
             %%
-            T = table();sub = [];
+            T = table();
+	    sub = [];
             for ns = 1:length(self.subject)
-                sub = [sub ns]
+                sub = [sub ns];
                 try
-                    T = [T;[self.subject{ns}.feargen_rating(:).param_table]];
+                    T = [T;[self.subject{ns}.feargen_scr(:).param_table]];
                 catch
-                    T = [T;nan(1,size(T,2))];
+                    dummy = array2table(nan(1,size(T,2)),'variablenames',T.Properties.VariableNames);
+                    T = [T;dummy];
                 end
             end
-            T.subject = sub';
+            T.subject = sub(:);
             %%
 %             T2 = table();sub = [];
 %             for ns = 1:length(self.subject)

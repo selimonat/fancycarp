@@ -5,7 +5,7 @@ classdef SCR < handle
         default_timeframe = 2.5:5.5;
     end
     properties (Hidden)
-        ledalab_defaults      = {'open', 'mat','downsample', 5, 'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1 };%
+        ledalab_defaults      = {'open', 'mat','downsample', 5,'smooth',{'gauss' '100'}, 'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1 };%
         hdr
         markers
         block2phase
