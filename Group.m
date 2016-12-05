@@ -379,6 +379,7 @@ classdef Group < Project
             end
         end
         function [info]  = getInfo(self,varargin)
+            % please enter which info you need as input string.
             % gender is 1 = male, 2 = female,
             % bdnf   is 1 = G, 2 = A (where A is the mutation)
             % CTQ    is 1 = yes, trauma, 0 = no trauma
