@@ -13,7 +13,8 @@ classdef Subject < Project
         csn
         scr
         feargen_rating
-        feargen_scr    
+        feargen_scr
+        groupinfo
     end
     methods
         function s = Subject(id)%constructor
@@ -29,7 +30,9 @@ classdef Subject < Project
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
                 
                 s.scr            = SCR(s);
-                                                
+                
+                s.groupinfo = s.get_groupinfo;
+
                                 
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path)
@@ -62,6 +65,12 @@ classdef Subject < Project
             end
         end
         
+        function out    = get_groupinfo(self)
+            load(sprintf('%smidlevel%sgroups.mat',self.path_project,filesep));
+            out.groups = group(self.id,:);
+            out.tags   = tags;
+        end
+
         function rating    = get_rating(self,run)
             % returns raw ratings in a format that is compatible with
             % Tuning object
