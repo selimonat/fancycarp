@@ -379,6 +379,11 @@ classdef Group < Project
             end
         end
         function [info]  = getInfo(self,varargin)
+            % gender is 1 = male, 2 = female,
+            % bdnf   is 1 = G, 2 = A (where A is the mutation)
+            % CTQ    is 1 = yes, trauma, 0 = no trauma
+            % LTE    is 1 = yes, 0 = no.
+            
             if isempty(varargin)
                 prompt = 'Which groupinfo do you want to collect? gender, bdnf, CTQ or LTE? enter as string! \n';
                 x = input(prompt);
