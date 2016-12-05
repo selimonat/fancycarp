@@ -48,7 +48,7 @@ classdef Subject < Project
             scr.x      = [-135:45:180];
             scr.ids    = self.id;
             scr.y      = [];
-            if self.scr.ok;
+            if self.scr.ok;                
                 indices                         = {'' [1:8] [9:16] [17:24]};
                 [out_z, out_raw, single_trials] = self.scr.ledalab_summary;
                 
@@ -58,7 +58,8 @@ classdef Subject < Project
                 scr.y    = log10(10+scr.y(:)');
                 i        = isnan(scr.y);
                 scr.y(i) = [];
-                scr.x(i) = [];
+                scr.x(i) = [];                
+                scr.y_mean = accumarray(scr.x'/45+4,scr.y,[8 1],@mean)';
             else                
                 scr.y            = [];                
                 cprintf([1 0 0],'no scr present for subject %03d and run (%d) \n',self.id,run);
