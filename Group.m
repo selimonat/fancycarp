@@ -49,29 +49,29 @@ classdef Group < Project
             end
             T.subject = sub';
             %%
-%             T2 = table();sub = [];
-%             for ns = 1:length(self.subject)
-%                 sub = [sub ns]
-%                 try
-%                     T2 = [T2;[self.subject{ns}.feargen_scr(:).param_table]];
-%                 catch
-%                     dummy = array2table(nan(1,size(T2,2)),'variablenames',T2.Properties.VariableNames);
-%                     T2 = [T2;dummy];
-%                 end
-%             end
-%             %%
-%             T3 = [T T2];
+            %             T2 = table();sub = [];
+            %             for ns = 1:length(self.subject)
+            %                 sub = [sub ns]
+            %                 try
+            %                     T2 = [T2;[self.subject{ns}.feargen_scr(:).param_table]];
+            %                 catch
+            %                     dummy = array2table(nan(1,size(T2,2)),'variablenames',T2.Properties.VariableNames);
+            %                     T2 = [T2;dummy];
+            %                 end
+            %             end
+            %             %%
+            %             T3 = [T T2];
         end
         function FitStan(self)
             %will fit data a VonMises function using the MLE estimates as
-            %initial values;            
-            %% raw data                   
+            %initial values;
+            %% raw data
             data.x=[];data.y=[];data.m=[];c = 0;
             for phase  = 2:4
                 c  = c+1;
-                for ns = 1:length(self.subject)                                                 
+                for ns = 1:length(self.subject)
                     data.y = [data.y self.subject{ns}.get_rating(phase).y(:)];
-                    data.x = [data.x self.subject{ns}.get_rating(phase).x(:)];                
+                    data.x = [data.x self.subject{ns}.get_rating(phase).x(:)];
                     data.m = [data.m c];
                 end
             end
@@ -79,7 +79,7 @@ classdef Group < Project
             data.T = size(data.y,2);
             data.M = length(unique(data.m));
             data.x = data.x(:,1);
-            %% initial estimates            
+            %% initial estimates
             T                = self.GroupTable;
             init             = [];
             init.amp         = [T.rating_amp_02'    T.rating_amp_03'      T.rating_amp_04'];
@@ -88,7 +88,7 @@ classdef Group < Project
             init.sigma_y     = [T.rating_sigma_y_02' T.rating_sigma_y_03' T.rating_sigma_y_04'];
             %
             for m = unique(data.m)
-                init.sigma_y(m)     = median(init.sigma_y(data.m == m));                
+                init.sigma_y(m)     = median(init.sigma_y(data.m == m));
                 init.mu_amp(m)      = median(init.amp(data.m == m));
                 init.mu_offset(m)   = median(init.offset(data.m == m));
                 init.mu_kappa(m)    = max(0.01,(median(init.kappa(data.m == m))));
@@ -97,9 +97,9 @@ classdef Group < Project
             init.sigma_amp   = repmat(0.5,1,length(unique(data.m)));
             init.sigma_offset= repmat(0.5,1,length(unique(data.m)));
             init.sigma_kappa = repmat(0.5,1,length(unique(data.m)));
-            init.sigma_y     = repmat(0.5,1,length(unique(data.m)));                                    
+            init.sigma_y     = repmat(0.5,1,length(unique(data.m)));
             
-            %%            
+            %%
             addpath('/home/onat/Documents/Code/C++/cmdstan-2.12.0/');
             addpath('/home/onat/Documents/Code/Matlab/MatlabProcessManager/');
             addpath('/home/onat/Documents/Code/Matlab/MatlabStan/')
@@ -159,7 +159,7 @@ classdef Group < Project
         function out = getSCR(self,varargin)
             valid = [];
             data = NaN(8*3,length(self.ids));
-            for sc = 1:length(self.ids)                
+            for sc = 1:length(self.ids)
                 try
                     if ~isempty(varargin)
                         data(:,sc) = self.subject{sc}.scr.ledalab_summary(varargin{:});
@@ -378,6 +378,18 @@ classdef Group < Project
                 end
             end
         end
-        
+        function [info]  = getInfo(self,varargin)
+            if isempty(varargin)
+                prompt = 'Which groupinfo do you want to collect? gender, bdnf, CTQ or LTE? enter as string! \n';
+                x = input(prompt);
+            else
+                x = varargin{:};
+                ind = strcmp(self.subject{1}.groupinfo.tags,x);
+                info = [];
+                for ns = 1:length(self.subject)
+                    info = [info self.subject{ns}.groupinfo.groups(ind)];
+                end
+            end
+        end
     end
 end
