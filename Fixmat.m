@@ -445,6 +445,21 @@ classdef Fixmat < Project
 %                         thincolorbar('vert');
 colorbar
         end
+        function getmaps_split(obj,varargin)
+            %will duplicate the number of varargin with odd and even trials
+            c= 0;
+            for v = varargin
+                c = c+1;
+                obj.UpdateSelection(v{1}{:});
+                trials          = sort(unique(obj.trialid(obj.selection)));
+                ttrial          = length(trials);
+                mid             = round(ttrial/2);
+                v_new{1}{c}     = [v{1} 'trialid' trials(1:mid)];                
+                v_new2{1}{c}     = [v{1} 'trialid' trials(mid+1:end)];
+            end 
+            v_new{1} = [v_new{:} v_new2{:}];
+            obj.getmaps(v_new{1}{:});            
+        end    
         function getmaps(obj,varargin)
             %will populate the maps property based on the filter in
             %VARARGIN, example:
