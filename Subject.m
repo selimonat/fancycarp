@@ -30,9 +30,6 @@ classdef Subject < Project
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
                 
                 s.scr            = SCR(s);
-                
-                s.groupinfo = s.get_groupinfo;
-
                                 
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path)
@@ -55,7 +52,7 @@ classdef Subject < Project
                 %scr.y            = out_raw(indices{run});
                 scr.y    = single_trials(:,indices{run});                
                 scr.x    = repmat(scr.x,[size(scr.y,1) 1]);
-                scr.y    = log10(10+scr.y(:)');
+                scr.y    = nanzscore(scr.y(:)');
                 i        = isnan(scr.y);
                 scr.y(i) = [];
                 scr.x(i) = [];                
@@ -64,12 +61,6 @@ classdef Subject < Project
                 scr.y            = [];                
                 cprintf([1 0 0],'no scr present for subject %03d and run (%d) \n',self.id,run);
             end
-        end
-        
-        function out    = get_groupinfo(self)
-            load(sprintf('%smidlevel%sgroups.mat',self.path_project,filesep));
-            out.groups = group(self.id,:);
-            out.tags   = tags;
         end
 
         function rating    = get_rating(self,run)
@@ -85,6 +76,7 @@ classdef Subject < Project
                 end
                 rating.y      = rating.y(:)';
                 rating.x      = sort(repmat([-135:45:180],1,size(self.paradigm{run}.out.rating,2)));
+                rating.y_mean = accumarray(rating.x'/45+4,rating.y,[8 1],@mean)';
                 if self.mean_correction
                     rating.y = rating.y - mean(rating.y);
                 end
@@ -94,12 +86,7 @@ classdef Subject < Project
         end               
         function out    = get_fit(self,modality,ph) 
             %returns fit results for ratings or scr, modality is a string.
-            forcefit = 0;
-            if strcmp(modality,'rating');
-                fun = @(x) self.get_rating(x);
-            elseif strcmp(modality,'scr');
-                fun = @(x) self.get_scr(x);
-            end
+            forcefit = 0;            
             %
             fit_results =[];%will be filled in below;
             %
@@ -111,6 +98,11 @@ classdef Subject < Project
                 out     = fit_results;
             elseif ~exist(phpath) || forcefit
                 fprintf('============================\n');
+                if strcmp(modality,'rating');
+                    fun = @(x) self.get_rating(x);
+                elseif strcmp(modality,'scr');
+                    fun = @(x) self.get_scr(x);
+                end
                 if forcefit
                     cprintf([1 0 0],'Forced refitting data, starting procedure with method %g...\n',self.fit_method)
                 end
@@ -122,8 +114,8 @@ classdef Subject < Project
                     t               = Tuning(data);
                     t.visualization = 1;
                     t.gridsize      = 10;
-                    fprintf('Phase %g... ',ph);
-                    t.SingleSubjectFit(self.fit_method);
+                    fprintf('Phase %g... ',ph);                    
+                    t.SingleSubjectFit(8);
                     fit_results     = t.fit_results;
                     save(phpath,'fit_results');
 %                 else
@@ -137,7 +129,7 @@ classdef Subject < Project
                 out  = fit_results;
                 %adapt the parameter name to phase and modality;
                 for nnn =   out.param_table.Properties.VariableNames;
-                    out.param_table.Properties.VariableNames{nnn{1}} = sprintf('%s_%s_%02d',modality,nnn{1},ph);
+                    out.param_table.Properties.VariableNames{nnn{1}} = sprintf('%s_%02d_%s',modality,ph,nnn{1});
                 end
             else
                 out.param_table = [];
