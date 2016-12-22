@@ -146,7 +146,7 @@ classdef Group < Project
                 self.sigma_test = [self.sigma_test; self.tunings.rate{4}.singlesubject{s}.Est(:,2)];
             end
         end
-        function [ratings,ratings_sd] = getRatings(self,phases)
+        function [ratings,ratings_sd] = getRatings(self,phases) %self.Ratings gets 16 ratings, this pools them to mean per condition
             for ph = phases(:)';
                 xc=0;
                 for x  = unique(self.Ratings(ph).x(:)')
@@ -200,6 +200,7 @@ classdef Group < Project
             end
         end
         function PlotRatingFit(self,subject)
+            
             if ~isempty(self.tunings.rate)
                 
                 i    =  find(self.ids == subject);
@@ -366,7 +367,7 @@ classdef Group < Project
             c = 0;
             for s = 1:length(self.subject)
                 if ~isempty(self.subject{s})
-                    dummy = self.subject{s}.GetRating(run);
+                    dummy = self.subject{s}.get_rating(run);
                     if ~isempty(dummy)
                         c = c+1;
                         if self.mean_correction
