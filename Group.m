@@ -39,7 +39,7 @@ classdef Group < Project
             
             %%
             T = table();
-	    sub = [];
+            sub = [];
             for ns = 1:length(self.subject)
                 sub = [sub ns];
                 try
@@ -156,6 +156,9 @@ classdef Group < Project
                     ratings_sd(:,xc,ph)   = std(self.Ratings(ph).y(:,i),0,2);
                 end
             end
+            %clean the zeros
+            ratings    = ratings(:,:,phases);
+            ratings_sd = ratings_sd(:,:,phases);
         end
         %%
         function out = getSCR(self,varargin)
@@ -199,9 +202,8 @@ classdef Group < Project
                 out = [out;self.subject{s}.parameterMat];
             end
         end
-        function PlotRatingFit(self,subject)
+        function PlotRatingFit(self,subject)%this is a single subject option...
             if ~isempty(self.tunings.rate)
-                
                 i    =  find(self.ids == subject);
                 ave  = mean(reshape(self.tunings.rate{3}.y(i,:),2,8));
                 x    = mean(reshape(self.tunings.rate{3}.x(i,:),2,8));
@@ -230,10 +232,11 @@ classdef Group < Project
                 pause
             else
                 fprintf('No tuning object found here yet...\n');
+                
             end
         end
         %%
-        function [rating] = PlotRatings(self,runs)
+        function [rating] = PlotRatings(self,runs) % uses imagesc, shows single and group ratings
             hvfigure;
             trun = length(runs);
             crun = 0;
@@ -242,7 +245,7 @@ classdef Group < Project
                 %
                 subplot(2,trun,crun);
                 rating  = self.Ratings(run);%collect group ratings
-                imagesc(rating.y,[0 10]);thincolorbar('vert');%single subject data
+                imagesc(rating.y,[0 10]);%thincolorbar('vert');%single subject data
                 set(gca,'xticklabel',{'CS+' 'CS-'},'xtick',[4 8],'fontsize',20,'yticklabel',{''});
                 colormap hot
                 %
@@ -258,47 +261,40 @@ classdef Group < Project
                 hold off;
             end
         end
-        function PlotRatingResults(self)%plots conditioning and test, in the usual bar colors. With GroupFit Gauss/Mises Curve visible
+        function fit_results = PlotRatingResults(self)%plots conditioning and test, in the usual bar colors. With GroupFit Gauss/Mises Curve visible
             %%
-            f=figure;
-            subplot(1,2,1);
-            h = bar(unique(self.tunings.rate{3}.x(1,:)),self.tunings.rate{3}.y_mean);SetFearGenBarColors(h);
-            hold on;
-            errorbar(unique(self.tunings.rate{3}.x(1,:)),self.tunings.rate{3}.y_mean,self.tunings.rate{3}.y_std./sqrt(length(self.ids)),'k.','LineWidth',2);
-            xlim([-160 200]);
-            box off
-            set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
-            x = linspace(self.tunings.rate{3}.x(1,1),self.tunings.rate{3}.x(1,end),100);
-            plot(x ,  self.tunings.rate{3}.groupfit.fitfun( x,self.tunings.rate{3}.groupfit.Est(:,1:end-1)) ,'k--','linewidth',2);
-            %             plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
-            hold off
-            %             set(gca,'fontsize',14);
-            axis square
-            t=title('Conditioning');set(t,'FontSize',14);
-            %
-            subplot(1,2,2);
-            h = bar(unique(self.tunings.rate{4}.x(1,:)),self.tunings.rate{4}.y_mean);SetFearGenBarColors(h);hold on;
-            errorbar(unique(self.tunings.rate{4}.x(1,:)),self.tunings.rate{4}.y_mean,self.tunings.rate{4}.y_std./sqrt(length(self.ids)),'k.','LineWidth',2);
+            ratings = self.getRatings(2:4);
+            f=figure(1);
+            for n = 1:3
+                subplot(1,3,n);
+                h = bar(-135:45:180,mean(ratings(:,:,n)));
+                SetFearGenBarColors(h);
+                hold on;
+                errorbar(-135:45:180,mean(ratings(:,:,n)),std(ratings(:,:,n))./sqrt(size(ratings,1)),'k.','LineWidth',2);
+                xlim([-160 200]);
+                box off
+                set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
+                x = linspace(-135,180,100);
+                fprintf('Estimating Groupfit, phase %g.\n',n)
+                out = self.Ratings(n+1);
+                t = Tuning(out);
+                self.tunings.rate{n+1} = t;
+                t.GroupFit(8);
+                fit_results(n) = t.groupfit;
+                figure(1);
+                plot(x,t.groupfit.fitfun(x,t.groupfit.Est(:,1:end-1)) ,'k','linewidth',2);
+            end
+            subplot(1,3,1);title('Base');
+            subplot(1,3,2);title('Cond');
+            subplot(1,3,3);title('Test');
+            s = supertitle(sprintf('Ratings results from n = %g subjects.',length(self.ids)));
+            set(s,'FontSize',14);
             EqualizeSubPlotYlim(gcf);
-            box off
-            xlim([-160 200]);
-            set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
-            x = linspace(self.tunings.rate{4}.x(1,1),self.tunings.rate{4}.x(1,end),100);
-            %             plot(x ,  self.tunings.rate{4}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{4}.params(:,1:end-1))) ,'k','linewidth',1);
-            plot(x ,  self.tunings.rate{4}.groupfit.fitfun( x,self.tunings.rate{4}.groupfit.Est(:,1:end-1)) ,'k','linewidth',2);
-            x = linspace(self.tunings.rate{3}.x(1,1),self.tunings.rate{3}.x(1,end),100);
-            % % %            plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
-            %             plot(x , self.tunings.rate{3}.groupfit.fitfun( x,self.tunings.rate{3}.groupfit.Est(:,1:end-1)) ,'k--','linewidth',2);
-            %             set(gca,'fontsize',14);
-            axis square
-            t=title('Test');set(t,'FontSize',14);
-            annotation(f,'textbox',[0.78 0.65 0.1 0.1],'String',['SI = ' num2str(nanmean(self.SI))],'FitBoxToText','off','LineStyle','none');
-            hold off
         end
-        function PlotSCR(self)
+        function PlotSCRResults(self)
             out = self.getSCR;
-            M = mean(out,2);
-            S = std(out,0,2);
+            M = mean(out.y);
+            S = std(out.y);
             f=figure;
             %
             for ph = 1:3
@@ -315,11 +311,66 @@ classdef Group < Project
             end
             subplot(1,3,1)
             t=title('Base');set(t,'FontSize',14);
-            subplot(1,3,1)
+            subplot(1,3,2)
             t=title('Cond');set(t,'FontSize',14);
-            subplot(1,3,1)
+            subplot(1,3,3)
             t=title('Test');set(t,'FontSize',14);
         end
+        function fit_results = PlotResults(self) %plots both ratings and scr
+            ratings = self.getRatings(2:4);
+            f=figure(1);
+            for n = 1:3
+                subplot(2,3,n);
+                h = bar(-135:45:180,mean(ratings(:,:,n)));
+                SetFearGenBarColors(h);
+                hold on;
+                errorbar(-135:45:180,mean(ratings(:,:,n)),std(ratings(:,:,n))./sqrt(size(ratings,1)),'k.','LineWidth',2);
+                xlim([-160 200]);
+                box off
+                set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
+                x = linspace(-135,180,100);
+                fprintf('Estimating Groupfit, phase %g.\n',n)
+                out = self.Ratings(n+1);
+                t = Tuning(out);
+                self.tunings.rate{n+1} = t;
+                t.GroupFit(8);
+                fit_results(n) = t.groupfit;
+                figure(1);
+                plot(x,t.groupfit.fitfun(x,t.groupfit.Est(:,1:end-1)) ,'k','linewidth',2);
+                ylim([0 10]);
+                %SCR for this phase
+                out = self.getSCR;
+                M = mean(out.y);
+                S = std(out.y);
+                figure(1);
+                ind = n-1;
+                subplot(2,3,n+3);
+                h = bar(-135:45:180,M([1:8]+8*ind));SetFearGenBarColors(h);
+                hold on;
+                errorbar(-135:45:180,M([1:8]+8*ind),S([1:8]+8*ind)./sqrt(length(self.ids)),'k.','LineWidth',2);
+                xlim([-180 225]);
+                box off
+                set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
+                if n~=2 %cond can't be fitted
+                    dummy.y = out.y(:,[1:8]+8*ind);
+                    dummy.x = out.x(:,[1:8]+8*ind);
+                    dummy.ids = self.ids;
+                    t = Tuning(dummy);
+                    t.GroupFit(8);
+                    fit_results(n+3) = t.groupfit;
+                    figure(1);
+                    plot(x,t.groupfit.fitfun(x,t.groupfit.Est(:,1:end-1)) ,'k','linewidth',2);
+                end
+                hold off
+                axis square
+            end
+            subplot(2,3,1);title('Base');
+            subplot(2,3,2);title('Cond');
+            subplot(2,3,3);title('Test');
+            s = supertitle(sprintf('Ratings results from n = %g subjects.',length(self.ids)));
+            set(s,'FontSize',14);
+        end
+        
         %%
         function [scr] = getSCRbars(self,run)
             %will collect the SCR tunings from single subjects
@@ -366,7 +417,7 @@ classdef Group < Project
             c = 0;
             for s = 1:length(self.subject)
                 if ~isempty(self.subject{s})
-                    dummy = self.subject{s}.GetRating(run);
+                    dummy = self.subject{s}.get_rating(run);
                     if ~isempty(dummy)
                         c = c+1;
                         if self.mean_correction
