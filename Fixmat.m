@@ -447,18 +447,27 @@ colorbar
         end
         function getmaps_split(obj,varargin)
             %will duplicate the number of varargin with odd and even trials
-            c= 0;
+            c= 0;cc=0;
+            v_new{1} = {};
             for v = varargin
                 c = c+1;
                 obj.UpdateSelection(v{1}{:});
                 trials          = sort(unique(obj.trialid(obj.selection)));
                 ttrial          = length(trials);
-                mid             = round(ttrial/2);
-                v_new{1}{c}     = [v{1} 'trialid' trials(1:mid)];                
-                v_new2{1}{c}     = [v{1} 'trialid' trials(mid+1:end)];
+                if ttrial >=2;%there sd be at least two trials
+                    cc              = cc +1;
+                    mid             = round(ttrial/2);
+                    v_new{1}{c}     = [v{1} 'trialid' trials(1:mid)];                
+                    v_new2{1}{c}    = [v{1} 'trialid' trials(mid+1:end)];                
+                end
             end 
-            v_new{1} = [v_new{:} v_new2{:}];
-            obj.getmaps(v_new{1}{:});            
+            if cc == c
+                v_new{1} = [v_new{:} v_new2{:}];            
+                obj.getmaps(v_new{1}{:});       
+            else
+                obj.maps = [];
+                cprintf([1 0 0],'not enough trials for oddevenings...\n');
+            end
         end    
         function getmaps(obj,varargin)
             %will populate the maps property based on the filter in

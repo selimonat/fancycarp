@@ -115,7 +115,7 @@ classdef Project < handle
             if xor(isunix,ismac)
                 o = '/mnt/data/project_bdnf/data/';
             elseif ismac
-                o = '/Volumes/feargen2/project_bdnf/data/';
+                o = '/Users/onat/Documents/project_bdnf/data/';
             else
                 o = 'C:\Users\Lea\Documents\Experiments\project_bdnf\data\';
             end
