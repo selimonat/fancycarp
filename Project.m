@@ -340,8 +340,9 @@ classdef Project < handle
             for ns = self.subject_indices%run across all the subjects
                 s   = Subject(ns);
                 out = [out;[s.id s.rating_param s.fit_rating.LL]];                
-            end            
-            out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_offset' 'rating_std' 'rating_LL'});
+            end
+            out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
+            out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_absmu' 'rating_offset' 'rating_std' 'rating_LL'});
         end       
         function out        = getgroup_facecircle(self)
             %collects the rating parameters for all subjects in a table.
@@ -350,7 +351,8 @@ classdef Project < handle
                 s   = Subject(ns);                
                 out = [out;[s.id s.fit_facecircle(1,8).params s.fit_facecircle(1,8).LL]];                
             end            
-            out = array2table(out,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_mu' 'facecircle_offset' 'facecircle_std' 'facecircle_LL'});
+            out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
+            out = array2table(out,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_mu' 'facecircle_absmu' 'facecircle_offset' 'facecircle_std' 'facecircle_LL'});
         end       
         function out        = getgroup_detected_oddballs(self)            
             odd = [];
@@ -366,7 +368,8 @@ classdef Project < handle
                 s      = Subject(ns);
                 face   = [face ;[s.id s.detected_face]];                
             end
-            out = array2table(face,'variablenames',{'subject_id' 'detection_face'});
+            face = [face abs(face(:,2))];
+            out = array2table(face,'variablenames',{'subject_id' 'detection_face' 'detection_absface'});
         end        
         function fixmat     = getgroup_facecircle_fixmat(self,subjects)
             %will collect all the fixmats for all subjects from the
@@ -427,7 +430,7 @@ classdef Project < handle
             %
             % see also getgroup_pupil_spacetime
             %                              
-            list    = self.get_selected_subjects(ngroup,0).list;
+            list    = self.get_selected_subjects(ngroup,1).list;
             t       = spm_list('table',self.SecondLevel_ANOVA(3,1,3,1:4,8,0));
             betas   = reshape(1:715,65,11)';
             betas   = betas(1:8,self.mbi_valid);
@@ -440,8 +443,39 @@ classdef Project < handle
                 out(:,:,:,c) = permute(dummy,[2 1 3]);
                 name{c}      = self.get_atlaslabel(coor(1:3)).name{1};                    
             end            
-        end
-        
+        end        
+        function [out, name] = getgroup_bold_spacetime_full(self,ngroup,sk)
+            %out        = getgroup_bold_spacetime_full(self,ngroup,sk)
+            % GROUP is fed to get_selected_subjects
+            % SK is fed to the ROI object.
+            %
+            %loads the Second-level anova which I used to select ROIs and
+            %extracts the coordinates from there.
+            %
+            % see also getgroup_pupil_spacetime
+            %                              
+            list    = self.get_selected_subjects(ngroup,1).list;
+            t       = spm_list('table',self.SecondLevel_ANOVA(3,1,3,1:4,8,0));
+            betas   = reshape(1:715,65,11)';
+            betas   = betas(1:11,:);
+            %%            
+            c = 0;
+            for coor = [t.dat{:,end};ones(1,3)];
+                c            = c+1;
+                r            = ROI('voxel_based',coor ,'chrf_0_0_mumfordian',0,betas(:)',list,sk);
+                dummy        = reshape(r.pattern(1,:,:),[11 65 size(r.pattern,3)]);%[condition microbock subject area];
+                out(:,:,:,c) = permute(dummy,[2 1 3]);
+                name{c}      = self.get_atlaslabel(coor(1:3)).name{1};                    
+            end            
+%             out(self.mbi_transition,:,:,:) = [];
+            %adjust the matrix so that the UCS trials are back to the 4th
+            %column
+            for ccc = [10 11]
+                i            = find(out(:,ccc,1,1)~=0);
+                out(i,4,:,:) = out(i,ccc,:,:);
+            end
+            out(:,9:end,:,:) = [];
+        end        
         function [out,name] = getgroup_pupil_spacetime(self,ngroup)
             %will load the group pupil data for the NGROUPth subjects.
             %
@@ -458,15 +492,14 @@ classdef Project < handle
             end
 %             out  = nanmean(out,3);
             name{1} = 'pupil';
-        end        
-        
+        end                
         function [out,name] = getgroup_scr_spacetime(self,ngroup)
             %will load the group pupil data for the NGROUPth subjects.
             %
             % see also getgroup_bold_spacetime, getgroup_pupil_spacetime
             out = [];
             c = 0;
-            for ns = self.get_selected_subjects(ngroup,0).list;                
+            for ns = self.get_selected_subjects(ngroup,1).list;                
                 c            = c + 1;
                 s            = Subject(ns);
                 scr          = SCR(s);
@@ -476,8 +509,24 @@ classdef Project < handle
             end
             %out  = out(self.mbi_valid,1:8,:);
             name{1} = 'scr';
-        end
-        
+        end        
+        function [out,name] = getgroup_scr_spacetime_full(self,ngroup)
+            %will load the group pupil data for the NGROUPth subjects.
+            %
+            % see also getgroup_bold_spacetime, getgroup_pupil_spacetime
+            out = [];
+            c = 0;
+            for ns = self.get_selected_subjects(ngroup,1).list;                
+                c            = c + 1;
+                s            = Subject(ns);
+                scr          = SCR(s);
+                scr.run_ledalab;                
+                dummy        = reshape(mean(scr.ledalab.y(150:200,:)),65,9);
+                out(:,:,c,1) = dummy(:,1:8,:);%discard the null condition
+            end
+            %out(self.mbi_transition,:,:) = [];%exclude the transition blocks
+            name{1} = 'scr';
+        end        
         function  name      = get_atlasROIname(self,roi_index)
             %get_atlasROIname(self,roi_index)
             %
@@ -626,39 +675,82 @@ classdef Project < handle
                 sub.name = [sub.name '_minus'];
             end
         end
-        function [c sub ]   = get_covariate(self,covariate_id)
-            %covariates = get_covariate(self,covariate_id,varargin);
-            %
-            %will create a covariate matrix in the midlevel folder where a
-            %value for every subject is saved. USE VARARGIN to select few
-            %subjects. This can be conceived as a mapping from behavioral
-            %readouts to another format.
-            
-            if covariate_id == 1;
-                %loadings on behavior
-                out       = self.getgroup_all_param;%get all group parameters                
-                %assemble the important behavioral readouts.
-                d         = [out.pmf_pooled_alpha abs(out.detection_face) (out.rating_amp./out.rating_fwhm) (out.facecircle_fwhm./out.rating_fwhm)];
-                d         = nanzscore(d);
-                [e v]     = eig(nancov(d));
-                loadings  = d*e(:,end:-1:end-1);
-                for n = 1:size(loadings,2)
-                    c(:,n)   = (loadings(:,n));                    
-                    sub      = out.subject_id;
-                end              
-            elseif covariate_id == 2;                
-                all  = self.get_selected_subjects(0);%get all group parameters                
-                good = self.get_selected_subjects(3);%get all group parameters                
-                vec       = ismember(all.list,good.list);
-                %assemble the important behavioral readouts.                
-                c        = vec;    
-                c = c(:);
-                sub      = all.list(:);
-            else
-                c = []
-            end
-        end                
         
+        function [fit,extract] = get_stanfit(self,area)
+            
+            group = 3;
+            sk    = 6;
+            want_baseline = 1;
+            want_zscore   = 1;
+            filename      = sprintf('%smidlevel/get_stanfit_area_%d_zscore_%d_baseline_%d_sk_%02d_group_%02d.mat',self.path_project,area,want_zscore,want_baseline,sk,group);
+            if exist(filename) == 0 
+            %% load the raw single trial mumfordian data.
+            [out_scr,  name]      = self.getgroup_scr_spacetime_full(group);
+            [out_bold, name_bold] = self.getgroup_bold_spacetime_full(group,sk);
+            out                   = cat(4,out_bold,out_scr);
+            out                   = permute(out,[2 1 3 4]);%[face microblock subject area]
+            %% for each subject separately make a global zscore transformation + baseline correction.            
+            dummy3        = [];
+            for modality = 1:size(out,4)
+                dummy2 = [];
+                for nsubject = 1:size(out,3)
+                    dummy    = out(:,:,nsubject,modality);
+                    if want_zscore
+                        dummy    = reshape(zscore(dummy(:)),size(dummy,1),size(dummy,2));
+                    end
+                    if want_baseline                        
+                        dummy    = dummy - repmat(mean(dummy(:,1:4),2),[1 size(dummy,2)]);
+                    end
+                    dummy2   = cat(3,dummy2,dummy);
+                end
+                dummy3 = cat(4,dummy3,dummy2);
+            end
+            out              = permute(out,[1 3 2 4]);
+            out              = dummy3(:,:,:,area);
+            %% organize the data for stan: each microblock is a modality                        
+            tsub             = size(out,3);
+            tmicroblock      = size(out,2);
+            modality =[];c=0;
+            for n = 1:tmicroblock
+               c        = c+1;
+               modality = [modality repmat(c,1,tsub)];
+            end
+            out              = reshape(out,[8 tmicroblock*tsub]); 
+            %% store it
+            data.y           = out;%[8xN]
+            data.x           = deg2rad([-135:45:180]');
+            data.X           = length(data.x);
+            data.T           = size(out,2);
+            data.m           = modality;
+            data.M           = length(unique(modality));
+            %% give sensible initial values.            
+            init.sigma_amp   = zeros(1,data.M)+1;
+            init.sigma_offset=zeros(1,data.M)+1;
+            init.sigma_kappa =zeros(1,data.M)+1;            
+            init.sigma_y     = zeros(1,data.M)+1;
+            init.mu_amp      = zeros(1,data.M);
+            init.mu_offset   = zeros(1,data.M);
+            init.mu_kappa    = zeros(1,data.M)+.01;
+            %
+            init.amp            = zeros(1,data.T);
+            init.kappa          = zeros(1,data.T)+0.01;%very wide 
+            init.offset         = zeros(1,data.T);
+            %
+            %% some path business
+            addpath('/home/onat/Documents/Code/C++/cmdstan-2.12.0/');
+            addpath('/home/onat/Documents/Code/Matlab/MatlabProcessManager/');
+            addpath('/home/onat/Documents/Code/Matlab/MatlabStan/')
+            
+            cd /mnt/data/project_fearamy/FitVonMises;
+            !rm FitVonMises FitVonMises.hpp FitVonMises.cpp  output-* temp.*;
+            fit       = stan('file','FitVonMises.stan','data',data,'verbose',true,'iter',400,'init',init);            
+            keyboard
+            extract   = fit.extract;
+            save(filename,'fit','extract');
+            else
+                load(filename)
+            end
+        end
     end
     methods %methods that does something on all subjects one by one
         function              VolumeGroupAverage(self,selector)
@@ -718,7 +810,7 @@ classdef Project < handle
             
             subjects   = self.get_selected_subjects(ngroup);                        
             spm_dir    = regexprep(self.dir_spmmat(run,model),'sub...','second_level');%convert to second-level path, replace the sub... to second-level.
-            spm_dir    = sprintf('%scov_id_%02d/%02dmm/group_%s/',spm_dir,covariate_id,sk,subjects.name);
+            spm_dir    = sprintf('%scov_id_%s/%02dmm/group_%s/',spm_dir,covariate_id,sk,subjects.name);
             xspm_path  = sprintf('%sxSPM.mat',spm_dir);
             if exist(xspm_path) == 0;
                                 
@@ -744,31 +836,24 @@ classdef Project < handle
                 matlabbatch{1}.spm.stats.factorial_design.des.anova.variance     = 1;
                 matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca        = 0;
                 matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova       = 0;
+                
                 matlabbatch{1}.spm.stats.factorial_design.cov                    = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
                 matlabbatch{1}.spm.stats.factorial_design.multi_cov              = struct('files', {}, 'iCFI', {}, 'iCC', {});
+                
                 %overwrite with the covariates if entered
-                if covariate_id ~= 0
-                    [c sub]                                                      = self.get_covariate(covariate_id);%this is for all subjects, however NGROUP might be non-zero, so we have to select the same subjects here too                    
-                    valid                                                        = ismember(sub,subjects.list);
-                    valid                                                        = ~isnan(sum(c,2)).*valid;
-                    valid                                                        = logical(valid);
+                if ~isempty(covariate_id)                   
+                    param                                                        = self.getgroup_all_param;
+                    %extract the relevant subjects
+                    c                                                            = param.(covariate_id);
+                    c                                                            = c(ismember(param.subject_id,subjects.list));                                        
                     %register beta images and covariate values.                    
-                    tcell = length(matlabbatch{1}.spm.stats.factorial_design.des.anova.icell);
-                    ccc =0;
-                    for ncov = 1:size(c,2)
-                        mat = kron(eye(4),c(valid,ncov));
-                        for ncell = 1:tcell
-                            ccc = ccc +1;
-                            matlabbatch{1}.spm.stats.factorial_design.cov(ccc)           = ...
-                                struct('c', mat(:,ncell), 'cname', sprintf('%cov:02d-cell:%02d',ncov,ncell), 'iCFI', 1, 'iCC', 1);
-                        end
+                    tcell                                                        = length(matlabbatch{1}.spm.stats.factorial_design.des.anova.icell);
+                    ccc                                                          = 0;                    
+                    mat                                                          = kron(eye(4),demean(c));
+                    for ncell = 1:tcell                            
+                        matlabbatch{1}.spm.stats.factorial_design.cov(ncell)     = struct('c', mat(:,ncell), 'cname', sprintf('cov:%s-cell:%02d',covariate_id,ncell), 'iCFI', 1, 'iCC', 1);                        
                     end                    
-                    %clean
-                    for ncell = 1:tcell
-                        matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(ncell).scans(~valid) = [];
-                    end
-                    
-                end                
+                end
                 matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none     = 1;
                 matlabbatch{1}.spm.stats.factorial_design.masking.im             = 1;
                 matlabbatch{1}.spm.stats.factorial_design.masking.em             = {''};
@@ -780,23 +865,26 @@ classdef Project < handle
                 matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
                 %                                
                 spm_jobman('run', matlabbatch);
-                if covariate_id == 0
+%                 if covariate_id == 0
                     %UPDATE THE SPM.mat with the contrast
                     %create the contrast that we are interested in, this could
                     %be later extended into a for loop
-                    load(sprintf('%s/SPM.mat',spm_dir))
-                    SPM = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any
-                    tbetas = length(beta_image_index);
-                    if model == 7 | model == 3
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3)]',SPM.xX.xKXs);
-                    elseif model == 2
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[eye(8)]',SPM.xX.xKXs);
-                        kappa       = .5;
-                        SPM.xCon(2) = spm_FcUtil('set','tuning','F','c',[zscore(Tuning.VonMises( linspace(-135,180,8),1,kappa,0,0))]',SPM.xX.xKXs);
-                    else
-                        keyboard
-                    end
+                    load(sprintf('%s/SPM.mat',spm_dir));
+                    SPM                                                          = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any
+                    tbetas                                                       = length(beta_image_index);
                     
+                    if model == 7 | model == 3
+                        tcontrast   = size(SPM.xX.xKXs.X,2);
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3) zeros(3,tcontrast-4)]',SPM.xX.xKXs);
+                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' zeros(3) [0 0 0 ]' eye(3)]'  ,SPM.xX.xKXs);
+%                     elseif model == 2
+%                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[eye(8)]',SPM.xX.xKXs);
+%                         kappa       = .5;
+%                         SPM.xCon(2) = spm_FcUtil('set','tuning','F','c',[zscore(Tuning.VonMises( linspace(-135,180,8),1,kappa,0,0))]',SPM.xX.xKXs);
+%                     else
+%                         keyboard
+                    end
+%                     
                     save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
                     %xSPM is used to threshold according to a contrast.
                     %                 xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');
@@ -805,7 +893,7 @@ classdef Project < handle
                     [SPM xSPM] = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
                     save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
                     save(xspm_path,'xSPM');
-                end
+%                 end
             else
                 load(xspm_path);                
 %                 t                                 = spm_list('table',xSPM{2}.rating);
@@ -1033,28 +1121,20 @@ classdef Project < handle
            betas            = reshape(1:715,65,11)';
            betas            = betas(1:8,self.mbi_valid);
            names            = [];
-           list1            = self.get_selected_subjects(ngroup,1).list;
-           list0            = self.get_selected_subjects(ngroup,0).list;
-           for sk = [0];
-               for coor = [t.dat{:,end};ones(1,size(t.dat,1))];
-                   for ngroup = 3                             
-                       r = ROI('voxel_based',coor ,'chrf_0_0_mumfordian',0,betas(:)',list1,sk);                                                                     
-                       fprintf('-------------------------------------------------------------------------------------------\n');
-                       r = ROI('voxel_based',coor ,'chrf_0_0_mumfordian',0,betas(:)',list0,sk);                                              
-                   end
+           list1            = self.get_selected_subjects(0).list;           
+           for sk = [0 6];
+               for coor = [t.dat{:,end};ones(1,size(t.dat,1))];                                          
+                       r = ROI('voxel_based',coor ,'chrf_0_0_mumfordian',0,betas(:)',list1,sk);                                                                                            
                end
            end           
            fprintf('-------------------------------------------------------------------------------------------\n');
            fprintf('-------------------------------------------------------------------------------------------\n');
            fprintf('-------------------------------------------------------------------------------------------\n');
            %% get rois for all the ROIs as well.
-           for sk = [0];
-               for ngroup = 3
+           for sk = [0 6];               
                    for nroi = self.valid_atlas_roi
-                       r = ROI('roi_based',nroi,'chrf_0_0_mumfordian',0,betas(:)',list1,sk);                                                                     
-                       r = ROI('roi_based',nroi,'chrf_0_0_mumfordian',0,betas(:)',list0,sk);
+                       r = ROI('roi_based',nroi,'chrf_0_0_mumfordian',0,betas(:)',list1,sk);                                                                                            
                    end
-               end
            end
         end
     end
@@ -1625,9 +1705,10 @@ classdef Project < handle
 %                 kernel = [kernel ; zeros(size(kernel))];
             elseif nargin == 2
                 kernel = varargin{1};
+                kernel = kernel./sum(kernel(:));
             end            
             [Yc]= conv2([Y Y Y],kernel,'same');
-            Yc  = Yc(:,(size(Yc,2)/3+1):(size(Yc,2)/3+1)+8-1)            
+            Yc  = Yc(:,(size(Yc,2)/3+1):(size(Yc,2)/3+1)+8-1);          
 
         end
         function [t2]=fit_spacetime(Y);
