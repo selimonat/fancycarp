@@ -31,13 +31,14 @@ classdef ROI < Project
             %EXAMPLE:
             %r = ROI('voxel_based',[0 0 0 1]','chrf_0_0',0,1:8,5)
             tic;
+            force = 1;
             %store some variables
             roi.model                = model_number;
             roi.sk                   = sk;
             roi.beta                 = betas;%p.model2validbetas;
             roi.selected_subjects    = subjects(:)';
             %get a cache name
-            roi.hash                 = DataHash([uint8(voxel_selection),ROI_OR_Voxels(:)',uint8(default_model),roi.atlas2mask_threshold roi.model roi.beta(:)' roi.sk]);
+            roi.hash                 = DataHash(getByteStreamFromArray([uint8(voxel_selection),ROI_OR_Voxels(:)',uint8(default_model),roi.atlas2mask_threshold roi.model roi.beta(:)' roi.sk]));
             %
             %compute and save
             if GetVoxelsXYZmm;%get coordinates and continue if success
@@ -52,14 +53,16 @@ classdef ROI < Project
                         mkdir(fileparts(filename));
                     end
                     cprintf([0 1 0],'File name:\n%s\n',filename);
-                    if exist(filename) == 0;
+                    if exist(filename) == 0 | force;
                         cprintf([1 0 0],'Not yet cached, will compute...\n');
-                        betas                = s.path_beta(1,roi.model,'w_',roi.beta);%(run, model)
+                        betas                = s.path_beta(1,roi.model,'w_',roi.beta)%(run, model)
                         vol                  = spm_vol(betas);
-                        vol                  = spm_smoothto16bit(vol,roi.sk);%smooth on the fly, slow but disk efficient.
-                        XYZvox               = roi.get_mm2vox(XYZmm,vol(1));%in EPI voxel space.
+                        vol                  = spm_smoothto16bit(vol,roi.sk);%smooth on the fly, slow but disk efficient.                        
                         %get the BOLD at these coordinates.
-                        data                 = spm_get_data(vol,XYZvox)';
+                        for NNN = 1:size(XYZmm,2)
+                            XYZvox               = roi.get_mm2vox(XYZmm(:,NNN),vol(1));%in EPI voxel space.
+                            data(NNN,:)          = spm_get_data(vol,XYZvox)';
+                        end
                         save(filename,'data');
                         cprintf([0 1 0],'Saved under %s...\n',roi.hash);
                     else
@@ -89,10 +92,14 @@ classdef ROI < Project
                 elseif strcmp(voxel_selection,'voxel_based');
                     cprintf([0 0 1],'Direct voxel selection.\n');
                     %voxel is directly given, no need to feedle around with
-                    %the atlas.
+                    %the atlas. Added possibility to give more than one
+                    %voxel
                     XYZmm              = ROI_OR_Voxels;
-                    roi.name           = roi.get_atlaslabel(XYZmm(1:3)).name{1};%the name of the roi
-                    if ~all(size(XYZmm) == [4 1]);
+                    roi.name = '';
+                    for coor = XYZmm
+                        roi.name           = strvcat(roi.name,roi.get_atlaslabel(coor(1:3)).name{1});%the name of the roi
+                    end
+                    if ~all(size(XYZmm,1) == 4);
                         cprintf([1 0 0],'WRONG size of voxel inputs\n');
                         XYZmm = [];
                         ok = 0;
