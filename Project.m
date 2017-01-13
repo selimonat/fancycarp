@@ -406,7 +406,7 @@ classdef Project < handle
                 out(n,:) = strrep(dummy(n,:),sprintf('sub%03d',self.id),'second_level');
             end
         end        
-        function [out,name ] = getgroup_all_spacetime(self,ngroup)
+        function [out,name ]= getgroup_all_spacetime(self,ngroup)
 
             
             
@@ -417,10 +417,23 @@ classdef Project < handle
             %name        = [name o2];
             [o1, o2]    = self.getgroup_scr_spacetime(ngroup);                        
             out         = cat(4,out,o1);
-            name        = [name o2];
-                        
+            name        = [name o2];                        
+            %zscore correction
+            dummy3 = [];
+            for modality = 1:size(out,4)
+                dummy2 = [];
+                for nsubject = 1:size(out,3)
+                    dummy    = out(:,:,nsubject,modality);
+                    dummy    = reshape(zscore(dummy(:)),size(dummy,1),size(dummy,2));
+                    dummy    = dummy - repmat(mean(dummy(:,1:4),2),[1 size(dummy,2)]);
+                    dummy2   = cat(3,dummy2,dummy);
+                end
+                dummy3 = cat(4,dummy3,dummy2);
+            end
+            
+            
         end
-        function [out, name] = getgroup_bold_spacetime(self,ngroup,sk)
+        function [out, name]= getgroup_bold_spacetime(self,ngroup,sk)
             %out        = getgroup_bold_spacetime(self,ngroup,sk)
             % GROUP is fed to get_selected_subjects
             % SK is fed to the ROI object.
@@ -431,12 +444,20 @@ classdef Project < handle
             % see also getgroup_pupil_spacetime
             %                              
             list    = self.get_selected_subjects(ngroup,1).list;
-            t       = spm_list('table',self.SecondLevel_ANOVA(3,1,3,1:4,8,0));
+            
+            %% get coordinates
+            %[xSPM]     = SecondLevel_ANOVA(self,ngroup,run,model,beta_image_index,sk,covariate_id)            
+            xSPM        = self.SecondLevel_ANOVA(ngroup,1,3,1:4,sk,[]);
+            xSPM        = struct('swd', xSPM.swd,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');
+            %replace 'none' to make FWE corrections.
+            [SPM xSPM]  = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
+            t           = spm_list('table',xSPM);
+            % get beta indices to be read
             betas   = reshape(1:715,65,11)';
             betas   = betas(1:8,self.mbi_valid);
             %%            
             c = 0;
-            for coor = [t.dat{:,end};ones(1,3)];
+            for coor = [t.dat{:,end};ones(1,size(t.dat,1))];;
                 c            = c+1;
                 r            = ROI('voxel_based',coor ,'chrf_0_0_mumfordian',0,betas(:)',list,sk);
                 dummy        = reshape(r.pattern(1,:,:),[8 47 size(r.pattern,3)]);%[condition microbock subject area];
@@ -444,7 +465,7 @@ classdef Project < handle
                 name{c}      = self.get_atlaslabel(coor(1:3)).name{1};                    
             end            
         end        
-        function [out, name] = getgroup_bold_spacetime_full(self,ngroup,sk)
+        function [out, name]= getgroup_bold_spacetime_full(self,ngroup,sk)
             %out        = getgroup_bold_spacetime_full(self,ngroup,sk)
             % GROUP is fed to get_selected_subjects
             % SK is fed to the ROI object.
@@ -455,7 +476,7 @@ classdef Project < handle
             % see also getgroup_pupil_spacetime
             %                              
             list    = self.get_selected_subjects(ngroup,1).list;
-            t       = spm_list('table',self.SecondLevel_ANOVA(3,1,3,1:4,8,0));
+            t       = spm_list('table',self.SecondLevel_ANOVA(3,1,3,1:4,8,''));
             betas   = reshape(1:715,65,11)';
             betas   = betas(1:11,:);
             %%            
@@ -594,7 +615,10 @@ classdef Project < handle
             %of the image in VH.
             XYZvox  = vh.mat\XYZmm;
             XYZvox  = unique(XYZvox','rows')';%remove repetitions
-            XYZvox  = round(XYZvox);%remove decimals as these are going to be matlab indices.
+            XYZvox  = (XYZvox);%remove decimals as these are going to be matlab indices.
+            %used to round the voxel coordinates but I think it is better
+            %to keep them decimal as spm_get_data has no problem with that,
+            %mainly it is to be more precise.
         end               
         function D          = getgroup_data(self,file,mask_id)
             %will read the data specified in FILE 
@@ -811,7 +835,7 @@ classdef Project < handle
             subjects   = self.get_selected_subjects(ngroup);                        
             spm_dir    = regexprep(self.dir_spmmat(run,model),'sub...','second_level');%convert to second-level path, replace the sub... to second-level.
             spm_dir    = sprintf('%scov_id_%s/%02dmm/group_%s/',spm_dir,covariate_id,sk,subjects.name);
-            xspm_path  = sprintf('%sxSPM.mat',spm_dir);
+            xspm_path  = sprintf('%sxSPM.mat',spm_dir)
             if exist(xspm_path) == 0;
                                 
                 beta_files = [];
@@ -876,7 +900,9 @@ classdef Project < handle
                     if model == 7 | model == 3
                         tcontrast   = size(SPM.xX.xKXs.X,2);
                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3) zeros(3,tcontrast-4)]',SPM.xX.xKXs);
-                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' zeros(3) [0 0 0 ]' eye(3)]'  ,SPM.xX.xKXs);
+                        if ~isempty(covariate_id)
+                            SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' zeros(3) [0 0 0 ]' eye(3)]'  ,SPM.xX.xKXs);
+                        end
 %                     elseif model == 2
 %                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[eye(8)]',SPM.xX.xKXs);
 %                         kappa       = .5;
