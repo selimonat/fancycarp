@@ -874,9 +874,15 @@ classdef Project < handle
                     tbetas                                                       = length(beta_image_index);
                     
                     if model == 7 | model == 3
-                        tcontrast   = size(SPM.xX.xKXs.X,2);
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3) zeros(3,tcontrast-4)]',SPM.xX.xKXs);
-                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' zeros(3) [0 0 0 ]' eye(3)]'  ,SPM.xX.xKXs);
+                        
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3) ]',SPM.xX.xKXs);
+                    elseif model == 4
+                        
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 0 0 ]' eye(5) ]',SPM.xX.xKXs);
+                        elseif model == 5
+                        
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 0 0 0 0 ]' eye(7) ]',SPM.xX.xKXs);
+%                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' zeros(3) [0 0 0 ]' eye(3)]'  ,SPM.xX.xKXs);
 %                     elseif model == 2
 %                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[eye(8)]',SPM.xX.xKXs);
 %                         kappa       = .5;
