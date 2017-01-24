@@ -31,7 +31,7 @@ classdef ROI < Project
             %EXAMPLE:
             %r = ROI('voxel_based',[0 0 0 1]','chrf_0_0',0,1:8,5)
             tic;
-            force = 1;
+            force = 0;
             %store some variables
             roi.model                = model_number;
             roi.sk                   = sk;
