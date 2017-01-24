@@ -55,7 +55,7 @@ classdef Project < handle
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
-        smoothing_factor      = 1:10;%how many mm images should be smoothened when calling the SmoothVolume method        
+        smoothing_factor      = 1:10;%how many mm images should be smoothened when calling the SmoothVolume method                
         path_smr              = sprintf('%s%ssmrReader%s',fileparts(which('Project')),filesep,filesep);%path to .SMR importing files in the fancycarp toolbox.
         gs                    = [5 6 7 8 9 12 14 16 17 18 19 20 21 24 25 27 28 30 32 34 35 37 39 40 41 42 43 44];
         subjects              = [];
@@ -69,6 +69,7 @@ classdef Project < handle
         roi                   = struct('xyz',{[30 0 -24] [30 22 -8] [33 22 6] [39 22 -6] [44 18 -13] [-30 18 -6] [-9 4 4] [40 -62 -12]},'label',{'rAmy' 'rAntInsula' 'rAntInsula2' 'rAntInsula3' 'rFronOper' 'lAntInsula' 'BNST' 'IOC'} );%in mm
         colors                = [ circshift( hsv(8), [3 0] );[0 0 0];[.8 0 0];[.8 0 0]]';
         valid_atlas_roi       = setdiff(1:63,[49 50 51]);%this excludes all the ROIs that are huge in number of voxels
+        ucs_vector            = [];        
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.         
@@ -81,6 +82,10 @@ classdef Project < handle
     end    
     properties (Hidden)
         atlas2mask_threshold  = 15;%where ROI masks are computed, this threshold is used.        
+        selected_smoothing    = 10;%smoothing for selection of voxels;
+        selected_model        = 4;
+        selected_betas        = 1:6
+        selected_ngroup       = 3;
     end    
 	methods
         function DU         = SanityCheck(self,runs,measure,varargin)
@@ -310,9 +315,34 @@ classdef Project < handle
 % % %             out = regexprep(self.path_spmmat(run,model),'sub...',sprintf('second_level_%02dmm',sk));
 % % %             
 % % %         end
+        function RW_analysis(self,ngroup)
+            %
+            [out]  = self.getgroup_all_spacetime(3,0,0,0);
+            [sy sx]  = GetSubplotNumber(size(out.d,4));%number of areas
+            %%
+            for n = 1:size(out.d,4)
+                bla = squeeze(mean(out.d(:,:,:,n),3));
+                bla = demean(bla')';
+                
+                [rw] = Project.RW_Fit(bla,Project.ucs_vector);                
+                %                
+                subplot(sy,sx,n);
+                R = abs(rw.r).^2;
+                imagesc(rw.learning_rates,rw.stds,R);
+                xlabel('learning rates');
+                ylabel('std');
+                colorbar;
+                hold on;
+                [y x] = find(R == max(R(:)));
+                plot(rw.learning_rates(x),rw.stds(y),'r+');
+                hold off;                
+                title(out.name{n},'interpreter','none'); 
+                drawnow;
+            end                        
+        end
     end    
     methods %getters
-        function out        = getgroup_all_param(self)
+        function out             = getgroup_all_param(self)
             %
             out = self.getgroup_pmf_param;
             out = join(out,self.getgroup_rating_param);
@@ -321,7 +351,7 @@ classdef Project < handle
             out = join(out,self.getgroup_detected_face);                        
             
         end
-        function out        = getgroup_pmf_param(self)
+        function out             = getgroup_pmf_param(self)
             %collects the pmf parameters for all subjects in a table.
             out = [];
             for ns = self.subject_indices
@@ -334,7 +364,7 @@ classdef Project < handle
             end
             out = array2table(out,'variablenames',{'subject_id' 'pmf_csp_alpha' 'pmf_csn_alpha' 'pmf_pooled_alpha' 'pmf_csp_beta' 'pmf_csn_beta' 'pmf_pooled_beta' 'pmf_csp_gamma' 'pmf_csn_gamma' 'pmf_pooled_gamma' 'pmf_csp_lamda'    'pmf_csn_lamda'    'pmf_pooled_lamda' 'pmf_csp_LL' 'pmf_csn_LL' 'pmf_pooled_LL' });
         end
-        function out        = getgroup_rating_param(self)
+        function out             = getgroup_rating_param(self)
             %collects the rating parameters for all subjects in a table.
             out = [];
             for ns = self.subject_indices%run across all the subjects
@@ -344,7 +374,7 @@ classdef Project < handle
             out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
             out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_absmu' 'rating_offset' 'rating_std' 'rating_LL'});
         end       
-        function out        = getgroup_facecircle(self)
+        function out             = getgroup_facecircle(self)
             %collects the rating parameters for all subjects in a table.
             out = [];
             for ns = self.subject_indices
@@ -354,7 +384,7 @@ classdef Project < handle
             out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
             out = array2table(out,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_mu' 'facecircle_absmu' 'facecircle_offset' 'facecircle_std' 'facecircle_LL'});
         end       
-        function out        = getgroup_detected_oddballs(self)            
+        function out             = getgroup_detected_oddballs(self)            
             odd = [];
             for ns = self.subject_indices
                 s       = Subject(ns);
@@ -362,7 +392,7 @@ classdef Project < handle
             end
             out = array2table(odd,'variablenames',{'subject_id' 'detection_oddball'});
         end
-        function out        = getgroup_detected_face(self)            
+        function out             = getgroup_detected_face(self)            
             face = [];
             for ns = self.subject_indices
                 s      = Subject(ns);
@@ -371,7 +401,7 @@ classdef Project < handle
             face = [face abs(face(:,2))];
             out = array2table(face,'variablenames',{'subject_id' 'detection_face' 'detection_absface'});
         end        
-        function fixmat     = getgroup_facecircle_fixmat(self,subjects)
+        function fixmat          = getgroup_facecircle_fixmat(self,subjects)
             %will collect all the fixmats for all subjects from the
             %SUBJECTS.
             
@@ -387,7 +417,7 @@ classdef Project < handle
                 end
             end
         end
-        function out        = path_beta_group(self,nrun,model_num,prefix,varargin)
+        function out             = path_beta_group(self,nrun,model_num,prefix,varargin)
             %returns the path for beta images for the second level
             %analysis. it simply loads single subjects' beta images and
             %replaces the string sub0000 with second_level.           
@@ -396,7 +426,7 @@ classdef Project < handle
                 out(n,:) = strrep(dummy(n,:),sprintf('sub%03d',self.id),'second_level');
             end
         end        
-        function out        = path_contrast_group(self,nrun,model_num,prefix,type)
+        function out             = path_contrast_group(self,nrun,model_num,prefix,type)
             %returns the path for F,T images for the second level
             %analysis. it simply loads single subjects' images and
             %replaces the string sub0000 with second_level.
@@ -406,98 +436,63 @@ classdef Project < handle
                 out(n,:) = strrep(dummy(n,:),sprintf('sub%03d',self.id),'second_level');
             end
         end        
-        function [out,name ]= getgroup_all_spacetime(self,ngroup)
-
-            
-            
-            sk          = 6;
-            [out, name] = self.getgroup_bold_spacetime(ngroup,sk);
-            %[o1, o2]    = self.getgroup_pupil_spacetime(ngroup);
-            %out         = cat(4,out,o1);
-            %name        = [name o2];
-            [o1, o2]    = self.getgroup_scr_spacetime(ngroup);                        
-            out         = cat(4,out,o1);
-            name        = [name o2];                        
-            %zscore correction
-            dummy3 = [];
-            for modality = 1:size(out,4)
-                dummy2 = [];
-                for nsubject = 1:size(out,3)
-                    dummy    = out(:,:,nsubject,modality);
-                    dummy    = reshape(zscore(dummy(:)),size(dummy,1),size(dummy,2));
-                    dummy    = dummy - repmat(mean(dummy(:,1:4),2),[1 size(dummy,2)]);
-                    dummy2   = cat(3,dummy2,dummy);
-                end
-                dummy3 = cat(4,dummy3,dummy2);
-            end
-            
-            
-        end
-        function [out, name]= getgroup_bold_spacetime(self,ngroup,sk)
-            %out        = getgroup_bold_spacetime(self,ngroup,sk)
-            % GROUP is fed to get_selected_subjects
-            % SK is fed to the ROI object.
+        function [spacetime]     = getgroup_all_spacetime(self,ngroup,clean,zsc,bc)
+            %returns condition x time matrices for NGROUP and smoothing kernel of 10.
+                                    
+            [spacetime1]     = self.getgroup_bold_spacetime(ngroup,clean,zsc,bc);           
+            [spacetime2]     = self.getgroup_scr_spacetime(ngroup,clean,zsc,bc);
             %
-            %loads the Second-level anova which I used to select ROIs and
-            %extracts the coordinates from there.
+            spacetime.d      = cat(4,spacetime1.d,spacetime2.d);
+            spacetime.name   = [spacetime1.name spacetime2.name];                                                                                    
+        end
+        function [spacetime]     = getgroup_bold_spacetime(self,ngroup,clean,zsc,bc)
+            %spacetime  = getgroup_bold_spacetime(self,ngroup,clean)
+            % GROUP is fed to get_selected_subjects.
+            % CLEAN == 1 to discard UCS microblocks.
+            %            
             %
             % see also getgroup_pupil_spacetime
-            %                              
-            list    = self.get_selected_subjects(ngroup,1).list;
-            
-            %% get coordinates
-            %[xSPM]     = SecondLevel_ANOVA(self,ngroup,run,model,beta_image_index,sk,covariate_id)            
-            xSPM        = self.SecondLevel_ANOVA(ngroup,1,3,1:4,sk,[]);
-            xSPM        = struct('swd', xSPM.swd,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');
-            %replace 'none' to make FWE corrections.
-            [SPM xSPM]  = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
-            t           = spm_list('table',xSPM);
+                        
+            sk      = self.selected_smoothing;                            
+            list    = self.get_selected_subjects(ngroup,1).list;            
+            % get coordinates
+            coors   = self.get_selected_coordinates;
             % get beta indices to be read
             betas   = reshape(1:715,65,11)';
-            betas   = betas(1:8,self.mbi_valid);
-            %%            
-            c = 0;
-            for coor = [t.dat{:,end};ones(1,size(t.dat,1))];;
-                c            = c+1;
-                r            = ROI('voxel_based',coor ,'chrf_0_0_mumfordian',0,betas(:)',list,sk);
-                dummy        = reshape(r.pattern(1,:,:),[8 47 size(r.pattern,3)]);%[condition microbock subject area];
-                out(:,:,:,c) = permute(dummy,[2 1 3]);
-                name{c}      = self.get_atlaslabel(coor(1:3)).name{1};                    
-            end            
-        end        
-        function [out, name]= getgroup_bold_spacetime_full(self,ngroup,sk)
-            %out        = getgroup_bold_spacetime_full(self,ngroup,sk)
-            % GROUP is fed to get_selected_subjects
-            % SK is fed to the ROI object.
-            %
-            %loads the Second-level anova which I used to select ROIs and
-            %extracts the coordinates from there.
-            %
-            % see also getgroup_pupil_spacetime
-            %                              
-            list    = self.get_selected_subjects(ngroup,1).list;
-            t       = spm_list('table',self.SecondLevel_ANOVA(3,1,3,1:4,8,''));
-            betas   = reshape(1:715,65,11)';
             betas   = betas(1:11,:);
-            %%            
-            c = 0;
-            for coor = [t.dat{:,end};ones(1,3)];
-                c            = c+1;
-                r            = ROI('voxel_based',coor ,'chrf_0_0_mumfordian',0,betas(:)',list,sk);
-                dummy        = reshape(r.pattern(1,:,:),[11 65 size(r.pattern,3)]);%[condition microbock subject area];
-                out(:,:,:,c) = permute(dummy,[2 1 3]);
-                name{c}      = self.get_atlaslabel(coor(1:3)).name{1};                    
-            end            
-%             out(self.mbi_transition,:,:,:) = [];
-            %adjust the matrix so that the UCS trials are back to the 4th
-            %column
+            %% collect                     
+            R       = ROI('voxel_based',coors ,'chrf_0_0_mumfordian',0,betas(:)',list,sk);
+            %% transform, rearrange etc.
+            pattern = permute(reshape(permute(R.pattern,[2 3 1]),[11 65 size(R.pattern,3) size(R.pattern,1)]),[2 1 3 4]);size(pattern);
+            name    = cellstr(R.name)';
+            %% exclude voxels outside of the brain
+            invalid                = R.name(:,1) == 'N';
+            if sum(invalid) > 0
+                pattern(:,:,:,invalid) = [];
+                name(invalid)          = [];
+                cprintf([1 0 0],'Removed %03d out of rois...\n',sum(invalid));
+            end
+            out = pattern;
+            %% move UCS condition to the 4th column
             for ccc = [10 11]
                 i            = find(out(:,ccc,1,1)~=0);
                 out(i,4,:,:) = out(i,ccc,:,:);
             end
             out(:,9:end,:,:) = [];
-        end        
-        function [out,name] = getgroup_pupil_spacetime(self,ngroup)
+            %% clean the bad microblocks with oddballs and transitions
+            out = self.CleanMicroBlocks(out);
+            %% clean further
+            if clean % and now clean the UCS trials if wanted.
+                out(self.ucs_vector == 1,:,:,:,:,:,:) = [];
+            end
+            %% output
+            spacetime.d    = out;;
+            spacetime.name = name;
+            %% zscore nad baseline correction
+            [spacetime.d]  = self.spacetime_preprocess(spacetime.d,zsc,bc);
+        end                
+        function [out,name]      = getgroup_pupil_spacetime(self,ngroup)
+            % this needs to be ADAPTED as in BOLD and SCR
             %will load the group pupil data for the NGROUPth subjects.
             %
             % see also getgroup_bold_spacetime
@@ -514,57 +509,52 @@ classdef Project < handle
 %             out  = nanmean(out,3);
             name{1} = 'pupil';
         end                
-        function [out,name] = getgroup_scr_spacetime(self,ngroup)
+        function [spacetime]     = getgroup_scr_spacetime(self,ngroup,clean,zsc,bc)
             %will load the group pupil data for the NGROUPth subjects.
             %
             % see also getgroup_bold_spacetime, getgroup_pupil_spacetime
+            %%
             out = [];
-            c = 0;
-            for ns = self.get_selected_subjects(ngroup,1).list;                
+            c   = 0;
+            for ns = self.get_selected_subjects(ngroup).list;                
                 c            = c + 1;
                 s            = Subject(ns);
                 scr          = SCR(s);
                 scr.run_ledalab;                
-                dummy        = reshape(mean(scr.ledalab.y(150:200,:)),65,9);
-                out(:,:,c,1) = dummy(self.mbi_valid,1:8,:);
+                dummy        = reshape(mean(scr.ledalab.y(150:300,:)),65,9);
+                out(:,:,c,1) = dummy(:,1:8,:);
             end
-            %out  = out(self.mbi_valid,1:8,:);
-            name{1} = 'scr';
-        end        
-        function [out,name] = getgroup_scr_spacetime_full(self,ngroup)
-            %will load the group pupil data for the NGROUPth subjects.
-            %
-            % see also getgroup_bold_spacetime, getgroup_pupil_spacetime
-            out = [];
-            c = 0;
-            for ns = self.get_selected_subjects(ngroup,1).list;                
-                c            = c + 1;
-                s            = Subject(ns);
-                scr          = SCR(s);
-                scr.run_ledalab;                
-                dummy        = reshape(mean(scr.ledalab.y(150:200,:)),65,9);
-                out(:,:,c,1) = dummy(:,1:8,:);%discard the null condition
+            %% clean the bad microblocks with oddballs and transitions
+            out = self.CleanMicroBlocks(out);
+            %% clean further
+            if clean % and now clean the UCS trials if wanted.
+                out(self.ucs_vector == 1,:,:,:,:,:,:) = [];
             end
-            %out(self.mbi_transition,:,:) = [];%exclude the transition blocks
-            name{1} = 'scr';
-        end        
-        function  name      = get_atlasROIname(self,roi_index)
+            %% output
+            spacetime.d    = out;;
+            spacetime.name = {'scr'};
+            %% zscore nad baseline correction
+            [spacetime.d]  = self.spacetime_preprocess(spacetime.d,zsc,bc);
+            
+            
+        end                
+        function  name           = get_atlasROIname(self,roi_index)
             %get_atlasROIname(self,roi_index)
             %
             %returns the name of the probabilistic atlas at ROI_INDEX along
-            %the 4th dimension of the atlas data.            
+            %the 4th dimension of the atlas data.
             cmd           = sprintf('sed "%dq;d" %s/data.txt',roi_index,fileparts(self.path_atlas));
             [~,name]      = system(cmd);
             name          = deblank(name);
         end
-        function roi        = get_atlaslabel(self,XYZmm)
+        function roi             = get_atlaslabel(self,XYZmm)
             %returns the label of the ROI at location XYZmm using the
             %Project's atlas.
-                        
+            
             atlas_labels = regexprep(self.path_atlas,'nii','txt');
             roi.name     = {};
             roi.prob     = {};
-            %            
+            %
             V            = spm_vol(self.path_atlas);
             V            = V(63:end);%take only the bilateral ones.
             %get the probabilities at that point
@@ -573,21 +563,21 @@ classdef Project < handle
             [~,a]      = system(sprintf('cat %s | grep Cerebral',atlas_labels));
             black_list = strsplit(a);
             %list the first 6 ROIs
-%             fprintf('Cursor located at (mm): %g %g %g\n', x,y,z);
+            %             fprintf('Cursor located at (mm): %g %g %g\n', x,y,z);
             counter = 0;
             while counter <= 3
                 counter               = counter + 1;
                 %get the current ROI name
-                current_name = self.get_atlasROIname(i(counter)+62);%the first 62 are bilateral rois, not useful.          
+                current_name = self.get_atlasROIname(i(counter)+62);%the first 62 are bilateral rois, not useful.
                 %include if the probability is bigger than zero and also if the current roi is not
-                %one of the stupid ROI names, e.g. cerebral cortex or so...             
+                %one of the stupid ROI names, e.g. cerebral cortex or so...
                 if -p(counter) > 0 & isempty(cell2mat( regexp(current_name,black_list)))
                     %isempty == 1 when there is no match, which is good
-                    %                    
+                    %
                     roi.name     = [roi.name current_name];
                     roi.prob     = [roi.prob -p(counter)];
                     fprintf('ROI: %d percent chance for %s.' , roi.prob{end}, roi.name{end}(1:end-1));
-                    fprintf('\n');                    
+                    fprintf('\n');
                 end
             end
             %if at the end of the loop we are still poor, we say it
@@ -598,19 +588,19 @@ classdef Project < handle
             
             fprintf('\n\n');
         end
-        function XYZmm      = get_XYZmmNormalized(self,mask_id)
+        function XYZmm           = get_XYZmmNormalized(self,mask_id)
             %Will return XYZ coordinates from ROI specified by MASK_INDEX
-            %thresholded by the default value. XYZ values are in world 
+            %thresholded by the default value. XYZ values are in world
             %space, so they will need to be brought to the voxel space of
-            %the EPIs.            
+            %the EPIs.
             mask_handle = spm_vol(self.path_atlas(mask_id));%read the mask
-            mask_ind    = spm_read_vols(mask_handle) > self.atlas2mask_threshold;%threshold it            
+            mask_ind    = spm_read_vols(mask_handle) > self.atlas2mask_threshold;%threshold it
             [X Y Z]     = ind2sub(mask_handle.dim,find(mask_ind));%get voxel indices
             XYZ         = [X Y Z ones(sum(mask_ind(:)),1)]';%this is in hr's voxels space.
-            XYZmm       = mask_handle.mat*XYZ;%this is world space.            
+            XYZmm       = mask_handle.mat*XYZ;%this is world space.
             XYZmm       = unique(XYZmm','rows')';%remove repetititons.
         end
-        function XYZvox     = get_mm2vox(self,XYZmm,vh)
+        function XYZvox          = get_mm2vox(self,XYZmm,vh)
             %brings points in the world space XYZmm to voxel space XYZvox
             %of the image in VH.
             XYZvox  = vh.mat\XYZmm;
@@ -619,15 +609,15 @@ classdef Project < handle
             %used to round the voxel coordinates but I think it is better
             %to keep them decimal as spm_get_data has no problem with that,
             %mainly it is to be more precise.
-        end               
-        function D          = getgroup_data(self,file,mask_id)
-            %will read the data specified in FILE 
+        end
+        function D               = getgroup_data(self,file,mask_id)
+            %will read the data specified in FILE
             %FILE is the absolute path to a 3/4D .nii file. Important point
             %is that the file should be in the normalized space, as MASK_ID
             %refers to a normalized atlas.
             %
             %MASK_ID is used to select voxels.
-            %                                    
+            %
             vh      = spm_vol(file);
             if spm_check_orientations(vh)
                 XYZmm   = self.get_XYZmmNormalized(mask_id);
@@ -635,9 +625,9 @@ classdef Project < handle
                 D       = spm_get_data(vh,XYZvox);
             else
                 fprintf('The data in\n %s\n doesn''t have same orientations...',file);
-            end            
+            end
         end
-        function sub        = get_selected_subjects(self,criteria,inversion)
+        function sub             = get_selected_subjects(self,criteria,inversion)
             %sub        = get_selected_subjects(self,criteria,inversion)
             %
             %will select subjects based on different CRITERIA. Use
@@ -648,13 +638,13 @@ classdef Project < handle
             %you get the selected subjects (generaly performing better).
             cprintf([0 1 0],'Selecting subjects, must loop over once...\n');
             if nargin == 2
-                inversion = 1;%will select good subjects            
+                inversion = 1;%will select good subjects
             end
             
             if criteria == 0
                 sub.name = '00_all';
                 sub.list = self.subject_indices(:);
-            
+                
             elseif     criteria == 1
                 %
                 sub.name   = '01_rating';
@@ -663,10 +653,10 @@ classdef Project < handle
                 select     = (out.rating_LL > -log10(.05))&(out.rating_mu > -90)&(out.rating_mu < 90);%select based on tuning
                 select     = select == inversion;
                 sub.list   = out.subject_id(select);%subject indices.
-                %               
+                %
             elseif criteria == 2
                 %
-                sub.name = '02_detection'; 
+                sub.name = '02_detection';
                 out      = self.getgroup_detected_face;
                 select   = abs(out.detection_face) <= 45;
                 select   = select==inversion;
@@ -676,14 +666,14 @@ classdef Project < handle
                 
                 %same as rating tuning, but with saliency data.
                 sub.name = '03_saliency';
-                out      = self.getgroup_facecircle;                
-                select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -90)&(out.facecircle_mu < 90);%select based on tuning                
+                out      = self.getgroup_facecircle;
+                select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -90)&(out.facecircle_mu < 90);%select based on tuning
                 select   = select==inversion;
                 sub.list = out.subject_id(select);
                 
             elseif criteria == 4
                 
-                sub.name    = '04_perception';                
+                sub.name    = '04_perception';
                 out     = self.getgroup_pmf_param;%all threshoild values
                 m       = nanmedian(out.pmf_pooled_alpha);
                 select  = out.pmf_pooled_alpha <= m;%subjects with sharp pmf
@@ -698,86 +688,234 @@ classdef Project < handle
             if ~inversion
                 sub.name = [sub.name '_minus'];
             end
-        end
-        
-        function [fit,extract] = get_stanfit(self,area)
+        end        
+        function [fit,extract]   = get_stanfit(self,area)
             
             group = 3;
             sk    = 6;
             want_baseline = 1;
             want_zscore   = 1;
             filename      = sprintf('%smidlevel/get_stanfit_area_%d_zscore_%d_baseline_%d_sk_%02d_group_%02d.mat',self.path_project,area,want_zscore,want_baseline,sk,group);
-            if exist(filename) == 0 
-            %% load the raw single trial mumfordian data.
-            [out_scr,  name]      = self.getgroup_scr_spacetime_full(group);
-            [out_bold, name_bold] = self.getgroup_bold_spacetime_full(group,sk);
-            out                   = cat(4,out_bold,out_scr);
-            out                   = permute(out,[2 1 3 4]);%[face microblock subject area]
-            %% for each subject separately make a global zscore transformation + baseline correction.            
-            dummy3        = [];
-            for modality = 1:size(out,4)
-                dummy2 = [];
-                for nsubject = 1:size(out,3)
-                    dummy    = out(:,:,nsubject,modality);
-                    if want_zscore
-                        dummy    = reshape(zscore(dummy(:)),size(dummy,1),size(dummy,2));
+            if exist(filename) == 0
+                %% load the raw single trial mumfordian data.
+                [out_scr,  name]      = self.getgroup_scr_spacetime_full(group);
+                [out_bold, name_bold] = self.getgroup_bold_spacetime_full(group,sk);
+                out                   = cat(4,out_bold,out_scr);
+                out                   = permute(out,[2 1 3 4]);%[face microblock subject area]
+                %% for each subject separately make a global zscore transformation + baseline correction.
+                dummy3        = [];
+                for modality = 1:size(out,4)
+                    dummy2 = [];
+                    for nsubject = 1:size(out,3)
+                        dummy    = out(:,:,nsubject,modality);
+                        if want_zscore
+                            dummy    = reshape(zscore(dummy(:)),size(dummy,1),size(dummy,2));
+                        end
+                        if want_baseline
+                            dummy    = dummy - repmat(mean(dummy(:,1:4),2),[1 size(dummy,2)]);
+                        end
+                        dummy2   = cat(3,dummy2,dummy);
                     end
-                    if want_baseline                        
-                        dummy    = dummy - repmat(mean(dummy(:,1:4),2),[1 size(dummy,2)]);
-                    end
-                    dummy2   = cat(3,dummy2,dummy);
+                    dummy3 = cat(4,dummy3,dummy2);
                 end
-                dummy3 = cat(4,dummy3,dummy2);
-            end
-            out              = permute(out,[1 3 2 4]);
-            out              = dummy3(:,:,:,area);
-            %% organize the data for stan: each microblock is a modality                        
-            tsub             = size(out,3);
-            tmicroblock      = size(out,2);
-            modality =[];c=0;
-            for n = 1:tmicroblock
-               c        = c+1;
-               modality = [modality repmat(c,1,tsub)];
-            end
-            out              = reshape(out,[8 tmicroblock*tsub]); 
-            %% store it
-            data.y           = out;%[8xN]
-            data.x           = deg2rad([-135:45:180]');
-            data.X           = length(data.x);
-            data.T           = size(out,2);
-            data.m           = modality;
-            data.M           = length(unique(modality));
-            %% give sensible initial values.            
-            init.sigma_amp   = zeros(1,data.M)+1;
-            init.sigma_offset=zeros(1,data.M)+1;
-            init.sigma_kappa =zeros(1,data.M)+1;            
-            init.sigma_y     = zeros(1,data.M)+1;
-            init.mu_amp      = zeros(1,data.M);
-            init.mu_offset   = zeros(1,data.M);
-            init.mu_kappa    = zeros(1,data.M)+.01;
-            %
-            init.amp            = zeros(1,data.T);
-            init.kappa          = zeros(1,data.T)+0.01;%very wide 
-            init.offset         = zeros(1,data.T);
-            %
-            %% some path business
-            addpath('/home/onat/Documents/Code/C++/cmdstan-2.12.0/');
-            addpath('/home/onat/Documents/Code/Matlab/MatlabProcessManager/');
-            addpath('/home/onat/Documents/Code/Matlab/MatlabStan/')
-            
-            cd /mnt/data/project_fearamy/FitVonMises;
-            !rm FitVonMises FitVonMises.hpp FitVonMises.cpp  output-* temp.*;
-            fit       = stan('file','FitVonMises.stan','data',data,'verbose',true,'iter',400,'init',init);            
-            keyboard
-            extract   = fit.extract;
-            save(filename,'fit','extract');
+                out              = permute(out,[1 3 2 4]);
+                out              = dummy3(:,:,:,area);
+                %% organize the data for stan: each microblock is a modality
+                tsub             = size(out,3);
+                tmicroblock      = size(out,2);
+                modality =[];c=0;
+                for n = 1:tmicroblock
+                    c        = c+1;
+                    modality = [modality repmat(c,1,tsub)];
+                end
+                out              = reshape(out,[8 tmicroblock*tsub]);
+                %% store it
+                data.y           = out;%[8xN]
+                data.x           = deg2rad([-135:45:180]');
+                data.X           = length(data.x);
+                data.T           = size(out,2);
+                data.m           = modality;
+                data.M           = length(unique(modality));
+                %% give sensible initial values.
+                init.sigma_amp   = zeros(1,data.M)+1;
+                init.sigma_offset=zeros(1,data.M)+1;
+                init.sigma_kappa =zeros(1,data.M)+1;
+                init.sigma_y     = zeros(1,data.M)+1;
+                init.mu_amp      = zeros(1,data.M);
+                init.mu_offset   = zeros(1,data.M);
+                init.mu_kappa    = zeros(1,data.M)+.01;
+                %
+                init.amp            = zeros(1,data.T);
+                init.kappa          = zeros(1,data.T)+0.01;%very wide
+                init.offset         = zeros(1,data.T);
+                %
+                %% some path business
+                addpath('/home/onat/Documents/Code/C++/cmdstan-2.12.0/');
+                addpath('/home/onat/Documents/Code/Matlab/MatlabProcessManager/');
+                addpath('/home/onat/Documents/Code/Matlab/MatlabStan/')
+                
+                cd /mnt/data/project_fearamy/FitVonMises;
+                !rm FitVonMises FitVonMises.hpp FitVonMises.cpp  output-* temp.*;
+                fit       = stan('file','FitVonMises.stan','data',data,'verbose',true,'iter',400,'init',init);
+                keyboard
+                extract   = fit.extract;
+                save(filename,'fit','extract');
             else
                 load(filename)
             end
         end
-    end
+        function [pmod]          = get_pmodmat(self,model)
+            %returns the pmod values used for different models, the idea
+            %here is to use this matrix and the fitted coefficients to
+            %reconstruct the timexcondition panels.
+            %
+            
+            kappa   = .1;
+            %create a weight vector for the derivative.
+            res     = 8;
+            x2      = [0:(res-1)]*(360/res)-135;
+            x2      = [x2 - (360/res/2) x2(end)+(360/res/2)];
+            deriv   = -abs(diff(Tuning.VonMises(x2,1,kappa,0,0)));
+            %this
+            mbi_id  = Vectorize(repmat(1:65,8,1));
+            stim_id = Vectorize(repmat([-135:45:180]',1,65));
+            pmod    = NaN(length(stim_id),6);
+            for ntrial = 1:length(stim_id)
+                if stim_id(ntrial) < 1000
+                    pmod(ntrial,1) = 1;%constant term
+                    pmod(ntrial,2) = mbi_id(ntrial);%onsets
+                    pmod(ntrial,3) = Tuning.VonMises( stim_id(ntrial),1,kappa,0,0);%amp
+                    pmod(ntrial,5) = deriv(mod(stim_id(ntrial)./45+4-1,8)+1);%dsigma
+                end
+            end
+            %
+            pmod(:,2:3)      = nandemean(pmod(:,2:3));%mean correct
+            pmod(:,7)        = nandemean(pmod(:,2).^2);%poly expansion time;
+            
+            pmod(:,5)        = nandemean(pmod(:,5));%dsigma
+            pmod(:,4)        = pmod(:,2).*pmod(:,3);%time x amp
+            pmod(:,6)        = pmod(:,2).*pmod(:,5);%time x dsigma
+            pmod(:,8)        = pmod(:,7).*pmod(:,3);%time2 x amp
+            pmod(:,9)        = pmod(:,7).*pmod(:,5);%time2 x dsigma
+            pmod(:,2:end)    = nanzscore(pmod(:,2:end));
+            
+            if model == 3
+                pmod = pmod(:,1:4);
+            elseif model == 4
+                pmod = pmod(:,1:6);
+            elseif model == 5
+                pmod = pmod(:,[1 2 3 4 7 8 5 6 9]);
+            end
+        end
+        function [coors]         = get_SecondLevel_ANOVA_coordinates(self,ngroup,sk);
+            %returns the coordiantes displayed on spm figure;
+            model       = 3;
+            reg_i       = 1:4;
+            xSPM        = self.SecondLevel_ANOVA(ngroup,1,model,reg_i,sk,[]);
+            xSPM        = struct('swd', xSPM.swd,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.001,'k',0,'thresDesc','none');
+            %replace 'none' to make FWE corrections.
+            [SPM xSPM]  = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
+            t           = spm_list('table',xSPM);
+            coors       = [t.dat{:,end};ones(1,size(t.dat,1))];
+        end
+        function [st  names]     = get_SecondLevel_ANOVA_fit(self,ngroup,sk);
+            model     = 8;
+            reg_i     = 1:21;
+            %returns the fitted space-time plot            
+            coors     = self.get_SecondLevel_ANOVA_coordinates(ngroup,sk);
+            tcoor     = size(coors,2);
+            r         = ROI('voxel_based',coors,'chrf_0_0',model,reg_i,self.get_selected_subjects(ngroup).list,sk);
+            betas     = r.evoked_pattern';
+            if model < 8
+                pmod      = self.get_pmodmat(model);
+            else
+                pmod      = self.get_chebyshev(5,6);
+                pmod      = reshape(pmod,[65*8 21]);
+            end
+            st        = reshape(pmod*betas,8,65,tcoor);
+            st        = permute(st,[2 1 3]);
+            names     = cellstr(r.name);
+        end
+        function [pmodmat names] = get_chebyshev(self,face_order,time_order)
+            %Chebyshev polynomials
+            %%
+            x      = linspace(-1,1,65)';
+            n2     = time_order;
+            m      = length(x);
+            %Generate the z variable as a mapping of your x data range into the interval [-1,1]            
+            z      = ((x-min(x))-(max(x)-x))/(max(x)-min(x));            
+            A(:,1) = ones(m,1);
+            if n2 > 1
+                A(:,2) = z;
+            end
+            if n2 > 2
+                for k = 3:n2+1
+                    A(:,k) = 2*z.*A(:,k-1) - A(:,k-2);  %% recurrence relation
+                end
+            end
+            %%
+            x = linspace(-1,1,8)';
+            n = face_order;
+            m = length(x);
+            %
+            %Generate the z variable as a mapping of your x data range into the interval [-1,1]
+            
+            z = ((x-min(x))-(max(x)-x))/(max(x)-min(x));
+            
+            B(:,1) = ones(m,1);
+            if n > 1
+                B(:,2) = z;
+            end
+            if n > 2
+                for k = 3:n+1
+                    B(:,k) = 2*z.*B(:,k-1) - B(:,k-2);  %% recurrence relation
+                end
+            end
+            B = B(:,1:2:end);
+            %%
+            clf;
+            c = 0;
+            pmodmat = [];degrees= [];
+            for i = 1:size(B,2);%face
+                for j = 1:size(A,2);%time
+                    c = c+1
+                    Y = [B(:,i)*A(:,j)'];
+                    subplot(size(B,2),size(A,2),c);
+                    imagesc(Y);
+                    pmodmat = cat(3,pmodmat,Y);
+                    degrees = [degrees [i;j]];                    
+                    names{c} = sprintf('time:%02d, face:%02d',j,i);
+                end
+            end
+            
+        end
+        function [coors]         = get_selected_coordinates(self)
+            %this method simply returns the coordinates of voxels that are
+            %selected. This is not supposed to change very often and stay
+            %as it is once fixed.
+                        
+            model                    = self.selected_model;
+            betas                    = self.selected_betas;
+            ngroup                   = self.selected_ngroup;
+            sk                       = self.selected_smoothing;
+            %
+            xSPM                     = self.SecondLevel_ANOVA(ngroup,1,model,betas,sk,[]);
+            xSPM                     = struct('swd', xSPM.swd,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.001,'k',0,'thresDesc','none');
+            %replace 'none' to make FWE corrections.
+            [SPM xSPM]               = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
+            t                        = spm_list('table',xSPM);
+            coors                    = [t.dat{:,end};ones(1,size(t.dat,1))];
+        end
+        function ucs             = get.ucs_vector(self)
+            %returns a logical vector with ones where there is a UCS AFTER
+            %CLEANING FOR ODDBALL and TRANSITION MICROBLOCKS.
+            ucs                                                 = zeros(1,65);
+            ucs(Project.mbi_ucs)                                = 1;
+            ucs([Project.mbi_oddball Project.mbi_transition])   = [];
+        end
+        end
     methods %methods that does something on all subjects one by one
-        function              VolumeGroupAverage(self,selector)
+        function                              VolumeGroupAverage(self,selector)
             %Averages all IMAGES across all subjects. This can only be done
             %on normalized images. The result will be saved to the
             %project/midlevel/. The string SELECTOR is appended to the
@@ -796,7 +934,7 @@ classdef Project < handle
             mkdir(fileparts(target_path));
             spm_write_vol(dummy,V);
         end   
-        function              VolumeSmooth(self,files)
+        function                              VolumeSmooth(self,files)
             %will smooth the files by the factor defined as Project
             %property.
             for sk = self.smoothing_factor
@@ -808,7 +946,7 @@ classdef Project < handle
                 spm_jobman('run', matlabbatch);
             end
         end        
-        function [xSPM]     = SecondLevel_ANOVA(self,ngroup,run,model,beta_image_index,sk,covariate_id)
+        function [xSPM]                     = SecondLevel_ANOVA(self,ngroup,run,model,beta_image_index,sk,covariate_id)
             %%
             %[xSPM]     = SecondLevel_ANOVA(self,ngroup,run,model,beta_image_index,sk,covariate_id)
             %
@@ -902,12 +1040,13 @@ classdef Project < handle
                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3) ]',SPM.xX.xKXs);
                     elseif model == 4
                         
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 0 0 ]' eye(5) ]',SPM.xX.xKXs);
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 0 0]' eye(5) ]',SPM.xX.xKXs);
                     elseif model == 5
                         
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 0 0 0 0 ]' eye(7) ]',SPM.xX.xKXs);
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 0 0 0 0 0]' eye(8) ]',SPM.xX.xKXs);
 %                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' zeros(3) [0 0 0 ]' eye(3)]'  ,SPM.xX.xKXs);
-
+                    elseif model == 8
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[zeros(1,20)]' eye(20) ]',SPM.xX.xKXs);
                     end
 %                     
                     save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
@@ -925,7 +1064,7 @@ classdef Project < handle
             end            
 
         end        
-        function B          = SecondLevel_Mumfordian(self,nrun,mask_id)
+        function B                          = SecondLevel_Mumfordian(self,nrun,mask_id)
             %
             B = [];
             for ns = self.subject_indices
@@ -934,7 +1073,7 @@ classdef Project < handle
                 B        = cat(3,B,mean(beta,3));
             end
         end
-        function              LatencyMap(self,midlevel_path,xBF)
+        function                              LatencyMap(self,midlevel_path,xBF)
             %Will read all beta images in midlevel_path consisting of a FIR
             %model.
             beta_files      = strvcat(FilterF(sprintf('%smidlevel/',self.path_project),midlevel_path,'beta'));
@@ -983,7 +1122,7 @@ classdef Project < handle
                 end
             end
         end
-        function nface      = analysis_selected_face(self,varargin)
+        function nface                      = analysis_selected_face(self,varargin)
             %will plot an histogram of detected faces 
             subjects = self.subject_indices
             if nargin > 1
@@ -997,7 +1136,7 @@ classdef Project < handle
             self.plot_newfigure;
             self.plot_bar(histc(nface,linspace(-135,180,8)));
         end
-        function [count_facewc,count_facew]=analysis_facecircle(self)
+        function [count_facewc,count_facew] = analysis_facecircle(self)
             % will conduct a group level face saliency analysis, will also
             % save the weights associated to each position. The analysis is
             % limited to the first 60 fixations, this seems to be the
@@ -1132,7 +1271,7 @@ classdef Project < handle
                 set(gca,'color','none')
             end
         end                        
-        function [names] =CacheROI(self)
+        function [names]                    = CacheROI(self)
            %run this method to cache all the ROIs that are potentially interesting
            
            %% the mumfordian analysis at ROIs which are shown to be            
@@ -1162,8 +1301,7 @@ classdef Project < handle
                    end
            end
         end
-    end
-    
+    end    
     methods %plotters
         function plot_normalized_surface(self);
             cat_surf_display(struct('data',{{'/Volumes/feargen2/project_fearamy/data/midlevel/run000/mrt/surf/lh.central.w_ss_data.gii' '/Volumes/feargen2/project_fearamy/data/midlevel/run000/mrt/surf/rh.central.w_ss_data.gii'}},'multisurf',0))
@@ -1691,7 +1829,64 @@ classdef Project < handle
 %             subplot(2,2,3);bar(((t.fit_results{8}.params(:,1))));box off;title('amplitude')
 %             subplot(2,2,4);bar(((vM2FWHM(t.fit_results{8}.params(:,2)))));box off;title('fwhm')
         end
-    end
+        function plot_spacetime2(self,spacetime,type)
+            %simple spacetime plots
+            
+            if nargin < 3
+                type = 1;
+            end
+            
+            tarea = size(spacetime.d,4);
+            [yy xx] = GetSubplotNumber(tarea);
+            
+            [d u] = GetColorMapLimits(spacetime.d(:),.1);
+            for narea = 1:tarea;
+                subplot(yy,xx,narea);
+                if type == 1
+                    imagesc(Project.circconv2( mean(spacetime.d(:,:,:,narea),3)),[d u]);
+                    colorbar;
+                    hold on
+                    axis xy;
+                    plot(xlim,[4 4],'r')
+                    plot([4 4],ylim,'--k')                    
+                    hold off;
+                elseif type == 2
+                    contourf(Project.circconv2( mean(spacetime.d(:,:,:,narea),3)),5,'color','none');
+                    colorbar;
+                    hold on
+                    axis xy;
+                    plot(xlim,[4 4],'r')
+                    plot([4 4],ylim,'--k')
+                    hold off;
+                elseif type == 3
+                    dummy         = Project.circconv2( mean(spacetime.d(:,:,:,narea),3));
+                    [theta,r]     = meshgrid(deg2rad(-135:45:180),linspace(0,1,47));
+                    X             = r(:,[1:8 1]).*cos(theta(:,[1:8 1]));
+                    Y             = r(:,[1:8 1]).*sin(theta(:,[1:8 1]));
+                    contourf(X,Y,dummy(:,[1:8 1]),5,'color','none');
+                end                
+                title(spacetime.name{narea},'interpreter','none');
+            end
+        end
+        function plot_spacetime_dendrogram(self,spacetime)
+            
+            figure;
+            data             = mean(spacetime.d,3);%take average across subjects;
+            s                = size(data);
+            data             = reshape(data,[prod(s(1:2)) s(end)]);
+            
+            corrmat          = corr(data);
+            Z                = linkage(data','average','correlation');
+            
+            tree             = linkage(corrmat,'average','correlation')
+            D                = pdist(corrmat,'correlation');
+            leafOrder        = optimalleaforder(tree,D);
+            [H1,T1,outperm1] = dendrogram(tree,0,'Reorder',leafOrder,'ColorThreshold','default');
+            set(gca,'XTickLabel',spacetime.name(leafOrder),'XTickLabelRotation',45,'ticklabelinterpreter','none')
+            set(H1,'linewidth',2);
+        end        
+    end    
+    
     methods (Static)
         function plot_bar(Y)
             % Fear tuning are stored in columns.
@@ -1723,7 +1918,7 @@ classdef Project < handle
             %circularly smoothes data using a 2x2 boxcar kernel;
             
             if nargin == 1
-                kernel   = make_gaussian2D(11,7,6,2.5,6,4);
+                kernel   = make_gaussian2D(7,5,3,2,4,3);
                 
                 kernel                   = kernel./sum(kernel(:));
                 
@@ -1755,6 +1950,75 @@ classdef Project < handle
                 fprintf('Running SPM jobman %i...\n',n);
                 spm_jobman('run', matlabbatch(n));
             end            
-        end                        
+        end
+        function [data]=CleanMicroBlocks(data);
+            %will remove all the microblocks where there is a transition or
+            %oddball trial. the ucs are still here.
+                        
+            data([Project.mbi_oddball Project.mbi_transition],:,:,:,:,:,:,:,:)   = [];                        
+        end
+        function [spacetime] = spacetime_preprocess(data,zsc,bc)
+            % zscore and baseline correction of spacetime data matrices
+                       
+            s    = size(data);
+            if zsc
+                %zscore                
+                data = reshape(data,[prod(s(1:2)) s(3:end)]);
+                data = zscore(data);
+                data = reshape(data,s);
+            end
+            if bc
+                %baseline
+%                 base = repmat(mean(mean(data(1:4,:,:,:)),2),[s(1) s(2) 1 1]);
+                base = repmat((mean(data(1:4,:,:,:))),[s(1) 1 1 1]);
+                data = data - base;
+            end
+            spacetime = data;
+        end
+        function [out] = RW_Fit(y,R);
+            %let's see if we can understand the amplitude changes using a rescorla
+            %wagner model of update of the alpha parameter. to this end I will use the learning rate and
+            %initial value as free parameters, so will be the case for Offset and Kappa
+            %parameters, I will try all combinations using a brute-force approach and
+            %see the best learning rate parameter. The Kappa and Offset parameters are
+            %kept constnant over time in this analyis.
+            x              = -135:45:180;
+            grid_size      = 200;
+            kappas         = logspace(-3,1.17,grid_size);
+            stds           = linspace(22.5,180,grid_size);
+            %alpha is a function of 2 parameters, these two parameters jointly returns
+            %a time-course of alpha parameter
+            learning_rates = linspace(0,.8,grid_size);
+            alpha_inits    = 0;
+            %% create the fitted data and measure the GOF using r
+            clear r;
+            viz = 0;
+            for c1 = 1:length(stds)%
+                fprintf('%03d\n',c1)
+                kappa  = kappas(c1);
+                stdd   = stds(c1);
+                %
+                for n1 = 1:length(learning_rates);%learning_rate
+                    alpha     = rescorlawagner( R , learning_rates(n1) ,0);
+                    %generate fitted responses.
+                    for n = 1:length(y);
+                        %     fit(n,:) = Tuning.VonMises(x,alpha(n),kappa,0,offset);
+                        fit(n,:) = Tuning.make_gaussian_fmri_zeromean(x,alpha(n),stdd);
+                    end
+                    fit = fit + randn(size(fit))*eps;
+                    %
+                    if viz
+                        subplot(1,3,1);imagesc(y(~R,:));colorbar;subplot(1,3,2);imagesc(fit(~R,:));colorbar;subplot(1,3,3);plot(alpha);drawnow;;
+                    end
+                    r(c1,n1) = corr(Vectorize(fit(~R,:)),Vectorize(y(~R,:)));
+                    if isnan(r(n1));
+                        keyboard
+                    end
+                end
+            end            
+            out.learning_rates = learning_rates;
+            out.r              = r;
+            out.stds           = stds;            
+        end
     end
 end
