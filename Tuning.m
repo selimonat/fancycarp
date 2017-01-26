@@ -103,9 +103,9 @@ classdef Tuning < handle
                 result.dof    = 3;
                 result.funname= 'gaussian_tau';
             elseif funtype == 5
-                result.fitfun = @(x,p) VonMises_fmri(x, p(1), p(2), p(3));
-                L           = [ -range(y)*2  10.^-16  mean(y)-range(y)*2   0];%amp kappa offset
-                U           = [  range(y)*2  180       mean(y)+range(y)*2   std(y)];
+                result.fitfun = @(x,p) self.VonMises_centered(x, p(1), p(2), p(3));
+                L           = [ -range(y)*2  0.1      mean(y)-range(y)*2   0];%amp kappa offset
+                U           = [  range(y)*2  15       mean(y)+range(y)*2   std(y)];
                 result.dof    = 3;
                 result.funname= 'vonmises';
             elseif funtype == 6
@@ -238,6 +238,11 @@ classdef Tuning < handle
             %http://en.wikipedia.org/wiki/Von_Mises_distribution.
             out    =  (exp(kappa*cos(deg2rad(X-centerX)))-exp(-kappa))./(exp(kappa)-exp(-kappa));%put it btw [0 and 1]
             out    =  amp*out + offset;%and now scale it
+        end
+        function [out] = VonMises_centered(X,amp,kappa,offset)
+            %[out] = VonMises_centered(X,amp,kappa,offset);
+            
+            out = Tuning.VonMises(X,amp,kappa,0,offset);
         end
         function [out] = make_gaussian_fmri_zeromean(x,amp,sd)            
             %

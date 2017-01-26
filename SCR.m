@@ -177,7 +177,7 @@ classdef SCR < handle
                     scr.event(round(event_index),c)      = true;
                     scr.event_name{c}                    = sprintf('%03d',cond_id);
                     scr.event_plotting{c}.line_width     = {{'linewidth', 2}};
-                    scr.event_plotting{c}.marker_size    = {{'markersize', 10}};
+                    scr.event_plotting{c}.marker_size    = {{'markersize', 2}};
                     scr.event_plotting{c}.symbol         = {{'symbol','+'}};
                     scr.event_plotting{c}.line           = {{'line',{'line' '-'}}};
                     scr.event_plotting{c}.color          = {{'color',Project.colors(:,cond_id)}};

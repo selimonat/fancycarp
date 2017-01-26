@@ -790,17 +790,20 @@ classdef Fixmat < Project
             obj.selection         = new_selection;            
         end
         function [count]=EyeNoseMouth(obj,map)           
-           [x y] = meshgrid(1:size(obj.stimulus,2),1:size(obj.stimulus,1));           
-           %% build rois.
-           %coordinates of ROI centers.
-           coor = [[80 85 5.5 5.5];[132 85 5.5 5.5];[106 110 3.5 5]; [107 145 6 3.8]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.
-           for n = 1:size(coor,1)
-               roi(:,:,n) = sqrt(((x-coor(n,1))./coor(n,3)).^2 + ((y-coor(n,2))./coor(n,4)).^2)<4;
-           end
-%            roi(:,:,5) = sum(roi(:,:,1:4),3);
+           
+           roi = obj.GetFaceROIs;
 %            for n = 1:size(roi,3);figure(n);h=imagesc(obj.stimulus);set(h,'alphaData',roi(:,:,n));drawnow;end
            %% count number of fixations in each roi.
            count = map(:)'*reshape(roi,size(roi,1)*size(roi,2),size(roi,3));
+        end
+        function roi = GetFaceROIs(obj)
+            [x y] = meshgrid(1:size(obj.stimulus,2),1:size(obj.stimulus,1));
+            %% build rois.
+            %coordinates of ROI centers.
+            coor = [[80 85 5.5 5.5];[132 85 5.5 5.5];[106 110 3.5 5]; [107 145 6 3.8]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.
+            for n = 1:size(coor,1)
+                roi(:,:,n) = sqrt(((x-coor(n,1))./coor(n,3)).^2 + ((y-coor(n,2))./coor(n,4)).^2)<4;
+            end
         end
     end    
 end
