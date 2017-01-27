@@ -45,7 +45,7 @@ classdef Subject < Project
         rating_param  = [];
         scr_param     = [];
         trio_session  = [];
-        rating       = [];
+        rating        = [];
         total_run     = [];
         pmf        
         detected_oddballs;
@@ -1580,10 +1580,10 @@ classdef Subject < Project
             hold on;
             %if the fit is better than flat line, paint accordingly.
             for P = 1:partition
-                if  (self.fit_facecircle(partition,fun).LL(P) < -log10(.05))%plot simply a blue line if the fit is not significant.
+                if  (self.fit_facecircle(partition).LL(P) < -log10(.05))%plot simply a blue line if the fit is not significant.
                     PlotTransparentLine(linspace(1,8,100)+9*(P-1),repmat(mean(out.countw(P,:)),100,1),.35,'b','linewidth',2.5);
                 else
-                    PlotTransparentLine(linspace(1,8,100)+9*(P-1),self.fit_facecircle(partition,fun).y(P,:)',.35,'k','linewidth',2.5);%this is the fit.
+                    PlotTransparentLine(linspace(1,8,100)+9*(P-1),self.fit_facecircle(partition).y(P,:)',.35,'k','linewidth',2.5);%this is the fit.
                 end
             end
             hold off;
@@ -2589,7 +2589,7 @@ classdef Subject < Project
             %wise will read the raw ratingdata (saved in runXXX/stimulation)
             %and compute a fit.
             
-            fun        = 8;%vM function
+            fun        = self.selected_fitfun;;%vM function
             force      = 0;%repeat the analysis or load from cache            
             write_path = sprintf('%s/midlevel/rating_fun_%i.mat',self.pathfinder(self.id,1),fun);            
             
@@ -2628,11 +2628,12 @@ classdef Subject < Project
             end
             
         end        
-        function [out] = fit_facecircle(self,partition,fun)
+        function [out] = fit_facecircle(self,partition)
             %will fit function FUN to facecircle data with PARTITION
             %partitions.
             
             force = 0;%repeat the analysis or load from cache            
+            fun   = self.selected_fitfun;
             write_path = sprintf('%s/midlevel/facecircle_fun_%i_partition_%i.mat',self.pathfinder(self.id,1),fun,partition);
             if exist(write_path) && force == 0
                 %load directly or
@@ -2718,7 +2719,7 @@ classdef Subject < Project
             %wise will read the raw ratingdata (saved in runXXX/stimulation)
             %and compute a fit.
             
-            fun        = 8;%vM function
+            fun        = self.selected_fitfun;%
             force      = 0;%repeat the analysis or load from cache            
             write_path = sprintf('%s/midlevel/scr_fun_%i.mat',self.pathfinder(self.id,1),fun);            
             
