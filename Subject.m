@@ -43,6 +43,7 @@ classdef Subject < Project
         eye
         pmf_param     = [];
         rating_param  = [];
+        scr_param     = [];
         trio_session  = [];
         rating       = [];
         total_run     = [];
@@ -409,7 +410,7 @@ classdef Subject < Project
                         rating(run).x      = repmat([-135:45:180],size(self.paradigm{run}.out.rating,2),1);
                         rating(run).ids    = repmat(self.id,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
                         rating(run).y_mean = mean(rating.y);
-                        rating(run).y_std  = std(rating.y)./sqrt(2);                                                
+                        rating(run).y_sem  = std(rating.y)./sqrt(2);                                                
                     else
                         fprintf('No rating present for this subject and run (%d) \n',nr);
                     end
@@ -418,23 +419,47 @@ classdef Subject < Project
         end
         function [out]      = get.rating_param(self)
             %returns the parameters of the pmf fit (1 x parameter);
-            out      = [self.fit_rating.params(1,:)];            
-        end           
-        function out        = get_scr(self,run,cond)
-            if nargin < 3
-                cond=1:8;
+            out      = [self.fit_rating.params(1,:)];
+        end
+        function [out]      = get.scr_param(self)
+            %returns the parameters of the pmf fit (1 x parameter);
+            out      = [self.fit_scr.params(1,:)];
+        end
+        function out        = get.scr(self)
+            %returns scr after cleaning bad microblocks
+            if ~isempty(self.scr)                
+                self.scr.run_ledalab;                
+                y                                                   = self.scr.ledalab.y;%[time trial]
+                y                                                   = mean(y);%remove tiem dimension
+                                
+                y                                                   = reshape(y,[65,9]);%[time mbi cond]
+                y([Project.mbi_oddball Project.mbi_transition],:)   = [];
+                y(self.ucs_vector == 1,:)                           = [];
+                
+                out.y                                               = y(:,1:8);
+                out.x                                               = repmat([-135:45:180],size(out.y,1),1);
+                out.ids                                             = repmat(self.id,size(out.y,1),size(out.y,2));
+                out.y_mean                                          = mean(out.y);
+                out.y_sem                                           = std(out.y)./sqrt(size(out.y,1));                
             end
-            conddummy = [-135:45:180 500 1000 3000];
-            % s is a subject instance
-            out       = [];
-            cutnum    = self.scr.findphase(run);
-            self.scr.cut(cutnum);
-            self.scr.run_ledalab;
-            self.scr.plot_tuning_ledalab(cond);
-            out.y     = self.scr.fear_tuning;
-            out.x     = conddummy(cond);
-            out.ind   = cutnum;
-        end        
+        end
+        function out        = get_scr_timecourse(self)
+            %returns the time-course of scr trials in out.y [time mbi
+            %cond], use get_scr to obtain timeless amplitudes
+            
+           if ~isempty(self.scr)
+               
+               self.scr.run_ledalab;
+               
+               y                                                   = self.scr.ledalab.y;%[time trial]
+               y                                                   = reshape(y,[size(y,1) 65,9]);%[time mbi cond]
+               y(:,[Project.mbi_oddball Project.mbi_transition],:) = [];
+               y(:,self.ucs_vector == 1,:)                         = [];
+               
+               out.y = y;
+               out.x = repmat(self.scr.ledalab.x(:,1),[1 size(data.y,2) size(data.y,3)]);
+           end
+        end
         function f          = get_facecircle_fixmat(self)
             %out        = get_facemaps(self)
             %
@@ -727,7 +752,7 @@ classdef Subject < Project
             out        = cat(4,out,self.get_bold_spacetime(sk));                   
             out        = cat(4,out,self.get_pupil_spacetime);
         end        
-            
+        
     end
     
     methods %(preprocessing))              
@@ -1500,15 +1525,13 @@ classdef Subject < Project
         function plot_rating(self)
             
             %plot subjects rating as a bar plot.
-            self.plot_bar(self.rating.y_mean(:));%plot the data
-            hold on;
-            errorbar(mean(self.rating.x),self.rating.y_mean,self.rating.y_std,'ko');%add error bars
+            self.plot_bar(mean(self.rating.x), self.rating.y_mean,self.rating.y_std);%plot the data            
             
             %if the fit is better than flat line, paint accordingly.
             if  (self.fit_rating.LL < -log10(.05))%plot simply a blue line if the fit is not significant.
-                PlotTransparentLine(self.fit_rating.x(:),repmat(mean(self.rating.y(:)),100,1),.5,'k','linewidth',2.5);
+                PlotTransparentLine(self.fit_rating.x_hd,repmat(mean(self.rating.y(:)),100,1),.5,'k','linewidth',2.5);
             else
-                PlotTransparentLine(self.fit_rating.x(:),self.fit_rating.y(:),.5,'k','linewidth',2.5);%this is the fit.
+                PlotTransparentLine(self.fit_rating.x_hd(:),self.fit_rating.y_hd(:),.5,'k','linewidth',2.5);%this is the fit.
             end
             hold off;
             ylim([0 10]);
@@ -1529,6 +1552,23 @@ classdef Subject < Project
             axis tight;box off;axis square;ylim([-0.1 1.2]);xlim([0 135]);drawnow;
             title(sprintf('id:%02d (+:%d)',self.id,self.csp),'fontsize',12);%subject and face id            
             hold on;plot(xlim,[0 0 ],'k-');plot(xlim,[0.5 0.5 ],'k:');plot(xlim,[1 1 ],'k-');hold off;%plot grid lines            
+        end
+        function plot_scr(self)
+            %plot_scr(self);
+            if ~isempty(self.scr)
+                out = self.scr;
+                self.plot_bar(out.x(1,:),out.y_mean,out.y_sem);
+                
+                %if the fit is better than flat line, paint accordingly.
+                if  (self.fit_scr.LL < -log10(.05))%plot simply a blue line if the fit is not significant.
+                    PlotTransparentLine(self.fit_scr.x_hd,repmat(mean(self.scr.y(:)),100,1),.5,'k','linewidth',2.5);
+                else
+                    PlotTransparentLine(self.fit_scr.x_hd(:),self.fit_scr.y_hd(:),.5,'k','linewidth',2.5);%this is the fit.
+                end
+                
+                
+                title(sprintf('id:%02d (+:%d)',self.id,self.csp),'fontsize',12);%subject and face id
+            end
         end
         function plot_facecircle(self,partition,fun)
             %plot subjects face_circle performance as a bar plot.
@@ -2672,6 +2712,52 @@ classdef Subject < Project
             end
             
         end        
+        
+        function [out] = fit_scr(self)
+            %will load the rating fit (saved in runXXX/rating) if computed other
+            %wise will read the raw ratingdata (saved in runXXX/stimulation)
+            %and compute a fit.
+            
+            fun        = 8;%vM function
+            force      = 0;%repeat the analysis or load from cache            
+            write_path = sprintf('%s/midlevel/scr_fun_%i.mat',self.pathfinder(self.id,1),fun);            
+            
+            if exist(write_path) && force ==0
+                %load directly or
+                load(write_path);
+%                 fprintf('SCR Fit found and loaded successfully for subject %i...\n',self.id);
+                
+            elseif force == 1 || ~exist(write_path)
+                %compute and save it.
+                fprintf('Fitting scr...\n')                
+                R                            = self.scr;
+                %adapt to what Tuning.m wants to have.
+                R.y                          = R.y(:)';
+                R.x                          = R.x(:)';
+                R.ids                        = R.ids(1);                
+                %create a tuning object and make a single subject fit
+                T                            = Tuning(R);                
+                T.SingleSubjectFit(fun);                               
+                %prepare data for outputting.
+                out.params                   = T.fit_results{fun}.params(1,:);                
+                out.LL                       = T.fit_results{fun}.pval(1,:);
+                out.exitflag                 = T.fit_results{fun}.ExitFlag(1,:);
+                out.y_hd                     = T.fit_results{fun}.y_fitted_HD(1,:);
+                out.x_hd                     = T.fit_results{fun}.x_HD(1,:);
+                out.y                        = T.fit_results{fun}.y_fitted(1,:);
+                out.x                        = T.fit_results{fun}.x(1,:);
+                out.fitfun                   = T.fit_results{fun}.fitfun;                
+                %
+                if fun == 8%if vM, then transform kappa to FWHM.
+                    fprintf('Kappa to FWHM transformation + absolute(peakshift).\n');
+                    out.params(:,2)            = vM2FWHM(out.params(:,2));
+                    %out.params(:,3)            = abs(out.params(:,3));
+                end
+                save(write_path,'out')
+            end
+            
+        end        
+ 
         function writename = brainbehavior_analysis(self,sk)
             
             

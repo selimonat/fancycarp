@@ -342,13 +342,20 @@ classdef Project < handle
         end
     end    
     methods %getters
-        function out             = getgroup_all_param(self)
+        function out             = getgroup_all_param(self,varargin)
             %
             out = self.getgroup_pmf_param;
             out = join(out,self.getgroup_rating_param);
             out = join(out,self.getgroup_facecircle);
             out = join(out,self.getgroup_detected_oddballs);
             out = join(out,self.getgroup_detected_face);                        
+            out = join(out,self.getgroup_scr_param);                        
+            %
+            if nargin > 1%if given take only the selected subjects
+                ngroup          = varargin{1};                
+                i               = ismember(double(out.subject_id),self.get_selected_subjects(ngroup).list);
+                out             = out(i,:);
+            end
             
         end
         function out             = getgroup_pmf_param(self)
@@ -374,6 +381,18 @@ classdef Project < handle
             out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
             out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_absmu' 'rating_offset' 'rating_std' 'rating_LL'});
         end       
+        
+        function out             = getgroup_scr_param(self)
+            %collects the scr parameters for all subjects in a table.
+            out = [];
+            for ns = self.subject_indices%run across all the subjects
+                s   = Subject(ns,'scr');
+                out = [out;[s.id s.scr_param s.fit_scr.LL]];                
+            end
+            out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
+            out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_absmu' 'rating_offset' 'rating_std' 'rating_LL'});
+        end       
+        
         function out             = getgroup_facecircle(self)
             %collects the rating parameters for all subjects in a table.
             out = [];
@@ -913,7 +932,7 @@ classdef Project < handle
             ucs(Project.mbi_ucs)                                = 1;
             ucs([Project.mbi_oddball Project.mbi_transition])   = [];
         end
-        function [out2]=spacetime2correlation(self,out)
+        function [out2]          =spacetime2correlation(self,out)
                 param = self.getgroup_all_param;
                 data  = double([param.pmf_pooled_alpha param.rating_amp param.rating_LL param.facecircle_amp param.facecircle_LL param.detection_absface]);
                 %%
@@ -929,7 +948,7 @@ classdef Project < handle
                     end
                 end
         end
-                
+                                
         end
     methods %methods that does something on all subjects one by one
         function                              VolumeGroupAverage(self,selector)
@@ -1318,6 +1337,38 @@ classdef Project < handle
                    end
            end
         end
+        function cmat                       = analysis_behavioral_correlation(self)
+            %%
+            
+            viz                    = 1;                        
+            param_ori              = self.getgroup_all_param;
+            %%
+            interesting_parameters = [4 16 17 18 20 23 24 25 27 30 31 33];
+            param                  = param_ori(:,interesting_parameters);                          
+            tvar                   = size(param,2);
+            names                  = param.Properties.VariableNames
+            data                   = table2array(param);
+            
+            cmat = corr(data,'type','spearman');
+            %%
+            if viz
+                clf; 
+                hold off
+                imagesc(CancelDiagonals(cmat.^2,NaN));colorbar;axis ij
+                caxis([0 .25])
+                set(gca,'xtick',[1:tvar],'XTickLabel',names,'ytick',[1:tvar],'YTickLabel',names','XAxisLocation','top','TickLabelInterpreter','none','XTickLabelRotation',45,'YTickLabelRotation',45)
+                axis square
+                hold on
+                plot([3 3]-.5,ylim,'k','linewidth',2);
+                plot(xlim,[3 3]-.5,'k','linewidth',2);
+                plot([3 3]-.5,ylim,'k','linewidth',2);
+                plot(xlim,[7 7]-.5,'k','linewidth',2);
+                plot([7 7]-.5,ylim,'k','linewidth',2);
+                plot(xlim,[11 11]-.5,'k','linewidth',2);
+                plot([11 11]-.5,ylim,'k','linewidth',2);
+            end
+        end
+        
     end    
     methods %plotters
         function plot_normalized_surface(self);
@@ -1376,6 +1427,20 @@ classdef Project < handle
             xlim([0 41]);
             set(gca,'ytick',[0 1 2],'xtick',1:40,'xticklabel',5:44);
             title('oddball performace');
+        end
+        function plot_ss_scr(self)
+            figure;set(gcf,'position',[5           1        1352        1104]);
+            %will plot all single subject ratings in a big subplot
+            tsubject = length(self.subject_indices);
+            [y x]    = GetSubplotNumber(tsubject);
+            c =0;
+            for ns = self.subject_indices                
+                c        = c+1;
+                s        = Subject(ns,'scr');
+                subplot(y,x,c)                
+                s.plot_scr;
+            end
+            supertitle(self.path_project,1);            
         end
         function plot_activitymap_normalized(self,files)
             %plots the data in a volume as average intensity projection, as
@@ -1915,35 +1980,33 @@ classdef Project < handle
             [H1,T1,outperm1] = dendrogram(tree,0,'Reorder',leafOrder,'ColorThreshold','default');
             set(gca,'XTickLabel',spacetime.name(leafOrder),'XTickLabelRotation',45,'ticklabelinterpreter','none')
             set(H1,'linewidth',2);
-        end        
+        end                
+        
     end    
     
     methods (Static)
-        function plot_bar(Y)
-            % Fear tuning are stored in columns.
-           cmap  = GetFearGenColors;
-            tcol = size(Y,2);
-            tbar = size(Y,1);
-            X    = linspace(-135,180,8)';
-            X    = repmat(X,1,tcol) + repmat([0:360:360*(tcol-1)],8,1);
-            for i = 1:tbar
-                h(i)    = bar(i,Y(i),.9,'facecolor',cmap(i,:),'edgecolor','none','facealpha',.8);
+        function plot_bar(X,Y,SEM)
+            % input vector of 8 faces in Y, angles in X, and SEM. All
+            % vectors of 1x8;
+            %%
+            cmap  = GetFearGenColors;
+            tbar  = 8;            
+            for i = 1:tbar                
+                h(i)    = bar(X(i),Y(i),40,'facecolor',cmap(i,:),'edgecolor','none','facealpha',.8);
                 hold on;
-            end
-            hold off
+            end            
+            %%
+            hold on;
+            errorbar(X,Y,SEM,'ko');%add error bars
+            
             %%                                    
-            set(gca,'xtick',1:8,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
+            set(gca,'xtick',X,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
             box off;
             set(gca,'color','none');
             xlim([0 tbar+1])
             drawnow;            
             axis tight;box off;axis square;drawnow;alpha(.5);
-            if tcol > 1
-                mx = max(X)
-                for ncol = 1:tcol
-                    plot(repmat(mx(ncol)+45/2,1,2),ylim,'k-.')
-                end
-            end                      
+              
         end
         function Yc = circconv2(Y,varargin)
             %circularly smoothes data using a 2x2 boxcar kernel;
