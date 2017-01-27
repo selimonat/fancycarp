@@ -175,9 +175,9 @@ classdef Tuning < handle
                 result.pval  = -log10(1-chi2cdf(-2*(result.Likelihood - result.null_Likelihood),result.dof) + eps);
             end
             result.x       = unique(x);            
-            result.fit     = result.fitfun(result.x,result.Est);
+            result.fit     = result.fitfun(result.x,result.Est)+CONSTANT;
             result.x_HD    = linspace(min(result.x),max(result.x),100);
-            result.fit_HD  = result.fitfun(result.x_HD,result.Est);
+            result.fit_HD  = result.fitfun(result.x_HD,result.Est)+CONSTANT;
             %% show fit if wanted
             if self.visualization
                 
