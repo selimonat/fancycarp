@@ -934,11 +934,11 @@ classdef Project < handle
             
         end
         
-        function [pmodmat names] = get_zernike(self)
+        function [pmod names] = get_zernike(self)
             %Zernike polynomials
             %%
             total = 21;
-            [y x] = meshgrid(linspace(0,1,65),deg2rad(0:45/10:(360-45/10)));
+            [y x] = meshgrid(linspace(0,1,65),deg2rad(0:45:(360-45)));
             c     = 0;
             clf;
             pmod = [];
@@ -947,8 +947,8 @@ classdef Project < handle
                     c=c+1;
                     subplot(3,7,c);
                     pmod(:,:,c) = reshape(zernfun(n,m,y(:),x(:)),size(x,1),size(x,2))';
-                    polarplot3d(pmod(:,:,c),'interpmethod','nearest');
-                    view(0,90);axis square;axis tight;axis off;
+                    %polarplot3d(pmod(:,:,c),'interpmethod','nearest');
+                    %view(0,90);axis square;axis tight;axis off;
                     names{c} = sprintf('N:%02d, M:%02d',n,m);
                     title(names{c});
                     drawnow;                   

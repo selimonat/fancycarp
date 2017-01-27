@@ -2428,7 +2428,7 @@ classdef Subject < Project
             figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));hold on;
             figure(1);;plot(stim_id,mbi_id,'ro','markersize',10);title(mat2str(self.id));hold off
             %%
-            [pmodmat names] = self.get_zernicke;
+            [pmodmat, names] = self.get_zernike;
             %%
             pmod    = NaN(length(stim_id),size(pmodmat,3));
             for ntrial = 1:length(stim_id)
