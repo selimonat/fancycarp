@@ -82,10 +82,13 @@ classdef Project < handle
     end    
     properties (Hidden)
         atlas2mask_threshold  = 15;%where ROI masks are computed, this threshold is used.        
+        %voxel selection
         selected_smoothing    = 10;%smoothing for selection of voxels;
         selected_model        = 4;
         selected_betas        = 1:6
         selected_ngroup       = 3;
+        %
+        selected_fitfun       = 8;%fixed gaussian (3), vonmises (8);
     end    
 	methods
         function DU         = SanityCheck(self,runs,measure,varargin)
@@ -349,12 +352,14 @@ classdef Project < handle
             out = join(out,self.getgroup_facecircle);
             out = join(out,self.getgroup_detected_oddballs);
             out = join(out,self.getgroup_detected_face);                        
-            out = join(out,self.getgroup_scr_param);                        
+            out = join(out,self.getgroup_scr_param);
             %
             if nargin > 1%if given take only the selected subjects
-                ngroup          = varargin{1};                
-                i               = ismember(double(out.subject_id),self.get_selected_subjects(ngroup).list);
-                out             = out(i,:);
+                if varargin{1} ~= 0;
+                    ngroup          = varargin{1};                
+                    i               = ismember(double(out.subject_id),self.get_selected_subjects(ngroup).list);
+                    out             = out(i,:);
+                end
             end
             
         end
@@ -378,8 +383,13 @@ classdef Project < handle
                 s   = Subject(ns);
                 out = [out;[s.id s.rating_param s.fit_rating.LL]];                
             end
-            out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
-            out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_absmu' 'rating_offset' 'rating_std' 'rating_LL'});
+            if self.selected_fitfun == 8
+                out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too            
+                out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_absmu' 'rating_offset' 'rating_std' 'rating_LL'});
+            elseif self.selected_fitfun == 3
+                out = [out(:,[1 2 3 5])];%
+                out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_LL'});
+            end
         end       
         
         function out             = getgroup_scr_param(self)
@@ -389,8 +399,14 @@ classdef Project < handle
                 s   = Subject(ns,'scr');
                 out = [out;[s.id s.scr_param s.fit_scr.LL]];                
             end
-            out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
-            out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_absmu' 'rating_offset' 'rating_std' 'rating_LL'});
+            
+            if self.selected_fitfun == 8
+                out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
+                out = array2table(out,'variablenames',{'subject_id' 'scr_amp' 'scr_fwhm' 'scr_mu' 'scr_absmu' 'scr_offset' 'scr_std' 'scr_LL'});
+            elseif self.selected_fitfun == 3
+                out = [out(:,[1 2 3 5])];%
+                out = array2table(out,'variablenames',{'subject_id' 'scr_amp' 'scr_fwhm' 'scr_LL'});
+            end
         end       
         
         function out             = getgroup_facecircle(self)
@@ -398,10 +414,16 @@ classdef Project < handle
             out = [];
             for ns = self.subject_indices
                 s   = Subject(ns);                
-                out = [out;[s.id s.fit_facecircle(1,8).params s.fit_facecircle(1,8).LL]];                
+                out = [out;[s.id s.fit_facecircle(1).params s.fit_facecircle(1).LL]];                
             end            
-            out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
-            out = array2table(out,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_mu' 'facecircle_absmu' 'facecircle_offset' 'facecircle_std' 'facecircle_LL'});
+            
+            if self.selected_fitfun == 8
+                out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
+                out = array2table(out,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_mu' 'facecircle_absmu' 'facecircle_offset' 'facecircle_std' 'facecircle_LL'});
+            elseif self.selected_fitfun == 3
+                out = [out(:,[1 2 3 5])];%
+                out = array2table(out,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_LL'});
+            end
         end       
         function out             = getgroup_detected_oddballs(self)            
             odd = [];
@@ -1337,35 +1359,57 @@ classdef Project < handle
                    end
            end
         end
-        function cmat                       = analysis_behavioral_correlation(self)
-            %%
-            
+        function cmat                       = analysis_behavioral_correlation(self,type,varargin)
+            %%            
+            if nargin > 2
+                ngroup = varargin{1};
+            else
+                ngroup = 0;
+            end
+           
             viz                    = 1;                        
-            param_ori              = self.getgroup_all_param;
+            param_ori              = self.getgroup_all_param(ngroup);
             %%
-            interesting_parameters = [4 16 17 18 20 23 24 25 27 30 31 33];
+            if self.selected_fitfun == 8
+                interesting_parameters = [4 16 17 18 20 23 24 25 27 30  34 35 37 40 31 33];
+            elseif self.selected_fitfun == 3
+                interesting_parameters = [4 16 17:22 26:28 23 25 ];
+            end
             param                  = param_ori(:,interesting_parameters);                          
             tvar                   = size(param,2);
             names                  = param.Properties.VariableNames
             data                   = table2array(param);
             
-            cmat = corr(data,'type','spearman');
+            cmat = corr(data,'type',type);                     
             %%
             if viz
                 clf; 
                 hold off
                 imagesc(CancelDiagonals(cmat.^2,NaN));colorbar;axis ij
-                caxis([0 .25])
+                caxis([0 .3])
                 set(gca,'xtick',[1:tvar],'XTickLabel',names,'ytick',[1:tvar],'YTickLabel',names','XAxisLocation','top','TickLabelInterpreter','none','XTickLabelRotation',45,'YTickLabelRotation',45)
                 axis square
                 hold on
-                plot([3 3]-.5,ylim,'k','linewidth',2);
-                plot(xlim,[3 3]-.5,'k','linewidth',2);
-                plot([3 3]-.5,ylim,'k','linewidth',2);
-                plot(xlim,[7 7]-.5,'k','linewidth',2);
-                plot([7 7]-.5,ylim,'k','linewidth',2);
-                plot(xlim,[11 11]-.5,'k','linewidth',2);
-                plot([11 11]-.5,ylim,'k','linewidth',2);
+                if self.selected_fitfun == 8
+                    plot([3 3]-.5,ylim,'k','linewidth',2);
+                    plot(xlim,[3 3]-.5,'k','linewidth',2);                    
+                    plot(xlim,[7 7]-.5,'k','linewidth',2);
+                    plot([7 7]-.5,ylim,'k','linewidth',2);
+                    plot(xlim,[11 11]-.5,'k','linewidth',2);
+                    plot([11 11]-.5,ylim,'k','linewidth',2);
+                    plot(xlim,[15 15]-.5,'k','linewidth',2);
+                    plot([15 15]-.5,ylim,'k','linewidth',2);
+                elseif self.selected_fitfun == 3
+                    plot([3 3]-.5,ylim,'k','linewidth',2);
+                    plot(xlim,[3 3]-.5,'k','linewidth',2);                    
+                    plot(xlim,[6 6]-.5,'k','linewidth',2);
+                    plot([6 6]-.5,ylim,'k','linewidth',2);
+                    plot(xlim,[9 9]-.5,'k','linewidth',2);
+                    plot([9 9]-.5,ylim,'k','linewidth',2);
+                    plot(xlim,[12 12]-.5,'k','linewidth',2);
+                    plot([12 12]-.5,ylim,'k','linewidth',2);
+                end
+                title(sprintf('Type: %s',type));
             end
         end
         
