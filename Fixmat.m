@@ -789,7 +789,7 @@ classdef Fixmat < Project
         function replaceselection(obj,new_selection)            
             obj.selection         = new_selection;            
         end
-         function [count]=EyeNoseMouth(obj,map,normalize)                       
+        function [count]=EyeNoseMouth(obj,map,normalize)                       
            %% count number of fixations in each roi.
            roi = obj.GetFaceROIs;
            for n = 1:size(roi,3)               
@@ -803,20 +803,14 @@ classdef Fixmat < Project
            end
 
          end
-         function roi = GetFaceROIs(obj)
-             %to visualize
-             %roi=fixmat.GetFaceROIs;h=imagesc(fixmat.stimulus);set(h,'alphadata',roi(:,:,1)+roi(:,:,2));
-             
-             [x y] = meshgrid(1:size(obj.stimulus,2),1:size(obj.stimulus,1));
-             %% build rois.
-             %coordinates of ROI centers.
-             coor = [[140 172 22 14];[360 172 22 14];[255 269 16 25]; [257 425 30 15]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.
-             for n = 1:size(coor,1)
-                 roi(:,:,n) = sqrt(((x-coor(n,1))./coor(n,3)).^2 + ((y-coor(n,2))./coor(n,4)).^2)<4;
-             end
-             roi(:,:,n+1) = sum(roi,3) == 0;
-             %            figure(2);imagesc(obj.stimulus);alpha(sum(roi,3));
-             %            roi(:,:,5) = sum(roi(:,:,1:4),3);
-             %            for n = 1:size(roi,3);figure(n);h=imagesc(obj.stimulus);set(h,'alphaData',roi(:,:,n));drawnow;end
-         end    end    
+        function roi = GetFaceROIs(obj)
+            [x y] = meshgrid(1:size(obj.stimulus,2),1:size(obj.stimulus,1));
+            %% build rois.
+            %coordinates of ROI centers.
+            coor = [[105 75 13.5 6];[105 115 5 5]; [107 145 7 3.8]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.
+            for n = 1:size(coor,1)
+                roi(:,:,n) = sqrt(((x-coor(n,1))./coor(n,3)).^2 + ((y-coor(n,2))./coor(n,4)).^2)<4;
+            end
+        end
+    end    
 end
