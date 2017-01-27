@@ -922,7 +922,10 @@ classdef Project < handle
                     c = c+1
                     Y = [B(:,i)*A(:,j)'];
                     subplot(size(B,2),size(A,2),c);
-                    imagesc(Y);
+                    %imagesc(Y);
+                    polarplot3d(Y','plottype','surfn','axislocation','off');
+                    view(0,90);axis square;axis tight;axis off;
+                    %
                     pmodmat = cat(3,pmodmat,Y);
                     degrees = [degrees [i;j]];                    
                     names{c} = sprintf('time:%02d, face:%02d',j,i);
@@ -930,6 +933,30 @@ classdef Project < handle
             end
             
         end
+        
+        function [pmodmat names] = get_zernike(self)
+            %Zernike polynomials
+            %%
+            total = 21;
+            [y x] = meshgrid(linspace(0,1,65),deg2rad(0:45/10:(360-45/10)));
+            c     = 0;
+            clf;
+            pmod = [];
+            for n = 0:1:5;
+                for m = -n:2:n
+                    c=c+1;
+                    subplot(3,7,c);
+                    pmod(:,:,c) = reshape(zernfun(n,m,y(:),x(:)),size(x,1),size(x,2))';
+                    polarplot3d(pmod(:,:,c),'interpmethod','nearest');
+                    view(0,90);axis square;axis tight;axis off;
+                    names{c} = sprintf('N:%02d, M:%02d',n,m);
+                    title(names{c});
+                    drawnow;                   
+                end
+            end            
+            
+        end
+        
         function [coors]         = get_selected_coordinates(self)
             %this method simply returns the coordinates of voxels that are
             %selected. This is not supposed to change very often and stay
