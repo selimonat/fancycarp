@@ -537,7 +537,7 @@ classdef Subject < Project
             
             out                               = [];
             filename                          = sprintf('%sfacecircle_%02d.mat',self.path_midlevel(3),partition);%facecircle is recorded in run 3.
-            force = 0;
+            force = 0;%!!!!!!!!!!!!!!!!!!!!!!!!!1
             %if you like to recache the Project.screen_size and
             %Fixmat.window has to be readjusted to original values, cache
             %it and change back to aligned settings.
@@ -1525,7 +1525,7 @@ classdef Subject < Project
         function plot_rating(self)
             
             %plot subjects rating as a bar plot.
-            self.plot_bar(mean(self.rating.x), self.rating.y_mean,self.rating.y_std);%plot the data            
+            self.plot_bar(mean(self.rating.x), self.rating.y_mean,self.rating.y_sem);%plot the data            
             
             %if the fit is better than flat line, paint accordingly.
             if  (self.fit_rating.LL < -log10(.05))%plot simply a blue line if the fit is not significant.
@@ -1570,20 +1570,22 @@ classdef Subject < Project
                 title(sprintf('id:%02d (+:%d)',self.id,self.csp),'fontsize',12);%subject and face id
             end
         end
-        function plot_facecircle(self,partition,fun)
-            %plot subjects face_circle performance as a bar plot.
+        function plot_facecircle(self,partition)
+            %plot subjects face_circle performance as a bar plot. No matter
+            %what PARTITION is, always the first one is plotted.
             %%
             out  = self.get_facecircle(partition);
-            Y = out.countw;
-            Y    = self.circconv2(out.countw,[1 1]/2);
-            self.plot_bar(Y');%plot the data            
+            Y    = out.countw(1,:);
+            Y    = self.circconv2(Y,[1 1]/2);
+            X    = out.x(1,:);
+            self.plot_bar(X,Y');%plot the data            
             hold on;
             %if the fit is better than flat line, paint accordingly.
             for P = 1:partition
                 if  (self.fit_facecircle(partition).LL(P) < -log10(.05))%plot simply a blue line if the fit is not significant.
-                    PlotTransparentLine(linspace(1,8,100)+9*(P-1),repmat(mean(out.countw(P,:)),100,1),.35,'b','linewidth',2.5);
+                    PlotTransparentLine(self.fit_facecircle(1).x , repmat(mean(out.countw(P,:)),100,1),.35,'b','linewidth',2.5);
                 else
-                    PlotTransparentLine(linspace(1,8,100)+9*(P-1),self.fit_facecircle(partition).y(P,:)',.35,'k','linewidth',2.5);%this is the fit.
+                    PlotTransparentLine(self.fit_facecircle(1).x , self.fit_facecircle(partition).y(P,:)',.35,'k','linewidth',2.5);%this is the fit.
                 end
             end
             hold off;

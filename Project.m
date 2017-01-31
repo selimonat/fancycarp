@@ -860,7 +860,7 @@ classdef Project < handle
             coors       = [t.dat{:,end};ones(1,size(t.dat,1))];
         end
         function [st  names]     = get_SecondLevel_ANOVA_fit(self,ngroup,sk);
-            model     = 8;
+            model     = 9;
             reg_i     = 1:21;
             %returns the fitted space-time plot            
             coors     = self.get_SecondLevel_ANOVA_coordinates(ngroup,sk);
@@ -869,9 +869,16 @@ classdef Project < handle
             betas     = r.evoked_pattern';
             if model < 8
                 pmod      = self.get_pmodmat(model);
-            else
+            elseif model == 8
+                
                 pmod      = self.get_chebyshev(5,6);
                 pmod      = reshape(pmod,[65*8 21]);
+                
+            elseif model == 9
+                
+                pmod      = self.get_zernike;
+                pmod      = reshape(pmod,[65*8 21]);
+                
             end
             st        = reshape(pmod*betas,8,65,tcoor);
             st        = permute(st,[2 1 3]);
