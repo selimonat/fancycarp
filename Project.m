@@ -329,6 +329,7 @@ classdef Project < handle
                 
                 [rw] = Project.RW_Fit(bla,Project.ucs_vector);                
                 %                
+                figure(1)
                 subplot(sy,sx,n);
                 R = rw.r;
                 imagesc(rw.learning_rates,rw.stds,R);
@@ -341,6 +342,9 @@ classdef Project < handle
                 hold off;                
                 title(out.name{n},'interpreter','none'); 
                 drawnow;
+                figure(2);
+                subplot(sy,sx,n);
+                imagesc([bla,rw.fit]);colorbar;
             end                        
         end
     end    
@@ -681,7 +685,7 @@ classdef Project < handle
             if nargin == 2
                 inversion = 1;%will select good subjects
             end
-            
+            borders = 90;
             if criteria == 0
                 sub.name = '00_all';
                 sub.list = self.subject_indices(:);
@@ -691,7 +695,11 @@ classdef Project < handle
                 sub.name   = '01_rating';
                 %
                 out        = self.getgroup_rating_param;%load the ratings of all subjects
-                select     = (out.rating_LL > -log10(.05))&(out.rating_mu > -90)&(out.rating_mu < 90);%select based on tuning
+                if self.selected_fitfun == 8
+                    select     = (out.rating_LL > -log10(.05))&(out.rating_mu > -borders)&(out.rating_mu < borders);%select based on tuning
+                else
+                    select     = (out.rating_LL > -log10(.05));
+                end
                 select     = select == inversion;
                 sub.list   = out.subject_id(select);%subject indices.
                 %
@@ -708,7 +716,11 @@ classdef Project < handle
                 %same as rating tuning, but with saliency data.
                 sub.name = '03_saliency';
                 out      = self.getgroup_facecircle;
-                select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -90)&(out.facecircle_mu < 90);%select based on tuning
+                if self.selected_fitfun == 8
+                    select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -borders)&(out.facecircle_mu < borders);%select based on tuning
+                else
+                    select     = (out.facecircle_LL > -log10(.05));
+                end
                 select   = select==inversion;
                 sub.list = out.subject_id(select);
                 
@@ -989,8 +1001,11 @@ classdef Project < handle
             ucs([Project.mbi_oddball Project.mbi_transition])   = [];
         end
         function [out2]          =spacetime2correlation(self,out)
+            %computes correlation between spacetime pixels and
+            %end-experiment behavioral measures.
                 param = self.getgroup_all_param;
                 data  = double([param.pmf_pooled_alpha param.rating_amp param.rating_LL param.facecircle_amp param.facecircle_LL param.detection_absface]);
+                out2.name = {'pmf_pooled' 'rating_amp' 'rating_LL' 'facecircle_amp' 'facecircle_LL' 'detection'};
                 %%
                 for nparam = 1:size(data,2)
                     nparam
@@ -998,13 +1013,19 @@ classdef Project < handle
                         for t= 1:size(out.d,1)
                             for m = 1:size(out.d,2)
                                 
-                                out2.r(t,m,1,area,nparam) = corr2(squeeze(out.d(t,m,:,area)),data(:,nparam));
+                                out2.r(t,m,1,area,nparam) = corr(squeeze(out.d(t,m,:,area)),data(:,nparam),'type','spearman');
                             end
                         end
                     end
                 end
         end
-                                
+           
+        function count           = get_subject_overlap(self)
+            count = [];
+            for ns = 1:4
+                count = [count ismember(self.subject_indices(:), self.get_selected_subjects(ns).list(:))];
+            end            
+        end
         end
     methods %methods that does something on all subjects one by one
         function                              VolumeGroupAverage(self,selector)
@@ -1480,7 +1501,7 @@ classdef Project < handle
             end
             supertitle(self.path_project,1)
         end
-        function plot_ss_facecircle(self,partition,fun)
+        function plot_ss_facecircle(self,partition)
             figure;set(gcf,'position',[5           1        1352        1104]);
             %will plot all single subject ratings in a big subplot
             tsubject = length(self.subject_indices);
@@ -1490,7 +1511,7 @@ classdef Project < handle
                 c        = c+1;
                 s        = Subject(ns);
                 subplot(y,x,c)                
-                s.plot_facecircle(partition,fun);
+                s.plot_facecircle(partition);
             end
             supertitle(self.path_project,1)
         end
@@ -2058,8 +2079,7 @@ classdef Project < handle
             [H1,T1,outperm1] = dendrogram(tree,0,'Reorder',leafOrder,'ColorThreshold','default');
             set(gca,'XTickLabel',spacetime.name(leafOrder),'XTickLabelRotation',45,'ticklabelinterpreter','none')
             set(H1,'linewidth',2);
-        end                
-        
+        end                        
     end    
     
     methods (Static)
@@ -2075,7 +2095,9 @@ classdef Project < handle
             end            
             %%
             hold on;
-            errorbar(X,Y,SEM,'ko');%add error bars
+            if nargin == 3
+               errorbar(X,Y,SEM,'ko');%add error bars
+            end
             
             %%                                    
             set(gca,'xtick',X,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
@@ -2160,11 +2182,11 @@ classdef Project < handle
             x              = -135:45:180;
             grid_size      = 50;
             kappas         = logspace(-3,1.17,grid_size);
-            stds           = linspace(22.5,180,grid_size);
+            stds           = linspace(45,180,grid_size);
             %alpha is a function of 2 parameters, these two parameters jointly returns
             %a time-course of alpha parameter
-            learning_rates = linspace(0,.8,grid_size);
-            learning_rates = [-fliplr(learning_rates(2:end)) learning_rates];
+            learning_rates = linspace(0,1,grid_size);
+            %learning_rates = [-fliplr(learning_rates(2:end)) learning_rates];
             indicator      = Vectorize(repmat([-1 1],grid_size,1))';
             alpha_inits    = 0;
             %% create the fitted data and measure the GOF using r
@@ -2188,15 +2210,24 @@ classdef Project < handle
                     if viz
                         subplot(1,3,1);imagesc(y(~R,:));colorbar;subplot(1,3,2);imagesc(fit(~R,:));colorbar;subplot(1,3,3);plot(alpha);drawnow;;
                     end
-                    r(c1,n1) = corr(Vectorize(fit(~R,:)),Vectorize(y(~R,:)));
+                    r(c1,n1) = corr(Vectorize(fit(~R,:)),Vectorize(y(~R,:))).^2;
                     if isnan(r(n1));
 %                        keyboard
                     end
                 end
             end            
+            [yp xp]            = find(r == max(r(:)));            
             out.learning_rates = learning_rates;
             out.r              = r;
             out.stds           = stds;            
+            out.peak_std       = stds(yp);
+            out.peak_lr        = learning_rates(xp);
+            
+            for n = 1:length(y);
+%              fit(n,:) = Tuning.VonMises(x,alpha(n),kappa,0,offset);
+               fit(n,:) = Tuning.make_gaussian_fmri_zeromean(x,out.peak_lr,out.peak_std);
+            end                    
+            out.fit            = fit;
         end
     end
 end
