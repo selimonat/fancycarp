@@ -276,6 +276,26 @@ classdef Fixmat < Project
             end
             obj.getmaps(v{:});
         end
+        function getsubmapsperphase(obj,varargin)
+            %similar to getsubmaps, but splits the data on phases.
+            if nargin > 1
+                subjects = varargin{1};
+            else
+                subjects = unique(obj.subject);
+            end
+            
+            c = 0;
+            for phase = [2 4]
+                for cond = unique(obj.realcond)
+                    c    = c+1;
+                    v{c} = {'subject' subjects 'deltacsp' cond 'phase' phase};
+                end
+            end
+            %
+            obj.getmaps(v{:});
+        end
+        
+        
         function linkage(obj)
             fprintf('Conducting linkage analysis with linkage method: _%s_ and linkage metric: _%s_\n',char(obj.linkage_method),obj.linkage_metric);
             %provides data for a dendrogram analysis.
