@@ -1,6 +1,6 @@
 classdef Tuning < handle
     properties (Hidden)
-        visualization = 1;%visualization of fit results
+        visualization = 0;%visualization of fit results
         gridsize      = 20;%resolution per parameter for initial estimation.
         options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-8,'tolfun',10^-8,'MaxIter',10000,'Algorithm','interior-point');
         singlesubject_data = [];%will contain the fit results for individual subjects
@@ -129,6 +129,8 @@ classdef Tuning < handle
                 result.dof    = 4;
                 result.funname= 'vonmisses_mobile';
             end
+            %% add some small noise in case of super-flat ratings
+            if sum(diff(y)) == 0;y = y + rand(length(y),1)*.001;end
             %% set the objective function
             result.likelihoodfun  = @(params) sum(-log( normpdf( y - result.fitfun( x,params(1:end-1)) , 0,params(end)) ));
             
@@ -138,9 +140,7 @@ classdef Tuning < handle
                 Init = self.RoughEstimator(x,y,result.fitfun,L(1:end-1),U(1:end-1));%[7.1053 15.5556 1.0382];
             else %null model
                 Init = mean(y);
-            end
-            %% add some small noise in case of super-flat ratings
-            if sum(diff(y)) == 0;y = y + rand(length(y),1)*.001;end
+            end            
             %% estimate initial values for sigma_noise
             %based on the likelihood of sigma given the data points assuming a Gaussian normal distribution.
             tsample      = 1000;
@@ -178,6 +178,11 @@ classdef Tuning < handle
             result.fit     = result.fitfun(result.x,result.Est)+CONSTANT;
             result.x_HD    = linspace(min(result.x),max(result.x),100);
             result.fit_HD  = result.fitfun(result.x_HD,result.Est)+CONSTANT;
+            
+            if result.ExitFlag < 0
+                cprintf([1 0 0],'Fmincon not converge, this usually happends with flat fear-tuning, setting pval manually to a large value....\n');
+                result.pval = 0.5;
+            end
             %% show fit if wanted
             if self.visualization
                 
