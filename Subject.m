@@ -1528,7 +1528,7 @@ classdef Subject < Project
             self.plot_bar(mean(self.rating.x), self.rating.y_mean,self.rating.y_sem);%plot the data            
             
             %if the fit is better than flat line, paint accordingly.
-            if  (self.fit_rating.LL < -log10(.05))%plot simply a blue line if the fit is not significant.
+            if  ~ismember(self.id,self.get_selected_subjects(1).list)%plot simply a blue line if the fit is not significant.
                 PlotTransparentLine(self.fit_rating.x_hd,repmat(mean(self.rating.y(:)),100,1),.5,'k','linewidth',2.5);
             else
                 PlotTransparentLine(self.fit_rating.x_hd(:),self.fit_rating.y_hd(:),.5,'k','linewidth',2.5);%this is the fit.
@@ -1582,10 +1582,10 @@ classdef Subject < Project
             hold on;
             %if the fit is better than flat line, paint accordingly.
             for P = 1:partition
-                if  (self.fit_facecircle(partition).LL(P) < -log10(.05))%plot simply a blue line if the fit is not significant.
-                    PlotTransparentLine(self.fit_facecircle(1).x , repmat(mean(out.countw(P,:)),100,1),.35,'b','linewidth',2.5);
+                if ~ismember(self.id,self.get_selected_subjects(3).list)%plot simply a blue line if the fit is not significant.
+                    PlotTransparentLine(self.fit_facecircle(1).x_hd , repmat(mean(out.countw(P,:)),100,1),.35,'k','linewidth',2.5);
                 else
-                    PlotTransparentLine(self.fit_facecircle(1).x , self.fit_facecircle(partition).y(P,:)',.35,'k','linewidth',2.5);%this is the fit.
+                    PlotTransparentLine(self.fit_facecircle(1).x_hd , self.fit_facecircle(partition).y_hd(P,:)',.35,'k','linewidth',2.5);%this is the fit.
                 end
             end
             hold off;
@@ -2715,7 +2715,13 @@ classdef Subject < Project
                     fprintf('Kappa to FWHM transformation + absolute(peakshift).\n');
                     out.params(:,2)            = vM2FWHM(out.params(:,2));
                     %out.params(:,3)            = abs(out.params(:,3));
+                    
+                    %also put the amplitude to negative if CS- > CS+
+                    if out.y(4) < out.y(end)
+                        out.params(1) = -out.params(1);
+                    end                    
                 end
+                                                
                 save(write_path,'out')
             end
             
@@ -2746,13 +2752,21 @@ classdef Subject < Project
                 out.params                   = T.fit_results{fun}.params; 
                 out.LL                       = T.fit_results{fun}.pval;
                 out.exitflag                 = T.fit_results{fun}.ExitFlag;
-                out.y                        = T.fit_results{fun}.y_fitted_HD;
-                out.x                        = T.fit_results{fun}.x_HD;
+                out.y_hd                     = T.fit_results{fun}.y_fitted_HD;
+                out.x_hd                     = T.fit_results{fun}.x_HD;
+                out.y                        = T.fit_results{fun}.y_fitted(1,:);
+                out.x                        = T.fit_results{fun}.x(1,:);                
                 out.fitfun                   = T.fit_results{fun}.fitfun;
                 if fun == 8%if vM, then transform kappa to FWHM.
                     fprintf('Kappa to FWHM transformation + absolute(peakshift).\n');
                     out.params(:,2)            = vM2FWHM(out.params(:,2));
                     %out.params(:,3)            = abs(out.params(:,3));
+                    
+                    %also put the amplitude to negative if CS- > CS+
+                    if out.y(4) < out.y(end)
+                        out.params(1) = -out.params(1);
+                    end                    
+                    
                 end
                 save(write_path,'out');
             end

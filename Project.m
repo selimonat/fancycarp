@@ -83,7 +83,7 @@ classdef Project < handle
     properties (Hidden)
         atlas2mask_threshold  = 15;%where ROI masks are computed, this threshold is used.        
         %voxel selection
-        selected_smoothing    = 10;%smoothing for selection of voxels;
+        selected_smoothing    = 8;%smoothing for selection of voxels;
         selected_model        = 4;
         selected_betas        = 1:6
         selected_ngroup       = 3;
@@ -318,33 +318,48 @@ classdef Project < handle
 % % %             out = regexprep(self.path_spmmat(run,model),'sub...',sprintf('second_level_%02dmm',sk));
 % % %             
 % % %         end
-        function [rw]=RW_analysis(self,ngroup)
+        function [output]=RW_analysis(self,ngroup)
             %
-            [out]  = self.getgroup_all_spacetime(3,0,0,1);
+            [out]  = self.getgroup_all_spacetime(3,0,0,0);
             [sy sx]  = GetSubplotNumber(size(out.d,4));%number of areas
             %%
             for n = 1:size(out.d,4)
-                bla = squeeze(mean(out.d(:,:,:,n),3));
-                bla = demean(bla')';
+                bla       = squeeze(mean(out.d(:,:,:,n),3));
+                bla       = demean(bla')';
+                %slightly smooth over conditions, not time.
+                 kernel   = make_gaussian1d(-2:2,1,2.2,0)
+                 kernel   = kernel./sum(kernel(:));
+                 bla      = Project.circconv2(bla,kernel);
                 
-                [rw] = Project.RW_Fit(bla,Project.ucs_vector);                
-                %                
+                [rw] = Project.RW_Fit(bla,ones(1,length(Project.ucs_vector)));
+                %[rw]      = Project.Linear_Fit(bla);                
+                output(n) = rw;
+                %         
+%                keyboard
                 figure(1)
                 subplot(sy,sx,n);
                 R = rw.r;
+                R = R.^2;
                 imagesc(rw.learning_rates,rw.stds,R);
                 xlabel('learning rates');
                 ylabel('std');
                 colorbar;
-                hold on;
-                [y x] = find(R == max(R(:)));
-                plot(rw.learning_rates(x),rw.stds(y),'r+');
+                hold on;                
+                plot(rw.peak_lr,rw.peak_std,'r+');
                 hold off;                
                 title(out.name{n},'interpreter','none'); 
                 drawnow;
+                %%
                 figure(2);
-                subplot(sy,sx,n);
-                imagesc([bla,rw.fit]);colorbar;
+                subplot(sy,sx,n);                
+                fit = reshape(zscore(Vectorize(rw.fit(self.ucs_vector == 0,:))),sum(self.ucs_vector==0),8);
+                bla = reshape(zscore(Vectorize(bla(self.ucs_vector == 0,:))),sum(self.ucs_vector==0),8);
+                imagesc([bla,fit]);
+                hold on;
+                plot([8.5 8.5],ylim,'r');
+                hold off;
+                title(out.name{n},'interpreter','none'); 
+                colorbar;
             end                        
         end
     end    
@@ -369,82 +384,122 @@ classdef Project < handle
         end
         function out             = getgroup_pmf_param(self)
             %collects the pmf parameters for all subjects in a table.
-            out = [];
-            for ns = self.subject_indices
-                s       = Subject(ns);
-                if ~isempty(s.pmf)
-                    out = [out;[s.id s.pmf_param(:)' s.fit_pmf.LL']];
-                else
-                    out = [out;[s.id NaN(1,size(out,2)-1)]];
+            target_name = sprintf('%smidlevel/%s.mat',self.path_project,'getgroup_pmf_param');
+            if exist(target_name) == 0
+                
+                out = [];
+                for ns = self.subject_indices
+                    s       = Subject(ns);
+                    if ~isempty(s.pmf)
+                        out = [out;[s.id s.pmf_param(:)' s.fit_pmf.LL']];
+                    else
+                        out = [out;[s.id NaN(1,size(out,2)-1)]];
+                    end
                 end
+                out = array2table(out,'variablenames',{'subject_id' 'pmf_csp_alpha' 'pmf_csn_alpha' 'pmf_pooled_alpha' 'pmf_csp_beta' 'pmf_csn_beta' 'pmf_pooled_beta' 'pmf_csp_gamma' 'pmf_csn_gamma' 'pmf_pooled_gamma' 'pmf_csp_lamda'    'pmf_csn_lamda'    'pmf_pooled_lamda' 'pmf_csp_LL' 'pmf_csn_LL' 'pmf_pooled_LL' });
+                save(target_name,'out');
+            else
+                load(target_name);
             end
-            out = array2table(out,'variablenames',{'subject_id' 'pmf_csp_alpha' 'pmf_csn_alpha' 'pmf_pooled_alpha' 'pmf_csp_beta' 'pmf_csn_beta' 'pmf_pooled_beta' 'pmf_csp_gamma' 'pmf_csn_gamma' 'pmf_pooled_gamma' 'pmf_csp_lamda'    'pmf_csn_lamda'    'pmf_pooled_lamda' 'pmf_csp_LL' 'pmf_csn_LL' 'pmf_pooled_LL' });
         end
         function out             = getgroup_rating_param(self)
-            %collects the rating parameters for all subjects in a table.
-            out = [];
-            for ns = self.subject_indices%run across all the subjects
-                s   = Subject(ns);
-                out = [out;[s.id s.rating_param s.fit_rating.LL]];                
+            target_name = sprintf('%smidlevel/%s_fitfun_%02d.mat',self.path_project,'getgroup_rating_param',self.selected_fitfun);
+            %
+            if exist(target_name) == 0
+                %collects the rating parameters for all subjects in a table.
+                out = [];
+                for ns = self.subject_indices%run across all the subjects
+                    s   = Subject(ns);
+                    out = [out;[s.id s.rating_param s.fit_rating.LL]];
+                end
+                if self.selected_fitfun == 8
+                    out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
+                    out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_absmu' 'rating_offset' 'rating_std' 'rating_LL'});
+                elseif self.selected_fitfun == 3
+                    out = [out(:,[1 2 3 5])];%
+                    out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_LL'});
+                end
+                save(target_name,'out');
+            else
+                load(target_name);
             end
-            if self.selected_fitfun == 8
-                out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too            
-                out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_absmu' 'rating_offset' 'rating_std' 'rating_LL'});
-            elseif self.selected_fitfun == 3
-                out = [out(:,[1 2 3 5])];%
-                out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_LL'});
-            end
-        end       
-        
+        end               
         function out             = getgroup_scr_param(self)
             %collects the scr parameters for all subjects in a table.
-            out = [];
-            for ns = self.subject_indices%run across all the subjects
-                s   = Subject(ns,'scr');
-                out = [out;[s.id s.scr_param s.fit_scr.LL]];                
-            end
             
-            if self.selected_fitfun == 8
-                out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
-                out = array2table(out,'variablenames',{'subject_id' 'scr_amp' 'scr_fwhm' 'scr_mu' 'scr_absmu' 'scr_offset' 'scr_std' 'scr_LL'});
-            elseif self.selected_fitfun == 3
-                out = [out(:,[1 2 3 5])];%
-                out = array2table(out,'variablenames',{'subject_id' 'scr_amp' 'scr_fwhm' 'scr_LL'});
+            target_name = sprintf('%smidlevel/%s_fitfun_%02d.mat',self.path_project,'getgroup_scr_param',self.selected_fitfun);
+            if exist(target_name) == 0
+                
+                out = [];
+                for ns = self.subject_indices%run across all the subjects
+                    s   = Subject(ns,'scr');
+                    out = [out;[s.id s.scr_param s.fit_scr.LL]];
+                end
+                
+                if self.selected_fitfun == 8
+                    out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
+                    out = array2table(out,'variablenames',{'subject_id' 'scr_amp' 'scr_fwhm' 'scr_mu' 'scr_absmu' 'scr_offset' 'scr_std' 'scr_LL'});
+                elseif self.selected_fitfun == 3
+                    out = [out(:,[1 2 3 5])];%
+                    out = array2table(out,'variablenames',{'subject_id' 'scr_amp' 'scr_fwhm' 'scr_LL'});
+                end
+                save(target_name,'out');
+            else
+                load(target_name);
             end
-        end       
-        
+        end               
         function out             = getgroup_facecircle(self)
-            %collects the rating parameters for all subjects in a table.
-            out = [];
-            for ns = self.subject_indices
-                s   = Subject(ns);                
-                out = [out;[s.id s.fit_facecircle(1).params s.fit_facecircle(1).LL]];                
-            end            
+            %collects the facecircle parameters for all subjects in a table.
             
-            if self.selected_fitfun == 8
-                out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
-                out = array2table(out,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_mu' 'facecircle_absmu' 'facecircle_offset' 'facecircle_std' 'facecircle_LL'});
-            elseif self.selected_fitfun == 3
-                out = [out(:,[1 2 3 5])];%
-                out = array2table(out,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_LL'});
+            target_name = sprintf('%smidlevel/%s_fitfun_%02d.mat',self.path_project,'getgroup_facecircle_param',self.selected_fitfun);
+            if exist(target_name) == 0
+                
+                out = [];
+                for ns = self.subject_indices
+                    s   = Subject(ns);
+                    out = [out;[s.id s.fit_facecircle(1).params s.fit_facecircle(1).LL]];
+                end
+                
+                if self.selected_fitfun == 8
+                    out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
+                    out = array2table(out,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_mu' 'facecircle_absmu' 'facecircle_offset' 'facecircle_std' 'facecircle_LL'});
+                elseif self.selected_fitfun == 3
+                    out = [out(:,[1 2 3 5])];%
+                    out = array2table(out,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_LL'});
+                end
+                save(target_name,'out');
+            else
+                load(target_name);
             end
         end       
         function out             = getgroup_detected_oddballs(self)            
-            odd = [];
-            for ns = self.subject_indices
-                s       = Subject(ns);
-                odd     = [odd ;[s.id sum(s.detected_oddballs)]];
+            target_name = sprintf('%smidlevel/%s.mat',self.path_project,'getgroup_detectedoddballs_param');
+            if exist(target_name) == 0
+                odd = [];
+                for ns = self.subject_indices
+                    s       = Subject(ns);
+                    odd     = [odd ;[s.id sum(s.detected_oddballs)]];
+                end
+                out = array2table(odd,'variablenames',{'subject_id' 'detection_oddball'});
+                save(target_name,'out');
+            else
+                load(target_name);
             end
-            out = array2table(odd,'variablenames',{'subject_id' 'detection_oddball'});
         end
         function out             = getgroup_detected_face(self)            
-            face = [];
-            for ns = self.subject_indices
-                s      = Subject(ns);
-                face   = [face ;[s.id s.detected_face]];                
+            target_name = sprintf('%smidlevel/%s.mat',self.path_project,'getgroup_detectedface_param');
+            if exist(target_name) == 0
+                face = [];
+                for ns = self.subject_indices
+                    s      = Subject(ns);
+                    face   = [face ;[s.id s.detected_face]];
+                end
+                face = [face abs(face(:,2))];
+                out = array2table(face,'variablenames',{'subject_id' 'detection_face' 'detection_absface'});
+                save(target_name,'out');
+            else
+                load(target_name);
             end
-            face = [face abs(face(:,2))];
-            out = array2table(face,'variablenames',{'subject_id' 'detection_face' 'detection_absface'});
         end        
         function fixmat          = getgroup_facecircle_fixmat(self,subjects)
             %will collect all the fixmats for all subjects from the
@@ -685,20 +740,23 @@ classdef Project < handle
             if nargin == 2
                 inversion = 1;%will select good subjects
             end
-            borders = 90;
+            borders = 1000;
             if criteria == 0
                 sub.name = '00_all';
                 sub.list = self.subject_indices(:);
                 
             elseif     criteria == 1
-                %
+                %The data must be  described with a Gaussian curve better
+                %than null model +
+                %the amplitude must be positive +
+                %for vM models the center must be +/- 45 degrees.
                 sub.name   = '01_rating';
                 %
                 out        = self.getgroup_rating_param;%load the ratings of all subjects
                 if self.selected_fitfun == 8
-                    select     = (out.rating_LL > -log10(.05))&(out.rating_mu > -borders)&(out.rating_mu < borders);%select based on tuning
+                    select     = (out.rating_LL > -log10(.05))&(out.rating_mu > -borders)&(out.rating_mu < borders)&(out.rating_amp > 0);%select based on tuning
                 else
-                    select     = (out.rating_LL > -log10(.05));
+                    select     = (out.rating_LL > -log10(.05))&(out.rating_amp > 0);
                 end
                 select     = select == inversion;
                 sub.list   = out.subject_id(select);%subject indices.
@@ -711,15 +769,14 @@ classdef Project < handle
                 select   = select==inversion;
                 sub.list = out.subject_id(select);
                 
-            elseif criteria == 3
-                
+            elseif criteria == 3                
                 %same as rating tuning, but with saliency data.
                 sub.name = '03_saliency';
                 out      = self.getgroup_facecircle;
                 if self.selected_fitfun == 8
-                    select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -borders)&(out.facecircle_mu < borders);%select based on tuning
+                    select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -borders)&(out.facecircle_mu < borders)&(out.facecircle_amp > 0);;%select based on tuning
                 else
-                    select     = (out.facecircle_LL > -log10(.05));
+                    select     = (out.facecircle_LL > -log10(.05))&(out.facecircle_amp > 0);;
                 end
                 select   = select==inversion;
                 sub.list = out.subject_id(select);
@@ -992,6 +1049,7 @@ classdef Project < handle
             [SPM xSPM]               = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
             t                        = spm_list('table',xSPM);
             coors                    = [t.dat{:,end};ones(1,size(t.dat,1))];
+            coors                    = coors(:,[1 3 5 7 10 13 15]);
         end
         function ucs             = get.ucs_vector(self)
             %returns a logical vector with ones where there is a UCS AFTER
@@ -1024,7 +1082,9 @@ classdef Project < handle
             count = [];
             for ns = 1:4
                 count = [count ismember(self.subject_indices(:), self.get_selected_subjects(ns).list(:))];
-            end            
+            end      
+            %add the oddball detection
+            count = [count self.getgroup_detected_oddballs.detection_oddball == 2];            
         end
         end
     methods %methods that does something on all subjects one by one
@@ -1085,8 +1145,8 @@ classdef Project < handle
             
             subjects   = self.get_selected_subjects(ngroup);                        
             spm_dir    = regexprep(self.dir_spmmat(run,model),'sub...','second_level');%convert to second-level path, replace the sub... to second-level.
-            spm_dir    = sprintf('%scov_id_%s/%02dmm/group_%s/',spm_dir,covariate_id,sk,subjects.name);
-            xspm_path  = sprintf('%sxSPM.mat',spm_dir)
+            spm_dir    = sprintf('%scov_id_%s/%02dmm/fitfun_%02d/group_%s/',spm_dir,covariate_id,sk,self.selected_fitfun,subjects.name);
+            xspm_path  = sprintf('%sxSPM.mat',spm_dir);
             if exist(xspm_path) == 0;
                                 
                 beta_files = [];
@@ -2063,7 +2123,7 @@ classdef Project < handle
                 title(spacetime.name{narea},'interpreter','none');
             end
         end
-        function plot_spacetime_dendrogram(self,spacetime)
+        function [leafOrder]=plot_spacetime_dendrogram(self,spacetime)
             
             figure;
             data             = mean(spacetime.d,3);%take average across subjects;
@@ -2172,6 +2232,53 @@ classdef Project < handle
             end
             spacetime = data;
         end
+        function [out]=Linear_Fit(y)
+            
+
+            %%
+            R         = Project.ucs_vector;%we still need this events to measure the correlation on non-contaminated ST profiles.
+            tsample   = size(y,1);
+            grid_size = 100;
+            x         = -135:45:180;;
+            time      = [0 0 0 0 linspace(0,1,tsample-4)];
+            slopes    = linspace(-1,1,grid_size);
+            stds      = linspace(22.5,180,grid_size);
+            viz       = 0;
+            %%
+            for c1 = 1:length(stds);
+                c1
+                stdd = stds(c1);
+                for n1 = 1:length(slopes);
+                    slope  = slopes(n1);
+                    alpha  = time*slope;
+                    %generate fitted responses.
+                    for n = 1:length(y);
+                        %                         fit(n,:) = Tuning.VonMises(x,alpha(n),kappa,0,offset);
+                        fit(n,:) = demean(Tuning.make_gaussian_fmri_zeromean(x,alpha(n),stdd));
+                    end                
+                    if viz
+                        subplot(1,3,1);imagesc(y(~R,:));colorbar;subplot(1,3,2);imagesc(fit(~R,:));colorbar;subplot(1,3,3);plot(alpha);drawnow;;
+                    end
+                    r(c1,n1) = corr(Vectorize(fit(~R,:)),Vectorize(y(~R,:)));
+                end
+            end
+            %%                        
+            [yp xp]            = find(r == max(r(:)),1);            
+            out.learning_rates = slopes;
+            out.r              = r;
+            out.stds           = stds;            
+            out.peak_std       = stds(yp);
+            out.peak_lr        = slopes(xp);
+            %collect the fit too;            
+            slope  = slopes(xp);
+            alpha  = time*slope;
+            %generate fitted responses.
+            for n = 1:length(y);
+                %                         fit(n,:) = Tuning.VonMises(x,alpha(n),kappa,0,offset);
+                fit(n,:) = demean(Tuning.make_gaussian_fmri_zeromean(x,alpha(n),stdd));
+            end
+            out.fit            = fit;                        
+        end        
         function [out] = RW_Fit(y,R);
             %let's see if we can understand the amplitude changes using a rescorla
             %wagner model of update of the alpha parameter. to this end I will use the learning rate and
@@ -2182,11 +2289,11 @@ classdef Project < handle
             x              = -135:45:180;
             grid_size      = 50;
             kappas         = logspace(-3,1.17,grid_size);
-            stds           = linspace(45,180,grid_size);
+            stds           = linspace(22.5,180,grid_size);
             %alpha is a function of 2 parameters, these two parameters jointly returns
             %a time-course of alpha parameter
-            learning_rates = linspace(0,1,grid_size);
-            %learning_rates = [-fliplr(learning_rates(2:end)) learning_rates];
+            learning_rates = linspace(0,.2,grid_size);
+            learning_rates = [-fliplr(learning_rates(2:end)) learning_rates];
             indicator      = Vectorize(repmat([-1 1],grid_size,1))';
             alpha_inits    = 0;
             %% create the fitted data and measure the GOF using r
@@ -2203,14 +2310,14 @@ classdef Project < handle
                     %generate fitted responses.
                     for n = 1:length(y);
 %                         fit(n,:) = Tuning.VonMises(x,alpha(n),kappa,0,offset);
-                        fit(n,:) = Tuning.make_gaussian_fmri_zeromean(x,alpha(n),stdd);
+                        fit(n,:) = demean(Tuning.make_gaussian_fmri_zeromean(x,alpha(n),stdd));
                     end
                     %fit = fit + randn(size(fit))*eps;
                     %
                     if viz
                         subplot(1,3,1);imagesc(y(~R,:));colorbar;subplot(1,3,2);imagesc(fit(~R,:));colorbar;subplot(1,3,3);plot(alpha);drawnow;;
                     end
-                    r(c1,n1) = corr(Vectorize(fit(~R,:)),Vectorize(y(~R,:))).^2;
+                    r(c1,n1) = corr(Vectorize(fit(:,:)),Vectorize(y(:,:)));
                     if isnan(r(n1));
 %                        keyboard
                     end
@@ -2222,10 +2329,12 @@ classdef Project < handle
             out.stds           = stds;            
             out.peak_std       = stds(yp);
             out.peak_lr        = learning_rates(xp);
-            
+            %collect the fit too;            
+            alpha     = rescorlawagner( R , abs(out.peak_lr) ,0);
+            alpha     = alpha*indicator(xp);
             for n = 1:length(y);
 %              fit(n,:) = Tuning.VonMises(x,alpha(n),kappa,0,offset);
-               fit(n,:) = Tuning.make_gaussian_fmri_zeromean(x,out.peak_lr,out.peak_std);
+               fit(n,:) = Tuning.make_gaussian_fmri_zeromean(x,alpha(n),out.peak_std);
             end                    
             out.fit            = fit;
         end

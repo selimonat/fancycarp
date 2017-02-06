@@ -1,6 +1,6 @@
 classdef Fixmat < Project
     properties (Hidden,Constant)                
-        window       = [212 212]./2;%[768 1024]./2;%%half size of the fixation maps        
+        window       = [768 1024]./2;%%half size of the fixation maps        ;[212 212]./2;%
     end
     
     properties (Hidden,SetAccess = public)
