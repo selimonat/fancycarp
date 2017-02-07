@@ -789,6 +789,22 @@ classdef Project < handle
                 select  = out.pmf_pooled_alpha <= m;%subjects with sharp pmf
                 select  = select==inversion;
                 sub.list= out.subject_id(select);
+               
+            elseif criteria == 5
+                %In this criterium, we have all significantly vM fitted
+                %people unconstraint on their amplitude sign, otherwise
+                %same as criterium 1
+                
+                sub.name = '01a_rating';
+                  %
+                out        = self.getgroup_rating_param;%load the ratings of all subjects
+                if self.selected_fitfun == 8
+                    select     = (out.rating_LL > -log10(.05))&(out.rating_mu > -borders)&(out.rating_mu < borders);%select based on tuning
+                else
+                    select     = (out.rating_LL > -log10(.05));
+                end
+                select     = select == inversion;
+                sub.list   = out.subject_id(select);%subject indices.
                 
             end
             %
@@ -1208,7 +1224,7 @@ classdef Project < handle
                     SPM                                                          = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any
                     tbetas                                                       = length(beta_image_index);
                     
-                    if model == 7 | model == 3
+                    if model == 7 | model == 3 | model == 33
                         tcontrast   = size(SPM.xX.xKXs.X,2);                                                
                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3) ]',SPM.xX.xKXs);
                     elseif model == 4
