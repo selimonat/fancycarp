@@ -2,6 +2,12 @@
 
 ![Logo](https://lh3.googleusercontent.com/JiBFuSBsphKFLgHn3DkIR2YQCpP-B8Spvoo3wrW2Rm3HiyC4yHNlSWmxEoLTLkB8Zw=w300-rw)
 
-Repository for streamlining fMRI analysis based on SPM.
+Repository for streamlining fMRI preprocessing and analysis based on SPM in Institute of Systems Neuroscience, UKE Hamburg.
 
-For analyzing a new project with this toolbox, please first check out the mrt/main branch and start adapting it to your own needs in a new branch with a name consistent with mrt/YOURPROJECT. 
+This repository 
+creates a folder hierarchy for an experiment, 
+download the fmri data from the internal dicom server, 
+preprocess fmri data with SPM,
+conduct first- and second-level analysis. 
+
+It can be integrated together with SCR, Pupil objects for the analysis of autonomic responses.
