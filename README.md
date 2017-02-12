@@ -2,7 +2,7 @@
 
 ![Logo](https://lh3.googleusercontent.com/JiBFuSBsphKFLgHn3DkIR2YQCpP-B8Spvoo3wrW2Rm3HiyC4yHNlSWmxEoLTLkB8Zw=w300)
 
-Repository for streamlining fMRI preprocessing and analysis based on SPM in Institute of Systems Neuroscience, UKE Hamburg.
+Repository for streamlining fMRI preprocessing and analysis based on SPM.
 
 This repository 
 creates a folder hierarchy for an experiment, 
