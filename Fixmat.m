@@ -99,7 +99,7 @@ classdef Fixmat < Project
                     for fns = properties(obj)'
                         %% take fixations which are only coming from the required phase.
                         %(e.g. ratings in baseline are coded as 5)
-                        valid_fix = dummy.phase == run;
+                        valid_fix = dummy.phase ~= 5;
                         if isfield(dummy,fns{1})%if it is not a property dont even consider
                             obj.(fns{1}) = [obj.(fns{1}) dummy.(fns{1})(valid_fix)];%append it to the previous
                         else
