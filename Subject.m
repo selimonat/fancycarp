@@ -26,10 +26,7 @@ classdef Subject < Project
     
     properties (Hidden)
         paradigm
-        default_run       = 1;   
-        dicom_serie_id    = [];
-        dicom_folders     = [];
-        dicom_target_run  = [];                
+        default_run       = 1;                   
         derivatives       = [0 0];%specifies expansion degree of the cHRF when running models.         
     end
     properties (SetAccess = private)
@@ -38,8 +35,7 @@ classdef Subject < Project
         csp
         csn
         scr        
-        get_param_pmf= [];
-        trio_session  = [];
+        get_param_pmf= [];        
         ratings       = [];
         total_run     = [];
         pmf
@@ -49,24 +45,9 @@ classdef Subject < Project
         function s = Subject(id)%constructor
             fprintf('Subject Constructor for id:%i is called:\n',id);
             s.id               = id;
-            s.path             = s.pathfinder(s.id,[]);
-            s.dicom_serie_id   = s.dicom_serie_selector{s.id};
-            s.dicom_target_run = s.dicom2run{s.id};
-            try
-                s.trio_session 	  = s.trio_sessions{s.id};
-            end
+            s.path             = s.pathfinder(s.id,[]);                        
             
-            if exist(s.path)
-                for nrun = 1:s.total_run
-                    s.paradigm{nrun} = s.get_paradigm(nrun);
-                end
-                try
-                s.csp = s.paradigm{s.default_run}.stim.cs_plus;
-                s.csn = s.paradigm{s.default_run}.stim.cs_neg;
-                end
-                s.scr = SCR(s);                       
-                
-            else
+            if ~exist(s.path)
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path);
                 fprintf('Your path might also be wrong...\n');
             end
@@ -85,8 +66,8 @@ classdef Subject < Project
             %create it if necess.
             if exist(self.dir_hr) == 0
                 mkdir(self.dir_hr);
-            end            
-            self.DicomDownload(self.path_hr_dicom,self.dir_hr);
+            end
+%           self.DicomDownload(self.path_hr_dicom,self.dir_hr);
             self.ConvertDicom(self.dir_hr);
             files       = spm_select('FPListRec',self.dir_hr,'^sTRIO');
             if ~isempty(files)
@@ -110,25 +91,13 @@ classdef Subject < Project
             %to.
             %
             
-            %spit out some info for sanity checks
-            self.dicomserver_request;
-            fprintf('You told me to download the following series: ');
-            fprintf('%i,',self.dicom_serie_id);
-            fprintf('\nDouble check if everything is fine.\n');
-            paths               = self.dicomserver_paths;
-            if ~isempty(paths)
-                self.dicom_folders  = paths(self.dicom_serie_id);
-                fprintf('Will now dump series (%s)\n',self.current_time);            
-            end
-            
-            %% save the desired runs to disk
-            n = 0;
-            for source = self.dicom_folders(:)'
-                %
-                n 				 = n+1;
+                        
+            %% save the desired runs to disk            
+            for  n = 4:self.total_run
+
                 dest             = self.dir_epi(n);                                
                 if exist(dest)
-					self.DicomDownload(source{1},dest);                
+%					self.DicomDownload(source{1},dest);                
                 	self.DicomTo4D(dest);
 				else
 					keyboard
@@ -583,7 +552,7 @@ classdef Subject < Project
             % simply returns the path to the mrt data.
             
             if nargin == 2                
-                out = sprintf('%smrt%s',self.pathfinder(self.id,self.dicom_target_run(nrun)),filesep);                
+                out = sprintf('%smrt%s',self.pathfinder(self.id,nrun),filesep);                
             else
                 fprintf('Need to give an input...\n')
                 return
