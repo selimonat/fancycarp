@@ -121,5 +121,35 @@ classdef Project < handle
             end
         end        
     end
+    methods (Static)
+        
+        function plot_bar(Y)
+            % Fear tuning are stored in columns.
+            cmap  = GetFearGenColors;
+            tcol = size(Y,2);
+            tbar = size(Y,1);
+            X    = linspace(-135,180,8)';
+            X    = repmat(X,1,tcol) + repmat([0:360:360*(tcol-1)],8,1);
+            for i = 1:tbar
+                h(i)    = bar(i,Y(i),.9,'facecolor',cmap(i,:),'edgecolor','none','facealpha',.8);
+                hold on;
+            end
+            hold off
+            %%                                    
+            set(gca,'xtick',1:8,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
+            box off;
+            set(gca,'color','none');
+            xlim([0 tbar+1])
+            drawnow;            
+            axis tight;box off;axis square;drawnow;alpha(.5);
+            if tcol > 1
+                mx = max(X)
+                for ncol = 1:tcol
+                    plot(repmat(mx(ncol)+45/2,1,2),ylim,'k-.')
+                end
+            end                      
+        end
+        
+    end
     
 end
