@@ -67,11 +67,10 @@ classdef Subject < Project
             if exist(self.dir_hr) == 0
                 mkdir(self.dir_hr);
             end
-%           self.DicomDownload(self.path_hr_dicom,self.dir_hr);
             self.ConvertDicom(self.dir_hr);
-            files       = spm_select('FPListRec',self.dir_hr,'^sTRIO');
+            files       = spm_select('FPListRec',self.dir_hr,'^sMR');
             if ~isempty(files)
-                movefile(files,regexprep(files,sprintf('%ssTRIO.*$',filesep),sprintf('%sdata.nii',filesep)));%rename it to data.nii
+                movefile(files,regexprep(files,sprintf('%ssMR.*$',filesep),sprintf('%sdata.nii',filesep)));%rename it to data.nii
             end
         end
         function p          = get_paradigm(self,nrun)
@@ -93,7 +92,7 @@ classdef Subject < Project
             
                         
             %% save the desired runs to disk            
-            for  n = 4:self.total_run
+            for  n = 1:self.total_run
 
                 dest             = self.dir_epi(n);                                
                 if exist(dest)

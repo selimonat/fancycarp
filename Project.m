@@ -45,7 +45,7 @@ classdef Project < handle
         %project
 
         path_project          = '/home/onat/Desktop/arjen/';        
-        path_spm              = '/common/apps/spm12-6685/';        
+        path_spm              = '/home/onat/Documents/Code/Matlab/spm12-6685/';        
         trio_sessions         = {   '' };
         dicom_serie_selector  = {  [1:8] };
         %this is necessary to tell matlab which series corresponds to which
