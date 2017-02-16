@@ -99,7 +99,7 @@ classdef Fixmat < Project
                     for fns = properties(obj)'
                         %% take fixations which are only coming from the required phase.
                         %(e.g. ratings in baseline are coded as 5)
-                        valid_fix = dummy.phase == run;
+                        valid_fix = dummy.phase ~= 5;
                         if isfield(dummy,fns{1})%if it is not a property dont even consider
                             obj.(fns{1}) = [obj.(fns{1}) dummy.(fns{1})(valid_fix)];%append it to the previous
                         else
@@ -276,6 +276,26 @@ classdef Fixmat < Project
             end
             obj.getmaps(v{:});
         end
+        function getsubmapsperphase(obj,varargin)
+            %similar to getsubmaps, but splits the data on phases.
+            if nargin > 1
+                subjects = varargin{1};
+            else
+                subjects = unique(obj.subject);
+            end
+            
+            c = 0;
+            for phase = [2 4]
+                for cond = unique(obj.realcond)
+                    c    = c+1;
+                    v{c} = {'subject' subjects 'deltacsp' cond 'phase' phase};
+                end
+            end
+            %
+            obj.getmaps(v{:});
+        end
+        
+        
         function linkage(obj)
             fprintf('Conducting linkage analysis with linkage method: _%s_ and linkage metric: _%s_\n',char(obj.linkage_method),obj.linkage_metric);
             %provides data for a dendrogram analysis.
