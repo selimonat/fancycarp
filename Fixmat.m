@@ -100,8 +100,8 @@ classdef Fixmat < Project
                         % exclude fixations which are not only from the rating phase (coded as 5), assuming only one type of phase per fixmat is present                        
                         % this is a posthoc correction, not optimal but
                         % opportunistic related to a bug in exp_bdnf.
-                        valid_fix             = dummy.phase ~= 5;%exclude fixations during rating
-                        obj.phase(valid_fix)  = repmat(int32(run),[1 sum(valid_fix)]);
+                        valid_fix               = dummy.phase ~= 5;%exclude fixations during rating
+                        dummy.phase(valid_fix)  = repmat(int32(run),[1 sum(valid_fix)]);
                         
                         if isfield(dummy,fns{1})%if it is not a property dont even consider
                             obj.(fns{1}) = [obj.(fns{1}) dummy.(fns{1})(valid_fix)];%append it to the previous
