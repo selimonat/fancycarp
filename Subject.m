@@ -34,15 +34,10 @@ classdef Subject < Project
     end
     properties (SetAccess = private)
         id
-        path
-        csp
-        csn
-        scr        
-        get_param_pmf= [];
+        path        
+        scr                
         trio_session  = [];
-        ratings       = [];
-        total_run     = [];
-        pmf
+        total_run     = [];        
     end
     %%
     methods
@@ -136,38 +131,7 @@ classdef Subject < Project
 				end
             end
             
-        end
-        function rating = get.ratings(self)
-            %returns the CS+-aligned ratings for all the runs
-            for run = 1:self.total_run;%don't count the first run
-                if isfield(self.paradigm{run}.out,'rating')
-                    if ~isempty(self.paradigm{run});
-                        rating(run).y      = self.paradigm{run}.out.rating';
-                        rating(run).y      = circshift(rating.y,[1 4-self.csp ]);
-                        rating(run).x      = repmat([-135:45:180],size(self.paradigm{run}.out.rating,2),1);
-                        rating(run).ids    = repmat(self.id,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
-                        rating(run).y_mean = mean(rating.y);
-                    else
-                        fprintf('No rating present for this subject and run (%d) \n',nr);
-                    end
-                end
-            end
-        end
-        function out    = get_scr(self,run,cond)
-            if nargin < 3
-                cond=1:8;
-            end
-            conddummy = [-135:45:180 500 1000 3000];
-            % s is a subject instance
-            out       = [];
-            cutnum    = self.scr.findphase(run);
-            self.scr.cut(cutnum);
-            self.scr.run_ledalab;
-            self.scr.plot_tuning_ledalab(cond);
-            out.y     = self.scr.fear_tuning;
-            out.x     = conddummy(cond);
-            out.ind   = cutnum;
-        end        
+        end            
         function [o]    = get.total_run(self)
             %% returns the total number of runs in a folder (except run000)
             o      = length(dir(self.path))-3;%exclude the directories .., ., and run000
@@ -423,11 +387,11 @@ classdef Subject < Project
             %volume (which is right amygdala).
             
             %copy the atlas to subject's folder.
-            copyfile(fileparts(self.path_atlas),[self.path_data(0) 'atlas/']);
+            copyfile(fileparts(self.path_atlas),[self.path_data(0) sprintf('atlas%s',filesep)]);
             %
             filename = self.path_native_atlas(120);%for test purposes and to gain speed I focus on amygdala right now.
             nf = 1;
-            matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_hr,'data.nii','mri/iy_data.nii'));%iy_ not y_!
+            matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%siy_data.nii',filesep)));%iy_ not y_!
             matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {filename};
             matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
                 78 76 85];
@@ -436,7 +400,7 @@ classdef Subject < Project
             matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'w';%inverse warped                        
             %
             self.RunSPMJob(matlabbatch);
-            target_file = regexprep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
+            target_file = strrep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
             movefile(target_file,self.path_native_atlas);
         end        
         function [X,N,K]=spm_DesignMatrix(self,nrun,model_num)
@@ -544,7 +508,7 @@ classdef Subject < Project
         end
         function out        = path_model(self,run,model_num)
             %returns the path to a model specified by MODEL_NUM in run RUN.
-            out = sprintf('%sdesign/model%02d/data.mat',self.path_data(run),model_num);
+            out = sprintf('%sdesign%smodel%02d%sdata.mat',self.path_data(run),filesep,model_num,filesep);
         end
         function out        = path_spmmat(self,nrun,model_num)
             %returns the path to spm folder for run RUN.
@@ -554,7 +518,7 @@ classdef Subject < Project
         function out        = path_native_atlas(self,varargin)
             %path to subjects native atlas, use VARARGIN to slice out a
             %given 3D volume.
-            out = sprintf('%satlas/data.nii',self.path_data(0));
+            out = sprintf('%satlas%sdata.nii',self.path_data(0),filesep);
             if nargin > 1
                 out = sprintf('%s,%d',out,varargin{1});
             end

@@ -4,6 +4,11 @@ classdef Project < handle
     % subject ids) and methods (for e.g. getting paths from the dicom
     % server).
     %
+    % This branch is mrt/main that is all future branches for new projects
+    % should be based on this branch. The CheckConsistency.m file can be
+    % used to test the consistency of this branch on a test dataset (the
+    % test data set can be found in /common/raw/users/onat/test_project).
+    %
     % The first set of properties has to be entered by hand. For example
     % TRIO_SESSIONS should be entered manually for your experiment. The
     % other properties drive from these. 
@@ -289,7 +294,7 @@ classdef Project < handle
             files = [];
             for ns = self.subject_indices
                 s     = Subject(ns);
-                current = sprintf('%s/%s',s.path_data(run),selector);
+                current = sprintf('%s%s%s',s.path_data(run),filesep,selector);
                 if exist(current) ~= 0
                     files = [files ; current];
                 else
