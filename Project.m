@@ -45,8 +45,9 @@ classdef Project < handle
     properties (Hidden, Constant)%adapt these properties for your project
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
-
-        path_project          = 'C:\Users\Sepideh\work\cueingPE\fancycarp'; 
+        path_raw='C:\Users\Sepideh\work\cueingPE\raw-data\';
+        sub_list= [6:12 14:28 30:38 41];
+        path_project          = 'D:\cueingPE\fancycarp\'; 
         %         path_project          = '/projects/sepf/fancycarp';
 %         path_spm              = '/common/apps/spm12-6685/';%IMPORTANT: use the same SPM version.
         path_spm              = 'C:\Users\Sepideh\Documents\MATLAB\spm12\';
