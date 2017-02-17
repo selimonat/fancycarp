@@ -26,10 +26,7 @@ classdef Subject < Project
     
     properties (Hidden)
         paradigm
-        default_run       = 1;   
-        dicom_serie_id    = [];
-        dicom_folders     = [];
-        dicom_target_run  = [];                
+        default_run       = 1;                   
         derivatives       = [0 0];%specifies expansion degree of the cHRF when running models.         
     end
     properties (SetAccess = private)
@@ -44,24 +41,9 @@ classdef Subject < Project
         function s = Subject(id)%constructor
             fprintf('Subject Constructor for id:%i is called:\n',id);
             s.id               = id;
-            s.path             = s.pathfinder(s.id,[]);
-            s.dicom_serie_id   = s.dicom_serie_selector{s.id};
-            s.dicom_target_run = s.dicom2run{s.id};
-            try
-                s.trio_session 	  = s.trio_sessions{s.id};
-            end
+            s.path             = s.pathfinder(s.id,[]);                        
             
-            if exist(s.path)
-                for nrun = 1:s.total_run
-                    s.paradigm{nrun} = s.get_paradigm(nrun);
-                end
-                try
-                s.csp = s.paradigm{s.default_run}.stim.cs_plus;
-                s.csn = s.paradigm{s.default_run}.stim.cs_neg;
-                end
-                s.scr = SCR(s);                       
-                
-            else
+            if ~exist(s.path)
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path);
                 fprintf('Your path might also be wrong...\n');
             end
@@ -80,12 +62,11 @@ classdef Subject < Project
             %create it if necess.
             if exist(self.dir_hr) == 0
                 mkdir(self.dir_hr);
-            end            
-            self.DicomDownload(self.path_hr_dicom,self.dir_hr);
+            end
             self.ConvertDicom(self.dir_hr);
-            files       = spm_select('FPListRec',self.dir_hr,'^sTRIO');
+            files       = spm_select('FPListRec',self.dir_hr,'^sMR');
             if ~isempty(files)
-                movefile(files,regexprep(files,sprintf('%ssTRIO.*$',filesep),sprintf('%sdata.nii',filesep)));%rename it to data.nii
+                movefile(files,regexprep(files,sprintf('%ssMR.*$',filesep),sprintf('%sdata.nii',filesep)));%rename it to data.nii
             end
         end
         function p          = get_paradigm(self,nrun)
@@ -105,25 +86,13 @@ classdef Subject < Project
             %to.
             %
             
-            %spit out some info for sanity checks
-            self.dicomserver_request;
-            fprintf('You told me to download the following series: ');
-            fprintf('%i,',self.dicom_serie_id);
-            fprintf('\nDouble check if everything is fine.\n');
-            paths               = self.dicomserver_paths;
-            if ~isempty(paths)
-                self.dicom_folders  = paths(self.dicom_serie_id);
-                fprintf('Will now dump series (%s)\n',self.current_time);            
-            end
-            
-            %% save the desired runs to disk
-            n = 0;
-            for source = self.dicom_folders(:)'
-                %
-                n 				 = n+1;
+                        
+            %% save the desired runs to disk            
+            for  n = 1:self.total_run
+
                 dest             = self.dir_epi(n);                                
                 if exist(dest)
-					self.DicomDownload(source{1},dest);                
+%					self.DicomDownload(source{1},dest);                
                 	self.DicomTo4D(dest);
 				else
 					keyboard
@@ -131,7 +100,38 @@ classdef Subject < Project
 				end
             end
             
-        end            
+        end
+        function rating = get.ratings(self)
+            %returns the CS+-aligned ratings for all the runs
+            for run = 1:self.total_run;%don't count the first run
+                if isfield(self.paradigm{run}.out,'rating')
+                    if ~isempty(self.paradigm{run});
+                        rating(run).y      = self.paradigm{run}.out.rating';
+                        rating(run).y      = circshift(rating.y,[1 4-self.csp ]);
+                        rating(run).x      = repmat([-135:45:180],size(self.paradigm{run}.out.rating,2),1);
+                        rating(run).ids    = repmat(self.id,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
+                        rating(run).y_mean = mean(rating.y);
+                    else
+                        fprintf('No rating present for this subject and run (%d) \n',nr);
+                    end
+                end
+            end
+        end
+        function out    = get_scr(self,run,cond)
+            if nargin < 3
+                cond=1:8;
+            end
+            conddummy = [-135:45:180 500 1000 3000];
+            % s is a subject instance
+            out       = [];
+            cutnum    = self.scr.findphase(run);
+            self.scr.cut(cutnum);
+            self.scr.run_ledalab;
+            self.scr.plot_tuning_ledalab(cond);
+            out.y     = self.scr.fear_tuning;
+            out.x     = conddummy(cond);
+            out.ind   = cutnum;
+        end        
         function [o]    = get.total_run(self)
             %% returns the total number of runs in a folder (except run000)
             o      = length(dir(self.path))-3;%exclude the directories .., ., and run000
@@ -547,7 +547,7 @@ classdef Subject < Project
             % simply returns the path to the mrt data.
             
             if nargin == 2                
-                out = sprintf('%smrt%s',self.pathfinder(self.id,self.dicom_target_run(nrun)),filesep);                
+                out = sprintf('%smrt%s',self.pathfinder(self.id,nrun),filesep);                
             else
                 fprintf('Need to give an input...\n')
                 return
