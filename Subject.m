@@ -351,7 +351,29 @@ classdef Subject < Project
             self.RunSPMJob(matlabbatch);
             target_file = strrep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
             movefile(target_file,self.path_native_atlas);
-        end        
+        end  
+        function meanNorm(self)
+            VolumeNormalize(self,cellstr(strrep(self.path_hr,sprintf('run000%smrt%sdata.nii',filesep,filesep),sprintf('run001%smrt%smeandata.nii',filesep,filesep))))
+        end
+%         function meanEPInorm(self)
+%         %Create warped T1 and mean EPI
+%             matlabbatch = [];
+%             strrep(self.path_hr,sprintf('mrt%sdata',filesep),sprintf('mrt%smri%sp1data',filesep,filesep));
+%                 st_dir      = [base_dir name '/fMRI' filesep 'mprage' filesep];
+%                 u_rc1_file  = spm_select('FPList', st_dir, u_rc1_templ);
+%                 strip_file  = spm_select('FPList', st_dir, skullstrip_templ);
+% 
+%                 f_dir       = [base_dir name '/fMRI' filesep 's1' ];
+%                 mean_file   = spm_select('FPList', f_dir, mean_func_templ);
+% 
+%                 matlabbatch{g}.spm.tools.dartel.crt_warped.flowfields = cellstr(strvcat(u_rc1_file,u_rc1_file));
+%                 matlabbatch{g}.spm.tools.dartel.crt_warped.images = {cellstr(strvcat(mean_file,strip_file))};
+%                 matlabbatch{g}.spm.tools.dartel.crt_warped.jactransf = 0;
+%                 matlabbatch{g}.spm.tools.dartel.crt_warped.K = 6;
+%                 matlabbatch{g}.spm.tools.dartel.crt_warped.interp = 1;
+%             
+%             self.RunSPMJob(matlabbatch);
+%         end
     end
     methods %path_tools which are related to the subject              
         function out        = path_skullstrip(self,varargin)
@@ -596,21 +618,31 @@ classdef Subject < Project
             end 
         end
         function CreateModels(self,runs)
-            %%%%%%%%%%%%%%%%%%%%%%
+            %%%%%%%%%%%%%%%%%%%%%
+            dummy=load([self.path_raw, sprintf('%02d',self.sub_list(self.id)), '\stim_onset.mat']);
             for run = runs
                 model_num  = 1;
                 model_path = self.path_model(run,model_num);
                 if ~exist(fileparts(model_path));mkdir(fileparts(model_path));end
-                [scan,id]  = self.StimTime2ScanUnit(run);
-                counter    = 0;
-                for current_condition = unique(id)
-                    counter                = counter + 1;
-                    cond(counter).name     = mat2str(current_condition);
-                    cond(counter).onset    = scan(id == current_condition);
-                    cond(counter).duration = self.duration(current_condition)*ones(1,length(cond(counter).onset));
-                    cond(counter).tmod     = 0;
-                    cond(counter).pmod     = struct('name',{},'param',{},'poly',{});
+                for current_condition =1:size(dummy.stim_onset,2)
+                    cond(current_condition).name     = mat2str(current_condition);
+                    cond(current_condition).onset    = dummy.stim_onset{run,current_condition}';
+                    cond(current_condition).duration = self.duration(current_condition)*ones(1,length(cond(current_condition).onset));
+                    cond(current_condition).tmod     = 0;
+                    cond(current_condition).pmod     = struct('name',{},'param',{},'poly',{});
                 end
+                current_condition = current_condition+1;
+                cond(current_condition).name     = mat2str(current_condition);
+                cond(current_condition).onset    = dummy.catch_onset{run}';
+                cond(current_condition).duration = self.duration(current_condition)*ones(1,length(cond(current_condition).onset));
+                cond(current_condition).tmod     = 0;
+                cond(current_condition).pmod     = struct('name',{},'param',{},'poly',{});
+                current_condition = current_condition+1;
+                cond(current_condition).name     = mat2str(current_condition);
+                cond(current_condition).onset    = dummy.rate_onset{run}';
+                cond(current_condition).duration = self.duration(current_condition)*ones(1,length(cond(current_condition).onset));
+                cond(current_condition).tmod     = 0;
+                cond(current_condition).pmod     = struct('name',{},'param',{},'poly',{});
                 save(model_path,'cond');
                 %%%%%%%%%%%%%%%%%%%%%%
             end
@@ -632,22 +664,40 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
-            
+            dummy                                                   = load(self.path_model(1,model_num));
+            cond_use   = [1:length(dummy.cond_name)];
+            duration = 2;
+            dummyScans = 6;
             for session = nrun
                 %load files using ...,1, ....,2 format
 
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(spm_select('expand',self.path_epi(session,'r')));%use always the realigned data.
                 %load the onsets
-                dummy                                                   = load(self.path_model(session,model_num));
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
-                %load nuissance parameters
-                nuis                                                    = self.get_param_motion(session);
-                nuis                                                    = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
-                for nNuis = 1:size(nuis,2)
-                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
-                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).name  = mat2str(nNuis);
+                for conds = 1:length(cond_use);
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond(conds).name     = dummy.cond_name{cond_use(conds)};
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond(conds).onset = dummyScans+dummy.stim_onset{session,conds};
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond(conds).duration = duration;
                 end
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond(conds+1).name     = 'rating';
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond(conds+1).onset = dummyScans+dummy.rate_onset{session};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond(conds+1).duration = duration;
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond(conds+2).name     = 'catch';
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond(conds+2).onset = dummyScans+dummy.catch_onset{session};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond(conds+2).duration = 9;
+                all_nuis{session}                                       = self.get_param_motion(session);
+                n_nuis         = size(all_nuis{session},2);
+                for nuis = 1:n_nuis
+                      matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nuis) = struct('name', cellstr(num2str(nuis)), 'val', all_nuis{session}(:,nuis));
+                end
+%                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
+%                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
+                %load nuissance parameters
+%                 nuis                                                    = self.get_param_motion(session);
+%                 nuis                                                    = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
+%                 for nNuis = 1:size(nuis,2)
+%                     matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
+%                     matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).name  = mat2str(nNuis);
+%                 end
                 %
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi               = {''};
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi_reg           = {''};
@@ -657,9 +707,10 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs                  = self.derivatives;%we have [0 0], [ 1 0] or [ 1 1] for 1, 2, or 3 regressors.
             matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
-            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
+%             matlabbatch{1}.spm.stats.fmri_spec.mthresh
+%             = -Inf;   %it was uncommented in Selim version
             matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
-            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
+            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'AR(1)';%'none' was selim setting;
             %estimation
             matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spm};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
@@ -667,8 +718,9 @@ classdef Subject < Project
             %
             %normalize the beta images right away
             beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
+            self.VolumeSmooth(beta_images);%('s_' will be added)       
             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
-            self.VolumeSmooth(beta_images);%('s_' will be added)         
+
         end
         function estContrast(self,nrun,model_num)
             nuis                  = self.get_param_motion(1);
@@ -699,5 +751,123 @@ classdef Subject < Project
             self.VolumeNormalize(con_images);%normalize them ('w_' will be added)
             self.VolumeSmooth(con_images);%('s_' will be added)   
         end
-     end
+        function analysis_spm_firstlevel(self,nrun,model_num)            
+            %run the model MODEL_NUM for data in NRUN.
+            %NRUN can be a vector, but then care has to be taken that
+            %model_num is correctly set for different runs.
+            
+            %set spm dir: saves always to run1
+            spm_dir  = self.dir_spmmat(nrun(1),model_num);
+            path_spm = self.path_spmmat(nrun(1),model_num);%stuff is always saved to the first run.
+            if exist(spm_dir)
+                rmdir(spm_dir,'s');
+            end
+            mkdir(spm_dir);               
+            matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
+            matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'secs'; %'scans';%more robust
+            matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
+            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
+            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
+            
+            for session = nrun
+                %load files using ...,1, ....,2 format
+                
+                dummy_scan = cellstr(spm_select('expand',self.path_epi(session,'r')));
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = dummy_scan(7:end); %use always the realigned data.
+                %load the onsets
+                dummy                                                   = load(self.path_model(session,model_num));
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
+                %load nuissance parameters
+                nuis                                                    = self.get_param_motion(session);
+                nuis                                                    = nuis(7:end,:);
+%                 nuis                                                    = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
+                for nNuis = 1:size(nuis,2)
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).name  = mat2str(nNuis);
+                end
+                %
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi               = {''};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi_reg           = {''};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = self.HParam;
+            end
+            matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
+            matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs                  = [0 0]; % self.derivatives;%we have [0 0], [ 1 0] or [ 1 1] for 1, 2, or 3 regressors.
+            matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
+            matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
+%             matlabbatch{1}.spm.stats.fmri_spec.mthresh
+%             = -Inf;  % was not commented %myself
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.;%add a proper mask here.
+            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';%'AR(1)';%'none';%'AR(1)'; % selim was 'none';  %myself
+            spm_jobman('run', matlabbatch);%create SPM file first
+            % now adapt for session effects.
+%             spm_fmri_concatenate(path_spm, [910 895 self.get_total_volumes(nrun)-910-895]);
+            
+            matlabbatch = [];
+            %estimation
+            matlabbatch{1}.spm.stats.fmri_est.spmmat            = {path_spm};
+            matlabbatch{1}.spm.stats.fmri_est.method.Classical  = 1;
+            spm_jobman('run', matlabbatch);
+            %                        
+%             matlabbatch = [];
+%             beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
+%             %normalize the beta images right away            
+%             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
+% %             self.VolumeSmooth(beta_images);%smooth the native images ('s_' will be added, resulting in 's_')
+%             beta_images = self.path_beta(nrun(1),model_num,'w_');%smooth the normalized images too.
+%             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
+            %%  
+        end
+        function image2surface(self,nrun,model_num)
+            beta_images = self.path_beta(nrun(1),model_num,'');
+            matlabbatch = [];
+            for co = 1:size(beta_images,1)
+                matlabbatch{co}.spm.tools.cat.stools.vol2surf.data_vol = cellstr(beta_images(co,:));
+                matlabbatch{co}.spm.tools.cat.stools.vol2surf.data_mesh_lh = cellstr(strrep(self.path_hr,'data.nii',sprintf('surf%slh.central.data.gii',filesep)));
+                matlabbatch{co}.spm.tools.cat.stools.vol2surf.sample = {'maxabs'};
+                matlabbatch{co}.spm.tools.cat.stools.vol2surf.interp = {'linear'};
+                matlabbatch{co}.spm.tools.cat.stools.vol2surf.datafieldname = '';
+                matlabbatch{co}.spm.tools.cat.stools.vol2surf.mapping.rel_mapping.class = 'GM';
+                matlabbatch{co}.spm.tools.cat.stools.vol2surf.mapping.rel_mapping.startpoint = 0;
+                matlabbatch{co}.spm.tools.cat.stools.vol2surf.mapping.rel_mapping.stepsize = 0.1;
+                matlabbatch{co}.spm.tools.cat.stools.vol2surf.mapping.rel_mapping.endpoint = 1;
+%                 matlabbatch{co}.spm.tools.cat.stools.vol2surftemp.data_vol = cellstr(beta_images(co,:));
+%                 matlabbatch{co}.spm.tools.cat.stools.vol2surftemp.data_mesh_lh = cellstr(strrep(self.dartel_templates(1),sprintf('templates_1.50mm%sTemplate_1_IXI555_MNI152.nii',filesep),sprintf('templates_surfaces%slh.central.Template_T1_IXI555_MNI152.gii',filesep)));
+%                 matlabbatch{co}.spm.tools.cat.stools.vol2surftemp.sample = {'maxabs'};
+%                 matlabbatch{co}.spm.tools.cat.stools.vol2surftemp.interp = {'linear'};
+%                 matlabbatch{co}.spm.tools.cat.stools.vol2surftemp.datafieldname = 'intensity';
+%                 matlabbatch{co}.spm.tools.cat.stools.vol2surftemp.mapping.rel_mapping.class = 'GM';
+%                 matlabbatch{co}.spm.tools.cat.stools.vol2surftemp.mapping.rel_mapping.startpoint = 0;
+%                 matlabbatch{co}.spm.tools.cat.stools.vol2surftemp.mapping.rel_mapping.stepsize = 0.1;
+%                 matlabbatch{co}.spm.tools.cat.stools.vol2surftemp.mapping.rel_mapping.endpoint = 1;
+            end
+            spm_jobman('run',matlabbatch);
+            mapped_surf  = spm_select('FPList', strrep(self.path_hr,'data.nii',sprintf('surf%s',filesep)), '^[lr]h.intensity.beta_*'); 
+            for i=1:size(mapped_surf,1)
+                [p,n,e] = fileparts(mapped_surf(i,:));
+                new_name = [p filesep strrep(n,'intensity_beta','beta') '.data'];
+%                 new_name = strrep(new_name,'.intensity.Template_T1_IXI555_MNI152_w_','.');
+                movefile(mapped_surf(i,:),new_name);
+            end
+        end
+%         function MoveFiles(self,nrun,model_num)
+%             mapped_surf = spm_select('FPList', self.dir_spmmat(nrun(1),model_num) , '^[lr]h.beta_*');
+%             for i=1:size(mapped_surf,1)
+%                 [new_name e p] = fileparts(mapped_surf(i,:));
+%                 new_name = strrep(new_name,'fancycarp',sprintf('fancycarp%ssurfaces',filesep));
+%                 if ~exist(new_name);   mkdir(new_name);  end
+%                 movefile(mapped_surf(i,:),[new_name filesep e p]);
+%             end
+%         end
+        function surface_normalize_smooth(self)
+            matlabbatch = [];
+            mapped_surf  = spm_select('FPList', strrep(self.path_hr,'data.nii',sprintf('surf%s',filesep)) , '^[lr]h.beta_.*');%cave only 10 and up!!
+            matlabbatch{1}.spm.tools.cat.stools.surfresamp.data_surf = cellstr(mapped_surf);
+            matlabbatch{1}.spm.tools.cat.stools.surfresamp.fwhm = 6;
+            matlabbatch{1}.spm.tools.cat.stools.surfresamp.nproc = 0;
+            matlabbatch{1}.spm.tools.cat.stools.surfresamp.lazy = 0;
+            spm_jobman('run',matlabbatch);
+        end
+        
+    end
 end
