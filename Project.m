@@ -81,7 +81,7 @@ classdef Project < handle
         path_stim             = sprintf('%sstim/ave.png',Project.path_project);
     end    
     properties (Hidden)
-        atlas2mask_threshold  = 15;%where ROI masks are computed, this threshold is used.        
+        atlas2mask_threshold  = 30;%where ROI masks are computed, this threshold is used.        
         %voxel selection
         selected_smoothing    = 8;%smoothing for selection of voxels;
         selected_model        = 4;
@@ -545,6 +545,42 @@ classdef Project < handle
             spacetime.d      = cat(4,spacetime1.d,spacetime2.d);
             spacetime.name   = [spacetime1.name spacetime2.name];                                                                                    
         end
+        function [spacetime_rsa] = getgroup_bold_spacetime_rsa(self,ngroup,rois);
+                   
+            smoothme= 1;
+            sk      = self.selected_smoothing;                            
+            list    = self.get_selected_subjects(ngroup,1).list;            
+            %%
+            betas                                                 = reshape(1:715,65,11)';
+            betas(:,[Project.mbi_oddball Project.mbi_transition]) = [];
+            betas(4,self.ucs_vector == 1)                         = betas(9,self.ucs_vector == 1);
+            betas(9:11,:)                                         = [];
+            %% 
+            roic = 0;
+            for roi = rois
+                roic    = roic + 1;
+                R       = ROI('roi_based',roi,'chrf_0_0_mumfordian',0,betas(:)',list,sk);
+                %% rearrange
+                data_ori = R.evoked_pattern;
+                data_ori = reshape(data_ori,[size(data_ori,1) 59 8]);%[voxel mbi condition];
+                %% slight smoothing
+                if smoothme
+                    kernel = [.5 1 .5 ];
+                    kernel = kernel./sum(kernel);
+                    for vox = 1:size(data_ori,1)
+                        dummy             = squeeze(data_ori(vox,:,:));
+                        dummy             = Project.circconv2(dummy,kernel);
+                        data_ori(vox,:,:) = dummy;
+                    end
+                end
+                %% get the similarity matrix for each mbi, same representation as the spacetime matrices
+                for N = 1:size(data_ori,2)
+                    data                        = squeeze(data_ori(:,N,:));
+                    spacetime_rsa.d(N,:,roic)   = squareform_force(corr(data));
+                end
+                spacetime_rsa.name{roic} = R.name;
+            end
+        end        
         function [spacetime]     = getgroup_bold_spacetime(self,ngroup,clean,zsc,bc)
             %spacetime  = getgroup_bold_spacetime(self,ngroup,clean)
             % GROUP is fed to get_selected_subjects.
@@ -1024,9 +1060,8 @@ classdef Project < handle
                 end
             end
             
-        end
-        
-        function [pmod names] = get_zernike(self)
+        end        
+        function [pmod names]    = get_zernike(self)
             %Zernike polynomials
             %%
             total = 21;
@@ -1047,8 +1082,7 @@ classdef Project < handle
                 end
             end            
             
-        end
-        
+        end        
         function [coors]         = get_selected_coordinates(self)
             %this method simply returns the coordinates of voxels that are
             %selected. This is not supposed to change very often and stay
@@ -1074,7 +1108,7 @@ classdef Project < handle
             ucs(Project.mbi_ucs)                                = 1;
             ucs([Project.mbi_oddball Project.mbi_transition])   = [];
         end
-        function [out2]          =spacetime2correlation(self,out)
+        function [out2]          = spacetime2correlation(self,out)
             %computes correlation between spacetime pixels and
             %end-experiment behavioral measures.
                 param = self.getgroup_all_param;
@@ -1092,8 +1126,7 @@ classdef Project < handle
                         end
                     end
                 end
-        end
-           
+        end           
         function count           = get_subject_overlap(self)
             count = [];
             for ns = 1:4
@@ -2096,7 +2129,7 @@ classdef Project < handle
             tarea = size(spacetime.d,4);
             [yy xx] = GetSubplotNumber(tarea);
             
-            [d u] = GetColorMapLimits(spacetime.d(:),.1);
+            [d u] = GetColorMapLimits(spacetime.d(:),2);
             for narea = 1:tarea;
                 subplot(yy,xx,narea);
                 if type == 1
@@ -2110,7 +2143,7 @@ classdef Project < handle
                 elseif type == 2
                     kernel   = make_gaussian2D(11,7,6,2.5,6,4);
                     kernel                   = kernel./sum(kernel(:));
-                    contourf(Project.circconv2( mean(spacetime.d(:,:,:,narea),3),kernel),4,'color','none');
+                    contourf((Project.circconv2( mean(spacetime.d(:,:,:,narea),3),kernel)),4,'color','none');
                     colorbar;
                     hold on
                     axis xy;
@@ -2138,6 +2171,45 @@ classdef Project < handle
                 end                
                 title(spacetime.name{narea},'interpreter','none');
             end
+        end
+        function plot_spacetime_rsa(self,ngroup,area)
+            %plots for a given area the spacetime profile next to its area
+            rsa                           = self.getgroup_bold_spacetime_rsa(ngroup,area);
+            rsa.d(self.ucs_vector == 1,:) = [];%clean the thing from R presence
+            %%
+            ndimen   = 1;%dimensionality of the MDS analysis            
+            timebins = reshape(5:46,14,3);%time bins for averaging the RSA
+            figure;
+            set(gcf,'position',[1992         454        1448         614]);
+            colors = GetFearGenColors;
+            %%
+            c        = 0;
+            for N = timebins;
+                c    = c+1;
+                data = squeeze(mean(rsa.d(N,:,:),1));
+                subplot(3,size(timebins,2),c);
+                imagesc( CancelDiagonals(squareform_force(data),NaN));;colorbar
+                title(sprintf('time bin %02d',c));
+                axis square;
+                axis off;                
+                subplot(3,size(timebins,2),c+size(timebins,2));
+                y = cmdscale(1-data,1);
+                Project.plot_bar(-135:45:180,y);
+                subplot(3,size(timebins,2),c+size(timebins,2)*2);
+                y = cmdscale(1-data,2);                
+                for nface = 1:8;
+                    plot(y(nface,1),y(nface,2),'.','color',colors(nface,:),'markersize',50);
+                    hold on;
+                    xlim([-1 1]);
+                    ylim([-1 1]);
+                end
+                box off;                
+                
+                hold off;
+                axis square;
+                drawnow;
+            end
+            supertitle(rsa.name,1,'interpreter','none');                        
         end
         function [leafOrder]=plot_spacetime_dendrogram(self,spacetime)
             
