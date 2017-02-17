@@ -260,8 +260,13 @@ classdef Tuning < handle
             %as well as d
             % d  = 0.02;
             %out      = amp.*exp(-tau*(x.^2)/2) - amp*sqrt(2*pi/tau)./d./XT;
-            
-            out      = amp.*exp(-(x./sd).^2/2) - amp*sqrt(2*pi*sd.^2)./d./XT;
-        end
+            x   = x(:)';
+            sd  = sd(:);
+            amp = amp(:);
+            sd  = repmat(sd, [1 length(x)]);
+            amp = repmat(amp,[1 length(x)]);
+            x   = repmat(x,  [length(sd) 1]);
+            out = amp.*exp(-(x./sd).^2/2) - amp.*sqrt(2*pi*sd.^2)./d./XT;
+        end               
     end
 end
