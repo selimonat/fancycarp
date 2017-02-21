@@ -66,19 +66,10 @@ classdef Subject < Project
             self.ConvertDicom(self.dir_hr);
             files       = spm_select('FPListRec',self.dir_hr,'^sMR');
             if ~isempty(files)
-                movefile(files,regexprep(files,sprintf('%ssMR.*$',filesep),sprintf('%sdata.nii',filesep)));%rename it to data.nii
+                movefile(files,regexprep(files,sprintf('%s%ssMR.*$',filesep,filesep),sprintf('%s%sdata.nii',filesep,filesep)));%rename it to data.nii
             end
         end
-        function p          = get_paradigm(self,nrun)
-            %will load the paradigm file saved during your psychophysics
-            %session.
-            filename = self.path_data(nrun,'stimulation');
-            p = [];
-            if exist(filename)
-                p = load(filename);
-                p = p.p;                
-            end
-        end 
+       
         function get_epi(self)
             %Will dump all DICOMS based on Sessions entered in the
             %Project object. trio_folders are folders in the dicom server,
@@ -101,22 +92,7 @@ classdef Subject < Project
             end
             
         end
-        function rating = get.ratings(self)
-            %returns the CS+-aligned ratings for all the runs
-            for run = 1:self.total_run;%don't count the first run
-                if isfield(self.paradigm{run}.out,'rating')
-                    if ~isempty(self.paradigm{run});
-                        rating(run).y      = self.paradigm{run}.out.rating';
-                        rating(run).y      = circshift(rating.y,[1 4-self.csp ]);
-                        rating(run).x      = repmat([-135:45:180],size(self.paradigm{run}.out.rating,2),1);
-                        rating(run).ids    = repmat(self.id,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
-                        rating(run).y_mean = mean(rating.y);
-                    else
-                        fprintf('No rating present for this subject and run (%d) \n',nr);
-                    end
-                end
-            end
-        end
+      
         function out    = get_scr(self,run,cond)
             if nargin < 3
                 cond=1:8;
@@ -155,17 +131,8 @@ classdef Subject < Project
             L(L(:,1) > last_scan_time,:)  = [];
             L(:,1)          = L(:,1) - first_scan_time;
         end
-        function out    = get.pmf(self)
-            %will load the raw pmf data.
-            dummy    = load(self.path_data(2,'stimulation'));
-            out      = dummy.p.psi;
-        end 
-        function out    = get.get_param_pmf(self)
-            %returns the parameters of the pmf fit (condition x parameter);
-            out      = self.fit_pmf;
-            out      = [out.params(1,:),out.params(2,:)];
-            out      = array2table([out self.id ],'variablenames',[self.pmf_variablenames 'subject_id']);
-        end         
+       
+        
         function o      = get_param_motion(self,run)
             %will load the realignment parameters, of course you have to
             %realign the EPIs first.
@@ -754,34 +721,17 @@ classdef Subject < Project
         end
     end
     methods %(fmri analysis)
-        function [stim_scanunit,stim_ids]=StimTime2ScanUnit(self,run)
+        function [stim_scanunit,stim_ids,stim_durations]=StimTime2ScanUnit(self,run)
             %will return stim onsets in units of scan. Will check the Log
             %for stim onsets, it will discard those trials occuring outside
             %the first and last scans based on their time-stamps. In
             %FearAmy, we have the reference measurements, i.e. scanner
             %stops for a while during the experiment. Those onsets are also
             %excluded (if the next scan unit is more than the TR far away).
-            
-            L               = self.get_log(run);
-            scan_times      = L(L(:,2) == 0,1);%find all scan events and get their times            
-            scan_id         = 1:length(scan_times);%label pulses with increasing numbers
-            last_scan_time  = max(scan_times);%time of the last
-            first_scan_time = min(scan_times);
-            %collect info on stim onsets and discard those not occurring
-            %during scanning.
-            stim_times      = L(find(L(:,2)==3),1)';            
-            valid           = stim_times<last_scan_time & stim_times>first_scan_time;%i.e. during scanning
-            if sum(valid) ~= length(stim_times)
-                keyboard
-            end            
-            %%     
-            stim_ids        = L(find(L(:,2)==3),3)';
-            stim_scanunit   = stim_ids;
-            trial           = 0;
-            for stim_time = stim_times;%run stim by stim          
-                trial                = trial + 1;
-                stim_scanunit(trial) = floor(stim_time./self.TR)+1 + mod(stim_time./self.TR,1);                
-            end            
+            load C:\Projects\ConcZoom\RawData\midlevel\TimingInfo.mat 
+            stim_scanunit=TimingInfo.Onsets{self.id,run};
+            stim_ids=TimingInfo.CondNames{self.id,run};
+            stim_durations=TimingInfo.Durations{self.id,run};           
         end
         function FitFIR(self,nrun,model_num)
             %run the model MODEL_NUM for data in NRUN.
@@ -837,13 +787,14 @@ classdef Subject < Project
             for run = runs                
                 model_path = self.path_model(run,model_num);
                 if ~exist(fileparts(model_path));mkdir(fileparts(model_path));end
-                [scan,id]  = self.StimTime2ScanUnit(run);
+                [scan,id,durs]  = self.StimTime2ScanUnit(run);
+                durs(durs<5)=0; % use duration 0 for short durations blocks
                 counter    = 0;
-                for current_condition = unique(id)
+                for current_condition = unique(id,'stable')';
                     counter                = counter + 1;
-                    cond(counter).name     = mat2str(current_condition);
-                    cond(counter).onset    = scan(id == current_condition);
-                    cond(counter).duration = zeros(1,length(cond(counter).onset));
+                    cond(counter).name     = current_condition{1};
+                    cond(counter).onset    = scan(ismember(id,current_condition{1}));
+                    cond(counter).duration = durs(ismember(id,current_condition{1}));                    
                     cond(counter).tmod     = 0;
                     cond(counter).pmod     = struct('name',{},'param',{},'poly',{});
                 end

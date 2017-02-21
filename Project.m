@@ -49,15 +49,15 @@ classdef Project < handle
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
 
-        path_project          = '/home/onat/Desktop/arjen/';        
-        path_spm              = '/home/onat/Documents/Code/Matlab/spm12-6685/';        
+        path_project          = 'C:\Projects\ConcZoom\RawData\';        
+        path_spm              = 'C:\Toolboxes\spm12-6685\';                
         trio_sessions         = {   '' };
         dicom_serie_selector  = {  [1:8] };
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
         dicom2run             = repmat({[1 2 3]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
         data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};%if you need another folder, do it here.
-        TR                    = 0.99;                
+        TR                    = 2;                
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
         smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method
@@ -65,9 +65,9 @@ classdef Project < handle
         path_smr              = sprintf('%s%ssmrReader%s',fileparts(which('Project')),filesep,filesep);%path to .SMR importing files in the fancycarp toolbox.
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
-        tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.         
-        path_second_level     = sprintf('%sspm/',Project.path_project);%where the second level results has to be stored
-        path_atlas            = sprintf('%satlas/data.nii',Project.path_project);%the location of the atlas
+        tpm_dir               = sprintf('%stpm%s',Project.path_spm,filesep); %path to the TPM images, needed by segment.         
+        path_second_level     = sprintf('%sspm%s',Project.path_project,filesep);%where the second level results has to be stored
+        path_atlas            = sprintf('%satlas%sdata.nii',Project.path_project,filesep);%the location of the atlas
 		current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
     end    
