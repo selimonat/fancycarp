@@ -802,8 +802,7 @@ classdef Subject < Project
                 %%%%%%%%%%%%%%%%%%%%%%
             end
         end
-        function FitHRF(self,nrun,model_num)
-
+        function                                     analysis_spm_firstlevel(self,nrun,model_num)            
             %run the model MODEL_NUM for data in NRUN.
             %NRUN can be a vector, but then care has to be taken that
             %model_num is correctly set for different runs.
@@ -812,8 +811,7 @@ classdef Subject < Project
             spm_dir  = self.dir_spmmat(nrun(1),model_num);
             path_spm = self.path_spmmat(nrun(1),model_num);%stuff is always saved to the first run.
             if ~exist(self.path_spm);mkdir(spm_dir);end
-
-            
+                        
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
             matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
             matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
@@ -822,7 +820,7 @@ classdef Subject < Project
             
             for session = nrun
                 %load files using ...,1, ....,2 format
-
+                
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(spm_select('expand',self.path_epi(session,'r')));%use always the realigned data.
                 %load the onsets
                 dummy                                                   = load(self.path_model(session,model_num));
@@ -838,14 +836,14 @@ classdef Subject < Project
                 %
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi               = {''};
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi_reg           = {''};
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = 128;
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = self.HParam;
             end
             matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
             matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs                  = self.derivatives;%we have [0 0], [ 1 0] or [ 1 1] for 1, 2, or 3 regressors.
             matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
-            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.;%add a proper mask here.
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
             %estimation
             matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spm};
@@ -854,9 +852,12 @@ classdef Subject < Project
             %
             %normalize the beta images right away
             beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
+            %normalize the beta images right away            
             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
-            beta_images = self.path_beta(nrun(1),model_num,'w_');%smooth the normalized images.
-            self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
+%             self.VolumeSmooth(beta_images);%smooth the native images ('s_' will be added, resulting in 's_')
+            beta_images = self.path_beta(nrun(1),model_num,'w_');%smooth the normalized images too.
+            self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
+            %%                        
         end
      end
 end
