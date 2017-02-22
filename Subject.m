@@ -340,7 +340,7 @@ classdef Subject < Project
                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
                                                                               78 76 85];
-                matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [3 3 3];
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'w_';
             end
@@ -856,8 +856,35 @@ classdef Subject < Project
             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
 %             self.VolumeSmooth(beta_images);%smooth the native images ('s_' will be added, resulting in 's_')
             beta_images = self.path_beta(nrun(1),model_num,'w_');%smooth the normalized images too.
-            self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
+            %self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
             %%                        
+        end
+        function                                     analysis_spm_tcontrast(self,nrun,model_num)
+            beta_indices=[];
+            NrRuns=8;
+            for run=1:NrRuns
+                beta_indices=[beta_indices [1:96]+((96+26)*(run-1))];
+            end
+            %beta_indices=1:5;
+            %will compute spmf images based on beta images..            
+            load(self.path_spmmat(nrun,model_num));%Get the SPM from first-level related to MODEL_NUM
+            tbeta       = length(beta_indices);%take only BETAS_INDICES, we dont want to analyze motion covariates etc.
+            con         = 0;
+            matlabbatch = [];
+            for n = beta_indices(:)'%create a t-contrast with all the required beta images
+                con                                                        = con + 1;%1
+                matlabbatch{1}.spm.stats.con.spmmat                        = {self.path_spmmat(nrun,model_num)};
+                matlabbatch{1}.spm.stats.con.consess{con}.tcon.name        = sprintf('%03d',n);
+                matlabbatch{1}.spm.stats.con.consess{con}.tcon.weights     = [circshift([1 zeros(1,tbeta-1)],[0 n-1])]';
+                matlabbatch{1}.spm.stats.con.consess{con}.tcon.sessrep     = 'none';
+                matlabbatch{1}.spm.stats.con.delete                        = 1;
+            end
+            spm_jobman('run', matlabbatch);%this will create a lot of spmF_ images.            
+            spmt_images = self.path_contrast(nrun,model_num,'','T');
+            self.VolumeNormalize(spmt_images);%normalize them ('w_' will be added)
+            %self.VolumeSmooth(spmt_images);%smooth the native images ('s_' will be added, resulting in 's_')
+            %spmt_images = self.path_contrast(nrun,model_num,'w_','T');
+            %self.VolumeSmooth(spmt_images);%('s_' will be added, resulting in 's_w_')
         end
      end
 end
