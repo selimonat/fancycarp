@@ -2961,29 +2961,6 @@ classdef Subject < Project
             end
             
         end        
- 		function                                     analysis_spm_tcontrast(self,nrun,model_num,beta_indices)
-            %experimental
-            %will compute spmf images based on beta images..            
-            load(self.path_spmmat(nrun,model_num));%Get the SPM from first-level related to MODEL_NUM
-            tbeta       = length(beta_indices);%take only BETAS_INDICES, we dont want to analyze motion covariates etc.
-            con         = 0;
-            matlabbatch = [];
-            for n = beta_indices(:)'%create a t-contrast with all the required beta images
-                con                                                        = con + 1;%1
-                matlabbatch{1}.spm.stats.con.spmmat                        = {self.path_spmmat(nrun,model_num)};
-                matlabbatch{1}.spm.stats.con.consess{con}.tcon.name        = sprintf('%03d',n);
-                matlabbatch{1}.spm.stats.con.consess{con}.tcon.weights     = [circshift([1 zeros(1,tbeta-1)],[0 n-1])]';
-                matlabbatch{1}.spm.stats.con.consess{con}.tcon.sessrep     = 'none';
-                matlabbatch{1}.spm.stats.con.delete                        = 1;
-            end
-            spm_jobman('run', matlabbatch);%this will create a lot of spmF_ images.            
-            spmt_images = self.path_contrast(nrun,model_num,'','T');
-            self.VolumeNormalize(spmt_images);%normalize them ('w_' will be added)
-            %self.VolumeSmooth(spmt_images);%smooth the native images ('s_' will be added, resulting in 's_')
-            %spmt_images = self.path_contrast(nrun,model_num,'w_','T');
-            %self.VolumeSmooth(spmt_images);%('s_' will be added, resulting in 's_w_')
-        end
-
         function writename = brainbehavior_analysis(self,sk)
             
             
