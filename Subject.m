@@ -1524,11 +1524,13 @@ classdef Subject < Project
         end        
         function plot_rating(self)
             
+            criterium = 5;%subject_validity criteria, see get_selected_subjects
+            
             %plot subjects rating as a bar plot.
             self.plot_bar(mean(self.rating.x), self.rating.y_mean,self.rating.y_sem);%plot the data            
             
             %if the fit is better than flat line, paint accordingly.
-            if  ~ismember(self.id,self.get_selected_subjects(1).list)%plot simply a blue line if the fit is not significant.
+            if  ~ismember(self.id,self.get_selected_subjects(criterium).list)%plot simply a blue line if the fit is not significant.
                 PlotTransparentLine(self.fit_rating.x_hd,repmat(mean(self.rating.y(:)),100,1),.5,'k','linewidth',2.5);
             else
                 PlotTransparentLine(self.fit_rating.x_hd(:),self.fit_rating.y_hd(:),.5,'k','linewidth',2.5);%this is the fit.
@@ -1582,7 +1584,7 @@ classdef Subject < Project
             hold on;
             %if the fit is better than flat line, paint accordingly.
             for P = 1:partition
-                if ~ismember(self.id,self.get_selected_subjects(3).list)%plot simply a blue line if the fit is not significant.
+                if ~ismember(self.id,self.get_selected_subjects(6).list)%plot simply a blue line if the fit is not significant.
                     PlotTransparentLine(self.fit_facecircle(1).x_hd , repmat(mean(out.countw(P,:)),100,1),.35,'k','linewidth',2.5);
                 else
                     PlotTransparentLine(self.fit_facecircle(1).x_hd , self.fit_facecircle(partition).y_hd(P,:)',.35,'k','linewidth',2.5);%this is the fit.
@@ -2438,12 +2440,12 @@ classdef Subject < Project
             figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));hold on;
             figure(1);;plot(stim_id,mbi_id,'ro','markersize',10);title(mat2str(self.id));hold off
             %%
-            [pmodmat names] = self.get_chebyshev(5,6);            
+            [pmodmat names] = self.get_chebyshev(5,3);            
             %%
             pmod    = NaN(length(stim_id),size(pmodmat,3));
             for ntrial = 1:length(stim_id)
                 if stim_id(ntrial) < 1000
-                    pmod(ntrial,:) = squeeze(pmodmat(mbi_id(ntrial),mod(stim_id(ntrial)./45+4-1,8)+1,:));
+                    pmod(ntrial,:) = squeeze(pmodmat(mod(stim_id(ntrial)./45+4-1,8)+1,mbi_id(ntrial),:));
                 end
             end
             %                        
