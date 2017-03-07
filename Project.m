@@ -124,36 +124,35 @@ classdef Project < handle
                 cprintf([1 0 0],'Correcting project path...\n');
                 o(end+1) = filesep;
             end
-        end        
+        end
     end
     methods (Static)
-        
-        function plot_bar(Y)
-            % Fear tuning are stored in columns.
+        function plot_bar(X,Y,SEM)
+            % input vector of 8 faces in Y, angles in X, and SEM. All
+            % vectors of 1x8;
+            %%
             cmap  = GetFearGenColors;
-            tcol = size(Y,2);
-            tbar = size(Y,1);
-            X    = linspace(-135,180,8)';
-            X    = repmat(X,1,tcol) + repmat([0:360:360*(tcol-1)],8,1);
+            tbar  = 8;
             for i = 1:tbar
-                h(i)    = bar(i,Y(i),.9,'facecolor',cmap(i,:),'edgecolor','none','facealpha',.8);
+                h(i)    = bar(X(i),Y(i),40,'facecolor',cmap(i,:),'edgecolor','none','facealpha',.8);
                 hold on;
             end
-            hold off
-            %%                                    
-            set(gca,'xtick',1:8,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
+            %%
+            hold on;
+            if nargin == 3
+                errorbar(X,Y,SEM,'ko');%add error bars
+            end
+            
+            %%
+            set(gca,'xtick',X,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
             box off;
             set(gca,'color','none');
             xlim([0 tbar+1])
-            drawnow;            
+            drawnow;
             axis tight;box off;axis square;drawnow;alpha(.5);
-            if tcol > 1
-                mx = max(X)
-                for ncol = 1:tcol
-                    plot(repmat(mx(ncol)+45/2,1,2),ylim,'k-.')
-                end
-            end                      
+            
         end
+        
         
     end
     
