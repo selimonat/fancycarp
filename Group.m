@@ -161,7 +161,7 @@ classdef Group < Project
             ratings_sd = ratings_sd(:,:,phases);
         end
         %%
-        function out = getSCR(self,varargin)
+        function [out outz outraw singletrials] = getSCR(self,varargin)
             valid = [];
             data = NaN(8*3,length(self.ids));
             for sc = 1:length(self.ids)
@@ -169,7 +169,7 @@ classdef Group < Project
                     if ~isempty(varargin)
                         data(:,sc) = self.subject{sc}.scr.ledalab_summary(varargin{:});
                     else
-                        data(:,sc) = self.subject{sc}.scr.ledalab_summary; %take default timewindow defined in SCR object
+                        data(:,sc) = self.subject{sc}.scr.ledalab_summary; %takes default timewindow defined in SCR object
                     end
                     valid = [valid sc];
                 catch
@@ -183,23 +183,20 @@ classdef Group < Project
         end
         
         function [out, tags] = parameterMat(self)
-            tags = {'csp_before_alpha' 'csp_after_alpha' 'csn_before_alpha' 'csn_after_alpha' ...
-                'csp_before_beta' 'csp_after_beta' 'csn_before_beta' 'csn_after_beta' ...
-                'csp_improvmt' 'csn_improvmnt' ...
-                'csp_imprvmtn_cted' ...
-                'kappa_cond' ...
+            tags = {'kappa_cond' ...
                 'kappa_test' ...
                 'kapp_SI'...
                 'mu_cond'...
                 'mu_test'...
-                'initial_alpha'...
                 'fwhm_cond'...
                 'fwhm_test'...
                 'fwhm_SI'...
                 };
             out = [];
             for s = 1:length(self.ids);
-                out = [out;self.subject{s}.parameterMat];
+                a = self.subject{s}.get_fit('rating',3).params;
+                b = self.subject{s}.get_fit('rating',4).params;
+                out = [out; a(2) b(2) b(2)-a(2) a(3) b(3) vM2FWHM(a(2)) vM2FWHM(b(2))  vM2FWHM(a(2))-vM2FWHM(b(2))];
             end
         end
         function PlotRatingFit(self,subject)%this is a single subject option...
@@ -264,13 +261,13 @@ classdef Group < Project
         function fit_results = PlotRatingResults(self)%plots conditioning and test, in the usual bar colors. With GroupFit Gauss/Mises Curve visible
             %%
             ratings = self.getRatings(2:4);
-            f=figure(1);
+            f=figure;
             for n = 1:3
                 subplot(1,3,n);
-                h = bar(-135:45:180,mean(ratings(:,:,n)));
+                h = bar(-135:45:180,mean(ratings(:,:,n),1));
                 SetFearGenBarColors(h);
                 hold on;
-                errorbar(-135:45:180,mean(ratings(:,:,n)),std(ratings(:,:,n))./sqrt(size(ratings,1)),'k.','LineWidth',2);
+                errorbar(-135:45:180,mean(ratings(:,:,n),1),std(ratings(:,:,n),0,1)./sqrt(size(ratings,1)),'k.','LineWidth',2);
                 xlim([-160 200]);
                 box off
                 set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
@@ -283,6 +280,7 @@ classdef Group < Project
                 fit_results(n) = t.groupfit;
                 figure(1);
                 plot(x,t.groupfit.fitfun(x,t.groupfit.Est(:,1:end-1)) ,'k','linewidth',2);
+                axis square
             end
             subplot(1,3,1);title('Base');
             subplot(1,3,2);title('Cond');
@@ -318,6 +316,7 @@ classdef Group < Project
         end
         function fit_results = PlotResults(self) %plots both ratings and scr
             ratings = self.getRatings(2:4);
+            scr = self.getSCR;
             f=figure(1);
             for n = 1:3
                 subplot(2,3,n);
@@ -338,10 +337,14 @@ classdef Group < Project
                 figure(1);
                 plot(x,t.groupfit.fitfun(x,t.groupfit.Est(:,1:end-1)) ,'k','linewidth',2);
                 ylim([0 10]);
+                axis square
                 %SCR for this phase
-                out = self.getSCR;
-                M = mean(out.y);
-                S = std(out.y);
+                %correct for nans resulting from invalid scr
+                scr.y = scr.y(~isnan(scr.y(:,1)),:);
+                scr.x = scr.x(~isnan(scr.y(:,1)),:);
+                scr.ids = scr.ids(~isnan(scr.y(:,1)));
+                M = mean(scr.y);
+                S = std(scr.y);
                 figure(1);
                 ind = n-1;
                 subplot(2,3,n+3);
@@ -352,8 +355,8 @@ classdef Group < Project
                 box off
                 set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
                 if n~=2 %cond can't be fitted
-                    dummy.y = out.y(:,[1:8]+8*ind);
-                    dummy.x = out.x(:,[1:8]+8*ind);
+                    dummy.y = scr.y(:,[1:8]+8*ind);
+                    dummy.x = scr.x(:,[1:8]+8*ind);
                     dummy.ids = self.ids;
                     t = Tuning(dummy);
                     t.GroupFit(8);
@@ -367,7 +370,7 @@ classdef Group < Project
             subplot(2,3,1);title('Base');
             subplot(2,3,2);title('Cond');
             subplot(2,3,3);title('Test');
-            s = supertitle(sprintf('Ratings results from n = %g subjects.',length(self.ids)));
+            s = supertitle(sprintf('Results from n = %g / %g (Rating/SCR) subjects.',length(self.ids),sum(~isnan(scr.y(:,1)))));
             set(s,'FontSize',14);
         end
         
@@ -450,5 +453,6 @@ classdef Group < Project
                 end
             end
         end
+       
     end
 end
