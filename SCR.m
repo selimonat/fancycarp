@@ -3,6 +3,7 @@ classdef SCR < handle
     properties (Constant = true, Hidden)
         default_run = 4;%at which run the scr data is located.
         default_timeframe = 2.5:5.5;
+        logtransform = 1;
     end
     properties (Hidden)
         ledalab_defaults      = {'open', 'mat','downsample', 5,'smooth',{'gauss' '100'}, 'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1 };%
@@ -504,7 +505,6 @@ classdef SCR < handle
             end
         end
         function [out_z, out_raw, out_singletrials] = ledalab_summary(self,varargin)
-            
             self.cut(self.findphase('base$'):self.findphase('test$'));
             self.run_ledalab;%collects the ledalab struct
             
@@ -519,16 +519,20 @@ classdef SCR < handle
                 'cond_0180','cond_0360',...
                 'test_0045','test_0090','test_0135','test_0180','test_0225','test_0270','test_0315','test_0360'};
             index  = [1:8 12 16 17:24];
-            out_singletrials = nan(max(self.ledalab.n),length(self.ledalab.n));
+            out_singletrials = nan(max(self.ledalab.n),length(self.ledalab.n)); %max(ledalab.n) is 78 nulltrials in testphase.. so there will be a lot of nans.
             for c = 1:length(condcollector)
                 timey                     = (self.ledalab.x(:,1) >= min(timeframe))&(self.ledalab.x(:,1) <= max(timeframe));%time window
                 condy                     = strcmp(condcollector{c},self.ledalab.condnames)';
-                dummy                     = mean(self.ledalab.y(timey,condy));%take average over time
+                dummy                     = mean(self.ledalab.y(timey,condy));%take average over time window
+                if self.logtransform == 1
+                    dummy = log10(1+dummy);
+                    dummy(imag(dummy)>0) = nan; %get rid of imaginary data where deconvolution is too negative.
+                end
                 out_singletrials(1:length(dummy),index(c))         = dummy(:);
-                out_raw(index(c),1)       = mean(dummy);%take average across trials                
+                out_raw(index(c),1)       = nanmean(dummy);%take average across trials, leaves one value per cond per subj.                
                 %out_rawsd(index(c),1)     = std(dummy)./sqrt(length(dummy));
             end
-            out_z = nanzscore(out_raw);            
+            out_z = nanzscore(out_raw);     %zscored within subject       
         end
         
     end
