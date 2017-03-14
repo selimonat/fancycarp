@@ -28,7 +28,6 @@ classdef Subject < Project
                 end
                 s.csp = s.paradigm{s.default_run}.stim.cs_plus;
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
-                
                 s.scr            = SCR(s);
                                 
             else
@@ -48,7 +47,6 @@ classdef Subject < Project
             if self.scr.ok;                
                 indices                         = {'' [1:8] [9:16] [17:24]};
                 [out_z, out_raw, single_trials] = self.scr.ledalab_summary;
-                
                 %scr.y            = out_raw(indices{run});
                 scr.y    = single_trials(:,indices{run});                
                 scr.x    = repmat(scr.x,[size(scr.y,1) 1]);
@@ -115,9 +113,9 @@ classdef Subject < Project
                     t.visualization = 1;
                     t.gridsize      = 10;
                     fprintf('Phase %g... ',ph);                    
-                    t.SingleSubjectFit(8);
+                    t.SingleSubjectFit(self.fit_method);
                     fit_results     = t.fit_results;
-                    save(phpath,'fit_results');
+%                     save(phpath,'fit_results');
 %                 else
 %                     fit_results.
                 end
