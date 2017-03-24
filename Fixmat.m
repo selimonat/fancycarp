@@ -468,6 +468,48 @@ classdef Fixmat < Project
 %                         thincolorbar('vert');
 colorbar
         end
+        function contourplot(obj,varargin)
+            v = {};
+            for n = 1:8
+                v{n} = {'file',n};
+            end
+            obj.getmaps(v{:})
+            M = obj.maps;
+           clf
+           nsp     = obj.subplot_number;
+           if nargin > 1
+               levels = logspace(0,1,varargin{1})./10.*range(Vectorize(mean(obj.maps,3)));
+           else
+               levels = logspace(0,1,4)./10.*range(Vectorize(mean(obj.maps,3)));
+           end
+            if nargin > 2
+                if length(varargin{2})==varargin{1}+1
+                    
+                alphas = varargin{2};
+                else
+                    warning('You did not provide enough alpha values for the given levels. Taking default (0:1 in equal steps)');
+                    alphas = linspace(0,1,varargin{1}+1);
+                end
+            else
+                alphas = linspace(0,1,varargin{1}+1);
+            end
+            for nc = 1:size(M,3)
+                h   = subplot(nsp(1),nsp(2),nc);
+                %plot the image;
+                bild = imread(strrep(obj.find_stim,'ave.bmp',sprintf('%02d.bmp',nc)));
+                bild    = bild( obj.rect(1):obj.rect(1)+obj.rect(3)-1,  obj.rect(2):obj.rect(2)+obj.rect(4)-1);
+                bild    = repmat(bild,[1 1 3]);
+                imagesc(obj.bincenters_x(501),obj.bincenters_y(501),bild);
+                hold on;
+                [~, conth]     = contourf(obj.bincenters_x(size(M,1)+1)-2,obj.bincenters_y(size(M,1)+1),M(:,:,nc),levels,'EdgeColor','none');
+                pause
+                 contourf_transparency(conth,alphas)
+                axis square
+                axis off
+                hold off
+            end
+            %                         thincolorbar('vert');
+        end
         function getmaps_split(obj,varargin)
             %will duplicate the number of varargin with odd and even trials
             c= 0;cc=0;
