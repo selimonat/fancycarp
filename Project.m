@@ -113,11 +113,11 @@ classdef Project < handle
         function o = get.path_project
             %
             if xor(isunix,ismac)
-                o = '/mnt/data/project_bdnf/data/';
+                o = '/mnt/data/project_FPSA_FearGen/data/';
             elseif ismac
-                o = '/Users/onat/Documents/project_bdnf/data/';
+                o = '/Users/onat/Documents/project_FPSA_FearGen/data/';
             else
-                o = 'C:\Users\Lea\Documents\Experiments\project_bdnf\data\';
+                o = 'C:\Users\Lea\Documents\Experiments\project_FPSA_FearGen\data\';
             end
             %add a filesep if necessary
             if ~strcmp(o(end),filesep)
@@ -134,7 +134,11 @@ classdef Project < handle
             cmap  = GetFearGenColors;
             tbar  = 8;
             for i = 1:tbar
-                h(i)    = bar(X(i),Y(i),40,'facecolor',cmap(i,:),'edgecolor','none','facealpha',.8);
+                try
+                    h(i)    = bar(X(i),Y(i),40,'facecolor',cmap(i,:),'edgecolor','none','facealpha',.8);
+                catch
+                    h(i)    = bar(X(i),Y(i),40,'facecolor',cmap(i,:),'edgecolor','none');
+                end
                 hold on;
             end
             %%
