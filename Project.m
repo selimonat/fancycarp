@@ -113,11 +113,11 @@ classdef Project < handle
         function o = get.path_project
             %
             if xor(isunix,ismac)
-                o = '/mnt/data/project_bdnf/data/';
+                o = '/mnt/data/project_FPSA_FearGen/data/';
             elseif ismac
-                o = '/Users/onat/Documents/project_bdnf/data/';
+                o = '/Users/onat/Documents/project_FPSA_FearGen/data/';
             else
-                o = 'C:\Users\Lea\Documents\Experiments\project_bdnf\data\';
+                o = 'C:\Users\Lea\Documents\Experiments\project_FPSA_FearGen\data\';
             end
             %add a filesep if necessary
             if ~strcmp(o(end),filesep)
