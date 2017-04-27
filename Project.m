@@ -38,7 +38,7 @@ classdef Project < handle
     %
     % Feel free to improve this help section.
     %
-    % 
+    % 7
     
     properties (Hidden, Constant)%adapt these properties for your project
         %All these properties MUST BE CORRECT and adapted to one owns
@@ -83,12 +83,12 @@ classdef Project < handle
     properties (Hidden)
         atlas2mask_threshold  = 30;%where ROI masks are computed, this threshold is used.        
         %voxel selection
-        selected_smoothing    = 8;%smoothing for selection of voxels;
-        selected_model        = 4;
-        selected_betas        = 1:6
-        selected_ngroup       = 3;
+        selected_smoothing    = 6;%smoothing for selection of voxels;
+        selected_model        = 3;%fmri model (see CreateModel)
+        selected_betas        = 1:4
+        selected_ngroup       = 1;
         %
-        selected_fitfun       = 8;%fixed gaussian (3), vonmises (8);
+        selected_fitfun       = 8;%fixed gaussian (3), vonmises (8);                
     end    
 	methods
         function DU         = SanityCheck(self,runs,measure,varargin)
@@ -380,7 +380,13 @@ classdef Project < handle
                     out             = out(i,:);
                 end
             end
-            
+            %%
+            for nss = [0 1 3]
+                t = [];
+                name = self.get_selected_subjects(nss).name;
+                t    = table(ismember(out.subject_id,self.get_selected_subjects(nss).list),out.subject_id,'variablenames',{ regexprep(name,'\d|_','') 'subject_id' });
+                out  = join(out,t);
+            end
         end
         function out             = getgroup_pmf_param(self)
             %collects the pmf parameters for all subjects in a table.
@@ -538,6 +544,7 @@ classdef Project < handle
         end        
         function [spacetime]     = getgroup_all_spacetime(self,ngroup,clean,zsc,bc)
             %returns condition x time matrices for NGROUP and smoothing kernel of 10.
+            %GROUP is fed to get_selected_subjects;
                                     
             [spacetime1]     = self.getgroup_bold_spacetime(ngroup,clean,zsc,bc);           
             [spacetime2]     = self.getgroup_scr_spacetime(ngroup,clean,zsc,bc);
@@ -592,12 +599,14 @@ classdef Project < handle
             sk      = self.selected_smoothing;                            
             list    = self.get_selected_subjects(ngroup,1).list;            
             % get coordinates
-            coors   = self.get_selected_coordinates;
+%             self.selected_ngroup = ngroup
+            coors   = self.get_selected_coordinates(ngroup);
             % get beta indices to be read
             betas   = reshape(1:715,65,11)';
             betas   = betas(1:11,:);
             %% collect                     
             R       = ROI('voxel_based',coors ,'chrf_0_0_mumfordian',0,betas(:)',list,sk);
+            R.name
             %% transform, rearrange etc.
             pattern = permute(reshape(permute(R.pattern,[2 3 1]),[11 65 size(R.pattern,3) size(R.pattern,1)]),[2 1 3 4]);size(pattern);
             name    = cellstr(R.name)';
@@ -712,8 +721,8 @@ classdef Project < handle
                     %
                     roi.name     = [roi.name current_name];
                     roi.prob     = [roi.prob -p(counter)];
-                    fprintf('ROI: %d percent chance for %s.' , roi.prob{end}, roi.name{end}(1:end-1));
-                    fprintf('\n');
+                    %fprintf('ROI: %d percent chance for %s.' , roi.prob{end}, roi.name{end}(1:end-1));
+                    %fprintf('\n');
                 end
             end
             %if at the end of the loop we are still poor, we say it
@@ -722,7 +731,7 @@ classdef Project < handle
                 roi.prob{1} = NaN;
             end
             
-            fprintf('\n\n');
+            %fprintf('\n\n');
         end
         function XYZmm           = get_XYZmmNormalized(self,mask_id)
             %Will return XYZ coordinates from ROI specified by MASK_INDEX
@@ -770,13 +779,15 @@ classdef Project < handle
             %INVERSION to invert the selection, i.e. use the unselected
             %subjects. LIST is the indices of subjects, NAME is the name of
             %the group, used to write folder names, identifying a given
-            %group of subjects. So dont get confused, when INVERSION is 0,
+            %group of subjects. So dont get confused, when INVERSION is 1,
             %you get the selected subjects (generaly performing better).
             cprintf([0 1 0],'Selecting subjects, must loop over once...\n');
             if nargin == 2
                 inversion = 1;%will select good subjects
             end
             borders = 1000;
+            funname{3} = 'Gau';
+            funname{8} = 'vM';
             if criteria == 0
                 sub.name = '00_all';
                 sub.list = self.subject_indices(:);
@@ -785,8 +796,10 @@ classdef Project < handle
                 %The data must be  described with a Gaussian curve better
                 %than null model +
                 %the amplitude must be positive +
-                %for vM models the center must be +/- 45 degrees.
-                sub.name   = '01_rating';
+                %depending on the fitfun value, this will select either a
+                %significant vM or Gaussian fits.
+                
+                sub.name = ['Rating_' funname{self.selected_fitfun} '_1'];
                 %
                 out        = self.getgroup_rating_param;%load the ratings of all subjects
                 if self.selected_fitfun == 8
@@ -797,9 +810,25 @@ classdef Project < handle
                 select     = select == inversion;
                 sub.list   = out.subject_id(select);%subject indices.
                 %
+            elseif     criteria == 11
+                %The data must be  described with a Gaussian curve better
+                %than null model                
+                %depending on the fitfun value, this will select either a
+                %significant vM or Gaussian fits.
+                
+                sub.name = ['Rating_' funname{self.selected_fitfun} '_0'];
+                %
+                out        = self.getgroup_rating_param;%load the ratings of all subjects
+                if self.selected_fitfun == 8
+                    select     = (out.rating_LL > -log10(.05))&(out.rating_mu > -borders)&(out.rating_mu < borders);%select based on tuning
+                else
+                    select     = (out.rating_LL > -log10(.05));
+                end
+                select     = select == inversion;
+                sub.list   = out.subject_id(select);%subject indices.                
             elseif criteria == 2
                 %
-                sub.name = '02_detection';
+                sub.name = 'detectors (<=45\circ) ';
                 out      = self.getgroup_detected_face;
                 select   = abs(out.detection_face) <= 45;
                 select   = select==inversion;
@@ -807,12 +836,23 @@ classdef Project < handle
                 
             elseif criteria == 3                
                 %same as rating tuning, but with saliency data.
-                sub.name = '03_saliency';
+                sub.name = ['Saliency_' funname{self.selected_fitfun} '_1'];
                 out      = self.getgroup_facecircle;
                 if self.selected_fitfun == 8
-                    select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -borders)&(out.facecircle_mu < borders)&(out.facecircle_amp > 0);;%select based on tuning
+                    select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -borders)&(out.facecircle_mu < borders)&(out.facecircle_amp > 0);;%select based on tuning                    
                 else
                     select     = (out.facecircle_LL > -log10(.05))&(out.facecircle_amp > 0);;
+                end
+                select   = select==inversion;
+                sub.list = out.subject_id(select);
+            elseif criteria == 33
+                %same as rating tuning, but with saliency data.
+                sub.name = ['Saliency_' funname{self.selected_fitfun} '_0'];
+                out      = self.getgroup_facecircle;
+                if self.selected_fitfun == 8
+                    select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -borders)&(out.facecircle_mu < borders);;%select based on tuning
+                else
+                    select     = (out.facecircle_LL > -log10(.05));;
                 end
                 select   = select==inversion;
                 sub.list = out.subject_id(select);
@@ -824,24 +864,7 @@ classdef Project < handle
                 m       = nanmedian(out.pmf_pooled_alpha);
                 select  = out.pmf_pooled_alpha <= m;%subjects with sharp pmf
                 select  = select==inversion;
-                sub.list= out.subject_id(select);
-               
-            elseif criteria == 5
-                %In this criterium, we have all significantly vM fitted
-                %people unconstraint on their amplitude sign, otherwise
-                %same as criterium 1
-                
-                sub.name = '01a_rating';
-                  %
-                out        = self.getgroup_rating_param;%load the ratings of all subjects
-                if self.selected_fitfun == 8
-                    select     = (out.rating_LL > -log10(.05))&(out.rating_mu > -borders)&(out.rating_mu < borders);%select based on tuning
-                else
-                    select     = (out.rating_LL > -log10(.05));
-                end
-                select     = select == inversion;
-                sub.list   = out.subject_id(select);%subject indices.
-                
+                sub.list= out.subject_id(select);             
             end
             %
             sub.list = sub.list(:)';
@@ -981,10 +1004,12 @@ classdef Project < handle
             coors       = [t.dat{:,end};ones(1,size(t.dat,1))];
         end
         function [st  names]     = get_SecondLevel_ANOVA_fit(self,ngroup,sk);
-            model     = 9;
-            reg_i     = 1:21;
+            model     = 5;
+            reg_i     = 1:9;
             %returns the fitted space-time plot            
-            coors     = self.get_SecondLevel_ANOVA_coordinates(ngroup,sk);
+            coors     = self.get_selected_coordinates;
+            cprintf([1 0 0],'returning the first 10...\n');
+%             coors     = coors(:,1:10);
             tcoor     = size(coors,2);
             r         = ROI('voxel_based',coors,'chrf_0_0',model,reg_i,self.get_selected_subjects(ngroup).list,sk);
             betas     = r.evoked_pattern';
@@ -992,8 +1017,13 @@ classdef Project < handle
                 pmod      = self.get_pmodmat(model);
             elseif model == 8
                 
+                pmod      = self.get_chebyshev(5,3);
+                pmod      = reshape(pmod,[65*8 length(reg_i)]);
+                
+            elseif model == 88
+                
                 pmod      = self.get_chebyshev(5,6);
-                pmod      = reshape(pmod,[65*8 21]);
+                pmod      = reshape(pmod,[65*8 length(reg_i)]);
                 
             elseif model == 9
                 
@@ -1042,7 +1072,7 @@ classdef Project < handle
             end
             B = B(:,1:2:end);
             %%
-            clf;
+            figure;clf;
             c = 0;
             pmodmat = [];degrees= [];
             for i = 1:size(B,2);%face
@@ -1083,23 +1113,45 @@ classdef Project < handle
             end            
             
         end        
-        function [coors]         = get_selected_coordinates(self)
+        function [coors,name]    = get_selected_coordinates(self,ngroup)
             %this method simply returns the coordinates of voxels that are
             %selected. This is not supposed to change very often and stay
             %as it is once fixed.
                         
-            model                    = self.selected_model;
-            betas                    = self.selected_betas;
-            ngroup                   = self.selected_ngroup;
-            sk                       = self.selected_smoothing;
-            %
-            xSPM                     = self.SecondLevel_ANOVA(ngroup,1,model,betas,sk,[]);
-            xSPM                     = struct('swd', xSPM.swd,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.001,'k',0,'thresDesc','none');
-            %replace 'none' to make FWE corrections.
-            [SPM xSPM]               = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
-            t                        = spm_list('table',xSPM);
-            coors                    = [t.dat{:,end};ones(1,size(t.dat,1))];
-            coors                    = coors(:,[1 3 5 7 10 13 15]);
+% % %             model                    = self.selected_model
+% % %             betas                    = self.selected_betas
+% % %             ngroup                   = self.selected_ngroup
+% % %             sk                       = self.selected_smoothing
+% % %             %
+% % %             xSPM                     = self.SecondLevel_ANOVA(ngroup,1,model,betas,sk,[]);
+% % %             xSPM                     = struct('swd', xSPM.swd,'title','eoi','Ic',2,'n',1,'Im',[],'pm',[],'Ex',[],'u',.001,'k',0,'thresDesc','none');
+% % %             %replace 'none' to make FWE corrections.
+% % %             [SPM xSPM]               = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
+% % %             t                        = spm_list('table',xSPM);
+% % %             coors                    = [t.dat{:,end};ones(1,size(t.dat,1))];                        
+            if ngroup == 3;%behavioral group
+                coors = [28  -4 -28 1; 
+                         28  22  -8 1; 
+                         -27 24  -7 1; 
+                         10  28  -14 1; 
+                         14  32   0  1;
+                         40  32  -14 1; 
+                         36 -44  -22 1; 
+                        -34 -24  -22 1]';
+            elseif ngroup  == 1%verbal + behavioral group            
+                coors = [-9 4 4 1; 10 6 10 1; 30 22 -10 1; -28 20 -7 1; 56 -19 -13 1]';
+            end
+            
+            name = [];invalid=[];
+            for n = 1:size(coors,2)
+                dummy = self.get_atlaslabel(coors(1:3,n));                
+                if strcmpi(dummy.name{1},'NotFound')
+                    invalid = [invalid n];
+                else
+                    name  = strvcat(name,dummy.name{1});
+                end
+            end
+           coors(:,invalid) =[]; 
         end
         function ucs             = get.ucs_vector(self)
             %returns a logical vector with ones where there is a UCS AFTER
@@ -1111,29 +1163,60 @@ classdef Project < handle
         function [out2]          = spacetime2correlation(self,out)
             %computes correlation between spacetime pixels and
             %end-experiment behavioral measures.
-                param = self.getgroup_all_param;
-                data  = double([param.pmf_pooled_alpha param.rating_amp param.rating_LL param.facecircle_amp param.facecircle_LL param.detection_absface]);
+                param     = self.getgroup_all_param(3);
+                data      = double([param.pmf_pooled_alpha param.rating_amp param.rating_LL param.facecircle_amp param.facecircle_LL param.detection_absface]);
                 out2.name = {'pmf_pooled' 'rating_amp' 'rating_LL' 'facecircle_amp' 'facecircle_LL' 'detection'};
                 %%
                 for nparam = 1:size(data,2)
                     nparam
                     for area = 1:size(out.d,4)
+                    kernel   = make_gaussian2D(11,7,3,1.5,6,4);
+                    kernel   = kernel./sum(kernel(:));
+                    for ns = 1:size(out.d,3)
+                        dummy(:,:,ns,area)    = Project.circconv2( (mean(out.d(:,:,ns,area),3)),kernel);
+                    end
                         for t= 1:size(out.d,1)
                             for m = 1:size(out.d,2)
                                 
-                                out2.r(t,m,1,area,nparam) = corr(squeeze(out.d(t,m,:,area)),data(:,nparam),'type','spearman');
+                                out2.r(t,m,1,area,nparam) = corr(squeeze(dummy(t,m,:,area)),data(:,nparam),'type','pearson');
                             end
                         end
                     end
                 end
         end           
-        function count           = get_subject_overlap(self)
-            count = [];
-            for ns = 1:4
-                count = [count ismember(self.subject_indices(:), self.get_selected_subjects(ns).list(:))];
-            end      
-            %add the oddball detection
-            count = [count self.getgroup_detected_oddballs.detection_oddball == 2];            
+        function [count labels]  = get_subject_overlap(self)
+            %computes a count matrix for different subject selection
+            %method.s
+            funname{3} = 'Gau';funname{8} = 'vM';
+            
+            count = [];labels={};
+            for fitfun = [8 3]
+                self.selected_fitfun = fitfun
+                for ns = [11 1]
+                    count  = [count ismember(self.subject_indices(:), self.get_selected_subjects(ns).list(:))];
+                    labels = [labels self.get_selected_subjects(ns).name];
+                end
+            end
+            for fitfun = [8 3]
+                self.selected_fitfun = fitfun
+                for ns = [33 3]
+                    count  = [count ismember(self.subject_indices(:), self.get_selected_subjects(ns).list(:))];
+                    labels = [labels self.get_selected_subjects(ns).name];
+                end
+            end
+% %             %add the pmrf and detection
+% %             for ns = [2 4]
+% %                 count  = [count ismember(self.subject_indices(:), self.get_selected_subjects(ns).list(:))];
+% %                 labels = [labels self.get_selected_subjects(ns).name];
+% %             end
+% %             %add the oddball
+% %             count  = [count self.getgroup_detected_oddballs.detection_oddball == 2];            
+% %             labels = [labels '100% oddball'];
+            %%
+            figure;
+            ImageWithText(count'*count,count'*count);
+            fs = 10;
+            set(gca,'fontsize',fs,'xtick',1:length(labels),'ytick',1:length(labels),'XTickLabelRotation',45,'xticklabels',labels,'fontsize',fs,'YTickLabelRotation',45,'yticklabels',labels,'TickLabelInterpreter','none')
         end
         end
     methods %methods that does something on all subjects one by one
@@ -1191,8 +1274,11 @@ classdef Project < handle
             % Monkey business: if you add covariates change the folder name
             % aswell.            
             
+            if length(ngroup) == 1
+                ngroup(2) = 1;
+            end
             
-            subjects   = self.get_selected_subjects(ngroup);                        
+            subjects   = self.get_selected_subjects(ngroup(1),ngroup(2));                        
             spm_dir    = regexprep(self.dir_spmmat(run,model),'sub...','second_level');%convert to second-level path, replace the sub... to second-level.
             spm_dir    = sprintf('%scov_id_%s/%02dmm/fitfun_%02d/group_%s/',spm_dir,covariate_id,sk,self.selected_fitfun,subjects.name);
             xspm_path  = sprintf('%sxSPM.mat',spm_dir);
@@ -1258,16 +1344,26 @@ classdef Project < handle
                     tbetas                                                       = length(beta_image_index);
                     
                     if model == 7 | model == 3 | model == 33
-                        tcontrast   = size(SPM.xX.xKXs.X,2);                                                
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' eye(3) ]',SPM.xX.xKXs);
+                        tcontrast   = size(SPM.xX.xKXs.X,2);           
+                        M = [[0 0 0 ]' eye(3)];
+                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                        M(1,2)      = 0;
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                        
                     elseif model == 4
-                        
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 0 0]' eye(5) ]',SPM.xX.xKXs);
+                        M           = [[0 0 0 0 0]' eye(5)];
+                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                        M(1,2)      = 0;
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
                     elseif model == 5
-                        
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[0 0 0 0 0 0 0 0]' eye(8) ]',SPM.xX.xKXs);
+                        M           = [[0 0 0 0 0 0 0 0]' eye(8)];
+                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                        M(1,2)      = 0;
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
 %                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' zeros(3) [0 0 0 ]' eye(3)]'  ,SPM.xX.xKXs);
                     elseif model == 8
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[zeros(1,11)]' eye(11) ]',SPM.xX.xKXs);
+                    elseif model == 88
                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[zeros(1,20)]' eye(20) ]',SPM.xX.xKXs);
                     end
 %                     
@@ -1580,7 +1676,54 @@ classdef Project < handle
     end    
     methods %plotters
         function plot_normalized_surface(self);
-            cat_surf_display(struct('data',{{'/Volumes/feargen2/project_fearamy/data/midlevel/run000/mrt/surf/lh.central.w_ss_data.gii' '/Volumes/feargen2/project_fearamy/data/midlevel/run000/mrt/surf/rh.central.w_ss_data.gii'}},'multisurf',0))
+            close all;
+            cmap      = parula(256);
+            threshold = 10;
+            group     = 3;
+            inflated  = 1;
+            %%
+            cat_surf_display(struct('data',{{'/mnt/data/project_fearamy/data/midlevel/run000/mrt/surf/rh.central.w_ss_data.gii'}},'multisurf',0));
+%             cat_surf_display(struct('data',{{'/mnt/data/project_fearamy/data/midlevel/run000/mrt/surf/lh.central.w_ss_data.gii'}},'multisurf',0))            
+            
+            MAP  = cat_surf_render('ColourMap',gca,cmap);
+            P    = spm_mesh_project(MAP.patch,'/mnt/data/project_fearamy/data/second_level/run001/spm/model_03_chrf_0_0/cov_id_/10mm/fitfun_08/group_Saliency_vM_1/spmF_0002.nii','nn');
+            cat_surf_render('overlay',gca,P);
+            ab   = cat_surf_render('clim',gca,[0 threshold]);
+            if inflated
+                spm_mesh_inflate(MAP.patch,Inf,1);            
+            end
+            SaveFigure(sprintf('~/Desktop/fearamy_figure2_group_%02d_side_%02d_inflated_%02d.png',group,1,inflated),'-r300');pause(.5);            
+            view(-90,0);
+            SaveFigure(sprintf('~/Desktop/fearamy_figure2_group_%02d_side_%02d_inflated_%02d.png',group,2,inflated),'-r300');pause(.5);
+            %%
+            group = 2;
+            cat_surf_display(struct('data',{{'/mnt/data/project_fearamy/data/midlevel/run000/mrt/surf/rh.central.w_ss_data.gii'}},'multisurf',0));
+%             cat_surf_display(struct('data',{{'/mnt/data/project_fearamy/data/midlevel/run000/mrt/surf/lh.central.w_ss_data.gii'}},'multisurf',0))                        
+            MAP  = cat_surf_render('ColourMap',gca,cmap);
+            P    = spm_mesh_project(MAP.patch,'/mnt/data/project_fearamy/data/second_level/run001/spm/model_03_chrf_0_0/cov_id_/10mm/fitfun_08/group_Rating_vM_1/spmF_0002.nii','nn');
+            cat_surf_render('overlay',gca,P);
+            ab   = cat_surf_render('clim',gca,[0 threshold]);
+            if inflated
+                spm_mesh_inflate(MAP.patch,Inf,1);            
+            end
+            SaveFigure(sprintf('~/Desktop/fearamy_figure2_group_%02d_side_%02d_inflated_%02d.png',group,1,inflated),'-r300');pause(.5);
+            view(-90,0)
+            SaveFigure(sprintf('~/Desktop/fearamy_figure2_group_%02d_side_%02d_inflated_%02d.png',group,2,inflated),'-r300');pause(.5);
+            
+            %%
+            group = 1;
+            cat_surf_display(struct('data',{{'/mnt/data/project_fearamy/data/midlevel/run000/mrt/surf/rh.central.w_ss_data.gii'}},'multisurf',0));
+%             cat_surf_display(struct('data',{{'/mnt/data/project_fearamy/data/midlevel/run000/mrt/surf/lh.central.w_ss_data.gii'}},'multisurf',0))            
+            MAP  = cat_surf_render('ColourMap',gca,cmap);
+            P    = spm_mesh_project(MAP.patch,'/mnt/data/project_fearamy/data/second_level/run001/spm/model_03_chrf_0_0/cov_id_/10mm/fitfun_08/group_00_all/spmF_0002.nii','nn');
+            cat_surf_render('overlay',gca,P);
+            ab   = cat_surf_render('clim',gca,[0 threshold]);
+            if inflated
+                spm_mesh_inflate(MAP.patch,Inf,1);            
+            end
+            SaveFigure(sprintf('~/Desktop/fearamy_figure2_group_%02d_side_%02d_inflated_%02d.png',group,1,inflated),'-r300');pause(.5);
+            view(-90,0)
+            SaveFigure(sprintf('~/Desktop/fearamy_figure2_group_%02d_side_%02d_inflated_%02d.png',group,2,inflated),'-r300');pause(.5);
         end
         function plot_ss_ratings(self)
             figure;set(gcf,'position',[5           1        1352        1104]);
@@ -1876,44 +2019,78 @@ classdef Project < handle
                 fprintf('call back doesn''t run\n')
             end
         end
-        function test(self)
-            
+        function test(self,SPM,xSPM)
+                        
             global st;
+            global SPM;
+            global xSPM;
             try
+                
                 coor = (st.centre);
-                self.default_model_name                                 = 'fir_15_15';
-                %betas = self.path_beta(1,2,'s_',1:135);
-                betas  = FilterF(sprintf('%s/midlevel/run001/spm/model_02_fir_15_15/s_w_beta_*',self.path_project));
-                betas  = vertcat(betas{:});
-                XYZvox = self.get_mm2vox([coor ;1],spm_vol(betas(1,:)))
-                d = spm_get_data(betas,XYZvox);
-                d = reshape(d,15,9);
+%                 self.default_model_name                                 = 'fir_15_15';
+%                 %betas = self.path_beta(1,2,'s_',1:135);
+%                 betas  = FilterF(sprintf('%s/midlevel/run001/spm/model_02_fir_15_15/s_w_beta_*',self.path_project));
+%                 betas  = vertcat(betas{:});
+%                 XYZvox = self.get_mm2vox([coor ;1],spm_vol(betas(1,:)))
+%                 d = spm_get_data(betas,XYZvox);
+%                 d = reshape(d,15,9);
                 figure(10001);
-                set(gcf,'position',[1370 1201 416  1104])                
-                subplot(3,1,1)
-                set(gca, 'ColorOrder', GetFearGenColors, 'NextPlot', 'replacechildren');
-                plot(d);box off;
-                hold on;plot(mean(d(:,1:8),2),'k--','linewidth',3);                
-                hold off;
-                subplot(3,1,2)
-                imagesc(d);colormap jet;
-                subplot(3,1,3)                
-                set(gca, 'ColorOrder', [linspace(0,1,15);zeros(1,15);1-linspace(0,1,15)]', 'NextPlot', 'replacechildren');
-                data = [];
-                data.x   = repmat(linspace(-135,180,8),15,1);
-                data.y   = d(:,1:8);
-                data.ids = 1:15;
-                Y = repmat([1:15]',1,8);
-                h=bar(mean(d));
+%                 set(gcf,'position',[1370 1201 416  1104])                
+%                 subplot(3,1,1)
+%                 set(gca, 'ColorOrder', GetFearGenColors, 'NextPlot', 'replacechildren');
+%                 plot(d);box off;
+%                 hold on;plot(mean(d(:,1:8),2),'k--','linewidth',3);                
+%                 hold off;
+%                 subplot(3,1,2)
+%                 imagesc(d);colormap jet;
+%                 subplot(3,1,3)                
+%                 set(gca, 'ColorOrder', [linspace(0,1,15);zeros(1,15);1-linspace(0,1,15)]', 'NextPlot', 'replacechildren');
+%                 data = [];
+%                 data.x   = repmat(linspace(-135,180,8),15,1);
+%                 data.y   = d(:,1:8);
+%                 data.ids = 1:15;
+%                 Y = repmat([1:15]',1,8);
+%                 h=bar(mean(d));
 %                 SetFearGenBarColors(h);
-                grid on;
-                self.default_model_name                                 = 'chrf_0_0';
-                %
-                betas  = FilterF(sprintf('%s/second_level/run001/spm/model_05_chrf_0_0/beta_*',self.path_project));
-                betas  = vertcat(betas{:});
-                XYZvox = self.get_mm2vox([coor(:); 1],spm_vol(betas(1,:)));
-                d      = spm_get_data(betas,XYZvox);
-                Weights2Dynamics(d(:)');
+%                 grid on;
+%                 self.default_model_name                                 = 'chrf_0_0';
+                %                
+                cd(SPM.swd)
+                betas  = vertcat(SPM.Vbeta(:).fname);
+                %betas  = FilterF(sprintf('%s/second_level/run001/spm/model_04_chrf_0_0/cov_id_/06mm/fitfun_08/group_Rating_vM_1/beta_*',self.path_project));
+                %betas  = vertcat(betas{:});
+                size(betas)
+                XYZvox    = self.get_mm2vox([coor(:); 1],spm_vol(betas(1,:)));
+                beta      = spm_get_data(betas,XYZvox);
+                
+                
+                ResMS = spm_get_data(SPM.VResMS,XYZvox);
+                Bcov  = ResMS*SPM.xX.Bcov;
+                
+                CI    = 1.6449;
+                % compute contrast of parameter estimates and 90% C.I.
+                %------------------------------------------------------------------
+                Ic    = xSPM.Ic; % Use current contrast
+                cbeta = SPM.xCon(Ic).c'*beta;
+                SE    = sqrt(diag(SPM.xCon(Ic).c'*Bcov*SPM.xCon(Ic).c));
+                CI    = CI*SE;
+
+                %%                
+                [pmod]      = self.get_pmodmat(5);%most complex model
+                size(pmod)
+                size(betas,1)
+                pmod        = pmod(:,1:size(betas,1));
+                %%
+                subplot(1,2,1)
+                %imagesc(reshape(pmod*beta,8,100)');
+                contourf(reshape(pmod*beta,8,520/8)',5,'color','none');
+                axis xy;
+                subplot(1,2,2);
+                bar(cbeta);
+                hold on;
+                errorbar(cbeta,CI,'ro');
+                hold off;
+                drawnow;
             catch
                 fprintf('call back doesn''t run\n')
             end
@@ -2121,18 +2298,21 @@ classdef Project < handle
         end
         function plot_spacetime2(self,spacetime,type)
             %simple spacetime plots
-            
+            plot_ucs = false;%true;
             if nargin < 3
                 type = 1;
             end
-            
+            a = ffigure;
             tarea = size(spacetime.d,4);
             [yy xx] = GetSubplotNumber(tarea);
             
-            [d u] = GetColorMapLimits(spacetime.d(:),2);
-            for narea = 1:tarea;
-                subplot(yy,xx,narea);
+               %%         
+            for narea = 1:tarea;                
+                h = subplot(yy,xx,narea);
                 if type == 1
+                    [d u] = GetColorMapLimits(Vectorize(spacetime.d(:,:,:,narea)),.2);
+                    d=0;
+                    u=.25;
                     imagesc(Project.circconv2( mean(spacetime.d(:,:,:,narea),3)),[d u]);
                     colorbar;
                     hold on
@@ -2141,26 +2321,92 @@ classdef Project < handle
                     plot([4 4],ylim,'--k')                    
                     hold off;
                 elseif type == 2
+                    
+                    
+                    posori = get(h,'position');
+                    posori(3) = .08;
+                    set(h,'position',posori);
+                    %
                     kernel   = make_gaussian2D(11,7,6,2.5,6,4);
-                    kernel                   = kernel./sum(kernel(:));
-                    contourf((Project.circconv2( mean(spacetime.d(:,:,:,narea),3),kernel)),4,'color','none');
-                    colorbar;
+%                     kernel      = make_gaussian2D(5,3,10,10,3,1.5);
+                    kernel      = kernel./sum(kernel(:));
+                    % smooth single subjects.
+                    for ns = 1:size(spacetime.d,3)
+                        spacetime.d(:,:,ns,narea) = Project.circconv2(spacetime.d(:,:,ns,narea),kernel);
+                    end
+                    % average across subjects
+                    D           = mean(spacetime.d(:,:,:,narea),3);%data with 2 dimensions                    
+                    
+                    % plot the average st plot.
+                    contourf(D,9,'color','none');
+                    box off;
+                    %                     contourf(mean(spacetime.d(:,:,:,narea),3),3,'color','none');
+                    %                     imagesc(mean(spacetime.d(:,:,:,narea),3));
                     hold on
                     axis xy;
-                    plot(xlim,[4 4],'r');                    
-                    plot([4 4],ylim,'--k');                    
+                    plot(xlim,[4 4],'r','color',[1 0 0 .75]);%plot a center line
+                    plot([4 4],ylim,'--k','linewidth',1,'color',[0 0 0 .25]);%plot a safe zone line
+                    plot([2 2],ylim,'--k','linewidth',1,'color',[0 0 0 .25]);%plot a safe zone line
+                    plot([6 6],ylim,'--k','linewidth',1,'color',[0 0 0 .25]);%plot a safe zone line
+                    set(gca,'ytick',[10 20 30 40],'yticklabels',{'10' '20' '30' '40'},'xtick',[2 4 6 8],'xticklabels',{'-90' 'CS+' '+90' 'CS-'},'XAxisLocation','bottom','YAxisLocation','right');
+                    ylabel('microblocks');
+                    %%                    
+                    h     = colorbar('location','westoutside');
+                    wcbar = .005;
+                    set(gca,'position',posori);
+                    h.Position = [posori(1)-wcbar*2 posori(2) wcbar posori(4)/2];
+                    h.Box = 'off';
+                    %% plot the feargen bar plot
+                    pos     = posori+[0 posori(4)+posori(4)/24 0 0];
+                    Dbar    = squeeze(mean(spacetime.d(:,:,:,narea)))';%data with 2 dimensions
+                    %average across participants and compute the SEM
+                    DbarM   = mean(Dbar);
+                    DbarSEM = std(Dbar)./sqrt(length(Dbar));
                     
-                    %
-                    bla                          = self.ucs_vector;
-                    bla(find(self.ucs_vector)+1) = 1;
-                    bla(self.ucs_vector==1)      = [];
-                    bla                          = find(bla);
-                    for n = 1:length(bla)
-                        h2 = plot(xlim,[bla(n) bla(n)],'k--');
-                        h2.Color = [ 0 0 0 .7];
+                    pos(4)  = .05;
+                    
+                    axes('position',pos);
+                    cmap  = GetFearGenColors;
+                    tbar  = 8;                    
+                    for nbar = 1:tbar
+                        bar(nbar,DbarM(nbar),1,'facecolor',cmap(nbar,:),'edgecolor','none','facealpha',.8);
+                        hold on;
+                        errorbar(nbar,DbarM(nbar),DbarSEM(nbar),'ko');
                     end
-                    %
+                    axis tight;            
+                    xlim([.5 8.5])
+%                     ylim([min(DbarM) max(DbarM)]);
+                    box off;
+                    set(gca,'ytick',[],'xcolor','w','xtick',[]);
+                    % fit a Gaussian
+                    data = [];
+                    data.y   = Dbar';
+                    data.x   = repmat(-135:45:180',[size(data.y,2) 1])';
+                    data.ids = 1:size(data.y,2);
+                    t        = Tuning(data);
+                    t.GroupFit(8);
+                    plot(linspace(1,8,100),t.groupfit.fit_HD,'k','linewidth',2)
+                    %% plot the difference time-course
+                    pos = posori+[posori(3)+posori(3)/6 0 0 0];                    
+                    axes('position',pos);
                     
+                    Dtimecourse = mean(D(:,[3 4 5]),2)-mean(D(:,[7 8 1]),2);
+                    data        = squeeze(mean(spacetime.d(:,[3 4 5],:,narea) - spacetime.d(:,[7 8 1],:,narea),2));
+                    ci          = bootci(5000,@mean,data')';
+                    
+                    plot(Dtimecourse,1:length(D),'linewidth',2,'color','k');
+                    hold on
+                    plot([0 0],ylim,'k--');
+                    plot(ci(:,1),1:length(D),'--','linewidth',1,'color','k');
+                    plot(ci(:,2),1:length(D),'--','linewidth',1,'color','k');                    
+                    box off;                    
+                    xticks = get(gca,'XTick');
+                    set(gca,'ytick',[],'YColor','w','xtick',xticks(2:end));
+                    xlabel('CS+ minus CS-')                    
+%                     xlim([-.4 .4]);
+                    axis tight;                    
+                    plot(xlim,[4 4],'r','color',[1 0 0 .75]);%plot a center line
+                    ylim([1,length(D)]);
                     hold off;
                 elseif type == 3
                     dummy         = Project.circconv2( mean(spacetime.d(:,:,:,narea),3));
@@ -2168,7 +2414,21 @@ classdef Project < handle
                     X             = r(:,[1:8 1]).*cos(theta(:,[1:8 1]));
                     Y             = r(:,[1:8 1]).*sin(theta(:,[1:8 1]));
                     contourf(X,Y,dummy(:,[1:8 1]),5,'color','none');
-                end                
+                end 
+                                
+                if plot_ucs
+                    hold on
+                        bla                          = self.ucs_vector;
+                        bla(find(self.ucs_vector)+1) = 1;
+                        bla(self.ucs_vector==1)      = [];
+                        bla                          = find(bla);
+                        for n = 1:length(bla)
+                            h2 = plot(xlim,[bla(n) bla(n)],'k--');
+                            h2.Color = [ 0 0 0 .7];
+                        end
+                        hold off;
+                    end
+                drawnow;
                 title(spacetime.name{narea},'interpreter','none');
             end
         end
@@ -2231,7 +2491,7 @@ classdef Project < handle
     end    
     
     methods (Static)
-        function plot_bar(X,Y,SEM)
+        function h = plot_bar(X,Y,SEM)
             % input vector of 8 faces in Y, angles in X, and SEM. All
             % vectors of 1x8;
             %%
@@ -2247,16 +2507,17 @@ classdef Project < handle
                errorbar(X,Y,SEM,'ko');%add error bars
             end
             
-            %%                                    
-            set(gca,'xtick',X,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
+            %% 
+            h = gca;
+            set(h,'xtick',X,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
             box off;
-            set(gca,'color','none');
+            set(h,'color','none');
             xlim([0 tbar+1])
             drawnow;            
             axis tight;box off;axis square;drawnow;alpha(.5);
               
         end
-        function Yc = circconv2(Y,varargin)
+        function Yc          = circconv2(Y,varargin)
             %circularly smoothes data using a 2x2 boxcar kernel;
             
             if nargin == 1
@@ -2276,7 +2537,7 @@ classdef Project < handle
             Yc  = Yc(:,(size(Yc,2)/3+1):(size(Yc,2)/3+1)+8-1);          
 
         end
-        function [t2]=fit_spacetime(Y);
+        function [t2]        = fit_spacetime(Y);
             data.y           = Y(:,1:8);
             data.x           = repmat(linspace(-135,180,8),size(data.y,1),1);
             data.ids         = 1:size(data.y,1);
@@ -2296,7 +2557,7 @@ classdef Project < handle
                 spm_jobman('run', matlabbatch(n));
             end            
         end
-        function [data]=CleanMicroBlocks(data);
+        function [data]      = CleanMicroBlocks(data);
             %will remove all the microblocks where there is a transition or
             %oddball trial. the ucs are still here.
                         
@@ -2314,13 +2575,13 @@ classdef Project < handle
             end
             if bc
                 %baseline
-%                 base = repmat(mean(mean(data(1:4,:,:,:)),2),[s(1) s(2) 1 1]);
-                base = repmat((mean(data(1:4,:,:,:))),[s(1) 1 1 1]);
+                base = repmat(mean(mean(data(1:4,:,:,:)),2),[s(1) s(2) 1 1]);
+%                 base = repmat((mean(data(1:4,:,:,:))),[s(1) 1 1 1]);
                 data = data - base;
             end
             spacetime = data;
         end
-        function [out]=Linear_Fit(y)
+        function [out]       = Linear_Fit(y)
             
 
             %%
@@ -2367,7 +2628,7 @@ classdef Project < handle
             end
             out.fit            = fit;                        
         end        
-        function [out] = RW_Fit(y,R);
+        function [out]       = RW_Fit(y,R);
             %let's see if we can understand the amplitude changes using a rescorla
             %wagner model of update of the alpha parameter. to this end I will use the learning rate and
             %initial value as free parameters, so will be the case for Offset and Kappa
