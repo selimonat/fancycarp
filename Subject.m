@@ -2489,6 +2489,95 @@ classdef Subject < Project
             save(model_path,'cond');
         end          
         
+        function analysis_CreateModel88(self)
+            %chebyshev polynomial expansion withj 21 basis functions
+            %
+            
+            %this initial part is exactly the same as model_02
+            model_num      = 88;
+            L              = self.get_log(1);%get the log file.
+            stim_onsets    = L(:,2) == 3;%all stim events.
+            scan_onsets    = L((L(:,2) == 0),1);%all scan events.
+            ucs_events     = L(:,2) == 5;%all ucs events
+            odd_events     = L(:,3) == 1002;%recover oddball events from the stim id as they are not logged in a specific channel.
+            %
+            mbi            = L(:,end);%microblock identity for all events.
+            %now we have to discard mbi where stimuli occured during a
+            %transition. This can be achieved by search mbi indices that
+            %occured between scans 910-911 and 1805-1806
+            % micro blocks during transition:
+            transition_events = (L(:,1)>scan_onsets(910) & L(:,1)<scan_onsets(911))|(L(:,1)>scan_onsets(1805) & L(:,1)<scan_onsets(1806));
+            %
+            % find stim events which are appearing in a microblock where
+            % there is an UCS (number 5);
+            i                 = ismember(mbi,mbi(ucs_events|odd_events|transition_events))&stim_onsets;
+            %
+            %add 500 degrees to "bad stimulus events".
+            L(i,3)            = L(i,3)+360;
+            %some more finetuning here basically for future convenience on labelling of conditions.
+            i                 = L(:,3) ==1360;%shifted null trials: put them back to 1000, we want to model null trials together irrespective of their microblock belongance.
+            L(i,3)            = 1000;
+            i                 = L(:,3) ==1361;%shifted ucs trials: put them to 500, which is the cond_id for CS+ with shock.
+            L(i,3)            = 360;
+            i                 = L(:,3) ==1362;%shifted oddball trials: put them back to 1002.
+            L(i,3)            = 1002;
+            i                 = L(:,3) ==1000;%shifted oddball trials: put them back to 1002.                        
+            %from this point on it is the same as
+            %self.analysis_CreateModels01            
+            [scan,stim_id,mbi_id]  = self.analysis_StimTime2ScanUnit(L);                        
+            %sanity check plot
+            figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));hold on;
+            figure(1);;plot(stim_id,mbi_id,'ro','markersize',10);title(mat2str(self.id));hold off
+            %%
+            [pmodmat names] = self.get_chebyshev(5,6);            
+            %%
+            pmod    = NaN(length(stim_id),size(pmodmat,3));
+            for ntrial = 1:length(stim_id)
+                if stim_id(ntrial) < 1000
+                    pmod(ntrial,:) = squeeze(pmodmat(mod(stim_id(ntrial)./45+4-1,8)+1,mbi_id(ntrial),:));
+                end
+            end
+            %                        
+            pmod    = nanzscore(pmod(:,2:end));
+            names   = names(:,2:end);
+            %%                        
+            cond             = [];
+            %all valid trials
+            i                = stim_id < 200;
+            cond(1).name     = 'onsets';
+            cond(1).onset    = scan(i);
+            cond(1).duration = zeros(1,sum(i));
+            cond(1).tmod     = 0;
+            cond(1).pmod     = struct('name',names,'param',num2cell(pmod(i,:),[1 size(pmod,2)]),'poly',num2cell(ones(1,size(pmod,2)),[1 size(pmod,2)]));
+%             bar([cond(1).onset]',[cond(1).pmod(4).param]');                        
+            %all the rest invalid trials            
+            i                = stim_id > 200 & stim_id < 800;
+            cond(2).name     = 'onsets_invalid';
+            cond(2).onset    = scan(i);
+            cond(2).duration = zeros(1,sum(i));
+            cond(2).tmod     = 0;
+            cond(2).pmod     = struct('name',names,'param',num2cell(pmod(i,:),[1 size(pmod,2)]),'poly',num2cell(ones(1,size(pmod,2)),[1 size(pmod,2)]));
+            %null trials            
+            i                = stim_id == 1000;
+            cond(3).name     = 'null';
+            cond(3).onset    = scan(i);
+            cond(3).duration = zeros(1,sum(i));
+            cond(3).tmod     = 0;
+            cond(3).pmod     = struct('name',{},'param',{},'poly',{});            
+            %add also the oddtrials
+            i                = stim_id == 1002;
+            cond(4).name     = 'odd';
+            cond(4).onset    = scan(i);
+            cond(4).duration = zeros(1,sum(i));
+            cond(4).tmod     = 0;
+            cond(4).pmod     = struct('name',{},'param',{},'poly',{});
+            
+            model_path       = self.path_model(1,model_num);
+            model_dir        = fileparts(model_path);
+            if ~exist(model_dir);mkdir(model_dir);end
+            save(model_path,'cond');
+        end                  
+        
         function analysis_CreateModel09(self)
             %zernike polynomial expansion
             %
