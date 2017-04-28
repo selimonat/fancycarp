@@ -69,7 +69,8 @@ classdef Project < handle
         roi                   = struct('xyz',{[30 0 -24] [30 22 -8] [33 22 6] [39 22 -6] [44 18 -13] [-30 18 -6] [-9 4 4] [40 -62 -12]},'label',{'rAmy' 'rAntInsula' 'rAntInsula2' 'rAntInsula3' 'rFronOper' 'lAntInsula' 'BNST' 'IOC'} );%in mm
         colors                = [ circshift( hsv(8), [3 0] );[0 0 0];[.8 0 0];[.8 0 0]]';
         valid_atlas_roi       = setdiff(1:63,[49 50 51]);%this excludes all the ROIs that are huge in number of voxels
-        ucs_vector            = [];        
+        ucs_vector            = [];  
+        ucs_vector_notcleaned = [];
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.         
@@ -1160,6 +1161,12 @@ classdef Project < handle
             ucs(Project.mbi_ucs)                                = 1;
             ucs([Project.mbi_oddball Project.mbi_transition])   = [];
         end
+        function ucs             = get.ucs_vector_notcleaned(self)
+            %returns a logical vector with ones where there is a UCS AFTER
+            %CLEANING FOR ODDBALL and TRANSITION MICROBLOCKS.
+            ucs                                                 = zeros(1,65);
+            ucs(Project.mbi_ucs)                                = 1;            
+        end
         function [out2]          = spacetime2correlation(self,out)
             %computes correlation between spacetime pixels and
             %end-experiment behavioral measures.
@@ -2082,8 +2089,8 @@ classdef Project < handle
                 pmod        = pmod(:,1:size(betas,1));
                 %%
                 subplot(1,2,1)
-                %imagesc(reshape(pmod*beta,8,100)');
-                contourf(reshape(pmod*beta,8,520/8)',5,'color','none');
+                imagesc(reshape(pmod*beta,8,520/8)');
+                %contourf(reshape(pmod*beta,8,520/8)',5,'color','none');
                 axis xy;
                 subplot(1,2,2);
                 bar(cbeta);
