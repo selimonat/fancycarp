@@ -112,13 +112,7 @@ classdef Project < handle
     
         function o = get.path_project
             %
-            if xor(isunix,ismac)
-                o = '/mnt/data/project_FPSA_FearGen/data/';
-            elseif ismac
-                o = '/Users/onat/Documents/project_FPSA_FearGen/data/';
-            else
-                o = 'C:\Users\Lea\Documents\Experiments\project_FPSA_FearGen\data\';
-            end
+            o = fullfile(FPSA_FearGen('get_path_project'),'data',filesep);
             %add a filesep if necessary
             if ~strcmp(o(end),filesep)
                 cprintf([1 0 0],'Correcting project path...\n');
