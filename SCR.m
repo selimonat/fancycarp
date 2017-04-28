@@ -514,11 +514,12 @@ classdef SCR < handle
                 timeframe = self.default_timeframe;
             end
             %
-            out_raw = nan(3*8,1);
-            condcollector = { 'base_0045','base_0090','base_0135','base_0180','base_0225','base_0270','base_0315','base_0360',...
-                'cond_0180','cond_0360',...
-                'test_0045','test_0090','test_0135','test_0180','test_0225','test_0270','test_0315','test_0360'};
-            index  = [1:8 12 16 17:24];
+            out_raw = nan(3*9,1);
+            condcollector = { 'base_0045','base_0090','base_0135','base_0180','base_0225','base_0270','base_0315','base_0360','base_1000',...
+                'cond_0180','cond_0360','cond_1000',...
+                'test_0045','test_0090','test_0135','test_0180','test_0225','test_0270','test_0315','test_0360','test_1000'};
+            %             index  = [1:8 12 16 17:24];
+            index  = [1:9 13 17 18 19:27];
             out_singletrials = nan(max(self.ledalab.n),length(self.ledalab.n)); %max(ledalab.n) is 78 nulltrials in testphase.. so there will be a lot of nans.
             for c = 1:length(condcollector)
                 timey                     = (self.ledalab.x(:,1) >= min(timeframe))&(self.ledalab.x(:,1) <= max(timeframe));%time window
