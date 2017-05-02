@@ -163,7 +163,7 @@ classdef Group < Project
         %%
         function [out outz outraw singletrials] = getSCR(self,varargin)
             valid = [];
-            data = NaN(8*3,length(self.ids));
+            data = NaN(9*3,length(self.ids));
             for sc = 1:length(self.ids)
                 try
                     if ~isempty(varargin)
@@ -178,7 +178,7 @@ classdef Group < Project
                 
             end
             out.y   = data'; % comes already nanzscored from SCR object
-            out.x   = repmat([-135:45:180]',3,size(out.y,1))';
+            out.x   = repmat([-135:45:180 NaN]',3,size(out.y,1))';
             out.ids = self.ids;
         end
         
