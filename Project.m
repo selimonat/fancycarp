@@ -26,6 +26,7 @@ classdef Project < handle
         %the following questionnaire data is from the Z project, use those for now.
         CTQ_SFB           = [1 0 0 0 1 1 0 0 0  0  1  0  1  0  0  0  1  0  0  0  0  1  0  0  1  0  0  0  0  0  0  0  1    0  0  0  0  1  0    1  0  1  0  0  1  1  0  0   0  0  0  0  0  0 NaN 0  0  1  0  0  0  1  0  0  0  0  0  0  0  0  0  0  1  1  1  0  0   0  0  0  0];
         LTE_SFB           = [1 0 1 1 0 0 0 1 0	1  1  1  1	1  1  1  1  1  1  1  1  1  1  1  1  1  1  0  1  1  1  0  1    1  1	1  0  1  1    1  1  1  1  1  0  1  1  0   1  1  1  1  1  1 NaN 1  1  1  1  1  1  0  1  1  1  1  1  1  0  1  1  1  1  1  0  1  1   1  1  1  0];
+        MM_SFB            = [3 0 1 1 2 2 0 1 0	1  3  1  3  1  1  1  3  1  1  1  1  3  1  1  3  1  1  0  1  1  1  0  3    1  1  1  0  3  1    3  1  3  1  1  2  3  1  0   1  1  1  1  1  1 NaN 1  1  3  1  1  1  2  1  1  1  1  1  1  0  1  1  1  3  3  2  1  1   1  1	1  0];        
         % those come from BDNF data collection
         CTQ_BDNF          = [1 0 0 0 1 1 0 0 0  0  1  0  1  0  0  0  0  0  0  0  0  1  1  0  0  1  0  0  0  0  0  0  0    0  1  0  0  1  0    1  0  1  0  1  1  1  1  0   0  0  1  0  0  0  1  0  0  1  1  1  0  0  0  0  0  0  1  0  1  0  1  0  0  1  1  0  0   0  0 NaN NaN];
         LTE_BDNF          = [1 0 1 1 1 1 0 1 0  0  1  0  0  1  1  1  1  0  1  0  1  1  1  1  1  1  1  0  1  1  0  0  1    1  1  1  1  1  1    1  0  1  1  1  0  1  0  1   1  1	1  0  1  1  1  1  0  1  1  1  1  0  1  0  1  1  1  1  0  1  1  1  1  1  0  1  1   1  1	1  0];
@@ -117,7 +118,7 @@ classdef Project < handle
             elseif ismac
                 o = '/Users/onat/Documents/project_bdnf/data/';
             else
-                o = 'C:\Users\Lea\Documents\Experiments\project_bdnf\data\';
+                o = 'C:\Users\Lea\Documents\Experiments\project_FPSA_FearGen\data\';
             end
             %add a filesep if necessary
             if ~strcmp(o(end),filesep)
