@@ -1,6 +1,6 @@
 classdef Tuning < handle
     properties (Hidden)
-        visualization = 0;%visualization of fit results
+        visualization = 1;%visualization of fit results
         gridsize      = 20;%resolution per parameter for initial estimation.
         options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
         singlesubject = [];%will contain the fit results for individual subjects
@@ -140,7 +140,7 @@ classdef Tuning < handle
             elseif funtype == 8
                 result.fitfun = @(x,p) self.VonMises(x,p(1),p(2),p(3),p(4));%amp,kappa,centerX,offset
                 L             = [ eps             0        min(x)   min(y(:))-std(y)   eps ];
-                U             = [ range(y(:))     8        max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
+                U             = [ range(y(:))     30        max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
                 %                 L      = [ eps                   0.1   eps     -pi   eps ];
                 %                 U      = [ min(10,range(y)*1.1)  20   2*pi   pi   10];
                 result.dof    = 4;
