@@ -904,7 +904,7 @@ colorbar
              for n = 1:size(coor,1)
                  roi(:,:,n) = sqrt(((x-coor(n,1))./coor(n,3)).^2 + ((y-coor(n,2))./coor(n,4)).^2)<4;
              end
-             roi(:,:,n+1) = sum(roi,3) == 0;
+             roi(:,:,n+1) = sum(roi,3) == 0; %roi(:,:,5) is all ROIs accumulated.
              %            figure(2);imagesc(obj.stimulus);alpha(sum(roi,3));
              %            roi(:,:,5) = sum(roi(:,:,1:4),3);
              %            for n = 1:size(roi,3);figure(n);h=imagesc(obj.stimulus);set(h,'alphaData',roi(:,:,n));drawnow;end
