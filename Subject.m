@@ -40,17 +40,27 @@ classdef Subject < Project
         function scr       = get_scr(self,run)
             %similar function to get_rating it will return the scr data
             %exactly in the same format suitable for Tuning object
+            %so:
+            % NO NULL extracted
+            % ONLY ONE RUN PER GO.
             
-            scr.x      = [-135:45:180];
+            if length(run)>1
+                warning('get_scr is intended for one run only!')
+                keyboard
+            end
+            
+            scr.x      = -135:45:180;
             scr.ids    = self.id;
             scr.y      = [];
             if self.scr.ok;                
-                indices                         = {'' [1:8] [9:16] [17:24]};
-                [out_z, out_raw, single_trials] = self.scr.ledalab_summary;
+                indices                         = {'' 1:8 10:17 19:26};
+                [out_z, single_trials_z,zave] = self.scr.ledalab_summary;
+                %zave is the old logic we had, so far just for comparing 
                 %scr.y            = out_raw(indices{run});
-                scr.y    = single_trials(:,indices{run});                
+            
+                scr.y    = single_trials_z(:,indices{run});                
                 scr.x    = repmat(scr.x,[size(scr.y,1) 1]);
-                scr.y    = nanzscore(scr.y(:)');
+%                 scr.y    = nanzscore(scr.y(:)');
                 i        = isnan(scr.y);
                 scr.y(i) = [];
                 scr.x(i) = [];                
@@ -115,7 +125,7 @@ classdef Subject < Project
                     fprintf('Phase %g... ',ph);                    
                     t.SingleSubjectFit(self.fit_method);
                     fit_results     = t.fit_results;
-%                     save(phpath,'fit_results');
+                    save(phpath,'fit_results');
 %                 else
 %                     fit_results.
                 end
