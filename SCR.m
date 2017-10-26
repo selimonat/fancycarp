@@ -4,6 +4,7 @@ classdef SCR < handle
         default_run = 4;%at which run the scr data is located.
         default_timeframe = 2.5:5.5;
         logtransform = 1;
+        zscored      = 1;
     end
     properties (Hidden)
         ledalab_defaults      = {'open', 'mat','downsample', 5,'smooth',{'gauss' '100'}, 'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1 };%
@@ -505,7 +506,7 @@ classdef SCR < handle
             end
         end
         
-        function [out_z, out_raw, out_singletrials] = ledalab_summary(self,varargin)
+        function [ave_z, singletrials_z] = ledalab_summary(self,varargin)
             self.cut(self.findphase('base$'):self.findphase('test$'));
             self.run_ledalab;%collects the ledalab struct
             
@@ -515,13 +516,13 @@ classdef SCR < handle
                 timeframe = self.default_timeframe;
             end
             %
-            out_raw = nan(3*9,1);
+            out_raw = nan(3*9,1); %this will be the average for each condition later
             condcollector = { 'base_0045','base_0090','base_0135','base_0180','base_0225','base_0270','base_0315','base_0360','base_1000',...
                 'cond_0180','cond_0360','cond_1000',...
                 'test_0045','test_0090','test_0135','test_0180','test_0225','test_0270','test_0315','test_0360','test_1000'};
             %             index  = [1:8 12 16 17:24];
             index  = [1:9 13 17 18 19:27];
-            out_singletrials = nan(max(self.ledalab.n),length(self.ledalab.n)); %max(ledalab.n) is 78 nulltrials in testphase.. so there will be a lot of nans.
+            raw_singletrials = nan(max(self.ledalab.n),length(self.ledalab.n)); %max(ledalab.n) is 78 nulltrials in testphase.. so there will be a lot of nans.
             for c = 1:length(condcollector)
                 timey                     = (self.ledalab.x(:,1) >= min(timeframe))&(self.ledalab.x(:,1) <= max(timeframe));%time window
                 condy                     = strcmp(condcollector{c},self.ledalab.condnames)';
@@ -530,11 +531,15 @@ classdef SCR < handle
                     dummy = log10(1+dummy);
                     dummy(imag(dummy)>0) = nan; %get rid of imaginary data where deconvolution is too negative.
                 end
-                out_singletrials(1:length(dummy),index(c))         = dummy(:);
-                out_raw(index(c),1)       = nanmean(dummy);%take average across trials, leaves one value per cond per subj.
+                raw_singletrials(1:length(dummy),index(c))         = nanzscore(dummy(:));
+
+                %out_raw(index(c),1)       = nanmean(dummy);%take average across trials, leaves one value per cond per subj.
                 %out_rawsd(index(c),1)     = std(dummy)./sqrt(length(dummy));
             end
-            out_z = nanzscore(out_raw);     %zscored within subject
+            olddim = size(raw_singletrials);
+            singletrials_z = reshape(nanzscore(raw_singletrials(:)),olddim);     %%nanzscore it, then resort it so that it has the same matrix dimensions, so now it's zscored within subject across all phases
+            
+            ave_z = nanmean(singletrials_z); %average across conditions
         end
         
     end
