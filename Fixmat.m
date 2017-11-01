@@ -787,6 +787,7 @@ colorbar
             end
             obj.bc = old_value;
         end
+        %
          function [count]=EyeNoseMouth(obj,map,normalize)                       
            %% count number of fixations in each roi.
            roi = obj.GetFaceROIs;
