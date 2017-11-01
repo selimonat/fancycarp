@@ -204,7 +204,7 @@ classdef Tuning < handle
             result.x       = unique(x);            
             result.fit     = result.fitfun(result.x,result.Est);
             result.x_HD    = linspace(min(result.x),max(result.x),100);
-            result.fit_HD  = result.fitfun(result.x_HD,result.Est);
+            result.fit_HD  = result.fitfun(result.x_HD,result.Est)+CONSTANT;
             %% show fit if wanted
             if self.visualization
                 
