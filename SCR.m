@@ -506,7 +506,7 @@ classdef SCR < handle
             end
         end
         
-        function [ave_z, singletrials_z,zscore_overmean] = ledalab_summary(self,varargin)
+        function [ave_z, raw_singletrials] = ledalab_summary(self,varargin)
             self.cut(self.findphase('base$'):self.findphase('test$'));
             self.run_ledalab;%collects the ledalab struct
             
@@ -536,11 +536,8 @@ classdef SCR < handle
                 out_raw(index(c),1)       = nanmean(dummy);%take average across trials, leaves one value per cond per subj.
                 %out_rawsd(index(c),1)     = std(dummy)./sqrt(length(dummy));
             end
-            olddim = size(raw_singletrials);
-            singletrials_z = reshape(nanzscore(raw_singletrials(:)),olddim);     %%nanzscore it, then resort it so that it has the same matrix dimensions, so now it's zscored within subject across all phases
-            
-            ave_z = nanmean(singletrials_z); %average across conditions
-            zscore_overmean = nanzscore(out_raw);
+            olddim = size(out_raw);
+            ave_z = reshape(nanzscore(out_raw(:)),olddim); %average across conditions
         end
         
     end
