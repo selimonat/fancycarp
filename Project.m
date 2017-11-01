@@ -126,7 +126,10 @@ classdef Project < handle
             % vectors of 1x8;
             %%
             cmap  = GetFearGenColors;
-            tbar  = 8;
+            if length(Y)==11;
+                cmap = [cmap; [0 0 0 ]];
+            end
+            tbar  = length(Y);
             for i = 1:tbar
                 try
                     h(i)    = bar(X(i),Y(i),40,'facecolor',cmap(i,:),'edgecolor','none','facealpha',.8);
@@ -138,7 +141,7 @@ classdef Project < handle
             %%
             hold on;
             if nargin == 3
-                errorbar(X,Y,SEM,'ko');%add error bars
+                errorbar(X,Y,SEM,'k.');%add error bars
             end
             
             %%
