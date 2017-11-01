@@ -161,7 +161,7 @@ classdef Group < Project
             ratings_sd = ratings_sd(:,:,phases);
         end
         %%
-        function [out outz outraw singletrials] = getSCR(self,varargin)
+        function [out] = getSCR(self,varargin)
             valid = [];
             data = NaN(9*3,length(self.ids));
             for sc = 1:length(self.ids)
