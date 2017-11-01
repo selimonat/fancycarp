@@ -4,7 +4,7 @@ classdef Subject < Project
         default_run     = 2;
         mean_correction = 0;%decides if mean correction should be applied
         align           = 1;%should ratings be aligned to CS+ face
-        fit_method      = 8;%defines method for Tuning Fit on feargen profiles
+        fit_method      = 3;%defines method for Tuning Fit on feargen profiles
     end
     properties (SetAccess = private)
         id
@@ -28,7 +28,7 @@ classdef Subject < Project
                 end
                 s.csp = s.paradigm{s.default_run}.stim.cs_plus;
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
-                s.scr            = SCR(s);
+%                 s.scr            = SCR(s);
                                 
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path)
@@ -54,17 +54,17 @@ classdef Subject < Project
             scr.y      = [];
             if self.scr.ok;                
                 indices                         = {'' 1:8 10:17 19:26};
-                [out_z, single_trials_z,zave] = self.scr.ledalab_summary;
+                [out_z, single_trials] = self.scr.ledalab_summary;
                 %zave is the old logic we had, so far just for comparing 
                 %scr.y            = out_raw(indices{run});
             
-                scr.y    = single_trials_z(:,indices{run});                
+                scr.y    = out_z(indices{run})';          % just fits the average response now.   
                 scr.x    = repmat(scr.x,[size(scr.y,1) 1]);
 %                 scr.y    = nanzscore(scr.y(:)');
-                i        = isnan(scr.y);
-                scr.y(i) = [];
-                scr.x(i) = [];                
-                scr.y_mean = accumarray(scr.x'/45+4,scr.y,[8 1],@mean)';
+%                 i        = isnan(scr.y);
+%                 scr.y(i) = [];
+%                 scr.x(i) = [];                
+%                 scr.y_mean = accumarray(scr.x'/45+4,scr.y,[8 1],@mean)';
             else                
                 scr.y            = [];                
                 cprintf([1 0 0],'no scr present for subject %03d and run (%d) \n',self.id,run);
