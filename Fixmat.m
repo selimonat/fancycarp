@@ -1,6 +1,6 @@
 classdef Fixmat < Project
     properties (Hidden,Constant)
-        window       = 250;%half size of the fixation maps
+        window       = [768 1024 ]./2;%half size of the fixation maps
     end
     
     properties (Hidden,SetAccess = public)
@@ -8,7 +8,7 @@ classdef Fixmat < Project
         bc                  = 0;%cocktail blank correction
         unitize             = 1;%sums to 1 or not
         maptype             = 'conv';%conv or bin
-        kernel_fwhm         = Fixmat.PixelPerDegree*.8;
+        kernel_fwhm         = Fixmat.PixelPerDegree*2.5;
         binsize             = 25;
         linkage_method      = 'average';
         linkage_metric      = 'correlation';
@@ -409,7 +409,7 @@ classdef Fixmat < Project
             c = 0;
             for stim_id = scene2stim(scenes)
                 c    = c+1;
-                v{c} = {'stim_id' stim_id};
+                v{c} = {'file' stim_id};
             end
             obj.getmaps(v{:});
             M = obj.maps;
@@ -438,7 +438,7 @@ classdef Fixmat < Project
                 nsp     = obj.subplot_number;
             end
             
-            path2stim = [strrep(Project.path_project,'data','Stimuli') '*.jpg'];
+            path2stim = [[fileparts(which('exp_ChangeBlindness.m')) filesep 'bin' filesep 'CB_Stimuli' filesep] '*.jpg'];
             dummy = dir(path2stim);
             FM    = [repmat([fileparts(path2stim) filesep],length(dummy),1) vertcat(dummy(:).name)];
             
@@ -453,18 +453,22 @@ classdef Fixmat < Project
                 scene_img = im(:,:,:,scene2stim(scene));
                 %plot the image;
 %                 imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.stimulus);
-                imagesc(obj.bincenters_x(500),obj.bincenters_y(500),scene_img);
+                imagesc(obj.bincenters_x(obj.window(1)),obj.bincenters_y(obj.window(2)),scene_img);
                 hold on;
                 h     = imagesc(obj.bincenters_x,obj.bincenters_y,M(:,:,nc),[d u]);
-                set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.5+.5);
+                set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.8+.2);
                 axis image;
                 axis off;
-                t     = sprintf('Scehe %d ',nc);
+                %
+                [X Y] = meshgrid(linspace(min(obj.bincenters_x),max(obj.bincenters_x),size(M,2)),linspace(min(obj.bincenters_y),max(obj.bincenters_y),size(M,1)));                
+                [~,h] = contourf(X,Y,obj.maps(:,:,nc),prctile(Vectorize(obj.maps(:,:,nc)),[90 97 99]),'linewidth',2);
+                set(h,'fill','off');
+                t     = sprintf('Scene %d ',nc);
                 title(t,'interpreter','none');
                 drawnow
             end
             %                         thincolorbar('vert');
-            colorbar
+%             colorbar
         end
         function plot(obj,varargin)
             
@@ -614,7 +618,7 @@ colorbar
             ttrial = length(unique([obj.trialid(obj.selection) ;obj.subject(obj.selection)]','rows'));
         end
         function out = get.rect(obj)
-            out = [obj.screen_resolution(1)/2-obj.window obj.screen_resolution(2)/2-obj.window [obj.window obj.window]*2];
+            out = [obj.screen_resolution(1)/2-obj.window(1) obj.screen_resolution(2)/2-obj.window(2) [obj.window]*2];
         end
         function out = get.binedges(obj)
             out = {obj.rect(1):obj.binsize:(obj.rect(1)+obj.rect(3)) ...
