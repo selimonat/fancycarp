@@ -235,9 +235,7 @@ classdef Fixmat < Project
             %             for node = 1:size(x,1)
             %                 error_ellipse([x(node,:) ;y(node,:)]','color',Project.colors(node+1,:),'linewidth',1.5);
             %             end
-            hold off
-            
-            
+            hold off       
             
         end
         
@@ -397,6 +395,76 @@ classdef Fixmat < Project
             imin = find(min(m));
             [~,out.ttest.p,out.ttest.ci] = ttest2(criterion(cluster(imax).subs),criterion(cluster(imin).subs));%compares higgest to smallest bar
             
+        end
+        function plot_scenes(obj,varargin)
+            
+            if nargin > 1
+                scenes = varargin{1};
+            else
+                scenes = 1:9;
+            end
+            scene2stim = 3:2:19; % we start at pic 3, then we need to skip version B of each image.
+            %will get maps for requested scenes.
+            v = [];
+            c = 0;
+            for stim_id = scene2stim(scenes)
+                c    = c+1;
+                v{c} = {'stim_id' stim_id};
+            end
+            obj.getmaps(v{:});
+            M = obj.maps;
+            if nargin > 2
+                cmap = varargin{2};
+            else
+                cmap = 'linear';
+            end
+            %get colormap limits.
+            if strcmp(cmap,'linear')
+                [d u] = GetColorMapLimits(M,obj.cmap_limits);
+                if sum(obj.maps(:) < 0) == 0%if there are no negative values
+                    d = 0;
+                end
+            elseif strcmp(cmap,'log')
+                u = max(log10(M(:)));
+                d = u - 1;
+                M = log10(M);
+            end
+            %
+            ffigure;
+            clf
+            if nargin > 3
+                nsp = varargin{3};
+            else
+                nsp     = obj.subplot_number;
+            end
+            
+            path2stim = [strrep(Project.path_project,'data','Stimuli') '*.jpg'];
+            dummy = dir(path2stim);
+            FM    = [repmat([fileparts(path2stim) filesep],length(dummy),1) vertcat(dummy(:).name)];
+            
+            for i = 1:size(FM,1)
+                im(:,:,:,i) = imread(FM(i,:));
+            end
+            
+            nc = 0;
+            for scene = scenes(:)'
+                nc = nc+1;
+                h   = subplot(nsp(1),nsp(2),nc);
+                scene_img = im(:,:,:,scene2stim(scene));
+                %plot the image;
+%                 imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.stimulus);
+                imagesc(obj.bincenters_x(500),obj.bincenters_y(500),scene_img);
+                hold on;
+                h     = imagesc(obj.bincenters_x,obj.bincenters_y,M(:,:,nc),[d u]);
+                set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.5+.5);
+                axis image;
+                axis off;
+                t     = sprintf('Scehe %d ',nc);
+                title(t,'interpreter','none');
+                drawnow
+            end
+            %                         thincolorbar('vert');
+            colorbar
         end
         function plot(obj,varargin)
             
