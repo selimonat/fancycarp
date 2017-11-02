@@ -14,7 +14,7 @@ classdef Project < handle
 %         path_project        = '/Users/onat/Documents/BehavioralExperiments/fearcloud/';
 %         path_project      = sprintf('%s%sGoogle Drive%sEthnoMaster%sBDNF%s',homedir,filesep,filesep,filesep,filesep);
 %         path_project      = sprintf('%s%sDocuments%sExperiments%sBDNF%sdata%s',homedir,filesep,filesep,filesep,filesep,filesep)
-        path_project      = sprintf('%s%sDocuments%sExperiments%sFearCloud_Eyelab%sdata%s',homedir,filesep,filesep,filesep,filesep,filesep)
+        path_project      = sprintf('%s%sDocuments%sExperiments%sNoS%sdata%s',homedir,filesep,filesep,filesep,filesep,filesep)
 %          path_project      = sprintf('%s%sDocuments%sExperiments%sPlaPil%sdata%s',homedir,filesep,filesep,filesep,filesep,filesep)
         scr_blocknames    = {'test_rating' 'test' 'cond_rating' 'cond' 'base_rating' 'base' };
 
