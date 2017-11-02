@@ -25,8 +25,8 @@ classdef Subject < Project
                 for nrun = 1:5
                     s.paradigm{nrun} = s.load_paradigm(nrun);
                 end
-                s.csp = s.paradigm{s.default_run}.stim.cs_plus;
-                s.csn = s.paradigm{s.default_run}.stim.cs_neg;
+%                 s.csp = s.paradigm{s.default_run}.stim.cs_plus;
+%                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
                 try
                     %s.scr = SCR(s);
                 end
