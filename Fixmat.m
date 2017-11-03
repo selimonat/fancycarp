@@ -1,6 +1,6 @@
 classdef Fixmat < Project
     properties (Hidden,Constant)
-        window       = [768 1024 ]./2;%half size of the fixation maps
+        window       = [300 400 ];%half size of the fixation maps
     end
     
     properties (Hidden,SetAccess = public)
@@ -8,7 +8,7 @@ classdef Fixmat < Project
         bc                  = 0;%cocktail blank correction
         unitize             = 1;%sums to 1 or not
         maptype             = 'conv';%conv or bin
-        kernel_fwhm         = Fixmat.PixelPerDegree*2.5;
+        kernel_fwhm         = Fixmat.PixelPerDegree*1.7;
         binsize             = 25;
         linkage_method      = 'average';
         linkage_metric      = 'correlation';
@@ -68,44 +68,80 @@ classdef Fixmat < Project
                 for subject = subjects(:)'
                     %                     if exist(regexprep(obj.path2data(subject,run,'eye'),'.mat','.edf')) ~= 0 %does the subject has an edf file?
                     
-                    %% edf2mat conversion
-                    if ~exist(obj.path2data(subject,run,'eye'))%is the edf file converted?
-                        fprintf('-edfread not yet ran (subject:%03d, run:%03d)\n-Roger that, will do it ASAP, sir!\n',subject,run);
-                        [trials info] = edfread(regexprep(obj.path2data(subject,run,'eye'),'.mat','.edf'),'TRIALID');
-                        save(obj.path2data(subject,run,'eye'),'trials','info');
-                        %if the conversion fails the code will fail, it is recommended to rename the data.edf file to something else then.
-                    else
-                        fprintf('edf is converted (subject:%03d, run:%03d)\n',subject,run);
-                    end
+                    path_eye= obj.path2data(subject,run,'eye');
+                    eval(['!/Applications/Eyelink/EDF_Access_API/Example/edf2asc  -t -ns ' regexprep(path_eye,'.mat','.edf') ';'])
+                    eval(['!cat ' regexprep(path_eye,'.mat','.asc') ' | grep EFIX  > ' regexprep(path_eye,'.mat','2.asc')]);
+                    text = fileread(regexprep(path_eye,'.mat','2.asc'));
+                    t=textscan(text,'%s%s%f%f%f%f%f%f','delimiter',sprintf('\t'));
                     
-                    dummy = load(obj.path2data(subject,run,'eye'));
-                    %this is necessary to expand the PTB message to
-                    %something that is understandable by the fixations
-                    %method.
-                    for nt = 1:length(dummy.trials)
-                        %extract relevant info first from the text message
-                        T = dummy.trials(nt).TRIALID.msg(1,:);
-                        %add them as msg so that .getfixmat can create the fields
-                        pairs = regexp(T,'[\w-]*','match');
-                        for np = 1:2:length(pairs)-1
-                            dummy.trials(nt).(lower(pairs{np})).msg = pairs{np+1};
-                        end
-                    end
-                    %
-                    dummy.trials = rmfield(dummy.trials,{'TRIALID'});%make .getfixmat happy
-                    dummy        = obj.getfixmat(dummy.trials,dummy.info);%get the fixmat
-                    dummy.subject= repmat(uint32(subject),1,length(dummy.x));
-                    %and append it to the previous fixmat
-                    for fns = properties(obj)'
-                        %% take fixations which are only coming from the required phase.
-                        %(e.g. ratings in baseline are coded as 5)
-                        valid_fix = dummy.phase == run;
-                        if isfield(dummy,fns{1})%if it is not a property dont even consider
-                            obj.(fns{1}) = [obj.(fns{1}) dummy.(fns{1})(valid_fix)];%append it to the previous
-                        else
-                            obj.(fns{1}) = [obj.(fns{1}) zeros(1,sum(valid_fix))];%append it to the previous
-                        end
-                    end
+                    eval(['!cat ' regexprep(path_eye,'.mat','.asc') ' | grep "Stim Onset"  > ' regexprep(path_eye,'.mat','3.asc')])
+                    text = fileread(regexprep(path_eye,'.mat','3.asc'));
+                    t3=textscan(text,'%s%f%s%s','delimiter',sprintf('\t'));
+                    Onsets = double(t3{2});
+                    
+                    eval(['!cat ' regexprep(path_eye,'.mat','.asc') ' | grep "Stim Offset"  > ' regexprep(path_eye,'.mat','4.asc')])
+                    text = fileread(regexprep(path_eye,'.mat','4.asc'));
+                    t4=textscan(text,'%s%f%s%s','delimiter',sprintf('\t'));
+                    Offsets = double(t4{2});
+                    
+                    
+                    
+                    tfix         = length(t{1});
+                    obj.y        = single(t{7}');
+                    obj.x        = single(t{6}');
+                    obj.phase    = repmat(int32(1),1,tfix); 
+                    obj.subject  = repmat(uint32(subjects(1)),1,tfix);
+                    
+                    obj.eye       = repmat(uint8(2),1,tfix);
+                    obj.deltacsp  = repmat(int32(0),1,tfix);
+                    for nfix = 1:tfix;file(nfix) = find([t{3}(nfix)-[Offsets]] < 0,1);end
+                    obj.file      = uint32(file);
+                    obj.oddball   = repmat(int32(0),1,tfix);
+                    obj.trialid   = obj.file;
+                    obj.ucs       = repmat(int32(0),1,tfix);
+%                     dummy.fix       = [1x105 int32]
+                    obj.chain     = repmat((0),1,tfix);
+                    obj.isref     = repmat((0),1,tfix);
+%                     obj.rect      = [0 0 768 1024];    
+
+% %                     %% edf2mat conversion
+% %                     if ~exist(obj.path2data(subject,run,'eye'))%is the edf file converted?
+% %                         fprintf('-edfread not yet ran (subject:%03d, run:%03d)\n-Roger that, will do it ASAP, sir!\n',subject,run);
+% %                         [trials info] = edfread(regexprep(obj.path2data(subject,run,'eye'),'.mat','.edf'),'TRIALID');
+% %                         save(obj.path2data(subject,run,'eye'),'trials','info');
+% %                         %if the conversion fails the code will fail, it is recommended to rename the data.edf file to something else then.
+% %                     else
+% %                         fprintf('edf is converted (subject:%03d, run:%03d)\n',subject,run);
+% %                     end
+% %                     
+% %                     dummy = load(obj.path2data(subject,run,'eye'));
+% %                     %this is necessary to expand the PTB message to
+% %                     %something that is understandable by the fixations
+% %                     %method.
+% %                     for nt = 1:length(dummy.trials)
+% %                         %extract relevant info first from the text message
+% %                         T = dummy.trials(nt).TRIALID.msg(1,:);
+% %                         %add them as msg so that .getfixmat can create the fields
+% %                         pairs = regexp(T,'[\w-]*','match');
+% %                         for np = 1:2:length(pairs)-1
+% %                             dummy.trials(nt).(lower(pairs{np})).msg = pairs{np+1};
+% %                         end
+% %                     end
+% %                     %
+% %                     dummy.trials = rmfield(dummy.trials,{'TRIALID'});%make .getfixmat happy
+% %                     dummy        = obj.getfixmat(dummy.trials,dummy.info);%get the fixmat
+% %                     dummy.subject= repmat(uint32(subject),1,length(dummy.x));
+% %                     %and append it to the previous fixmat
+% %                     for fns = properties(obj)'
+% %                         %% take fixations which are only coming from the required phase.
+% %                         %(e.g. ratings in baseline are coded as 5)
+% %                         valid_fix = dummy.phase == run;
+% %                         if isfield(dummy,fns{1})%if it is not a property dont even consider
+% %                             obj.(fns{1}) = [obj.(fns{1}) dummy.(fns{1})(valid_fix)];%append it to the previous
+% %                         else
+% %                             obj.(fns{1}) = [obj.(fns{1}) zeros(1,sum(valid_fix))];%append it to the previous
+% %                         end
+% %                     end
                 end
                 %                 end
             end
@@ -401,13 +437,12 @@ classdef Fixmat < Project
             if nargin > 1
                 scenes = varargin{1};
             else
-                scenes = 1:9;
-            end
-            scene2stim = 3:2:19; % we start at pic 3, then we need to skip version B of each image.
+                scenes = 2:10;
+            end            
             %will get maps for requested scenes.
             v = [];
             c = 0;
-            for stim_id = scene2stim(scenes)
+            for stim_id = scenes;%scene2stim(scenes)
                 c    = c+1;
                 v{c} = {'file' stim_id};
             end
@@ -437,35 +472,35 @@ classdef Fixmat < Project
             else
                 nsp     = obj.subplot_number;
             end
-            
-            path2stim = [[fileparts(which('exp_ChangeBlindness.m')) filesep 'bin' filesep 'CB_Stimuli' filesep] '*.jpg'];
-            dummy = dir(path2stim);
-            FM    = [repmat([fileparts(path2stim) filesep],length(dummy),1) vertcat(dummy(:).name)];
-            
-            for i = 1:size(FM,1)
-                im(:,:,:,i) = imread(FM(i,:));
+                        %%
+            im = [];
+            for i = scenes-1
+                filename = sprintf('/Users/onat/Documents/Code/Matlab/ptb/bin/CB_Stimuli/%02d-0.jpg',i)
+                im(:,:,:,i) = imread(filename);
             end
-            
+            %%
+            clf;
             nc = 0;
             for scene = scenes(:)'
+                
                 nc = nc+1;
                 h   = subplot(nsp(1),nsp(2),nc);
-                scene_img = im(:,:,:,scene2stim(scene));
+                scene_img = im(:,:,:,scene-1);
                 %plot the image;
 %                 imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.stimulus);
-                imagesc(obj.bincenters_x(obj.window(1)),obj.bincenters_y(obj.window(2)),scene_img);
+                imagesc(obj.bincenters_x(obj.window(1)),obj.bincenters_y(obj.window(2)),scene_img./255);
                 hold on;
                 h     = imagesc(obj.bincenters_x,obj.bincenters_y,M(:,:,nc),[d u]);
-                set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.8+.2);
+                set(h,'alphaData',Scale(abs((obj.maps(:,:,nc))))*.5+.5);
                 axis image;
                 axis off;
                 %
                 [X Y] = meshgrid(linspace(min(obj.bincenters_x),max(obj.bincenters_x),size(M,2)),linspace(min(obj.bincenters_y),max(obj.bincenters_y),size(M,1)));                
                 [~,h] = contourf(X,Y,obj.maps(:,:,nc),prctile(Vectorize(obj.maps(:,:,nc)),[90 97 99]),'linewidth',2);
                 set(h,'fill','off');
-                t     = sprintf('Scene %d ',nc);
+                t     = sprintf('Bild: %d ',nc);
                 title(t,'interpreter','none');
-                drawnow
+                drawnow                
             end
             %                         thincolorbar('vert');
 %             colorbar
