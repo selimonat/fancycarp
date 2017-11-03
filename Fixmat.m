@@ -81,7 +81,7 @@ classdef Fixmat < Project
 % 					end
 % 
 %                     dummy = load(path_eye);
-%                     %this is necessary to expand the PTB message to
+%                     %this is necessary to expand the P:TB message to
 %                     %something that is understandable by the fixations
 %                     %method.
 %                     for nt = 1:length(dummy.trials)
@@ -101,26 +101,36 @@ classdef Fixmat < Project
                     eval(['!cat ' regexprep(path_eye,'.mat','.asc') ' | grep EFIX  > ' regexprep(path_eye,'.mat','2.asc')])
                     text = fileread(regexprep(path_eye,'.mat','2.asc'));
                     t=textscan(text,'%s%s%f%f%f%f%f%f','delimiter',sprintf('\t'));
+                                        
+                    eval(['!cat ' regexprep(path_eye,'.mat','.asc') ' | grep "Stim Onset"  > ' regexprep(path_eye,'.mat','3.asc')])
+                    text = fileread(regexprep(path_eye,'.mat','3.asc'));
+                    t=textscan(text,'%s%f%s%s','delimiter',sprintf('\t'));
+                    Onsets = t{2};
                     
-                    tfix  = length(t{1});
-                    dummy.y  = t{6};
-                    dummy.x  = t{7};
-                    dummy.phase    = repmat(1,1,tfix); 
-                    dummy.subject  = repmat(uint32(subject),1,tfix);
+                    eval(['!cat ' regexprep(path_eye,'.mat','.asc') ' | grep "Stim Offset"  > ' regexprep(path_eye,'.mat','4.asc')])
+                    text = fileread(regexprep(path_eye,'.mat','4.asc'));
+                    t=textscan(text,'%s%f%s%s','delimiter',sprintf('\t'));
+                    Offsets = t{3};
                     
-                    dummy.eye       = repmat(uint32(2),1,tfix);
-                    dummy.deltacsp  = [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
-                    dummy.file      = [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
-                    dummy.oddball   = [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
-                    dummy.trialid   = [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
-                    dummy.ucs       = [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
-                    dummy.fix       = [1x105 int32]
-                    dummy.chain     = [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
-                    dummy.isref     = [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+                    tfix           = length(t{1});
+                    dummy.y        = single(t{7}');
+                    dummy.x        = single(t{6}');
+                    dummy.phase    = repmat(int32(1),1,tfix); 
+                    dummy.subject  = repmat(uint32(subjects(1)),1,tfix);
+                    
+                    dummy.eye       = repmat(uint8(2),1,tfix);
+                    dummy.deltacsp  = repmat(int32(0),1,tfix);
+%                     dummy.file      = repmat(uint32(2),1,tfix);
+                    dummy.oddball   = repmat(int32(0),1,tfix);
+%                     dummy.trialid   = [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+                    dummy.ucs       = repmat(int32(0),1,tfix);
+%                     dummy.fix       = [1x105 int32]
+                    dummy.chain     = repmat((0),1,tfix);
+                    dummy.isref     = repmat((0),1,tfix);
                     dummy.rect      = [0 0 768 1024]
-                    dummy.selection = [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
-                    dummy.realcond  = 0
-                    dummy.weight    =  [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+%                     dummy.selection = [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+%                     dummy.realcond  = 0
+%                     dummy.weight    =  [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
                     
                     
                     
