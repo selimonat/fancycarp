@@ -39,14 +39,15 @@ classdef Subject < Project
         pupil
         csp
         csn
-        scr           = [];
+        scr              = [];
         eye
-        pmf_param     = [];
-        rating_param  = [];
-        scr_param     = [];
-        trio_session  = [];
-        rating        = [];
-        total_run     = [];
+        pmf_param        = [];
+        rating_param     = [];
+        scr_param        = [];
+        facecircle_param = [];
+        trio_session     = [];
+        rating           = [];
+        total_run        = [];
         pmf        
         detected_oddballs;
         detected_face;%
@@ -406,10 +407,12 @@ classdef Subject < Project
                 if isfield(self.paradigm{run}.out,'rating')
                     if ~isempty(self.paradigm{run});
                         rating(run).y      = self.paradigm{run}.out.rating';
+%                         rating(run).y      = rating(run).y - mean(rating(run).y(:));%remove the global mean
                         rating(run).y      = circshift(rating.y,[1 4-self.csp ]);
                         rating(run).x      = repmat([-135:45:180],size(self.paradigm{run}.out.rating,2),1);
                         rating(run).ids    = repmat(self.id,size(self.paradigm{run}.out.rating,2),size(self.paradigm{run}.out.rating,1));
                         rating(run).y_mean = mean(rating.y);
+%                         rating(run).y_mean = self.circconv2(rating.y_mean,[1 1]/2);
                         rating(run).y_sem  = std(rating.y)./sqrt(2);                                                
                     else
                         fprintf('No rating present for this subject and run (%d) \n',nr);
@@ -419,27 +422,49 @@ classdef Subject < Project
         end
         function [out]      = get.rating_param(self)
             %returns the parameters of the pmf fit (1 x parameter);
-            out      = [self.fit_rating.params(1,:)];
+            fit               = self.fit_rating;
+            out               = fit.params;
+            %
+            D                 = zscore(self.rating.y_mean);
+            NonParametricDiff = mean(D([3 4 5])-D([1 7 8]));
+            if self.selected_fitfun == 8                
+                dummy    = [self.id out(:,1:3) abs(out(1,3)) fit.LL fit.FearTuning NonParametricDiff];                
+                out      = array2table(dummy,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_absmu' 'rating_LL' 'feartuning_rating' 'rating_nonparam'});                
+            elseif self.selected_fitfun == 3
+                dummy    = [self.id out(:,1:2)  fit.LL fit.FearTuning NonParametricDiff];                
+                out      = array2table(dummy,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm'                            'rating_LL' 'feartuning_rating' 'rating_nonparam'});
+            end
         end
+        
         function [out]      = get.scr_param(self)
-            %returns the parameters of the pmf fit (1 x parameter);
-            out      = [self.fit_scr.params(1,:)];
+            %
+            fit               = self.fit_scr;
+            out               = fit.params;
+            D                 = zscore(self.scr.y_mean);
+            NonParametricDiff = mean(D([3 4 5])-D([1 7 8]));
+            if self.selected_fitfun == 8                
+                dummy    = [self.id out(:,1:3) abs(out(1,3)) fit.LL fit.FearTuning NonParametricDiff];                
+                out      = array2table(dummy,'variablenames',{'subject_id' 'scr_amp' 'scr_fwhm' 'scr_mu' 'scr_absmu' 'scr_LL' 'feartuning_scr' 'scr_nonparam'});                
+            elseif self.selected_fitfun == 3
+                dummy    = [self.id out(:,1:2)  fit.LL fit.FearTuning NonParametricDiff];                
+                out      = array2table(dummy,'variablenames',{'subject_id' 'scr_amp' 'scr_fwhm'                      'scr_LL' 'feartuning_scr' 'scr_nonparam'});
+            end
+            
         end
         function out        = get.scr(self)
             %returns scr after cleaning bad microblocks
             if ~isempty(self.scr)                
                 self.scr.run_ledalab;                
-                y                                                   = self.scr.ledalab.y;%[time trial]
+                y                                                   = self.scr.ledalab.y;%[time trial
                 y                                                   = mean(y);%remove tiem dimension
-                                
                 y                                                   = reshape(y,[65,9]);%[time mbi cond]
                 y([Project.mbi_oddball Project.mbi_transition],:)   = [];
                 y(self.ucs_vector == 1,:)                           = [];
                 
-                out.y                                               = y(:,1:8);
+                out.y                                               = y(self.select_scr_trials:end,1:8);
                 out.x                                               = repmat([-135:45:180],size(out.y,1),1);
                 out.ids                                             = repmat(self.id,size(out.y,1),size(out.y,2));
-                out.y_mean                                          = mean(out.y);
+                out.y_mean                                          = mean(out.y);%average only on the second half.                
                 out.y_sem                                           = std(out.y)./sqrt(size(out.y,1));                
             end
         end
@@ -459,6 +484,19 @@ classdef Subject < Project
                out.y = y;
                out.x = repmat(self.scr.ledalab.x(:,1),[1 size(data.y,2) size(data.y,3)]);
            end
+        end
+        function [out]      = get.facecircle_param(self)
+            fit               = self.fit_facecircle;
+            out               = fit.params;    
+            D                 = zscore(self.get_facecircle.(self.eye_data_type));
+            NonParametricDiff = mean(D([3 4 5])-D([1 7 8]));
+            if self.selected_fitfun == 8                
+                dummy    = [self.id out(:,1:3) abs(out(1,3)) fit.LL fit.FearTuning NonParametricDiff];                
+                out      = array2table(dummy,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_mu' 'facecircle_absmu' 'facecircle_LL' 'feartuning_facecircle' 'facecircle_nonparam'});                
+            elseif self.selected_fitfun == 3
+                dummy    = [self.id out(:,1:2)  fit.LL fit.FearTuning NonParametricDiff];                
+                out      = array2table(dummy,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm'                                    'facecircle_LL' 'feartuning_facecircle' 'facecircle_nonparam'});
+            end            
         end
         function f          = get_facecircle_fixmat(self)
             %out        = get_facemaps(self)
@@ -534,10 +572,12 @@ classdef Subject < Project
             % mind that the .RAW field interacts with PARTITION, if you
             % need to have all fixations in the .RAW fields you have to
             % have PARTITION set to 1.
-            
+            if nargin < 2%if no partition info, assumes 1
+                partition = 1;
+            end
             out                               = [];
             filename                          = sprintf('%sfacecircle_%02d.mat',self.path_midlevel(3),partition);%facecircle is recorded in run 3.
-            force = 0;%!!!!!!!!!!!!!!!!!!!!!!!!!1
+            force = 1;%!!!!!!!!!!!!!!!!!!!!!!!!!1
             %if you like to recache the Project.screen_size and
             %Fixmat.window has to be readjusted to original values, cache
             %it and change back to aligned settings.
@@ -594,12 +634,15 @@ classdef Subject < Project
                 limits        = linspace(0,tfix,partition+1)+1;
                 [a b]         = histc(out.raw(10,:),limits);
                 for P   = 1:partition
-                    i                         = b == P;
-                    out.count(P,:)    = accumarray(out.raw(9,i)',1,[8 1] );%no weight
+                    i                 = b == P;
+                    out.count(P,:)    = accumarray(out.raw(9,i)',1,[8 1] );%no weight                    
                     out.countw(P,:)   = accumarray(out.raw(9,i)',W2(out.raw(6,i)'),[8 1] );%posiiton weights
                     out.x(P,:)        = [-135:45:180];
                     out.ids(P,:)      = repmat(P,1,8);
                 end
+                %output the standard structure
+                out.y         = self.circconv2(out.(self.eye_data_type),[1 1]/2);
+                out.y_mean    = mean(out.y,1);                
                 %add these weights to the raw data matrix also.
                 cprintf([0 1 0],'facecircle for partition %03d is now cached...\n',partition);
                 save(filename,'out');
@@ -1530,13 +1573,15 @@ classdef Subject < Project
             self.plot_bar(mean(self.rating.x), self.rating.y_mean,self.rating.y_sem);%plot the data            
             
             %if the fit is better than flat line, paint accordingly.
-            if  ~ismember(self.id,self.get_selected_subjects(criterium).list)%plot simply a blue line if the fit is not significant.
-                PlotTransparentLine(self.fit_rating.x_hd,repmat(mean(self.rating.y(:)),100,1),.5,'k','linewidth',2.5);
+            fit = self.fit_rating;
+            if fit.FearTuning == 0%plot simply a blue line if the fit is not significant.
+                PlotTransparentLine(fit.x_hd , repmat(mean(self.rating.y_mean),100,1),.35,'k','linewidth',2.5);
+                PlotTransparentLine(fit.x_hd , fit.y_hd(:),.35,'k','linewidth',2.5);%this is the fit.
             else
-                PlotTransparentLine(self.fit_rating.x_hd(:),self.fit_rating.y_hd(:),.5,'k','linewidth',2.5);%this is the fit.
+                PlotTransparentLine(fit.x_hd , fit.y_hd(:),.35,'k','linewidth',2.5);%this is the fit.
             end
             hold off;
-            ylim([0 10]);
+%             ylim([0 10]);
             title(sprintf('id:%02d (+:%d)',self.id,self.csp),'fontsize',12);%subject and face id
         end
         function plot_pmf(self,chains)
@@ -1560,12 +1605,13 @@ classdef Subject < Project
             if ~isempty(self.scr)
                 out = self.scr;
                 self.plot_bar(out.x(1,:),out.y_mean,out.y_sem);
-                
+                fit = self.fit_scr;
                 %if the fit is better than flat line, paint accordingly.
-                if  (self.fit_scr.LL < -log10(.05))%plot simply a blue line if the fit is not significant.
-                    PlotTransparentLine(self.fit_scr.x_hd,repmat(mean(self.scr.y(:)),100,1),.5,'k','linewidth',2.5);
+                if  fit.FearTuning == 0%plot simply a blue line if the fit is not significant.
+                    PlotTransparentLine(fit.x_hd,repmat(mean(self.scr.y(:)),100,1),.5,'k','linewidth',2.5);
+                    PlotTransparentLine(fit.x_hd(:),fit.y_hd(:),.5,'k','linewidth',2.5);%this is the fit.
                 else
-                    PlotTransparentLine(self.fit_scr.x_hd(:),self.fit_scr.y_hd(:),.5,'k','linewidth',2.5);%this is the fit.
+                    PlotTransparentLine(fit.x_hd(:),fit.y_hd(:),.5,'k','linewidth',2.5);%this is the fit.
                 end
                 
                 
@@ -1576,18 +1622,23 @@ classdef Subject < Project
             %plot subjects face_circle performance as a bar plot. No matter
             %what PARTITION is, always the first one is plotted.
             %%
+            if nargin < 2
+                partition = 1;
+            end
             out  = self.get_facecircle(partition);
-            Y    = out.countw(1,:);
+            Y    = out.(self.eye_data_type)(1,:);
             Y    = self.circconv2(Y,[1 1]/2);
             X    = out.x(1,:);
             self.plot_bar(X,Y');%plot the data            
             hold on;
             %if the fit is better than flat line, paint accordingly.
+            fit = self.fit_facecircle(partition);
             for P = 1:partition
-                if ~ismember(self.id,self.get_selected_subjects(6).list)%plot simply a blue line if the fit is not significant.
-                    PlotTransparentLine(self.fit_facecircle(1).x_hd , repmat(mean(out.countw(P,:)),100,1),.35,'k','linewidth',2.5);
+                if fit.FearTuning == 0%plot simply a blue line if the fit is not significant.
+                    PlotTransparentLine(fit.x_hd , repmat(mean(out.(self.eye_data_type)(P,:)),100,1),.35,'k','linewidth',2.5);
+                    PlotTransparentLine(fit.x_hd , fit.y_hd(P,:)',.35,'k','linewidth',2.5);%this is the fit.
                 else
-                    PlotTransparentLine(self.fit_facecircle(1).x_hd , self.fit_facecircle(partition).y_hd(P,:)',.35,'k','linewidth',2.5);%this is the fit.
+                    PlotTransparentLine(fit.x_hd , fit.y_hd(P,:)',.35,'k','linewidth',2.5);%this is the fit.
                 end
             end
             hold off;
@@ -1625,7 +1676,224 @@ classdef Subject < Project
             supertitle(mat2str(self.id));
             %it seems the PTB was drawing the face circle from 11:00 oclock
             %clockwise.
+        end                
+        function figure_ModelExplanation(self)
+            
+            model = 4;
+            tmbi  = 5;
+            %%
+            kappa   = .1;
+            %create a weight vector for the derivative.
+            res     = 8;
+            x2      = [0:(res-1)]*(360/res)-135;
+            x2      = [x2 - (360/res/2) x2(end)+(360/res/2)];
+            deriv   = -abs(diff(Tuning.VonMises(x2,1,kappa,0,0)));
+            %this
+            mbi_id  = Vectorize(repmat(1:tmbi,res,1));
+            stim_id = Vectorize(repmat([-135:45:180]',1,tmbi));
+            pmod    = NaN(length(stim_id),6);
+            for ntrial = 1:length(stim_id)
+                if stim_id(ntrial) < 1000
+                    pmod(ntrial,1) = 1;%constant term
+                    pmod(ntrial,2) = mbi_id(ntrial);%onsets
+                    pmod(ntrial,3) = Tuning.VonMises( stim_id(ntrial),1,kappa,0,0);%amp
+                    pmod(ntrial,5) = deriv(mod(stim_id(ntrial)./45+4-1,8)+1);%dsigma
+                end
+            end
+            %
+            pmod(:,2:3)      = nandemean(pmod(:,2:3));%mean correct
+            pmod(:,7)        = nandemean(pmod(:,2).^2);%poly expansion time;
+            
+            pmod(:,5)        = nandemean(pmod(:,5));%dsigma
+            pmod(:,4)        = pmod(:,2).*pmod(:,3);%time x amp
+            pmod(:,6)        = pmod(:,2).*pmod(:,5);%time x dsigma
+            pmod(:,8)        = pmod(:,7).*pmod(:,3);%time2 x amp
+            pmod(:,9)        = pmod(:,7).*pmod(:,5);%time2 x dsigma
+            pmod(:,2:end)    = nanzscore(pmod(:,2:end));
+            
+            if model == 3
+                pmod = pmod(:,1:4);
+            elseif model == 4
+                pmod = pmod(:,1:6);
+            elseif model == 5
+                pmod = pmod(:,[1 2 3 4 7 8 5 6 9]);
+            end
+            %
+            w       = [0 -1 0 0 0 0;0 -1 2 0 0 0 ;0 -1 2 1 0 0;0 -1 2 1 .5 0 ;0 -1 2 .6 .5 .7]
+            
+            
+            
+            trow    = size(w,1);
+            tcol    = 3;
+            figure(2);
+            set(gcf,'position',[765           1        1155        1104]);
+            c =1;
+            clf;
+            for nmodel = 1:trow
+                st      = reshape(pmod*w(nmodel,:)',8,8*tmbi/8)';
+                %
+                subplot(trow,tcol,c);
+                barh(w(nmodel,2:end),.9,'k');                
+                hold off
+                box off;
+                axis tight;
+                xlim([-2 2]);
+                hold on
+                set(gca,'ygrid','on','yticklabel','','xticklabel',{'0'},'ytick',1:6,'xtick',0);
+                axis ij;
+                if c == 1
+                    title('Weights');
+                end
+                hold on
+                plot(w(nmodel,2:end),1:5,'ko');
+                plot(w(nmodel,2:end),1:5,'k.','markersize',10);
+                
+                yticklabels = {'time', '\alpha', 'time\times\alpha' '\sigma' 'time\times\sigma'};
+                set(gca,'yticklabel',yticklabels(1:5));
+                
+                c=c+1;
+                %%
+                subplot(trow,tcol,c);
+                plot(Vectorize(st'),'k.-','markersize',20);
+                box off;
+                if nmodel == 1
+                    ylabel('activity');
+                end
+                if nmodel == 1
+                    xlabel('microblocks')
+                end
+                set(gca,'xtick',8:8:tmbi*8,'xticklabel','','xgrid','on','ytick',[],'xticklabel',{'1          ' '2          ' '3          ' '4          ' '5          '});
+                
+                c=c+1;
+                %%
+                subplot(trow,tcol,c);
+                imagesc(st);
+                set(gca,'xtick',[2 4 6 8],'xticklabel',{'-90' 'CS+' '+90' 'CS-'},'xgrid','on','ytick',[1 2 3 4 5])
+                box off
+                colormap parula
+                axis xy;
+%                 axis image;
+                if nmodel == 1
+                    ylabel('microblocks');
+                end
+                c=c+1;
+            end
         end
+        function figure_PostExperimentResults(self,ngroup)
+            
+            s             = Subject(5);
+            X_pmf         = s.fit_pmf.x(1:58);
+            X_detection   = -135:45:180;
+            out           = s.getgroup_all_param;
+            %% select subjects to plot
+            %selected      = out.subject_id(abs(out.detection_face) <= 45);%randsample( 5:44,20,1);
+            %selected      = out.subject_id(abs(out.rating_mu) <= 45);%randsample( 5:44,20,1);
+            selection     = ngroup
+            selected      = s.get_selected_subjects(selection).list;
+            tit           = sprintf('%s (n = %02d)',s.get_selected_subjects(selection).name,length(selected));
+            all_subjects  = 5:44;
+            subjects{1}   = selected;%selected subjects.
+            subjects{2}   = setdiff(all_subjects,selected);
+            tgroup        = length(subjects);
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % average pmf Curve
+            figure;
+            set(gcf,'position',[83         313        1149         730]);
+            clf
+            for groups = 1:tgroup;
+                subplot(tgroup,4,1+4*(groups-1))
+                i = subjects{groups};
+                i = ismember(out.subject_id,i);
+                params_csp = nanmean([out.pmf_csp_alpha(i)  out.pmf_csp_beta(i) out.pmf_csp_gamma(i) out.pmf_csp_lamda(i)]);
+                params_csn = nanmean([out.pmf_csn_alpha(i)  out.pmf_csn_beta(i) out.pmf_csn_gamma(i) out.pmf_csn_lamda(i)]);
+                Y_P        = PAL_Weibull(params_csp,X_pmf);
+                Y_N        = PAL_Weibull(params_csn,X_pmf);
+                plot(X_pmf,Y_P,'r',X_pmf,Y_N,'c','linewidth',5);
+                axis square;box off;axis tight;
+                ylabel('p(correct)')
+                xlabel('\Delta Difference')
+                ylim([0 1]);
+                SetTickNumber(gca,5,'y');
+                set(gca,'xtick',[0:45:90],'xticklabel',{'CS+/-' '45'  '90'},'xgrid','on')
+                title(sprintf('Perceptual\nDiscrimination'));
+            end
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % polar plot of the detected faces.
+            cdata = GetFearGenColors;
+            for groups = 1:tgroup;
+                subplot(tgroup,4,1+1+4*(groups-1))
+                i  = subjects{groups};
+                i  = ismember(out.subject_id,i);
+                Y  = out.detection_face(i);
+                Y  = histc(Y,X_detection);
+                %turn the following on for polar plots
+%                 PolarBarPlot(circshift(deg2rad(X_detection),[0 0]),circshift(Y',[0 2]),circshift(cdata(1:8,:)',[0 2]),[0:4:10],strcat({' '}, num2str(circshift(X_detection(:),[2 0]),'%d')))                
+                self.plot_bar(-135:45:180,Y)
+                ylim([0 10]);
+            end
+%             subplot(tgroup,4,2);title('Detection');
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % explicit ratings
+            R = [];
+            for ns = all_subjects
+                s = Subject(ns);
+                R = [R;s.rating.y_mean];
+            end
+            for groups = 1:tgroup;
+                subplot(tgroup,4,2+1+4*(groups-1))
+                i = ismember(all_subjects,subjects{groups});
+                Project.plot_bar(-135:45:180,mean(R(i,:)),std(R(i,:))./sqrt(sum(i)));
+                %
+                hold on;
+                data.y   = R(i,:)';
+                data.x   = repmat(-135:45:180',[size(data.y,2) 1])';
+                data.ids    = 1:size(data.y,2);
+                t           = Tuning(data);
+                t.gridsize = 10;
+                t.GroupFit(8);
+                if t.groupfit.pval > -log10(0.01)
+                    plot(t.groupfit.x_HD,t.groupfit.fit_HD,'k','linewidth',4);
+                else
+                    plot(t.groupfit.x_HD,repmat(mean2(R(i,:)),1,100),'k','linewidth',4);
+                end
+                drawnow;
+                hold off
+            end
+%             subplot(tgroup,4,3);title(sprintf('Subjective Shock\n Likelihood'));
+            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+            % saliency
+            F = [];
+            for ns = all_subjects
+                s = Subject(ns);
+                F = [F;s.get_facecircle(1).(self.eye_data_type)];
+            end
+            for groups = 1:tgroup
+                subplot(tgroup,4,3+1+4*(groups-1))
+                i = ismember(all_subjects,subjects{groups});
+                Project.plot_bar(-135:45:180,mean(F(i,:))',std(F(i,:))./sqrt(sum(i)));                
+                
+                hold on;
+                data.y     = F(i,:)';
+                data.x     = repmat(-135:45:180',[size(data.y,2) 1])';
+                data.ids   = 1:size(data.y,2);
+                t          = Tuning(data);
+                t.gridsize = 10;
+                t.GroupFit(8);
+                if t.groupfit.pval > -log10(0.01)
+                    plot(t.groupfit.x_HD,t.groupfit.fit_HD,'k','linewidth',4);
+                else
+                    plot(t.groupfit.x_HD,repmat(mean2(F(i,:)),1,100),'k','linewidth',4);
+                end
+                drawnow;
+                hold off;
+            end
+            subplot(tgroup,4,4);supertitle(tit,1,'interpreter','none','fontsize',12);            
+%             SaveFigure(sprintf('/home/onat/Dropbox/selim/Office/Fearamy/FigureCache/%s.png',s.get_selected_subjects(selection).name));
+            
+            %
+            
+        end
+        
     end
     methods %(spm_fmri analysis)
         function [stim_scanunit,stim_ids,stim_mbi] = analysis_StimTime2ScanUnit(self,L)
@@ -2974,14 +3242,16 @@ classdef Subject < Project
             %wise will read the raw ratingdata (saved in runXXX/stimulation)
             %and compute a fit.
             
-            fun        = self.selected_fitfun;;%vM function
-            force      = 0;%repeat the analysis or load from cache            
-            write_path = sprintf('%s/midlevel/rating_fun_%i.mat',self.pathfinder(self.id,1),fun);            
+            fun        = self.selected_fitfun;;%vM or Gau function
+            force      = 1;%repeat the analysis or load from cache            
+            borders    = 1000;
+            pval       = self.pval;
+            write_path = sprintf('%s/midlevel/rating_fun_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),fun,borders,pval*1000);
             
             if exist(write_path) && force ==0
                 %load directly or
                 load(write_path);
-%                 fprintf('Rating Fit found and loaded successfully for subject %i...\n',self.id);
+                cprintf([0 1 0 ],'Rating Fit found and loaded successfully for subject %i...\n%s\n',self.id,write_path);
                 
             elseif force == 1 || ~exist(write_path)
                 %compute and save it.
@@ -3003,18 +3273,23 @@ classdef Subject < Project
                 out.y                        = T.fit_results{fun}.y_fitted(1,:);
                 out.x                        = T.fit_results{fun}.x(1,:);
                 out.fitfun                   = T.fit_results{fun}.fitfun;                
-                %
+                %%
                 if fun == 8%if vM, then transform kappa to FWHM.
-                    fprintf('Kappa to FWHM transformation + absolute(peakshift).\n');
-                    out.params(:,2)            = vM2FWHM(out.params(:,2));
-                    %out.params(:,3)            = abs(out.params(:,3));
-                    
+                    fprintf('Kappa to FWHM transformation.\n');
+                    out.params(:,2)            = vM2FWHM(out.params(:,2));                                        
                     %also put the amplitude to negative if CS- > CS+
                     if out.y(4) < out.y(end)
                         out.params(1) = -out.params(1);
                     end                    
                 end
-                                                
+                %% is there evidence for fear-tuning?                
+                if fun == 8;
+                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(3) > -borders)&(out.params(3) < borders)&(out.params(1) > 0));
+                    out.FearTuning = logical((out.LL > -log10(pval)));
+                else 
+                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(1) > 0));
+                end
+                %%
                 save(write_path,'out')
             end
             
@@ -3022,24 +3297,27 @@ classdef Subject < Project
         function [out] = fit_facecircle(self,partition)
             %will fit function FUN to facecircle data with PARTITION
             %partitions.
-            
-            force = 0;%repeat the analysis or load from cache            
-            fun   = self.selected_fitfun;
-            write_path = sprintf('%s/midlevel/facecircle_fun_%i_partition_%i.mat',self.pathfinder(self.id,1),fun,partition);
+            if nargin < 2
+                partition = 1;
+            end
+            force   = 1;%repeat the analysis or load from cache            
+            fun     = self.selected_fitfun;
+            borders = 1000;
+            pval    = self.pval;
+            write_path = sprintf('%s/midlevel/facecircle_fun_%i_partition_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),fun,partition,borders,pval*1000);
             if exist(write_path) && force == 0
                 %load directly or
                 load(write_path);
-%                 fprintf('Rating Fit found and loaded successfully for subject %i...\n',self.id);
+                cprintf([0 1 0 ],'Facecircle Fit found and loaded successfully for subject %i...\n%s\n',self.id,write_path);
                 
             elseif force == 1 || ~exist(write_path)
                 %compute and save it.
                 fprintf('Fitting Ratings...\n')                
                 R                            = self.get_facecircle(partition);
                 %adapt to what Tuning.m wants to have.                
-                R.y                          = self.circconv2(R.countw,[1 1]/2);;                                
-                %create a tuning object and make a single subject fit
-                T                            = Tuning(R);
                 
+                %create a tuning object and make a single subject fit
+                T                            = Tuning(R);                
                 T.SingleSubjectFit(fun);
                 %prepare data for outputting.
                 out.params                   = T.fit_results{fun}.params; 
@@ -3050,17 +3328,24 @@ classdef Subject < Project
                 out.y                        = T.fit_results{fun}.y_fitted(1,:);
                 out.x                        = T.fit_results{fun}.x(1,:);                
                 out.fitfun                   = T.fit_results{fun}.fitfun;
+                %%re-arrange parameters if vM selected.
                 if fun == 8%if vM, then transform kappa to FWHM.
                     fprintf('Kappa to FWHM transformation + absolute(peakshift).\n');
                     out.params(:,2)            = vM2FWHM(out.params(:,2));
-                    %out.params(:,3)            = abs(out.params(:,3));
-                    
+                    %out.params(:,3)            = abs(out.params(:,3));                    
                     %also put the amplitude to negative if CS- > CS+
                     if out.y(4) < out.y(end)
                         out.params(1) = -out.params(1);
-                    end                    
-                    
+                    end
                 end
+                %% is there evidence for fear-tuning?                
+                if fun == 8;
+                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(3) > -borders)&(out.params(3) < borders)&(out.params(1) > 0));
+                    out.FearTuning = logical((out.LL > -log10(pval)));
+                else 
+                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(1) > 0));
+                end
+                %%
                 save(write_path,'out');
             end
             
@@ -3116,28 +3401,28 @@ classdef Subject < Project
         function [out] = fit_scr(self)
             %will load the rating fit (saved in runXXX/rating) if computed other
             %wise will read the raw ratingdata (saved in runXXX/stimulation)
-            %and compute a fit.
-            
+            %and compute a fit.            
             fun        = self.selected_fitfun;%
-            force      = 0;%repeat the analysis or load from cache            
-            write_path = sprintf('%s/midlevel/scr_fun_%i.mat',self.pathfinder(self.id,1),fun);            
-            
+            force      = 1;%repeat the analysis or load from cache            
+            borders    = 1000;
+            pval       = self.pval;
+            write_path = sprintf('%s/midlevel/scr_fun_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),fun,borders,pval*1000);                        
             if exist(write_path) && force ==0
                 %load directly or
                 load(write_path);
-%                 fprintf('SCR Fit found and loaded successfully for subject %i...\n',self.id);
+                cprintf([0 1 0 ],'SCR Fit found and loaded successfully for subject %i...\n%s\n',self.id,write_path);
                 
             elseif force == 1 || ~exist(write_path)
                 %compute and save it.
                 fprintf('Fitting scr...\n')                
                 R                            = self.scr;
                 %adapt to what Tuning.m wants to have.
-                R.y                          = R.y(:)';
-                R.x                          = R.x(:)';
-                R.ids                        = R.ids(1);                
+                R.y                          = self.circconv2(R.y_mean,[1 1]/2);
+                R.x                          = self.rating.x(1,:);
+                R.ids                        = R.ids(1);
                 %create a tuning object and make a single subject fit
-                T                            = Tuning(R);                
-                T.SingleSubjectFit(fun);                               
+                T                            = Tuning(R);
+                T.SingleSubjectFit(fun);
                 %prepare data for outputting.
                 out.params                   = T.fit_results{fun}.params(1,:);                
                 out.LL                       = T.fit_results{fun}.pval(1,:);
@@ -3147,12 +3432,23 @@ classdef Subject < Project
                 out.y                        = T.fit_results{fun}.y_fitted(1,:);
                 out.x                        = T.fit_results{fun}.x(1,:);
                 out.fitfun                   = T.fit_results{fun}.fitfun;                
-                %
+                %%
                 if fun == 8%if vM, then transform kappa to FWHM.
                     fprintf('Kappa to FWHM transformation + absolute(peakshift).\n');
                     out.params(:,2)            = vM2FWHM(out.params(:,2));
                     %out.params(:,3)            = abs(out.params(:,3));
+                    if out.y(4) < out.y(end)
+                        out.params(1) = -out.params(1);
+                    end
                 end
+                %% is there evidence for fear-tuning?                
+                if fun == 8;
+                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(3) > -borders)&(out.params(3) < borders)&(out.params(1) > 0));
+                    out.FearTuning = logical((out.LL > -log10(pval)));
+                else 
+                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(1) > 0));
+                end
+                %%
                 save(write_path,'out')
             end
             

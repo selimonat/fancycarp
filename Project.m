@@ -78,7 +78,7 @@ classdef Project < handle
 		current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
         PixelPerDegree        = 29;
-        screen_resolution     = [212 212];%[768 1024];%%%;%this is the size of the face on the facecircle
+        screen_resolution     = [768 1024];%%%;%this is the size of the face on the facecircle;[212 212];
         path_stim             = sprintf('%sstim/ave.png',Project.path_project);
     end    
     properties (Hidden)
@@ -90,6 +90,9 @@ classdef Project < handle
         selected_ngroup       = 1;
         %
         selected_fitfun       = 8;%fixed gaussian (3), vonmises (8);                
+        pval                  = .05;%tuning presence
+        eye_data_type         = 'countw';
+        select_scr_trials     = 5;
     end    
 	methods
         function DU         = SanityCheck(self,runs,measure,varargin)
@@ -319,20 +322,20 @@ classdef Project < handle
 % % %             out = regexprep(self.path_spmmat(run,model),'sub...',sprintf('second_level_%02dmm',sk));
 % % %             
 % % %         end
-        function [output]=RW_analysis(self,ngroup)
+        function [output]=RW_analysis(self,out)
             %
-            [out]  = self.getgroup_all_spacetime(3,0,0,0);
+%             [out]  = self.getgroup_all_spacetime(3,0,0,0);
             [sy sx]  = GetSubplotNumber(size(out.d,4));%number of areas
             %%
-            for n = 1:size(out.d,4)
-                bla       = squeeze(mean(out.d(:,:,:,n),3));
+            for n = 1:size(out.d,4)%run over areas
+                bla       = squeeze(mean(out.d(:,:,:,n),3));%average across subjects
                 bla       = demean(bla')';
                 %slightly smooth over conditions, not time.
                  kernel   = make_gaussian1d(-2:2,1,2.2,0)
                  kernel   = kernel./sum(kernel(:));
                  bla      = Project.circconv2(bla,kernel);
                 
-                [rw] = Project.RW_Fit(bla,ones(1,length(Project.ucs_vector)));
+                [rw] = Project.RW_Fit(bla,Project.ucs_vector);
                 %[rw]      = Project.Linear_Fit(bla);                
                 output(n) = rw;
                 %         
@@ -369,25 +372,18 @@ classdef Project < handle
             %
             out = self.getgroup_pmf_param;
             out = join(out,self.getgroup_rating_param);
-            out = join(out,self.getgroup_facecircle);
+            out = join(out,self.getgroup_facecircle_param);
             out = join(out,self.getgroup_detected_oddballs);
             out = join(out,self.getgroup_detected_face);                        
             out = join(out,self.getgroup_scr_param);
-            %
+            %%
             if nargin > 1%if given take only the selected subjects
                 if varargin{1} ~= 0;
                     ngroup          = varargin{1};                
                     i               = ismember(double(out.subject_id),self.get_selected_subjects(ngroup).list);
                     out             = out(i,:);
                 end
-            end
-            %%
-            for nss = [0 1 3]
-                t = [];
-                name = self.get_selected_subjects(nss).name;
-                t    = table(ismember(out.subject_id,self.get_selected_subjects(nss).list),out.subject_id,'variablenames',{ regexprep(name,'\d|_','') 'subject_id' });
-                out  = join(out,t);
-            end
+            end            
         end
         function out             = getgroup_pmf_param(self)
             %collects the pmf parameters for all subjects in a table.
@@ -410,22 +406,16 @@ classdef Project < handle
             end
         end
         function out             = getgroup_rating_param(self)
+            force       = 1;
             target_name = sprintf('%smidlevel/%s_fitfun_%02d.mat',self.path_project,'getgroup_rating_param',self.selected_fitfun);
             %
-            if exist(target_name) == 0
+            if force || exist(target_name) == 0
                 %collects the rating parameters for all subjects in a table.
                 out = [];
                 for ns = self.subject_indices%run across all the subjects
                     s   = Subject(ns);
-                    out = [out;[s.id s.rating_param s.fit_rating.LL]];
-                end
-                if self.selected_fitfun == 8
-                    out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
-                    out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_absmu' 'rating_offset' 'rating_std' 'rating_LL'});
-                elseif self.selected_fitfun == 3
-                    out = [out(:,[1 2 3 5])];%
-                    out = array2table(out,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_LL'});
-                end
+                    out = [out;s.rating_param];
+                end                
                 save(target_name,'out');
             else
                 load(target_name);
@@ -433,46 +423,28 @@ classdef Project < handle
         end               
         function out             = getgroup_scr_param(self)
             %collects the scr parameters for all subjects in a table.
-            
+            force = 1;
             target_name = sprintf('%smidlevel/%s_fitfun_%02d.mat',self.path_project,'getgroup_scr_param',self.selected_fitfun);
-            if exist(target_name) == 0
-                
+            if force == 1 || exist(target_name) == 0                
                 out = [];
                 for ns = self.subject_indices%run across all the subjects
                     s   = Subject(ns,'scr');
-                    out = [out;[s.id s.scr_param s.fit_scr.LL]];
-                end
-                
-                if self.selected_fitfun == 8
-                    out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
-                    out = array2table(out,'variablenames',{'subject_id' 'scr_amp' 'scr_fwhm' 'scr_mu' 'scr_absmu' 'scr_offset' 'scr_std' 'scr_LL'});
-                elseif self.selected_fitfun == 3
-                    out = [out(:,[1 2 3 5])];%
-                    out = array2table(out,'variablenames',{'subject_id' 'scr_amp' 'scr_fwhm' 'scr_LL'});
+                    out = [out;s.scr_param];
                 end
                 save(target_name,'out');
             else
                 load(target_name);
             end
         end               
-        function out             = getgroup_facecircle(self)
+        function out             = getgroup_facecircle_param(self)
             %collects the facecircle parameters for all subjects in a table.
-            
+            force = 1
             target_name = sprintf('%smidlevel/%s_fitfun_%02d.mat',self.path_project,'getgroup_facecircle_param',self.selected_fitfun);
-            if exist(target_name) == 0
-                
+            if force | exist(target_name) == 0                
                 out = [];
                 for ns = self.subject_indices
                     s   = Subject(ns);
-                    out = [out;[s.id s.fit_facecircle(1).params s.fit_facecircle(1).LL]];
-                end
-                
-                if self.selected_fitfun == 8
-                    out = [out(:,[1 2 3 4 ]) abs(out(:,4)) out(:,[5 6 7]) ];%add absolute distances too
-                    out = array2table(out,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_mu' 'facecircle_absmu' 'facecircle_offset' 'facecircle_std' 'facecircle_LL'});
-                elseif self.selected_fitfun == 3
-                    out = [out(:,[1 2 3 5])];%
-                    out = array2table(out,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_LL'});
+                    out = [out;s.facecircle_param];
                 end
                 save(target_name,'out');
             else
@@ -493,7 +465,7 @@ classdef Project < handle
                 load(target_name);
             end
         end
-        function out             = getgroup_detected_face(self)            
+        function out             = getgroup_detected_face(self)
             target_name = sprintf('%smidlevel/%s.mat',self.path_project,'getgroup_detectedface_param');
             if exist(target_name) == 0
                 face = [];
@@ -507,7 +479,7 @@ classdef Project < handle
             else
                 load(target_name);
             end
-        end        
+        end
         function fixmat          = getgroup_facecircle_fixmat(self,subjects)
             %will collect all the fixmats for all subjects from the
             %SUBJECTS.
@@ -515,15 +487,40 @@ classdef Project < handle
             for ns = subjects(:)';
                 s = Subject(ns);
                 if ns == subjects(1)
-                    fixmat = s.get_facecircle_fixmat;                    
-                else                
-                    dummy  = s.get_facecircle_fixmat;                                                                                                  
-                    for nf = fieldnames(dummy)'         
+                    fixmat = s.get_facecircle_fixmat;
+                else
+                    dummy  = s.get_facecircle_fixmat;
+                    for nf = fieldnames(dummy)'
                         fixmat.(nf{1}) = [fixmat.(nf{1}) dummy.(nf{1})];
                     end
                 end
             end
         end
+        function out             = getgroup_behavioral(self,datatype);
+            %returns all DATATYPE data of all participants. DATATYPE =
+            %'rating' for collecting the rating data.
+            %% get the data
+            dummy = [];
+            for ns = self.subject_indices;
+                if strcmp(datatype,'scr')
+                    dummy  = vertcat(dummy ,Subject(ns,'scr').(datatype));
+                else
+                    dummy  = vertcat(dummy ,Subject(ns).(datatype));
+                end
+            end
+            %% massage it to Tuning format
+            R     = [];
+            R.y   = vertcat(dummy(:).y_mean);
+            R.y   = demean(R.y')';
+            R.x   = repmat(dummy(1).x(1,:),size(R.y,1),1);
+            R.ids = repmat([1:size(R.y,1)]',1,size(R.y,2));
+            %% fit and output
+            out               = Tuning(R);
+            out.visualization = 0;
+            out.gridsize      = 10;
+            out.GroupFit(self.selected_fitfun);
+        end
+        
         function out             = path_beta_group(self,nrun,model_num,prefix,varargin)
             %returns the path for beta images for the second level
             %analysis. it simply loads single subjects' beta images and
@@ -800,16 +797,11 @@ classdef Project < handle
                 %depending on the fitfun value, this will select either a
                 %significant vM or Gaussian fits.
                 
-                sub.name = ['Rating_' funname{self.selected_fitfun} '_1'];
+                sub.name   = ['Rating_' funname{self.selected_fitfun} '_1'];
                 %
-                out        = self.getgroup_rating_param;%load the ratings of all subjects
-                if self.selected_fitfun == 8
-                    select     = (out.rating_LL > -log10(.05))&(out.rating_mu > -borders)&(out.rating_mu < borders)&(out.rating_amp > 0);%select based on tuning
-                else
-                    select     = (out.rating_LL > -log10(.05))&(out.rating_amp > 0);
-                end
-                select     = select == inversion;
-                sub.list   = out.subject_id(select);%subject indices.
+                t          = self.getgroup_rating_param;
+                select     = t.feartuning_rating == inversion;%load the ratings of all subjects                                
+                sub.list   = t.subject_id(select);%subject indices.
                 %
             elseif     criteria == 11
                 %The data must be  described with a Gaussian curve better
@@ -819,14 +811,10 @@ classdef Project < handle
                 
                 sub.name = ['Rating_' funname{self.selected_fitfun} '_0'];
                 %
-                out        = self.getgroup_rating_param;%load the ratings of all subjects
-                if self.selected_fitfun == 8
-                    select     = (out.rating_LL > -log10(.05))&(out.rating_mu > -borders)&(out.rating_mu < borders);%select based on tuning
-                else
-                    select     = (out.rating_LL > -log10(.05));
-                end
-                select     = select == inversion;
-                sub.list   = out.subject_id(select);%subject indices.                
+                t          = self.getgroup_rating_param;
+                select     = t.feartuning_rating == 0;%load the ratings of all subjects                                
+                sub.list   = t.subject_id(select);%subject indices.
+                %
             elseif criteria == 2
                 %
                 sub.name = 'detectors (<=45\circ) ';
@@ -837,26 +825,20 @@ classdef Project < handle
                 
             elseif criteria == 3                
                 %same as rating tuning, but with saliency data.
-                sub.name = ['Saliency_' funname{self.selected_fitfun} '_1'];
-                out      = self.getgroup_facecircle;
-                if self.selected_fitfun == 8
-                    select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -borders)&(out.facecircle_mu < borders)&(out.facecircle_amp > 0);;%select based on tuning                    
-                else
-                    select     = (out.facecircle_LL > -log10(.05))&(out.facecircle_amp > 0);;
-                end
-                select   = select==inversion;
-                sub.list = out.subject_id(select);
+                sub.name = ['Saliency_' funname{self.selected_fitfun} '_1'];                
+                %
+                t          = self.getgroup_facecircle_param;
+                select     = t.feartuning_rating == inversion;%load the ratings of all subjects                                
+                sub.list   = t.subject_id(select);%subject indices.
+                %
             elseif criteria == 33
                 %same as rating tuning, but with saliency data.
                 sub.name = ['Saliency_' funname{self.selected_fitfun} '_0'];
-                out      = self.getgroup_facecircle;
-                if self.selected_fitfun == 8
-                    select   = (out.facecircle_LL > -log10(.05))&(out.facecircle_mu > -borders)&(out.facecircle_mu < borders);;%select based on tuning
-                else
-                    select     = (out.facecircle_LL > -log10(.05));;
-                end
-                select   = select==inversion;
-                sub.list = out.subject_id(select);
+                %
+                t          = self.getgroup_facecircle_param;
+                select     = t.feartuning_rating == 0;%load the ratings of all subjects                                
+                sub.list   = t.subject_id(select);%subject indices.
+                %
                 
             elseif criteria == 4
                 
@@ -1130,17 +1112,28 @@ classdef Project < handle
 % % %             [SPM xSPM]               = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
 % % %             t                        = spm_list('table',xSPM);
 % % %             coors                    = [t.dat{:,end};ones(1,size(t.dat,1))];                        
-            if ngroup == 3;%behavioral group
-                coors = [28  -4 -28 1; 
-                         28  22  -8 1; 
-                         -27 24  -7 1; 
-                         10  28  -14 1; 
-                         14  32   0  1;
-                         40  32  -14 1; 
-                         36 -44  -22 1; 
-                        -34 -24  -22 1]';
-            elseif ngroup  == 1%verbal + behavioral group            
-                coors = [-9 4 4 1; 10 6 10 1; 30 22 -10 1; -28 20 -7 1; 56 -19 -13 1]';
+            if ngroup == 3;%verbal + behavioral group
+                coors = [26  -2 -28 1;
+                         32  22 -10 1;
+                         44  18 -13 1]';
+                
+%                 coors = [28  -4 -28 1; 
+%                          28  22  -8 1; 
+%                          -27 24  -7 1; 
+%                          10  28  -14 1; 
+%                          14  32   0  1;
+%                          40  32  -14 1; 
+%                          36 -44  -22 1; 
+%                         -34 -24  -22 1]';
+            elseif ngroup  == 1%verbal group;
+                coors = [32  22 -10 1;
+                         44  18 -13 1]';
+                
+%                 coors = [-9   4   4 1; 
+%                          10   6  10 1; 
+%                          30  22 -10 1; 
+%                         -28  20  -7 1; 
+%                          56 -19 -13 1]';
             end
             
             name = [];invalid=[];
@@ -1224,7 +1217,7 @@ classdef Project < handle
             ImageWithText(count'*count,count'*count);
             fs = 10;
             set(gca,'fontsize',fs,'xtick',1:length(labels),'ytick',1:length(labels),'XTickLabelRotation',45,'xticklabels',labels,'fontsize',fs,'YTickLabelRotation',45,'yticklabels',labels,'TickLabelInterpreter','none')
-        end
+        end        
         end
     methods %methods that does something on all subjects one by one
         function                              VolumeGroupAverage(self,selector)
@@ -1289,59 +1282,59 @@ classdef Project < handle
             spm_dir    = regexprep(self.dir_spmmat(run,model),'sub...','second_level');%convert to second-level path, replace the sub... to second-level.
             spm_dir    = sprintf('%scov_id_%s/%02dmm/fitfun_%02d/group_%s/',spm_dir,covariate_id,sk,self.selected_fitfun,subjects.name);
             xspm_path  = sprintf('%sxSPM.mat',spm_dir);
-            if exist(xspm_path) == 0;
-                                
-                beta_files = [];
-                for ns = subjects.list(:)'
-                    s          = Subject(ns);
-                    %store all the beta_images in a 3D array
-                    beta_files = cat(3,beta_files,s.path_beta(run,model,sprintf('s%02d_w_',sk),beta_image_index)');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
-                end
-                %
-                c = 0;
-                for ind = 1:length(beta_image_index)
-                    %take single beta_images across all subjects and store them
-                    %in a cell
-                    c                                                                  = c +1;
-                    files                                                              = squeeze(beta_files(:,ind,:))';
-                    matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files);
-                end                                
-                %depending on subject group and smoothening, generate
-                %a directory name for this spm analysis.
-                matlabbatch{1}.spm.stats.factorial_design.dir                    = cellstr(spm_dir);
-                matlabbatch{1}.spm.stats.factorial_design.des.anova.dept         = 0;
-                matlabbatch{1}.spm.stats.factorial_design.des.anova.variance     = 1;
-                matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca        = 0;
-                matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova       = 0;
-                
-                matlabbatch{1}.spm.stats.factorial_design.cov                    = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
-                matlabbatch{1}.spm.stats.factorial_design.multi_cov              = struct('files', {}, 'iCFI', {}, 'iCC', {});
-                
-                %overwrite with the covariates if entered
-                if ~isempty(covariate_id)                   
-                    param                                                        = self.getgroup_all_param;
-                    %extract the relevant subjects
-                    c                                                            = param.(covariate_id);
-                    c                                                            = c(ismember(param.subject_id,subjects.list));                                        
-                    %register beta images and covariate values.                    
-                    tcell                                                        = length(matlabbatch{1}.spm.stats.factorial_design.des.anova.icell);
-                    ccc                                                          = 0;                    
-                    mat                                                          = kron(eye(4),demean(c));
-                    for ncell = 1:tcell                            
-                        matlabbatch{1}.spm.stats.factorial_design.cov(ncell)     = struct('c', mat(:,ncell), 'cname', sprintf('cov:%s-cell:%02d',covariate_id,ncell), 'iCFI', 1, 'iCC', 1);                        
-                    end                    
-                end
-                matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none     = 1;
-                matlabbatch{1}.spm.stats.factorial_design.masking.im             = 1;
-                matlabbatch{1}.spm.stats.factorial_design.masking.em             = {''};
-                matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit         = 1;
-                matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
-                matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm        = 1;
-                %
-                matlabbatch{2}.spm.stats.fmri_est.spmmat                         = {[spm_dir '/SPM.mat']};
-                matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
-                %                                
-                spm_jobman('run', matlabbatch);
+% % % %             if exist(xspm_path) == 0;
+% % % %                                 
+% % % %                 beta_files = [];
+% % % %                 for ns = subjects.list(:)'
+% % % %                     s          = Subject(ns);
+% % % %                     %store all the beta_images in a 3D array
+% % % %                     beta_files = cat(3,beta_files,s.path_beta(run,model,sprintf('s%02d_w_',sk),beta_image_index)');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
+% % % %                 end
+% % % %                 %
+% % % %                 c = 0;
+% % % %                 for ind = 1:length(beta_image_index)
+% % % %                     %take single beta_images across all subjects and store them
+% % % %                     %in a cell
+% % % %                     c                                                                  = c +1;
+% % % %                     files                                                              = squeeze(beta_files(:,ind,:))';
+% % % %                     matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files);
+% % % %                 end                                
+% % % %                 %depending on subject group and smoothening, generate
+% % % %                 %a directory name for this spm analysis.
+% % % %                 matlabbatch{1}.spm.stats.factorial_design.dir                    = cellstr(spm_dir);
+% % % %                 matlabbatch{1}.spm.stats.factorial_design.des.anova.dept         = 0;
+% % % %                 matlabbatch{1}.spm.stats.factorial_design.des.anova.variance     = 1;
+% % % %                 matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca        = 0;
+% % % %                 matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova       = 0;
+% % % %                 
+% % % %                 matlabbatch{1}.spm.stats.factorial_design.cov                    = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
+% % % %                 matlabbatch{1}.spm.stats.factorial_design.multi_cov              = struct('files', {}, 'iCFI', {}, 'iCC', {});
+% % % %                 
+% % % %                 %overwrite with the covariates if entered
+% % % %                 if ~isempty(covariate_id)                   
+% % % %                     param                                                        = self.getgroup_all_param;
+% % % %                     %extract the relevant subjects
+% % % %                     c                                                            = param.(covariate_id);
+% % % %                     c                                                            = c(ismember(param.subject_id,subjects.list));                                        
+% % % %                     %register beta images and covariate values.                    
+% % % %                     tcell                                                        = length(matlabbatch{1}.spm.stats.factorial_design.des.anova.icell);
+% % % %                     ccc                                                          = 0;                    
+% % % %                     mat                                                          = kron(eye(4),demean(c));
+% % % %                     for ncell = 1:tcell                            
+% % % %                         matlabbatch{1}.spm.stats.factorial_design.cov(ncell)     = struct('c', mat(:,ncell), 'cname', sprintf('cov:%s-cell:%02d',covariate_id,ncell), 'iCFI', 1, 'iCC', 1);                        
+% % % %                     end                    
+% % % %                 end
+% % % %                 matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none     = 1;
+% % % %                 matlabbatch{1}.spm.stats.factorial_design.masking.im             = 1;
+% % % %                 matlabbatch{1}.spm.stats.factorial_design.masking.em             = {''};
+% % % %                 matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit         = 1;
+% % % %                 matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
+% % % %                 matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm        = 1;
+% % % %                 %
+% % % %                 matlabbatch{2}.spm.stats.fmri_est.spmmat                         = {[spm_dir '/SPM.mat']};
+% % % %                 matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
+% % % %                 %                                
+% % % %                 spm_jobman('run', matlabbatch);
 %                 if covariate_id == 0
                     %UPDATE THE SPM.mat with the contrast
                     %create the contrast that we are interested in, this could
@@ -1357,11 +1350,14 @@ classdef Project < handle
                         M(1,2)      = 0;
                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
                         
-                    elseif model == 4
+                    elseif model == 4 | model >= 100
                         M           = [[0 0 0 0 0]' eye(5)];
                         SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
                         M(1,2)      = 0;
                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                        M           = zeros(5,6)
+                        M(3,4)      = 1;
+                        SPM.xCon(3) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
                     elseif model == 5
                         M           = [[0 0 0 0 0 0 0 0]' eye(8)];
                         SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
@@ -1371,22 +1367,22 @@ classdef Project < handle
                     elseif model == 8
                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[zeros(1,11)]' eye(11) ]',SPM.xX.xKXs);
                     elseif model == 88
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[zeros(1,20)]' eye(20) ]',SPM.xX.xKXs);
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[zeros(1,20)]' eye(20) ]',SPM.xX.xKXs);                    
                     end
 %                     
                     save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
                     %xSPM is used to threshold according to a contrast.
-                    %                 xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');
-                    xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.05,'k',0,'thresDesc','FWE');
+                    %                 xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');                    
+                    xSPM = struct('swd', spm_dir,'title','eoi','Ic',3,'n',[],'Im',[],'pm',[],'Ex',[],'u',.05,'k',0,'thresDesc','FWE');
                     %replace 'none' to make FWE corrections.
                     [SPM xSPM] = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
                     save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
                     save(xspm_path,'xSPM');
 %                 end
-            else
-                load(xspm_path);                
+% % % %             else
+% % % %                 load(xspm_path);                
 %                 t                                 = spm_list('table',xSPM{2}.rating);
-            end            
+% % % %             end            
 
         end        
         function B                          = SecondLevel_Mumfordian(self,nrun,mask_id)
@@ -1618,7 +1614,7 @@ classdef Project < handle
            end           
            fprintf('-------------------------------------------------------------------------------------------\n');
            fprintf('-------------------------------------------------------------------------------------------\n');
-           fprintf('-------------------------------------------------------------------------------------------\n');
+           fprintf('------------------7-------------------------------------------------------------------------\n');
            %% get rois for all the ROIs as well.
            for sk = [0 6];               
                    for nroi = self.valid_atlas_roi
@@ -1678,13 +1674,14 @@ classdef Project < handle
                 end
                 title(sprintf('Type: %s',type));
             end
-        end
-        
+        end        
     end    
     methods %plotters
         function plot_normalized_surface(self);
+            %will plot the inflated brain with the F maps.
             close all;
-            cmap      = parula(256);
+%             cmap      = parula(256);
+            cmap      = hot(256);
             threshold = 10;
             group     = 3;
             inflated  = 1;
@@ -1693,41 +1690,45 @@ classdef Project < handle
 %             cat_surf_display(struct('data',{{'/mnt/data/project_fearamy/data/midlevel/run000/mrt/surf/lh.central.w_ss_data.gii'}},'multisurf',0))            
             
             MAP  = cat_surf_render('ColourMap',gca,cmap);
-            P    = spm_mesh_project(MAP.patch,'/mnt/data/project_fearamy/data/second_level/run001/spm/model_03_chrf_0_0/cov_id_/10mm/fitfun_08/group_Saliency_vM_1/spmF_0002.nii','nn');
+            P    = spm_mesh_project(MAP.patch,'/mnt/data/project_fearamy/data/second_level/run001/spm/model_04_chrf_0_0/cov_id_/10mm/fitfun_08/group_Saliency_vM_1/spmF_0002.nii','nn');
             cat_surf_render('overlay',gca,P);
             ab   = cat_surf_render('clim',gca,[0 threshold]);
             if inflated
                 spm_mesh_inflate(MAP.patch,Inf,1);            
             end
+            colorbar
+            
             SaveFigure(sprintf('~/Desktop/fearamy_figure2_group_%02d_side_%02d_inflated_%02d.png',group,1,inflated),'-r300');pause(.5);            
             view(-90,0);
             SaveFigure(sprintf('~/Desktop/fearamy_figure2_group_%02d_side_%02d_inflated_%02d.png',group,2,inflated),'-r300');pause(.5);
             %%
-            group = 2;
+            group = 1;
             cat_surf_display(struct('data',{{'/mnt/data/project_fearamy/data/midlevel/run000/mrt/surf/rh.central.w_ss_data.gii'}},'multisurf',0));
 %             cat_surf_display(struct('data',{{'/mnt/data/project_fearamy/data/midlevel/run000/mrt/surf/lh.central.w_ss_data.gii'}},'multisurf',0))                        
             MAP  = cat_surf_render('ColourMap',gca,cmap);
-            P    = spm_mesh_project(MAP.patch,'/mnt/data/project_fearamy/data/second_level/run001/spm/model_03_chrf_0_0/cov_id_/10mm/fitfun_08/group_Rating_vM_1/spmF_0002.nii','nn');
+            P    = spm_mesh_project(MAP.patch,'/mnt/data/project_fearamy/data/second_level/run001/spm/model_04_chrf_0_0/cov_id_/10mm/fitfun_08/group_Rating_vM_1/spmF_0002.nii','nn');
             cat_surf_render('overlay',gca,P);
             ab   = cat_surf_render('clim',gca,[0 threshold]);
             if inflated
                 spm_mesh_inflate(MAP.patch,Inf,1);            
             end
+            colorbar
+            
             SaveFigure(sprintf('~/Desktop/fearamy_figure2_group_%02d_side_%02d_inflated_%02d.png',group,1,inflated),'-r300');pause(.5);
             view(-90,0)
             SaveFigure(sprintf('~/Desktop/fearamy_figure2_group_%02d_side_%02d_inflated_%02d.png',group,2,inflated),'-r300');pause(.5);
             
             %%
-            group = 1;
+            group = 0;
             cat_surf_display(struct('data',{{'/mnt/data/project_fearamy/data/midlevel/run000/mrt/surf/rh.central.w_ss_data.gii'}},'multisurf',0));
 %             cat_surf_display(struct('data',{{'/mnt/data/project_fearamy/data/midlevel/run000/mrt/surf/lh.central.w_ss_data.gii'}},'multisurf',0))            
             MAP  = cat_surf_render('ColourMap',gca,cmap);
-            P    = spm_mesh_project(MAP.patch,'/mnt/data/project_fearamy/data/second_level/run001/spm/model_03_chrf_0_0/cov_id_/10mm/fitfun_08/group_00_all/spmF_0002.nii','nn');
+            P    = spm_mesh_project(MAP.patch,'/mnt/data/project_fearamy/data/second_level/run001/spm/model_04_chrf_0_0/cov_id_/10mm/fitfun_08/group_00_all/spmF_0001.nii','nn');
             cat_surf_render('overlay',gca,P);
             ab   = cat_surf_render('clim',gca,[0 threshold]);
             if inflated
                 spm_mesh_inflate(MAP.patch,Inf,1);            
-            end
+            end            
             SaveFigure(sprintf('~/Desktop/fearamy_figure2_group_%02d_side_%02d_inflated_%02d.png',group,1,inflated),'-r300');pause(.5);
             view(-90,0)
             SaveFigure(sprintf('~/Desktop/fearamy_figure2_group_%02d_side_%02d_inflated_%02d.png',group,2,inflated),'-r300');pause(.5);
@@ -1761,6 +1762,9 @@ classdef Project < handle
             supertitle(self.path_project,1)
         end
         function plot_ss_facecircle(self,partition)
+            if nargin < 2
+                partition = 1
+            end
             figure;set(gcf,'position',[5           1        1352        1104]);
             %will plot all single subject ratings in a big subplot
             tsubject = length(self.subject_indices);
@@ -2042,6 +2046,7 @@ classdef Project < handle
 %                 d = spm_get_data(betas,XYZvox);
 %                 d = reshape(d,15,9);
                 figure(10001);
+                set(gcf,'position',[ 1921         478        1098         588]);
 %                 set(gcf,'position',[1370 1201 416  1104])                
 %                 subplot(3,1,1)
 %                 set(gca, 'ColorOrder', GetFearGenColors, 'NextPlot', 'replacechildren');
@@ -2074,7 +2079,9 @@ classdef Project < handle
                 ResMS = spm_get_data(SPM.VResMS,XYZvox);
                 Bcov  = ResMS*SPM.xX.Bcov;
                 
-                CI    = 1.6449;
+                CI    = 1.6449;%90
+                CI    = 1.96;%95
+                CI    = 2.3263;%99
                 % compute contrast of parameter estimates and 90% C.I.
                 %------------------------------------------------------------------
                 Ic    = xSPM.Ic; % Use current contrast
@@ -2088,16 +2095,34 @@ classdef Project < handle
                 size(betas,1)
                 pmod        = pmod(:,1:size(betas,1));
                 %%
-                subplot(1,2,1)
-                imagesc(reshape(pmod*beta,8,520/8)');
-                %contourf(reshape(pmod*beta,8,520/8)',5,'color','none');
+                subplot(1,2,2)
+%                 imagesc(reshape(pmod*beta,8,520/8)');
+                contourf(reshape(pmod*beta,8,520/8)',9,'color','none');
+                S         = get(gca,'position');
+                h         = colorbar('Location','WestOutside');
+                h.Box     = 'off';
+                cbarticks = linspace(min(h.Ticks),max(h.Ticks),3);
+                h.Ticks   = cbarticks;
+%                 set(gca,'position',S);
                 axis xy;
-                subplot(1,2,2);
-                bar(cbeta);
+                box off
+                set(gca,'ytick',[],'xtick',[2 4 6 8],'xticklabel',{sprintf('-90%c',char(176))  'CS+' sprintf('90%c',char(176)) 'CS-'},'fontsize',16,'fontweight','bold'); 
+                grid on;
+                ylabel('time','fontsize',16,'fontweight','bold');
+                %%
+                subplot(1,2,1);
+                bar(cbeta,.9,'k');                
                 hold on;
-                errorbar(cbeta,CI,'ro');
-                hold off;
-                drawnow;
+                h=errorbar(cbeta,CI,'ro','linewidth',2,'marker','none');                
+                box off;
+                hold off;                
+                grid on
+                set(gca,'xticklabel',{'time','tuning' 'time \times tuning' '\sigma' 't x \sigma'},'XTickLabelRotation',45,'fontsize',16,'fontweight','bold','ytick',[-.8 -.4 0 .4 .8],'ylim',[-1 1]);
+                
+                ylabel(sprintf('Beta Weight\n(99%% CI)'));
+                ylim([-.65 .2]);
+                drawnow;                
+                
             catch
                 fprintf('call back doesn''t run\n')
             end
@@ -2331,18 +2356,20 @@ classdef Project < handle
                     
                     
                     posori = get(h,'position');
-                    posori(3) = .08;
+                    posori(3) = .1;
+                    posori(2) = posori(2) - .05;
                     set(h,'position',posori);
                     %
                     kernel   = make_gaussian2D(11,7,6,2.5,6,4);
+                    III      = 1:size(spacetime.d,1)-5;
 %                     kernel      = make_gaussian2D(5,3,10,10,3,1.5);
-                    kernel      = kernel./sum(kernel(:));
+%                     kernel      = kernel./sum(kernel(:));
                     % smooth single subjects.
-                    for ns = 1:size(spacetime.d,3)
-                        spacetime.d(:,:,ns,narea) = Project.circconv2(spacetime.d(:,:,ns,narea),kernel);
-                    end
+%                     for ns = 1:size(spacetime.d,3)
+%                         spacetime.d(:,:,ns,narea) = Project.circconv2(spacetime.d(:,:,ns,narea),kernel);
+%                     end                                        
                     % average across subjects
-                    D           = mean(spacetime.d(:,:,:,narea),3);%data with 2 dimensions                    
+                    D           = mean(spacetime.d(III,:,:,narea),3);%data with 2 dimensions                    
                     
                     % plot the average st plot.
                     contourf(D,9,'color','none');
@@ -2355,22 +2382,25 @@ classdef Project < handle
                     plot([4 4],ylim,'--k','linewidth',1,'color',[0 0 0 .25]);%plot a safe zone line
                     plot([2 2],ylim,'--k','linewidth',1,'color',[0 0 0 .25]);%plot a safe zone line
                     plot([6 6],ylim,'--k','linewidth',1,'color',[0 0 0 .25]);%plot a safe zone line
-                    set(gca,'ytick',[10 20 30 40],'yticklabels',{'10' '20' '30' '40'},'xtick',[2 4 6 8],'xticklabels',{'-90' 'CS+' '+90' 'CS-'},'XAxisLocation','bottom','YAxisLocation','right');
+                    set(gca,'ytick',[10 20 30 40],'yticklabels',{'10' '20' '30' '40'},'xtick',[2 4 6 8],'xticklabels',{sprintf('-90%c',char(176)) 'CS+' sprintf('+90%c',char(176)) sprintf('180%c',char(176))},'XAxisLocation','bottom','YAxisLocation','right','fontsize',20);
                     ylabel('microblocks');
                     %%                    
                     h     = colorbar('location','westoutside');
+                    h.Label.String = ['\muSiemens'];
+                    h.FontSize = 16
+                    h.Label.FontSize = 16;
                     wcbar = .005;
                     set(gca,'position',posori);
                     h.Position = [posori(1)-wcbar*2 posori(2) wcbar posori(4)/2];
                     h.Box = 'off';
                     %% plot the feargen bar plot
                     pos     = posori+[0 posori(4)+posori(4)/24 0 0];
-                    Dbar    = squeeze(mean(spacetime.d(:,:,:,narea)))';%data with 2 dimensions
+                    Dbar    = squeeze(mean(spacetime.d(III,:,:,narea)))';%data with 2 dimensions
                     %average across participants and compute the SEM
                     DbarM   = mean(Dbar);
                     DbarSEM = std(Dbar)./sqrt(length(Dbar));
                     
-                    pos(4)  = .05;
+                    pos(4)  = .075;
                     
                     axes('position',pos);
                     cmap  = GetFearGenColors;
@@ -2392,13 +2422,15 @@ classdef Project < handle
                     data.ids = 1:size(data.y,2);
                     t        = Tuning(data);
                     t.GroupFit(8);
-                    plot(linspace(1,8,100),t.groupfit.fit_HD,'k','linewidth',2)
+                    plot(linspace(1,8,100),t.groupfit.fit_HD,'k','linewidth',2)                    
+                    set(gca,'ylim',[.037 max(ylim)])
+                    keyboard
                     %% plot the difference time-course
                     pos = posori+[posori(3)+posori(3)/6 0 0 0];                    
                     axes('position',pos);
                     
-                    Dtimecourse = mean(D(:,[3 4 5]),2)-mean(D(:,[7 8 1]),2);
-                    data        = squeeze(mean(spacetime.d(:,[3 4 5],:,narea) - spacetime.d(:,[7 8 1],:,narea),2));
+                    Dtimecourse = mean(D(III,[3 4 5]),2)-mean(D(:,[7 8 1]),2);
+                    data        = squeeze(mean(spacetime.d(III,[3 4 5],:,narea) - spacetime.d(III,[7 8 1],:,narea),2));
                     ci          = bootci(5000,@mean,data')';
                     
                     plot(Dtimecourse,1:length(D),'linewidth',2,'color','k');
@@ -2495,7 +2527,276 @@ classdef Project < handle
             set(gca,'XTickLabel',spacetime.name(leafOrder),'XTickLabelRotation',45,'ticklabelinterpreter','none')
             set(H1,'linewidth',2);
         end                        
-    end    
+        function figure_Draw3D(self,D)
+
+            %%
+            winfun = [8];
+            data.y           = D;
+            data.x           = repmat(linspace(-135,180,8),size(data.y,1),1);
+            data.ids         = 1:size(data.y,1);
+            t2               = Tuning(data);
+            t2.visualization = 1;
+            t2.gridsize      = 10;
+            t2.SingleSubjectFit(winfun);            
+            %%                     
+            if 1
+                figure(5);clf;
+                
+                for nfix = 1:size(data.y,1)
+                    hold on;
+                    X = t2.fit_results{8}.x_HD(1,:);
+                    
+                    
+                        Est    = t2.fit_results{winfun}.params(nfix,:);
+                        Est(4) = 0;
+                        c = 'k';
+                        
+                        Y      = t2.fit_results{winfun}.fitfun(X,Est);
+                        plot3(X,repmat(nfix,1,size(X,2)),Y,'color',c,'linewidth',1);
+                end
+            end
+            view(43,32)
+            ylim([0 size(data.y,1)])
+            %            
+            [X Y ] = meshgrid(linspace(-135,180,8),1:size(D,1));
+            h = contourf(X,Y,D,9,'color','none');
+%             h      = surf(X,Y,D);
+%             set(h,'FaceColor','texturemap','CData',D,'LineStyle','none')
+            hold off;
+            %                 DrawPlane(gcf,.4);
+            %
+            set(gca,'xtick',[-90 0 90 180],'xticklabel',{sprintf('-90%c',char(176)) 'CS+' sprintf('+90%c',char(176)) sprintf('180%c',char(176))},'xgrid','on','ytick',[0 20 40],'ztick',[0 .01 .02],'ygrid','on','color','none','fontsize',16)
+            axis tight;
+            xlabel('');
+            ylabel('microblocks');
+            zlabel('\muSiemens')            
+        end
+        function figure_PostExperimentTests(self,ngroup)
+            
+            s            = Subject(5);
+            X_pmf        = s.fit_pmf.x(1:58);
+            X_detection  = -135:45:180;
+            out          = s.getgroup_all_param;
+            %% select subjects to plot
+            %selected      = out.subject_id(abs(out.detection_face) <= 45);%randsample( 5:44,20,1);
+            %selected      = out.subject_id(abs(out.rating_mu) <= 45);%randsample( 5:44,20,1);
+            for selection = ngroup(:)
+                selected      = s.get_selected_subjects(selection).list;
+                tit           = sprintf('%s (n = %02d)',s.get_selected_subjects(selection).name,length(selected));
+                all_subjects  = 5:44;
+                subjects{1}   = selected;%selected subjects.
+                if ngroup ~= 0
+                    subjects{2}   = setdiff(all_subjects,selected);                                
+                end
+                    tgroup        = length(subjects);
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                % average pmf Curve
+                figure;
+                set(gcf,'position',[83         313        1149         730]);
+                clf
+                for groups = 1:tgroup;
+                    subplot(tgroup,4,1+4*(groups-1))
+                    i = subjects{groups};
+                    i = ismember(out.subject_id,i);
+                    params_csp = nanmean([out.pmf_csp_alpha(i)  out.pmf_csp_beta(i) out.pmf_csp_gamma(i) out.pmf_csp_lamda(i)]);
+                    params_csn = nanmean([out.pmf_csn_alpha(i)  out.pmf_csn_beta(i) out.pmf_csn_gamma(i) out.pmf_csn_lamda(i)]);
+                    Y_P        = PAL_Weibull(params_csp,X_pmf);
+                    Y_N        = PAL_Weibull(params_csn,X_pmf);
+                    plot(X_pmf,Y_P,'r',X_pmf,Y_N,'c','linewidth',5);
+                    axis square;box off;axis tight;
+                    ylabel('p(correct)')
+                    xlabel('\Delta Difference')
+                    ylim([0 1]);
+                    SetTickNumber(gca,5,'y');
+                    set(gca,'xtick',[0:45:90],'xticklabel',{'CS+/-' '45'  '90'},'xgrid','on')
+                    title(sprintf('Perceptual\nDiscrimination'));
+                end
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                % polar plot of the detected faces.
+                cdata = GetFearGenColors;
+                for groups = 1:tgroup;
+                    subplot(tgroup,4,1+1+4*(groups-1))
+                    i  = subjects{groups};
+                    i  = ismember(out.subject_id,i);
+                    Y  = out.detection_face(i);
+                    Y  = histc(Y,X_detection);
+                    Project.plot_bar(-135:45:180,Y);
+                    
+                end
+                subplot(tgroup,4,2);title('Detection');
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                % explicit ratings
+                R = [];
+                for ns = all_subjects
+                    s = Subject(ns);
+                    R = [R;s.rating.y_mean];
+                end
+                R = demean(R')';
+                for groups = 1:tgroup;
+                    subplot(tgroup,4,2+1+4*(groups-1))
+                    i = ismember(all_subjects,subjects{groups});
+                    Project.plot_bar(-135:45:180,mean(R(i,:)),std(R(i,:))./sqrt(sum(i)))
+
+                    data.y           = R(i,:);
+                    data.x           = repmat(linspace(-135,180,8),sum(i),1);
+                    data.ids         = 1:sum(i);
+                    t2               = Tuning(data);
+                    t2.visualization = 0;
+                    t2.gridsize      = 10;
+                    t2.GroupFit(2);
+                    hold on;
+                    if t2.groupfit.pval > -log10(0.01)
+                        plot(t2.groupfit.x_HD,t2.groupfit.fit_HD,'k','linewidth',3)                    
+                    else
+                        plot(t2.groupfit.x_HD,repmat(mean2(R(i,:)),1,100),'k','linewidth',3)                    
+                    end
+                end
+                subplot(tgroup,4,3);title('Ratings');
+                %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+                %% saliency
+                F = [];
+                for ns = all_subjects
+                    s = Subject(ns);
+                    F = [F; s.get_facecircle(1).count];                    
+                end
+                F = demean(F')';
+                %%
+                for groups = 1:tgroup
+                    subplot(tgroup,4,3+1+4*(groups-1))
+                    i = ismember(all_subjects,subjects{groups});
+                    Project.plot_bar(-135:45:180,mean(F(i,:))',std(F(i,:))./sqrt(sum(i)));
+                    
+                    data.y           = F(i,:);
+                    data.x           = repmat(linspace(-135,180,8),sum(i),1);
+                    data.ids         = 1:sum(i);
+                    t2               = Tuning(data);
+                    t2.visualization = 0;
+                    t2.gridsize      = 10;
+                    t2.GroupFit(3);
+                    hold on
+                    
+                    if t2.groupfit.pval > -log10(0.05)
+                        plot(t2.groupfit.x_HD,t2.groupfit.fit_HD,'k','linewidth',3)                    
+                    else
+                        plot(t2.groupfit.x_HD,repmat(mean2(F(i,:)),1,100),'k','linewidth',3)                    
+                    end
+                                        
+                end
+                subplot(tgroup,4,4);supertitle(tit,1,'interpreter','none','fontsize',12);
+                drawnow;
+%                 SaveFigure(sprintf('/home/onat/Dropbox/selim/Office/Fearamy/FigureCache/%s.png',s.get_selected_subjects(selection).name));
+                pause(1);
+                %
+            end
+        end
+        function figure_ModelExplanation(self,w)
+            %Project().figure_ModelExplanation([0 .6 0 0; 0 .6 .4 0;0  .6 .4 .3])
+            %%
+            
+            for N = 1:size(w,1)
+                figure;
+                set(gcf,'position',[1921          93        1278         942]);
+                %%
+                subplot(3,3,[1 4]);
+                
+                pmod  = self.get_pmodmat(3);
+                cbeta = w(N,2:end);
+                
+                bar(cbeta,.9,'k');
+                hold on;
+                plot(1:3,cbeta,'or','markersize',10);
+                box off;
+                hold off;
+                grid on
+                set(gca,'xticklabel',{'time','tuning' 'time \times tuning' '\sigma' 't x \sigma'},'XTickLabelRotation',45,'fontsize',20,'fontweight','bold','ytick',[0  2],'ylim',[-1 1]);
+                
+                ylabel(sprintf('Beta Weight'));
+                ylim([0 .75]);
+                drawnow;
+                %%
+                subplot(3,3,[2 3 5 6 8 9]);
+                hold off
+                D = pmod*w(N,:)';
+                D = reshape(D,8,65)';
+                D = D - min(D(:));
+                D = D./max(D(:));
+                for nfix =1:10:size(D,1)
+                    data.y = D(nfix,:);
+                    data.x = -135:45:180;
+                    data.ids = 1;                    
+                    t        = Tuning(data);
+                    t.GroupFit(5);                    
+                    plot3(t.groupfit.x_HD,repmat(nfix,1,100),t.groupfit.fit_HD,'color',[0 0 0 .5],'linewidth',3);
+                    hold on;
+                end
+                view(43,32);
+                %%
+                [X Y ] = meshgrid(linspace(-135,180,8),1:size(D,1));
+                h      = contourf(X,Y,D,6,'color','none');
+                
+                set(gca,'fontsize',16,'xtick',[-90 0 90 180],'xticklabel',{sprintf('-90%c',char(176)) 'CS+' sprintf('+90%c',char(176)) sprintf('\\pm180%c',char(176))},'xgrid','on','ytick',[0 20 40],'ztick',[],'ygrid','on','color','none','fontsize',16,'fontweight','bold','yticklabel',{''})
+                axis tight;
+                xlabel('');
+%                 ylabel('time','Rotation',40);
+                zlabel(sprintf('BOLD\nResponse'))
+                set(gca,'zlim',[0 1.5]);
+                drawnow;
+            end
+        end
+        function figure_01(self);
+            %%            
+            set(gcf,'position',[2412         595        1261         472])
+            clf;
+            datatype = {'rating' 'scr' 'get_facecircle'};
+            titles = {'Ratings' 'SCR' 'Saliency'};
+            ylabels= {'VAS' sprintf(['Phasic\nSCR (' char(181) 'Siemens)']) sprintf('Fixation Count')};
+            for n = 1:3
+                subplot(2,6,[n*2-1 n*2]);
+                out = self.getgroup_behavioral(datatype{n});
+                self.plot_bar(out.x(1,:),out.y_mean,out.y_SEM);
+                title(titles{n});
+                ylabel(ylabels{n});
+                %
+                hold on;                
+                PlotTransparentLine(out.groupfit.x_HD,out.groupfit.fit_HD(:),.35,'k','linewidth',2.5);
+            end
+            %%
+            t = self.getgroup_all_param;                       
+            %%
+            titels = {'SCR\nTuning' 'Detection\nError'};
+            transparency = .8;
+            subs = find(t.pmf_pooled_alpha < 70)';%1:size(t,1)
+            for n = 1:2
+                subplot(2,6,6+[n*3-2 n*3-1 n*3]);
+                hold off;
+                if n == 1
+                    for np = subs
+                        h                   = scatter(t.rating_nonparam(np),(t.facecircle_nonparam(np)),1000,'filled','markerfacealpha',transparency);
+                        hold on;
+                        h.SizeData          = ((t.scr_nonparam(np))-min(t.scr_nonparam)+1).^4;
+                        h.MarkerFaceColor   = [1-((t.scr_nonparam(np))-min(t.scr_nonparam))./max(t.scr_nonparam-min(t.scr_nonparam)) ((t.scr_nonparam(np))-min(t.scr_nonparam))./max(t.scr_nonparam-min(t.scr_nonparam)) 0];
+                    end
+                elseif n == 2
+                    for np = subs
+                        h = scatter(t.rating_nonparam(np),t.facecircle_nonparam(np),1000,'filled','markerfacealpha',transparency);
+                        hold on;
+                        h.SizeData  = (((t.detection_absface(np)./180)+1)*5).^3;
+                        h.MarkerFaceColor     = [t.detection_absface(np)/180 1-t.detection_absface(np)/180  0];
+                    end
+                end                                
+                title(sprintf(titels{n}));
+                xlabel(sprintf('Fear-Tuning\nRating'))
+                ylabel(sprintf('Fear-Tuning\nSaliency'))                
+                axis tight;box off;axis square;
+                xlim([-2 2]);
+                ylim([-2 2]);
+                set(gca,'color','none','xtick',[-2:1:2],'ytick',[-2:1:2]);                                                                
+                grid on
+                drawnow;            
+                hold off;
+            end            
+        end
+    end
     
     methods (Static)
         function h = plot_bar(X,Y,SEM)
@@ -2515,8 +2816,7 @@ classdef Project < handle
             end
             
             %% 
-            h = gca;
-            set(h,'xtick',X,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
+            h = gca;            set(h,'xtick',X,'xticklabel',{'' sprintf('-90%c',char(176)) '' 'CS+' '' sprintf('+90%c',char(176)) '' sprintf('\\pm180%c',char(176))});
             box off;
             set(h,'color','none');
             xlim([0 tbar+1])
@@ -2643,12 +2943,12 @@ classdef Project < handle
             %see the best learning rate parameter. The Kappa and Offset parameters are
             %kept constnant over time in this analyis.
             x              = -135:45:180;
-            grid_size      = 50;
+            grid_size      = 200;
             kappas         = logspace(-3,1.17,grid_size);
             stds           = linspace(22.5,180,grid_size);
             %alpha is a function of 2 parameters, these two parameters jointly returns
             %a time-course of alpha parameter
-            learning_rates = linspace(0,.2,grid_size);
+            learning_rates = linspace(0,.5,grid_size);
             learning_rates = [-fliplr(learning_rates(2:end)) learning_rates];
             indicator      = Vectorize(repmat([-1 1],grid_size,1))';
             alpha_inits    = 0;
@@ -2661,12 +2961,12 @@ classdef Project < handle
                 stdd   = stds(c1);
                 %
                 for n1 = 1:length(learning_rates);%learning_rate
-                    alpha     = rescorlawagner( R , abs(learning_rates(n1)) ,0);
+                    alpha     = rescorlawagner( R , abs(learning_rates(n1)), Inf ,0);
                     alpha     = alpha*indicator(n1);
                     %generate fitted responses.
                     for n = 1:length(y);
-%                         fit(n,:) = Tuning.VonMises(x,alpha(n),kappa,0,offset);
-                        fit(n,:) = demean(Tuning.make_gaussian_fmri_zeromean(x,alpha(n),stdd));
+%                        fit(n,:) = Tuning.VonMises(x,alpha(n),kappa,0,offset);
+                         fit(n,:) = demean(Tuning.make_gaussian_fmri_zeromean(x,alpha(n),stdd));
                     end
                     %fit = fit + randn(size(fit))*eps;
                     %
@@ -2686,7 +2986,7 @@ classdef Project < handle
             out.peak_std       = stds(yp);
             out.peak_lr        = learning_rates(xp);
             %collect the fit too;            
-            alpha     = rescorlawagner( R , abs(out.peak_lr) ,0);
+            alpha     = rescorlawagner( R , abs(out.peak_lr),Inf ,0);
             alpha     = alpha*indicator(xp);
             for n = 1:length(y);
 %              fit(n,:) = Tuning.VonMises(x,alpha(n),kappa,0,offset);

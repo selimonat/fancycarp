@@ -12,6 +12,7 @@ classdef Tuning < handle
         ids    = [];
         y_mean = [];
         y_std  = [];
+        y_SEM  = [];
         groupfit        
         params;
         pval;
@@ -25,11 +26,13 @@ classdef Tuning < handle
             tuning.x   = data.x;
             tuning.y   = data.y;
             tuning.ids = data.ids;
+            tsubject   = length(unique(tuning.ids(:)));
             for x  = unique(tuning.x(:)')
                 i             = tuning.x == x;
                 tuning.y_mean = [tuning.y_mean mean(tuning.y(i))];%Group mean
-                tuning.y_std  = [tuning.y_std  std(tuning.y(i))];% Group std
+                tuning.y_std  = [tuning.y_std  std(tuning.y(i))];% Group std                
             end
+            tuning.y_SEM      = tuning.y_std./sqrt(tsubject);
         end
         
         function SingleSubjectFit(self,funtype)
@@ -259,13 +262,13 @@ classdef Tuning < handle
             XT = length(x);
             %as well as d
             % d  = 0.02;
-            %out      = amp.*exp(-tau*(x.^2)/2) - amp*sqrt(2*pi/tau)./d./XT;
-            x   = x(:)';
-            sd  = sd(:);
-            amp = amp(:);
-            sd  = repmat(sd, [1 length(x)]);
-            amp = repmat(amp,[1 length(x)]);
-            x   = repmat(x,  [length(sd) 1]);
+%             out      = amp.*exp(-tau*(x.^2)/2) - amp*sqrt(2*pi/tau)./d./XT;
+%             x   = x(:)';
+%             sd  = sd(:);
+%             amp = amp(:);
+%             sd  = repmat(sd, [1 length(x)]);
+%             amp = repmat(amp,[1 length(x)]);
+%             x   = repmat(x,  [length(sd) 1]);
             out = amp.*exp(-(x./sd).^2/2) - amp.*sqrt(2*pi*sd.^2)./d./XT;
         end               
     end
