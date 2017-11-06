@@ -89,7 +89,7 @@ classdef Project < handle
         selected_betas        = 1:4
         selected_ngroup       = 1;
         %
-        selected_fitfun       = 3;%fixed gaussian (3), vonmises (8);                
+        selected_fitfun       = 8;%fixed gaussian (3), vonmises (8);                
         pval                  = .05;%tuning presence
         eye_data_type         = 'countw';
         select_scr_trials     = 5;
@@ -1185,7 +1185,7 @@ classdef Project < handle
             
             count  = [];
             labels = {};            
-            for ns = [1 11]
+            for ns = [1 11 3 33]
                 count  = [count ismember(self.subject_indices(:), self.get_selected_subjects(ns).list(:))];
                 labels = [labels self.get_selected_subjects(ns).name];
             end            
