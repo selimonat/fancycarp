@@ -434,8 +434,7 @@ classdef Subject < Project
                 dummy    = [self.id out(:,1:2)  fit.LL fit.FearTuning NonParametricDiff];                
                 out      = array2table(dummy,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm'                            'rating_LL' 'feartuning_rating' 'rating_nonparam'});
             end
-        end
-        
+        end        
         function [out]      = get.scr_param(self)
             %
             fit               = self.fit_scr;
@@ -577,7 +576,7 @@ classdef Subject < Project
             end
             out                               = [];
             filename                          = sprintf('%sfacecircle_%02d.mat',self.path_midlevel(3),partition);%facecircle is recorded in run 3.
-            force = 1;%!!!!!!!!!!!!!!!!!!!!!!!!!1
+            force = 0;%!!!!!!!!!!!!!!!!!!!!!!!!!1
             %if you like to recache the Project.screen_size and
             %Fixmat.window has to be readjusted to original values, cache
             %it and change back to aligned settings.
@@ -794,8 +793,7 @@ classdef Subject < Project
             out        = [];            
             out        = cat(4,out,self.get_bold_spacetime(sk));                   
             out        = cat(4,out,self.get_pupil_spacetime);
-        end        
-        
+        end                
     end
     
     methods %(preprocessing))              
@@ -1566,8 +1564,7 @@ classdef Subject < Project
             
         end        
         function plot_rating(self)
-            
-            criterium = 5;%subject_validity criteria, see get_selected_subjects
+                        
             
             %plot subjects rating as a bar plot.
             self.plot_bar(mean(self.rating.x), self.rating.y_mean,self.rating.y_sem);%plot the data            
@@ -3191,8 +3188,7 @@ classdef Subject < Project
             model_dir        = fileparts(model_path);
             if ~exist(model_dir);mkdir(model_dir);end
             save(model_path,'cond');
-        end        
-        
+        end                
         function [out] = fit_pmf(self,varargin)
             %will load the pmf fit (saved in runXXX/pmf) if computed other
             %wise will read the raw pmf data (saved in runXXX/stimulation)
@@ -3243,7 +3239,7 @@ classdef Subject < Project
             %and compute a fit.
             
             fun        = self.selected_fitfun;;%vM or Gau function
-            force      = 1;%repeat the analysis or load from cache            
+            force      = 0;%repeat the analysis or load from cache            
             borders    = 1000;
             pval       = self.pval;
             write_path = sprintf('%s/midlevel/rating_fun_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),fun,borders,pval*1000);
@@ -3300,7 +3296,7 @@ classdef Subject < Project
             if nargin < 2
                 partition = 1;
             end
-            force   = 1;%repeat the analysis or load from cache            
+            force   = 0;%repeat the analysis or load from cache            
             fun     = self.selected_fitfun;
             borders = 1000;
             pval    = self.pval;
@@ -3396,14 +3392,13 @@ classdef Subject < Project
                 save(write_path,'out')
             end
             
-        end        
-        
+        end                
         function [out] = fit_scr(self)
             %will load the rating fit (saved in runXXX/rating) if computed other
             %wise will read the raw ratingdata (saved in runXXX/stimulation)
             %and compute a fit.            
             fun        = self.selected_fitfun;%
-            force      = 1;%repeat the analysis or load from cache            
+            force      = 0;%repeat the analysis or load from cache            
             borders    = 1000;
             pval       = self.pval;
             write_path = sprintf('%s/midlevel/scr_fun_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),fun,borders,pval*1000);                        
@@ -3485,7 +3480,7 @@ classdef Subject < Project
                 cprintf([1 0 0],'Already computed...\n');
             end
         end
-        function [volume]=get_brainbehavior_analysis(self)
+        function [volume]  = get_brainbehavior_analysis(self)
             %[volume]=get_brainbehavior_analysis(self)
             %
             writename = sprintf('%sbrainbehavior.nii',self.path_midlevel(1));
