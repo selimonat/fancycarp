@@ -81,7 +81,7 @@ classdef Project < handle
         screen_resolution     = [768 1024];%%%;%this is the size of the face on the facecircle;[212 212];
         path_stim             = sprintf('%sstim/ave.png',Project.path_project);
     end    
-    properties (Hidden)
+    properties (Hidden,Constant)
         atlas2mask_threshold  = 30;%where ROI masks are computed, this threshold is used.        
         %voxel selection
         selected_smoothing    = 6;%smoothing for selection of voxels;
@@ -93,6 +93,7 @@ classdef Project < handle
         pval                  = .05;%tuning presence
         eye_data_type         = 'countw';
         select_scr_trials     = 5;
+        tuning_criterium      = 1;        
     end    
 	methods
         function DU         = SanityCheck(self,runs,measure,varargin)
@@ -405,50 +406,27 @@ classdef Project < handle
                 load(target_name);
             end
         end
-        function out             = getgroup_rating_param(self)
-            force       = 0;
-            target_name = sprintf('%smidlevel/%s_fitfun_%02d.mat',self.path_project,'getgroup_rating_param',self.selected_fitfun);
-            %
-            if force || exist(target_name) == 0
-                %collects the rating parameters for all subjects in a table.
-                out = [];
-                for ns = self.subject_indices%run across all the subjects
-                    s   = Subject(ns);
-                    out = [out;s.rating_param];
-                end                
-                save(target_name,'out');
-            else
-                load(target_name);
+        function out             = getgroup_rating_param(self)            
+            %collects the rating parameters for all subjects in a table.
+            out = [];
+            for ns = self.subject_indices%run across all the subjects
+                s   = Subject(ns);
+                out = [out;s.rating_param];
             end
         end               
         function out             = getgroup_scr_param(self)
             %collects the scr parameters for all subjects in a table.
-            force = 0;
-            target_name = sprintf('%smidlevel/%s_fitfun_%02d.mat',self.path_project,'getgroup_scr_param',self.selected_fitfun);
-            if force == 1 || exist(target_name) == 0                
-                out = [];
-                for ns = self.subject_indices%run across all the subjects
-                    s   = Subject(ns,'scr');
-                    out = [out;s.scr_param];
-                end
-                save(target_name,'out');
-            else
-                load(target_name);
+            for ns = self.subject_indices%run across all the subjects
+                s   = Subject(ns,'scr');
+                out = [out;s.scr_param];
             end
         end               
         function out             = getgroup_facecircle_param(self)
-            %collects the facecircle parameters for all subjects in a table.
-            force = 0
-            target_name = sprintf('%smidlevel/%s_fitfun_%02d.mat',self.path_project,'getgroup_facecircle_param',self.selected_fitfun);
-            if force | exist(target_name) == 0                
-                out = [];
-                for ns = self.subject_indices
-                    s   = Subject(ns);
-                    out = [out;s.facecircle_param];
-                end
-                save(target_name,'out');
-            else
-                load(target_name);
+            %collects the facecircle parameters for all subjects in a table.            
+            out = [];
+            for ns = self.subject_indices
+                s   = Subject(ns);
+                out = [out;s.facecircle_param];
             end
         end       
         function out             = getgroup_detected_oddballs(self)            
@@ -2789,16 +2767,14 @@ classdef Project < handle
             hold on;
             if nargin == 3
                errorbar(X,Y,SEM,'ko');%add error bars
-            end
-            
-            %% 
+            end            
+            %%
             h = gca;            set(h,'xtick',X,'xticklabel',{'' sprintf('-90%c',char(176)) '' 'CS+' '' sprintf('+90%c',char(176)) '' sprintf('\\pm180%c',char(176))});
             box off;
             set(h,'color','none');
             xlim([0 tbar+1])
             drawnow;            
-            axis tight;box off;axis square;drawnow;alpha(.5);
-              
+            axis tight;box off;axis square;drawnow;alpha(.5);              
         end
         function Yc          = circconv2(Y,varargin)
             %circularly smoothes data using a 2x2 boxcar kernel;
@@ -2969,6 +2945,22 @@ classdef Project < handle
                fit(n,:) = Tuning.make_gaussian_fmri_zeromean(x,alpha(n),out.peak_std);
             end                    
             out.fit            = fit;
+        end        
+        function out         = IsTuned(out,tuning_criterium);
+            borders    = 1000;
+            pval       = Project.pval;
+            fun        = Project.selected_fitfun;
+            %applies the tuning criterium and returns logical YES or NO
+            if tuning_criterium ==1
+                if fun == 8;
+                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(3) > -borders)&(out.params(3) < borders)&(out.params(1) > 0));
+                    %                     out.FearTuning = logical((out.LL > -log10(pval)));
+                else
+                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(1) > 0));
+                end                
+            elseif tuning_criterium == 2
+                out.FearTuning = logical((out.LL > -log10(pval)));                
+            end
         end
     end
 end

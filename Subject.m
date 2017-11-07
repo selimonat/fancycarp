@@ -3277,19 +3277,13 @@ classdef Subject < Project
                     if out.y(4) < out.y(end)
                         out.params(1) = -out.params(1);
                     end                    
-                end
-                %% is there evidence for fear-tuning?                
-                if fun == 8;
-                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(3) > -borders)&(out.params(3) < borders)&(out.params(1) > 0));
-                    out.FearTuning = logical((out.LL > -log10(pval)));
-                else 
-                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(1) > 0));
-                end
+                end                
                 %%
                 save(write_path,'out')
             end
-            
-        end        
+            %% is there evidence for fear-tuning?
+            out = self.IsTuned(out,1);
+        end
         function [out] = fit_facecircle(self,partition)
             %will fit function FUN to facecircle data with PARTITION
             %partitions.
@@ -3334,18 +3328,12 @@ classdef Subject < Project
                         out.params(1) = -out.params(1);
                     end
                 end
-                %% is there evidence for fear-tuning?                
-                if fun == 8;
-                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(3) > -borders)&(out.params(3) < borders)&(out.params(1) > 0));
-                    out.FearTuning = logical((out.LL > -log10(pval)));
-                else 
-                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(1) > 0));
-                end
                 %%
                 save(write_path,'out');
             end
-            
-        end        
+            %% is there evidence for fear-tuning?
+            out = self.IsTuned(out,2);
+        end
         function [out] = fit_pupil(self,fun)
             %will load the rating fit (saved in runXXX/rating) if computed
             %otherwise will read the raw ratingdata (saved in
@@ -3396,12 +3384,12 @@ classdef Subject < Project
         function [out] = fit_scr(self)
             %will load the rating fit (saved in runXXX/rating) if computed other
             %wise will read the raw ratingdata (saved in runXXX/stimulation)
-            %and compute a fit.            
-            fun        = self.selected_fitfun;%
-            force      = 0;%repeat the analysis or load from cache            
+            %and compute a fit.                        
+            force      = 0;%repeat the analysis or load from cache                                    
             borders    = 1000;
-            pval       = self.pval;
-            write_path = sprintf('%s/midlevel/scr_fun_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),fun,borders,pval*1000);                        
+            pval       = Project.pval;
+            fun        = Project.selected_fitfun;
+            write_path = sprintf('%s/midlevel/scr_fun_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),Project.selected_fitfun,borders,pval*1000);                        
             if exist(write_path) && force ==0
                 %load directly or
                 load(write_path);
@@ -3436,18 +3424,12 @@ classdef Subject < Project
                         out.params(1) = -out.params(1);
                     end
                 end
-                %% is there evidence for fear-tuning?                
-                if fun == 8;
-                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(3) > -borders)&(out.params(3) < borders)&(out.params(1) > 0));
-                    out.FearTuning = logical((out.LL > -log10(pval)));
-                else 
-                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(1) > 0));
-                end
                 %%
                 save(write_path,'out')
             end
-            
-        end        
+            %% is there evidence for fear-tuning?
+            out = self.IsTuned(out,1);
+        end
         function writename = brainbehavior_analysis(self,sk)
             
             
