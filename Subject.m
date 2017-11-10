@@ -2113,7 +2113,7 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs                  = self.derivatives;%we have [0 0], [ 1 0] or [ 1 1] for 1, 2, or 3 regressors.
             matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
-            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
+            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;%
             matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.;%add a proper mask here.
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
             spm_jobman('run', matlabbatch);%create SPM file first
@@ -3332,7 +3332,7 @@ classdef Subject < Project
                 save(write_path,'out');
             end
             %% is there evidence for fear-tuning?
-            out = self.IsTuned(out,2);
+            out = self.IsTuned(out,1);
         end
         function [out] = fit_pupil(self,fun)
             %will load the rating fit (saved in runXXX/rating) if computed

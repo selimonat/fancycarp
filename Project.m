@@ -416,6 +416,7 @@ classdef Project < handle
         end               
         function out             = getgroup_scr_param(self)
             %collects the scr parameters for all subjects in a table.
+            out = [];
             for ns = self.subject_indices%run across all the subjects
                 s   = Subject(ns,'scr');
                 out = [out;s.scr_param];
@@ -1163,7 +1164,7 @@ classdef Project < handle
             
             count  = [];
             labels = {};            
-            for ns = [1 11 3 33]
+            for ns = [1 2 3 4]
                 count  = [count ismember(self.subject_indices(:), self.get_selected_subjects(ns).list(:))];
                 labels = [labels self.get_selected_subjects(ns).name];
             end            
@@ -1177,7 +1178,7 @@ classdef Project < handle
             set(gca,'fontsize',fs,'xtick',1:length(labels),'ytick',1:length(labels),'XTickLabelRotation',45,'xticklabels',labels,'fontsize',fs,'YTickLabelRotation',45,'yticklabels',labels,'TickLabelInterpreter','none')
         end        
         end
-    methods %methods that does something on all subjects one by one
+    methods 
         function                              VolumeGroupAverage(self,selector)
             %Averages all IMAGES across all subjects. This can only be done
             %on normalized images. The result will be saved to the
@@ -1231,7 +1232,7 @@ classdef Project < handle
             %
             % Monkey business: if you add covariates change the folder name
             % aswell.            
-            
+
             if length(ngroup) == 1
                 ngroup(2) = 1;
             end
@@ -1266,16 +1267,21 @@ classdef Project < handle
                 matlabbatch{1}.spm.stats.factorial_design.cov                    = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
                 matlabbatch{1}.spm.stats.factorial_design.multi_cov              = struct('files', {}, 'iCFI', {}, 'iCC', {});
                 %%
-                %overwrite with the covariates if entered
-                if ~isempty(covariate_id)                   
-                    param                                                        = self.getgroup_all_param(ngroup);
+                %overwrite with the covariates if entered                
+                if ~isempty(covariate_id)                          
+                    out                                                          = self.getgroup_pmf_param;
+                    out                                                          = join(out,self.getgroup_rating_param);
+                    out                                                          = join(out,self.getgroup_facecircle_param);
+                    out                                                          = out(ismember(out.subject_id,subjects.list),:);
+                    param                                                        = out;
+                    
                     %extract the parameters for the currently selected subjects
                     c                                                            = param.(covariate_id);                    
                     %register beta images and covariate values.                    
                     tcell                                                        = length(matlabbatch{1}.spm.stats.factorial_design.des.anova.icell);
-                    ccc                                                          = 0;                    
+                    ccc                                                          = 0;
                     mat                                                          = kron(eye(4),demean(c));
-                    for ncell = 1:tcell                            
+                    for ncell = 1:tcell 
                         matlabbatch{1}.spm.stats.factorial_design.cov(ncell)     = struct('c', mat(:,ncell), 'cname', sprintf('cov:%s-cell:%02d',covariate_id,ncell), 'iCFI', 1, 'iCC', 1);                        
                     end                    
                 end
@@ -1290,50 +1296,50 @@ classdef Project < handle
                 matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
                 %                                
                 spm_jobman('run', matlabbatch);
-%                 if covariate_id == 0
+                if isempty(covariate_id)                   
                     %UPDATE THE SPM.mat with the contrast
                     %create the contrast that we are interested in, this could
                     %be later extended into a for loop
-% % % %                     load(sprintf('%s/SPM.mat',spm_dir));
-% % % %                     SPM                                                          = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any
-% % % %                     tbetas                                                       = length(beta_image_index);
-% % % %                     
-% % % %                     if model == 7 | model == 3 | model == 33
-% % % %                         tcontrast   = size(SPM.xX.xKXs.X,2);           
-% % % %                         M = [[0 0 0 ]' eye(3)];
-% % % %                         SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
-% % % %                         M(1,2)      = 0;
-% % % %                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
-% % % %                         
-% % % %                     elseif model == 4 | model >= 100
-% % % %                         M           = [[0 0 0 0 0]' eye(5)];
-% % % %                         SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
-% % % %                         M(1,2)      = 0;
-% % % %                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
-% % % %                         M           = zeros(5,6)
-% % % %                         M(3,4)      = 1;
-% % % %                         SPM.xCon(3) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
-% % % %                     elseif model == 5
-% % % %                         M           = [[0 0 0 0 0 0 0 0]' eye(8)];
-% % % %                         SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
-% % % %                         M(1,2)      = 0;
-% % % %                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
-% % % % %                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' zeros(3) [0 0 0 ]' eye(3)]'  ,SPM.xX.xKXs);
-% % % %                     elseif model == 8
-% % % %                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[zeros(1,11)]' eye(11) ]',SPM.xX.xKXs);
-% % % %                     elseif model == 88
-% % % %                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[zeros(1,20)]' eye(20) ]',SPM.xX.xKXs);                    
-% % % %                     end
-% % % % %                     
-% % % %                     save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
-% % % %                     %xSPM is used to threshold according to a contrast.
-% % % %                     %                 xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');                    
-% % % %                     xSPM = struct('swd', spm_dir,'title','eoi','Ic',3,'n',[],'Im',[],'pm',[],'Ex',[],'u',.05,'k',0,'thresDesc','FWE');
-% % % %                     %replace 'none' to make FWE corrections.
-% % % %                     [SPM xSPM] = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
-% % % %                     save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
-% % % %                     save(xspm_path,'xSPM');
-%                 end
+                    load(sprintf('%s/SPM.mat',spm_dir));
+                    SPM                                                          = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any
+                    tbetas                                                       = length(beta_image_index);
+                    
+                    if model == 7 | model == 3 | model == 33
+                        tcontrast   = size(SPM.xX.xKXs.X,2);           
+                        M = [[0 0 0 ]' eye(3)];
+                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                        M(1,2)      = 0;
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                        
+                    elseif model == 4 | model >= 100
+                        M           = [[0 0 0 0 0]' eye(5)];
+                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                        M(1,2)      = 0;
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                        M           = zeros(5,6)
+                        M(3,4)      = 1;
+                        SPM.xCon(3) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                    elseif model == 5
+                        M           = [[0 0 0 0 0 0 0 0]' eye(8)];
+                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                        M(1,2)      = 0;
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+%                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' zeros(3) [0 0 0 ]' eye(3)]'  ,SPM.xX.xKXs);
+                    elseif model == 8
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[zeros(1,11)]' eye(11) ]',SPM.xX.xKXs);
+                    elseif model == 88
+                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[zeros(1,20)]' eye(20) ]',SPM.xX.xKXs);                    
+                    end
+%                     
+                    save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
+                    %xSPM is used to threshold according to a contrast.
+                    %                 xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');                    
+                    xSPM = struct('swd', spm_dir,'title','eoi','Ic',length(SPM.xCon),'n',[],'Im',[],'pm',[],'Ex',[],'u',.05,'k',0,'thresDesc','FWE');
+                    %replace 'none' to make FWE corrections.
+                    [SPM xSPM] = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
+                    save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
+                    save(xspm_path,'xSPM');
+                end
             else
                 load(xspm_path);                
                 t                                 = spm_list('table',xSPM{2}.rating);
