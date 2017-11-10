@@ -55,12 +55,6 @@ classdef Subject < Project
                 for nrun = 1:s.total_run
                     s.paradigm{nrun} = s.get_paradigm(nrun);
                 end
-                try
-                s.csp = s.paradigm{s.default_run}.stim.cs_plus;
-                s.csn = s.paradigm{s.default_run}.stim.cs_neg;
-                end
-                s.scr = SCR(s);                       
-                
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path);
                 fprintf('Your path might also be wrong...\n');
@@ -607,79 +601,6 @@ classdef Subject < Project
         end       
     end
    
-    methods %analysis
-        function [out] = fit_pmf(self,varargin)
-            %will load the pmf fit (saved in runXXX/pmf) if computed other
-            %wise will read the raw pmf data (saved in runXXX/stimulation)
-            %and compute a fit.            
-                
-            if exist(self.path_data(2,'pmf')) && isempty(varargin)
-                %load directly or 
-                load(self.path_data(2,'pmf'));
-%                 fprintf('PMF Fit found and loaded successfully for subject %i...\n',self.id);
-                
-            elseif ~isempty(varargin) || ~exist(self.path_data(2,'pmf'))
-                addpath(self.path_palamedes);
-                %compute and save it.
-                fprintf('Fitting PMF...\n')                                
-                % define a search grid
-                searchGrid.alpha  = linspace(0,100,10);    %structure defining grid to
-                searchGrid.beta   = 10.^[-1:0.1:1];         %search for initial values
-                searchGrid.gamma  = linspace(0,0.5,10);
-                searchGrid.lambda = linspace(0,0.1,10);
-                paramsFree        = [1 1 1 1];
-                PF                = @PAL_Weibull;
-                %prepare some variables
-                tchain            = size(self.pmf.log.xrounded,3);
-                xlevels           = unique(abs(self.pmf.presentation.uniquex));
-                NumPos            = NaN(length(xlevels),tchain);
-                OutOfNum          = NaN(length(xlevels),tchain);
-                sd                = NaN(length(xlevels),tchain);
-                %first collapse the two directions (pos/neg differences from
-                %csp)
-                
-                for chain = 1:tchain
-                    fprintf('Starting to fit chain %g...\n',chain)
-                    %get responses, and resulting PMF from PAL algorithm
-                    data = self.pmf.log.xrounded(:,:,chain);
-                    rep  = self.pmf.presentation.rep;
-                    cl   = 0;
-                    for l = xlevels(:)'
-                        cl                 = cl+1;
-                        ind                = find(abs(self.pmf.presentation.uniquex) == l);
-                        collecttrials      = data(ind,1:rep(ind(1)));
-                        collecttrials      = collecttrials(:);
-                        NumPos(cl,chain)   = sum(collecttrials);% number of "different" responses
-                        OutOfNum(cl,chain) = length(collecttrials);%number of presentations at that level
-                        sd(cl,chain)       = (OutOfNum(cl,chain)*NumPos(cl,chain)/OutOfNum(cl,chain)...
-                            *(1-NumPos(cl,chain)/OutOfNum(cl,chain)))./OutOfNum(cl,chain);%var of binomial distr. (np(1-p))
-                    end
-                    %fit the function using PAL
-                    %%
-                    options             = PAL_minimize('options');
-                    options.MaxIter     = 10.^3;
-                    options.MaxFunEvals = 10.^3;
-                    options.Display     = 'On';
-                    options.ToX         = -10.^3;
-                    options.TolFun      = -10.^3;
-                    
-                    [paramsValues LL exitflag output] = PAL_PFML_Fit(xlevels, ...
-                        NumPos(:,chain), OutOfNum(:,chain), searchGrid, paramsFree, PF,'lapseLimits',[0 .5],'guessLimits',[0 .5]);
-                    fprintf('%s.\n',output.message );
-                    out.NumPos(chain,:)          = NumPos(:,chain);
-                    out.OutOfNum(chain,:)        = OutOfNum(:,chain);
-                    out.PropCorrectData(chain,:) = NumPos(:,chain)./OutOfNum(:,chain);
-                    out.sd(chain,:)              = sd(:,chain);
-                    out.params(chain,:)          = paramsValues;
-                    out.LL(chain,:)              = LL;
-                    out.exitflag(chain,:)        = exitflag;
-                    out.PF                       = PF;
-                    out.xlevels                  = xlevels;
-                end
-                save(self.path_data(2,'pmf'),'out')
-            end
-        end
-    end
     methods %(plotters)
         function plot_log(self,nrun)
             %will plot the events that are logged during the experiment.
@@ -693,7 +614,7 @@ classdef Subject < Project
             plot([scan_times(5:5:end) scan_times(5:5:end)],ylim,'k','linewidth',.1);%plot every 5 th pulse event as a line
             % text pulse indices for each line as well.
             t_scan = length(scan_times);
-            text(scan_times(5:5:t_scan),repmat(0,length(5:5:t_scan),1),num2str([5:5:t_scan]'),'color','r');
+            :text(scan_times(5:5:t_scan),repmat(0,length(5:5:t_scan),1),num2str([5:5:t_scan]'),'color','r');
             % mark with a star missing pulses (if any)
             miss        = find(diff(scan_times) > self.TR*1.1);
             if ~isempty(miss)
