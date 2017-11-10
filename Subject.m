@@ -155,17 +155,6 @@ classdef Subject < Project
             L(L(:,1) > last_scan_time,:)  = [];
             L(:,1)          = L(:,1) - first_scan_time;
         end
-        function out    = get.pmf(self)
-            %will load the raw pmf data.
-            dummy    = load(self.path_data(2,'stimulation'));
-            out      = dummy.p.psi;
-        end 
-        function out    = get.get_param_pmf(self)
-            %returns the parameters of the pmf fit (condition x parameter);
-            out      = self.fit_pmf;
-            out      = [out.params(1,:),out.params(2,:)];
-            out      = array2table([out self.id ],'variablenames',[self.pmf_variablenames 'subject_id']);
-        end         
         function o      = get_param_motion(self,run)
             %will load the realignment parameters, of course you have to
             %realign the EPIs first.
