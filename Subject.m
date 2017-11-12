@@ -357,11 +357,11 @@ classdef Subject < Project
             self.RunSPMJob(matlabbatch);
         end        
         function MNI2Native(self)
-            %brings the atlas to MNI space and saves it in run000/atlas.
+            %brings the atlas to native space and saves it in run000/atlas.
             %Same as VolumeNormalize but uses the inverse deformation
             %fields but same batch. Currently functions only with the 120th
             %volume (which is right amygdala).
-            
+            if exist(self.path_atlas)
             %copy the atlas to subject's folder.
             copyfile(fileparts(self.path_atlas),[self.path_data(0) sprintf('atlas%s',filesep)]);
             %
@@ -378,6 +378,9 @@ classdef Subject < Project
             self.RunSPMJob(matlabbatch);
             target_file = strrep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
             movefile(target_file,self.path_native_atlas);
+    	    else
+	    fprintf('For MNI2Native Analysis you need to have a atlas in %s\n',self.path_atlas);
+	    end
         end        
         function [X,N,K]=spm_DesignMatrix(self,nrun,model_num)
             %will return the same design matrix used by spm in an efficient
