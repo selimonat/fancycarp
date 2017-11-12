@@ -35,7 +35,6 @@ classdef Subject < Project
     properties (SetAccess = private)
         id
         path        
-        scr                
         trio_session  = [];
         total_run     = [];        
     end
@@ -74,12 +73,12 @@ classdef Subject < Project
             %create it if necess.
             if exist(self.dir_hr) == 0
                 mkdir(self.dir_hr);
-            end            
+            end   
             self.DicomDownload(self.path_hr_dicom,self.dir_hr);
             self.ConvertDicom(self.dir_hr);
-            files       = spm_select('FPListRec',self.dir_hr,'^sTRIO');
+            files       = spm_select('FPListRec',self.dir_hr,'^sPRISMA');
             if ~isempty(files)
-                movefile(files,regexprep(files,sprintf('%ssTRIO.*$',filesep),sprintf('%sdata.nii',filesep)));%rename it to data.nii
+                movefile(files,regexprep(files,sprintf('%ssPRISMA.*$',filesep),sprintf('%sdata.nii',filesep)));%rename it to data.nii
             end
         end
         function p          = get_paradigm(self,nrun)
@@ -109,19 +108,17 @@ classdef Subject < Project
                 self.dicom_folders  = paths(self.dicom_serie_id);
                 fprintf('Will now dump series (%s)\n',self.current_time);            
             end
-            
-            %% save the desired runs to disk
-            n = 0;
-            for source = self.dicom_folders(:)'
-                %
-                n 				 = n+1;
+            %% save the desired runs to disk            
+			for source = self.dicom_folders(:)'
+				%
+                n 				 = n+1
                 dest             = self.dir_epi(n);                                
                 if exist(dest)
 					self.DicomDownload(source{1},dest);                
-                	self.DicomTo4D(dest);
+					self.DicomTo4D(dest);
 				else
-					keyboard
 					fprintf('Stopped here as a sanity check\nIt seems the destination folder doesn''t exist.')
+					keyboard
 				end
             end
             
@@ -192,40 +189,6 @@ classdef Subject < Project
             XYZ         = [X Y Z ones(sum(mask_ind(:)),1)]';%this is in hr's voxels space.
             XYZmm       = mask_handle.mat*XYZ;%this is world space.            
             XYZmm       = unique(XYZmm','rows')';%remove repetititons.
-        end
-        function L      = get_physio2log(self)            
-            %returns logged events from the physio computer in the same
-            %format as the log file. Events are aligned to the first valid
-            %scan pulse.
-            %%
-            
-            filename = sprintf('%s/run001/scr/data.smr',self.path);
-            fh       = fopen(filename);
-            % get times for trigger channels.
-            chan2L   = [NaN 9 3 NaN 5 0 NaN NaN 5];%transform channels to event_types as logged by the stim computer.
-            L        = [];
-            for chan     = [2 3 4 5 6 9];%all event channels.            
-                dummy    = SONGetEventChannel(fh,chan);
-                L        = [L ;[dummy(:) repmat(chan2L(chan),length(dummy),1)]];%returns time in seconds.                
-            end
-            % include only the period starting and ending with pulses. To
-            % this end find the period where the distance between the two
-            % pulse is smaller than the TR times 1.1. In the physio
-            % computer events might have been recorded before and after
-            % scanning session.
-            scan_times      = L(find(L(:,2) == 0),1);
-            last_scan_ind   = find(diff(scan_times) < self.TR*1.1,1,'last');
-            first_scan_ind  = find(diff(scan_times) < self.TR*1.1,1,'first');
-            %
-            first_scan_time = scan_times(first_scan_ind);
-            last_scan_time  = scan_times(last_scan_ind);
-            %
-            L(L(:,1) < first_scan_time,:) = [];
-            L(L(:,1) > last_scan_time,:)  = [];
-            %
-            L(:,1)   = L(:,1) - first_scan_time;
-            %                   
-            fclose(fh);
         end
     end
     
@@ -598,9 +561,12 @@ classdef Subject < Project
                 [status2 HRLine] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders | grep mprage | tail -n 1',self.trio_session));
                 %                
                 if ~isempty(HRLine);
-                    HRPath = regexp(HRLine,'/common\S*','match');
+					HRLine = regexp(HRLine,'Series.*','match');
+					HRLine = HRLine{1};
+                    HRPath = regexp(HRLine,'/common.*','match');
                     HRPath = HRPath{1};
-                    %HRPath = GetDicomPath(HRLine);
+                    HRPath = regexprep(HRPath,'\n','');
+					%HRPath = GetDicomPath(HRLine);
                     fprintf('Dicom Server returns:\n=====\n')
                     fprintf(DicqOutputFull);
                     fprintf('=====\n');
@@ -648,7 +614,7 @@ classdef Subject < Project
             plot([scan_times(5:5:end) scan_times(5:5:end)],ylim,'k','linewidth',.1);%plot every 5 th pulse event as a line
             % text pulse indices for each line as well.
             t_scan = length(scan_times);
-            :text(scan_times(5:5:t_scan),repmat(0,length(5:5:t_scan),1),num2str([5:5:t_scan]'),'color','r');
+            text(scan_times(5:5:t_scan),repmat(0,length(5:5:t_scan),1),num2str([5:5:t_scan]'),'color','r');
             % mark with a star missing pulses (if any)
             miss        = find(diff(scan_times) > self.TR*1.1);
             if ~isempty(miss)
