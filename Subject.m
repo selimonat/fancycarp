@@ -197,11 +197,15 @@ classdef Subject < Project
             %meta method to run all the required steps for hr
             %preprocessing. RUNS specifies the functional runs, make it a
             %vector if needed.
-            self.SegmentSurface_HR;
-            self.SkullStrip;%removes non-neural voxels
-            self.MNI2Native;%brings the atlas to native space
-            self.Re_Coreg(runs);            
-            self.SegmentSurface_EPI;
+            if nargin > 1
+	    	self.SegmentSurface_HR;
+            	self.SkullStrip;%removes non-neural voxels
+            	self.MNI2Native;%brings the atlas to native space
+            	self.Re_Coreg(runs);            
+            	self.SegmentSurface_EPI;
+	    else
+		fprintf('One input argument is required!\n');
+	    end
         end                   
         function SkullStrip(self)
             %needs results of SegmentSurface, will produce a skullstripped
