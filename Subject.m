@@ -471,11 +471,9 @@ classdef Subject < Project
     methods %path_tools which are related to the subject              
         function out  = path_meanepi(self)
             %returns the path to the meanepi (result of realignment).
-            %returns empty if non-existent.
-            out    = strrep( self.path_epi(1),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
-            if exist(out) == 0
-                out = [];
-            end
+            %returns empty if non-existent. Assumes that the first run contains the mean epi.
+            first_run = self.dicom_target_run(1);
+	    out       = strrep( self.path_epi(first_run),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
         end
         function out        = path_skullstrip(self,varargin)
             %returns filename for the skull stripped hr. Use VARARGIN to
