@@ -1420,6 +1420,10 @@ classdef Subject < Project
             %the directory where hr is located
             out = sprintf('%smrt%s',self.pathfinder(self.id,0),filesep);
         end
+        function out        = path_scr(self)
+            %the directory where SCR is located
+            out = sprintf('%sscr%sdata.smr',self.pathfinder(self.id,1),filesep);
+        end
     end      
     methods %(plotters)
         function plot_log(self,nrun)
