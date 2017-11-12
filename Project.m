@@ -49,14 +49,14 @@ classdef Project < handle
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
 
-        path_project          = '/mnt/data/project_helen/data/';
+        path_project          = '/home/onat/project_helen/data/';
         path_spm              = '/common/apps/spm12-6685/';        
         trio_sessions         = { 'PRISMA_19873' };
-        dicom_serie_selector  = {  [1 2 3 4 ] };
+        dicom_serie_selector  = {  [8 19 20 21 9 10 22 23 6 7 17 18 ] };
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs)
-        dicom2run             = repmat({[1 2 3]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
-        data_folders          = {'eye' 'midlevel' 'mrt' 'scr' 'stimulation'};%if you need another folder, do it here.
+        dicom2run             = repmat({[1:12]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
+        data_folders          = {'midlevel' 'mrt' };%if you need another folder, do it here.
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
@@ -159,7 +159,7 @@ classdef Project < handle
             %will create data.nii consisting of all the [f,s]TRIO images
             %merged to 4D. the final name will be called data.nii.
             % merge to 4D
-            files       = spm_select('FPListRec',destination,'^fTRIO');
+            files       = spm_select('FPListRec',destination,'^[f,s]PRISMA');
             fprintf('MergeTo4D:\nMerging (%s):\n',self.current_time);
             matlabbatch{1}.spm.util.cat.vols  = cellstr(files);
             matlabbatch{1}.spm.util.cat.name  = 'data.nii';
@@ -256,6 +256,7 @@ classdef Project < handle
                         path2subject = sprintf('%s%ssub%03d%srun%03d%s%s',self.path_project,filesep,ns,filesep,nr,filesep,self.data_folders{nf});
                         if ~isempty(self.trio_sessions{ns})
                             a = fullfile(path2subject);
+							a
                             mkdir(a);
                         end
                     end
