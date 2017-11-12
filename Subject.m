@@ -234,11 +234,11 @@ classdef Subject < Project
             %meta method to run all the required steps for hr
             %preprocessing. RUNS specifies the functional runs, make it a
             %vector if needed.
-            self.SegmentSurface;
+            self.SegmentSurface_HR;
             self.SkullStrip;%removes non-neural voxels
             self.MNI2Native;%brings the atlas to native space
             self.Re_Coreg(runs);            
-
+            self.SegmentSurface_EPI;
         end                   
         function SkullStrip(self)
             %needs results of SegmentSurface, will produce a skullstripped
@@ -316,7 +316,7 @@ classdef Subject < Project
             self.RunSPMJob(matlabbatch);
             
         end
-        function SegmentSurface(self)            
+        function SegmentSurface_HR(self)            
             %runs CAT12 Segment Surface routine.
             matlabbatch{1}.spm.tools.cat.estwrite.data = {spm_select('expand',self.path_hr)};
             matlabbatch{1}.spm.tools.cat.estwrite.nproc = 0;
@@ -341,9 +341,35 @@ classdef Subject < Project
             %
             self.RunSPMJob(matlabbatch);
         end
+        function SegmentSurface_EPI(self)            
+            %                        
+            %runs CAT12 Segment Surface routine.
+            matlabbatch{1}.spm.tools.cat.estwrite.data = {spm_select('expand',self.path_meanepi)};
+            matlabbatch{1}.spm.tools.cat.estwrite.nproc = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm = {sprintf('%sTPM.nii',self.tpm_dir)};
+            matlabbatch{1}.spm.tools.cat.estwrite.opts.affreg = 'mni';
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.APP = 1;
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.LASstr = 0.5;
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.gcutstr = 0.5;
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.cleanupstr = 0.5;
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.darteltpm = {self.dartel_templates(1)};
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.vox = 1.5;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.surface = jn;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.native = 1;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.mod = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.dartel = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.native = 1;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.mod = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.dartel = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.bias.warped = 1;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.jacobian.warped = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.warps = [1 1];
+            %
+            self.RunSPMJob(matlabbatch);
+        end
         function VolumeNormalize(self,path2image)
             %SegmentSurface writes deformation fields (y_*), which are here used
-            %to normalize the native hr images. Adds a prefix w- to
+            %to normalize the native hr images. Adds a prefix w- to    
             %resampled images. path2image is the image to be resampled.
             %Example: 
             %
@@ -473,6 +499,14 @@ classdef Subject < Project
         end              
     end
     methods %path_tools which are related to the subject              
+        function out  = path_meanepi(self)
+            %returns the path to the meanepi (result of realignment).
+            %returns empty if non-existent.
+            out    = strrep( self.path_epi(1),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
+            if exist(mean_epi) == 0
+                out = [];
+            end
+        end
         function out        = path_skullstrip(self,varargin)
             %returns filename for the skull stripped hr. Use VARARGIN to
             %add a prefix to the output, such as 'w' for example.
