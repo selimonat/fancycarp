@@ -198,8 +198,8 @@ classdef Subject < Project
             %preprocessing. RUNS specifies the functional runs, make it a
             %vector if needed.
             if nargin > 1
-	    	self.SegmentSurface_HR;
-            	self.SkullStrip;%removes non-neural voxels
+	    	%self.SegmentSurface_HR;
+            	%self.SkullStrip;%removes non-neural voxels
             	self.MNI2Native;%brings the atlas to native space
             	self.Re_Coreg(runs);            
             	self.SegmentSurface_EPI;
@@ -473,7 +473,7 @@ classdef Subject < Project
             %returns the path to the meanepi (result of realignment).
             %returns empty if non-existent.
             out    = strrep( self.path_epi(1),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
-            if exist(mean_epi) == 0
+            if exist(out) == 0
                 out = [];
             end
         end
