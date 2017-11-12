@@ -278,7 +278,19 @@ classdef Project < handle
                 fprintf('Running SPM jobman %i...\n',n);
                 spm_jobman('run', matlabbatch(n));
             end            
-        end                        
+        end
+        
+        function plot_orthview(filename)
+            %will plot the volume using spm_image;
+            global st                        
+            spm_image('init',filename)
+            spm_clf;
+            spm_orthviews('Image',filename)
+%             spm_image('display',filename)
+            spm_orthviews('AddColourBar',h(1),1);
+            spm_orthviews('AddContext',h(1));
+        end        
+        
     end
     methods %methods that does something on all subjects one by one
         function VolumeGroupAverage(self,run,selector)
