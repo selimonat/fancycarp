@@ -198,15 +198,22 @@ classdef Subject < Project
             %preprocessing. RUNS specifies the functional runs, make it a
             %vector if needed.
             if nargin > 1
-	    		self.SegmentSurface_HR;
+	    		self.SegmentSurface_HR;%cat12 segmentation
             	self.SkullStrip;%removes non-neural voxels
             	self.MNI2Native;%brings the atlas to native space
-            	self.Re_Coreg(runs);            
-            	self.SegmentSurface_EPI;
-	    else
-		fprintf('One input argument is required!\n');
-	    end
-        end                   
+            	self.Re_Coreg(runs);%realignment and coregistration
+            	self.Segment_meanEPI;%segments mean EPI with new segment
+				self.SkullStrip_meanEPI;%creates a native mask
+	    	else
+				fprintf('One input argument is required!\n');
+		    end
+        end
+		function SkullStrip_meanEPI(self)
+			%combines c{1,2,3}meanepi.nii images to create a binary mask in the native space.
+			Vi = self.path_meanepi_segmented(1:3);
+			Vo = self.path_skullstrip_meanepi;
+			spm_imcalc(Vi,Vo,'(i1+i2+i3)>0');
+		end
         function SkullStrip(self)
             %needs results of SegmentSurface, will produce a skullstripped
             %version of hr (filename: ss_data.nii). It will also
@@ -315,7 +322,7 @@ classdef Subject < Project
             %
             self.RunSPMJob(matlabbatch);
         end
-        function SegmentSurface_EPI(self)            
+        function Segment_meanEPI(self)            
             % Runs the new segment of SPM12 on the mean EPI image.
 			% Will write to the disk:
 			% meandata_seg8.mat
@@ -457,7 +464,7 @@ classdef Subject < Project
             c = 0;            
             for b = run_borders
                 c        = c + 1;
-                K(c).row = b(1):b(2);
+                K(c).row = b(1);
                 K(c)     = spm_filter(K(c));
                 K(c).X0  = [ones(length(K(c).row),1)*std(K(c).X0(:)) K(c).X0];                
             end
@@ -494,7 +501,10 @@ classdef Subject < Project
         end              
     end
     methods %path_tools which are related to the subject              
-        function out  = path_meanepi(self)
+        	function out = path_skullstrip_meanepi(self)
+				out = regexprep(self.path_meanepi,'meandata','ss_meandata');
+			end
+			function out  = path_meanepi(self)
             %returns the path to the meanepi (result of realignment).
             %returns empty if non-existent. Assumes that the first run contains the mean epi.
             first_run = self.dicom_target_run(1);
@@ -503,6 +513,14 @@ classdef Subject < Project
 		function out = path_tpm(self,n)
 			%return the path to the Nth TPM image from the spm
 			out = sprintf('%s/TPM.nii,%i',self.tpm_dir,n);
+		end
+		function out = path_meanepi_segmented(self,num)
+			%Returns the path to the output of Segment_meanEPI, N can be a vector.
+			mean_epi = self.path_meanepi;
+			out      = '';
+			for n = num
+				out      = strvcat(out,regexprep(mean_epi,'meandata',sprintf('c%dmeandata',n)))
+			end
 		end
         function out        = path_skullstrip(self,varargin)
             %returns filename for the skull stripped hr. Use VARARGIN to
