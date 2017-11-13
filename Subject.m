@@ -3086,10 +3086,11 @@ classdef Subject < Project
         function analysis_CreateModel_RW(self,learning_rate)
             %same as 04, however interaction with ampxtime uses RW derived
             %temporal factors.
-            %
+            % for ns = s.get_selected_subjects(0).list;s=Subject(ns);for rw = logspace(-3,0,25);s.analysis_CreateModel_RW(rw);end;end
+            
             
             %this initial part is exactly the same as model_02
-            model_num      = 100+learning_rate*100;            
+            model_num      = 10000+learning_rate*10000;            
             
             L              = self.get_log(1);%get the log file.
             stim_onsets    = L(:,2) == 3;%all stim events.
@@ -3126,7 +3127,7 @@ classdef Subject < Project
             figure(1);plot(stim_id,mbi_id,'ro','markersize',10);title(mat2str(self.id));hold off
             %%
             rw_time = rescorlawagner( self.ucs_vector_notcleaned , learning_rate ,Inf, 0);%for each mb we have a coefficient for amp
-            figure(2);plot(rw_time);
+            figure(2);plot(rw_time,'o-');
             kappa   = .1;
             %create a weight vector for the derivative.
             res     = 8;
@@ -3182,9 +3183,8 @@ classdef Subject < Project
             cond(4).onset    = scan(i);
             cond(4).duration = zeros(1,sum(i));
             cond(4).tmod     = 0;
-            cond(4).pmod     = struct('name',{},'param',{},'poly',{});
-            
-            model_path       = self.path_model(1,model_num);
+            cond(4).pmod     = struct('name',{},'param',{},'poly',{});            
+            model_path       = self.path_model(1,round(model_num));
             model_dir        = fileparts(model_path);
             if ~exist(model_dir);mkdir(model_dir);end
             save(model_path,'cond');
