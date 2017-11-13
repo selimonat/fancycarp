@@ -200,8 +200,8 @@ classdef Subject < Project
             if nargin > 1
 	    	%self.SegmentSurface_HR;
             	%self.SkullStrip;%removes non-neural voxels
-            	self.MNI2Native;%brings the atlas to native space
-            	self.Re_Coreg(runs);            
+            	%self.MNI2Native;%brings the atlas to native space
+            	%self.Re_Coreg(runs);            
             	self.SegmentSurface_EPI;
 	    else
 		fprintf('One input argument is required!\n');
@@ -247,7 +247,7 @@ classdef Subject < Project
                 end
             end
             %% path to the mean_epi
-            mean_epi    = strrep( self.path_epi(1),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
+            mean_epi    = self.path_meanepi;
             
             %double-pass realign EPIs and reslice the mean image only.
             matlabbatch{1}.spm.spatial.realign.estwrite.data = epi_run;
@@ -284,7 +284,14 @@ classdef Subject < Project
             
         end
         function SegmentSurface_HR(self)            
-            %runs CAT12 Segment Surface routine.
+            % Runs CAT12 Segment Surface routine.
+			% Will write to the disk:
+			% mri and report folders
+			% mri/iy_data.nii
+			% mri/p1data.nii
+			% mri/p2data.nii
+			% mri/wmdata.nii
+			% mri_y_data.nii
             matlabbatch{1}.spm.tools.cat.estwrite.data = {spm_select('expand',self.path_hr)};
             matlabbatch{1}.spm.tools.cat.estwrite.nproc = 0;
             matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm = {sprintf('%sTPM.nii',self.tpm_dir)};
@@ -309,30 +316,48 @@ classdef Subject < Project
             self.RunSPMJob(matlabbatch);
         end
         function SegmentSurface_EPI(self)            
-            %                        
-            %runs CAT12 Segment Surface routine.
-            matlabbatch{1}.spm.tools.cat.estwrite.data = {spm_select('expand',self.path_meanepi)};
-            matlabbatch{1}.spm.tools.cat.estwrite.nproc = 0;
-            matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm = {sprintf('%sTPM.nii',self.tpm_dir)};
-            matlabbatch{1}.spm.tools.cat.estwrite.opts.affreg = 'mni';
-            matlabbatch{1}.spm.tools.cat.estwrite.extopts.APP = 1;
-            matlabbatch{1}.spm.tools.cat.estwrite.extopts.LASstr = 0.5;
-            matlabbatch{1}.spm.tools.cat.estwrite.extopts.gcutstr = 0.5;
-            matlabbatch{1}.spm.tools.cat.estwrite.extopts.cleanupstr = 0.5;
-            matlabbatch{1}.spm.tools.cat.estwrite.extopts.darteltpm = {self.dartel_templates(1)};
-            matlabbatch{1}.spm.tools.cat.estwrite.extopts.vox = 1.5;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.surface = jn;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.native = 1;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.mod = 0;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.dartel = 0;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.native = 1;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.mod = 0;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.dartel = 0;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.bias.warped = 1;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.jacobian.warped = 0;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.warps = [1 1];
-            %
-            self.RunSPMJob(matlabbatch);
+            % Runs the new segment of SPM12 on the mean EPI image.
+			% Will write to the disk:
+			% meandata_seg8.mat
+			% iy_meandata.nii
+            % c{1-5}meandata.nii
+			% y_meandata.nii
+			matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(self.path_meanepi);
+			matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
+			matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
+			matlabbatch{1}.spm.spatial.preproc.channel.write = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm = {self.path_tpm(1)};
+			matlabbatch{1}.spm.spatial.preproc.tissue(1).ngaus = 1;
+			matlabbatch{1}.spm.spatial.preproc.tissue(1).native = [1 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(1).warped = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm = {self.path_tpm(2)};
+			matlabbatch{1}.spm.spatial.preproc.tissue(2).ngaus = 1;
+			matlabbatch{1}.spm.spatial.preproc.tissue(2).native = [1 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(2).warped = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm = {self.path_tpm(3)};
+			matlabbatch{1}.spm.spatial.preproc.tissue(3).ngaus = 2;
+			matlabbatch{1}.spm.spatial.preproc.tissue(3).native = [1 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(3).warped = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm = {self.path_tpm(4)};
+			matlabbatch{1}.spm.spatial.preproc.tissue(4).ngaus = 3;
+			matlabbatch{1}.spm.spatial.preproc.tissue(4).native = [1 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(4).warped = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm = {self.path_tpm(5)};
+			matlabbatch{1}.spm.spatial.preproc.tissue(5).ngaus = 4;
+			matlabbatch{1}.spm.spatial.preproc.tissue(5).native = [1 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(5).warped = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm = {self.path_tpm(6)};
+			matlabbatch{1}.spm.spatial.preproc.tissue(6).ngaus = 2;
+			matlabbatch{1}.spm.spatial.preproc.tissue(6).native = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(6).warped = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.warp.mrf = 1;
+			matlabbatch{1}.spm.spatial.preproc.warp.cleanup = 1;
+			matlabbatch{1}.spm.spatial.preproc.warp.reg = [0 0.001 0.5 0.05 0.2];
+			matlabbatch{1}.spm.spatial.preproc.warp.affreg = 'mni';
+			matlabbatch{1}.spm.spatial.preproc.warp.fwhm = 0;
+			matlabbatch{1}.spm.spatial.preproc.warp.samp = 3;
+			matlabbatch{1}.spm.spatial.preproc.warp.write = [1 1];
+           self.RunSPMJob(matlabbatch);
         end
         function VolumeNormalize(self,path2image)
             %SegmentSurface writes deformation fields (y_*), which are here used
@@ -475,6 +500,10 @@ classdef Subject < Project
             first_run = self.dicom_target_run(1);
 	    out       = strrep( self.path_epi(first_run),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
         end
+		function out = path_tpm(self,n)
+			%return the path to the Nth TPM image from the spm
+			out = sprintf('%s/TPM.nii,%i',self.tpm_dir,n);
+		end
         function out        = path_skullstrip(self,varargin)
             %returns filename for the skull stripped hr. Use VARARGIN to
             %add a prefix to the output, such as 'w' for example.

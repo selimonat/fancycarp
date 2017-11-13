@@ -49,12 +49,13 @@ classdef Project < handle
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
 
-        path_project          = '/home/onat/project_helen/data/';
-        path_spm              = '/common/apps/spm12-6685/';        
+        path_project          = '/mnt/data/project_helen/data/';
+        path_spm              = '/home/onat/Documents/Code/Matlab/spm12-6685/';        
         trio_sessions         = { 'PRISMA_19873' };
         dicom_serie_selector  = {  [8 19 20 21 9 10 22 23 6 7 17 18 ] };
         %this is necessary to tell matlab which series corresponds to which
-        %run (i.e. it doesn't always corresponds to different runs)
+        %run (i.e. it doesn't always corresponds to different runs as in FearAmy)
+		%meanEPI.nii detection assumes that the first run is the first functional run.
         dicom2run             = repmat({[1:12]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
         data_folders          = {'midlevel' 'mrt' };%if you need another folder, do it here.
         TR                    = 0.99;                
