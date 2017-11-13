@@ -801,12 +801,23 @@ classdef Subject < Project
             %meta method to run all the required steps for hr
             %preprocessing. RUNS specifies the functional runs, make it a
             %vector if needed.
-            self.SegmentSurface;
-            self.SkullStrip;%removes non-neural voxels
-            self.MNI2Native;%brings the atlas to native space
-            self.Re_Coreg(runs);            
-
-        end                   
+            if nargin > 1
+	    		self.SegmentSurface_HR;%cat12 segmentation
+            	self.SkullStrip;%removes non-neural voxels
+            	self.MNI2Native;%brings the atlas to native space
+            	self.Re_Coreg(runs);%realignment and coregistration
+            	self.Segment_meanEPI;%segments mean EPI with new segment
+				self.SkullStrip_meanEPI;%creates a native mask
+	    	else
+				fprintf('One input argument is required!\n');
+		    end
+        end
+		function SkullStrip_meanEPI(self)
+			%combines c{1,2,3}meanepi.nii images to create a binary mask in the native space.
+			Vi = self.path_meanepi_segmented(1:3);
+			Vo = self.path_skullstrip_meanepi;
+			spm_imcalc(Vi,Vo,'(i1+i2+i3)>0');
+		end
         function SkullStrip(self)
             %needs results of SegmentSurface, will produce a skullstripped
             %version of hr (filename: ss_data.nii). It will also
@@ -838,7 +849,7 @@ classdef Subject < Project
         function Re_Coreg(self,runs)
             %will realign and coregister. 
               
-            % collect all the EPIs as a cell array of cellstr
+            %% collect all the EPIs as a cell array of cellstr
             c = 0;
             for nr = runs
                 if exist(self.path_epi(nr))
@@ -883,8 +894,15 @@ classdef Subject < Project
             self.RunSPMJob(matlabbatch);
             
         end
-        function SegmentSurface(self)            
-            %runs CAT12 Segment Surface routine.
+        function SegmentSurface_HR(self)            
+            % Runs CAT12 Segment Surface routine.
+			% Will write to the disk:
+			% mri and report folders
+			% mri/iy_data.nii
+			% mri/p1data.nii
+			% mri/p2data.nii
+			% mri/wmdata.nii
+			% mri_y_data.nii
             matlabbatch{1}.spm.tools.cat.estwrite.data = {spm_select('expand',self.path_hr)};
             matlabbatch{1}.spm.tools.cat.estwrite.nproc = 0;
             matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm = {sprintf('%sTPM.nii',self.tpm_dir)};
@@ -908,26 +926,72 @@ classdef Subject < Project
             %
             self.RunSPMJob(matlabbatch);
         end
+        function Segment_meanEPI(self)            
+            % Runs the new segment of SPM12 on the mean EPI image.
+			% Will write to the disk:
+			% meandata_seg8.mat
+			% iy_meandata.nii
+            % c{1-5}meandata.nii
+			% y_meandata.nii
+			matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(self.path_meanepi);
+			matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
+			matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
+			matlabbatch{1}.spm.spatial.preproc.channel.write = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm = {self.path_tpm(1)};
+			matlabbatch{1}.spm.spatial.preproc.tissue(1).ngaus = 1;
+			matlabbatch{1}.spm.spatial.preproc.tissue(1).native = [1 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(1).warped = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm = {self.path_tpm(2)};
+			matlabbatch{1}.spm.spatial.preproc.tissue(2).ngaus = 1;
+			matlabbatch{1}.spm.spatial.preproc.tissue(2).native = [1 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(2).warped = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm = {self.path_tpm(3)};
+			matlabbatch{1}.spm.spatial.preproc.tissue(3).ngaus = 2;
+			matlabbatch{1}.spm.spatial.preproc.tissue(3).native = [1 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(3).warped = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm = {self.path_tpm(4)};
+			matlabbatch{1}.spm.spatial.preproc.tissue(4).ngaus = 3;
+			matlabbatch{1}.spm.spatial.preproc.tissue(4).native = [1 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(4).warped = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm = {self.path_tpm(5)};
+			matlabbatch{1}.spm.spatial.preproc.tissue(5).ngaus = 4;
+			matlabbatch{1}.spm.spatial.preproc.tissue(5).native = [1 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(5).warped = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm = {self.path_tpm(6)};
+			matlabbatch{1}.spm.spatial.preproc.tissue(6).ngaus = 2;
+			matlabbatch{1}.spm.spatial.preproc.tissue(6).native = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.tissue(6).warped = [0 0];
+			matlabbatch{1}.spm.spatial.preproc.warp.mrf = 1;
+			matlabbatch{1}.spm.spatial.preproc.warp.cleanup = 1;
+			matlabbatch{1}.spm.spatial.preproc.warp.reg = [0 0.001 0.5 0.05 0.2];
+			matlabbatch{1}.spm.spatial.preproc.warp.affreg = 'mni';
+			matlabbatch{1}.spm.spatial.preproc.warp.fwhm = 0;
+			matlabbatch{1}.spm.spatial.preproc.warp.samp = 3;
+			matlabbatch{1}.spm.spatial.preproc.warp.write = [1 1];
+           self.RunSPMJob(matlabbatch);
+        end
         function VolumeNormalize(self,path2image)
             %SegmentSurface writes deformation fields (y_*), which are here used
-            %to normalize the native hr images. Adds a prefix w- to
+            %to normalize the native hr images. Adds a prefix w- to    
             %resampled images. path2image is the image to be resampled.
             %Example: 
             %
             %s.VolumeNormalize(s.path_beta(1,1))
             %s.VolumeNormalize(s.path_skullstrip);
             
-            matlabbatch{1}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));
-            matlabbatch{1}.spm.spatial.normalise.write.subj.resample = cellstr(path2image);
-            matlabbatch{1}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
-                                                                         78   76  85];
-            matlabbatch{1}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
-            matlabbatch{1}.spm.spatial.normalise.write.woptions.interp = 4;
-            matlabbatch{1}.spm.spatial.normalise.write.woptions.prefix = 'w_';
-            
+            for nf = 1:size(path2image,1)
+
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
+                                                                              78 76 85];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'w_';
+            end
             %
             self.RunSPMJob(matlabbatch);
-        end                        
+        end        
         function MNI2Native(self)
             %brings the atlas to native space and saves it in run000/atlas.
             %Same as VolumeNormalize but uses the inverse deformation
