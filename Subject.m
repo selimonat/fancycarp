@@ -198,10 +198,10 @@ classdef Subject < Project
             %preprocessing. RUNS specifies the functional runs, make it a
             %vector if needed.
             if nargin > 1
-	    	%self.SegmentSurface_HR;
-            	%self.SkullStrip;%removes non-neural voxels
-            	%self.MNI2Native;%brings the atlas to native space
-            	%self.Re_Coreg(runs);            
+	    		self.SegmentSurface_HR;
+            	self.SkullStrip;%removes non-neural voxels
+            	self.MNI2Native;%brings the atlas to native space
+            	self.Re_Coreg(runs);            
             	self.SegmentSurface_EPI;
 	    else
 		fprintf('One input argument is required!\n');
