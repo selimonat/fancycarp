@@ -94,9 +94,11 @@ classdef Project < handle
         eye_data_type         = 'countw';
         select_scr_trials     = 5;
         tuning_criterium      = 1;        
+    end  
+	properties (Hidden)
         normalization_method  = 'EPI';%which normalization method to use. possibilities are EPI or CAT
-    end    
-	methods
+	end
+		methods
         function DU         = SanityCheck(self,runs,measure,varargin)
             %DU = SanityCheck(self,runs,measure,varargin)
 			%will run through subject folders and will plot their disk
