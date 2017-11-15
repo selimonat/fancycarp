@@ -1242,7 +1242,7 @@ classdef Project < handle
             %% depending on subject group and smoothening, generate a directory name for this spm analysis.
             subjects   = self.get_selected_subjects(ngroup(1),ngroup(2));
             spm_dir    = regexprep(self.dir_spmmat(run,model),'sub...','second_level');%convert to second-level path, replace the sub... to second-level.
-            spm_dir    = sprintf('%scov_id_%s/%02dmm/fitfun_%02d/group_%s/normalization_%s',spm_dir,covariate_id,sk,self.selected_fitfun,subjects.name,self.normalization_method);
+            spm_dir    = sprintf('%scov_id_%s/%02dmm/fitfun_%02d/group_%s/normalization_%s/',spm_dir,covariate_id,sk,self.selected_fitfun,subjects.name,self.normalization_method);
             xspm_path  = sprintf('%sxSPM.mat',spm_dir);
             if exist(xspm_path) == 0;
                 %% create path to beta images;                
