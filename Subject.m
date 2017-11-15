@@ -93,9 +93,7 @@ classdef Subject < Project
         function              get_hr(self)
             %will download the latest HR for this subject to default hr
             %path (which is run000)
-            %
-        
-            
+            %                    
             fprintf('get_hr:\nWill now dump the latest HR (%s)\n',self.current_time);            
             %target location for the hr: self.dir_hr;            
             %create it if necess.
@@ -153,8 +151,7 @@ classdef Subject < Project
             % merge the data into 4D
             for nrun = unique(self.dicom2run(:))'
                 self.DicomTo4D(self.dir_epi(nrun));
-            end
-                
+            end                
         end        
         function [o]        = get.total_run(self)
             % returns the total number of ALL (epi+others) runs in a folder.
@@ -796,16 +793,16 @@ classdef Subject < Project
         end                
     end
     
-    methods %(preprocessing))              
+    methods %(mri, preprocessing))              
         function preprocess_pipeline(self,runs)
             %meta method to run all the required steps for hr
             %preprocessing. RUNS specifies the functional runs, make it a
             %vector if needed.
             if nargin > 1
-	    		self.SegmentSurface_HR;%cat12 segmentation
-            	self.SkullStrip;%removes non-neural voxels
-            	self.MNI2Native;%brings the atlas to native space
-            	self.Re_Coreg(runs);%realignment and coregistration
+% 	    		self.SegmentSurface_HR;%cat12 segmentation
+%             	self.SkullStrip;%removes non-neural voxels
+%             	self.MNI2Native;%brings the atlas to native space
+%             	self.Re_Coreg(runs);%realignment and coregistration
             	self.Segment_meanEPI;%segments mean EPI with new segment
 				self.SkullStrip_meanEPI;%creates a native mask
 	    	else
@@ -979,17 +976,28 @@ classdef Subject < Project
             %s.VolumeNormalize(s.path_beta(1,1))
             %s.VolumeNormalize(s.path_skullstrip);
             
+            %% Normalize with mean epi segmentation
             for nf = 1:size(path2image,1)
-
-                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,'meandata','y_meandata'));
                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
                                                                               78 76 85];
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
-                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'w_';
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
             end
-            %
+            self.RunSPMJob(matlabbatch);
+            %% Normalize with CAT12 segmentation
+            matlabbatch =[];
+            for nf = 1:size(path2image,1)
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));               
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
+                                                                              78 76 85];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wCAT_';
+            end
             self.RunSPMJob(matlabbatch);
         end        
         function MNI2Native(self)
@@ -997,9 +1005,9 @@ classdef Subject < Project
             %Same as VolumeNormalize but uses the inverse deformation
             %fields but same batch. Currently functions only with the 120th
             %volume (which is right amygdala).
-            
+            if exist(self.path_atlas)
             %copy the atlas to subject's folder.
-            copyfile(fileparts(self.path_atlas),[self.path_data(0) 'atlas/']);
+            copyfile(fileparts(self.path_atlas),[self.path_data(0) sprintf('atlas%s',filesep)]);
             %
             nf = 0;
             for roi = [48 58 120 182]%left, right, bilateral amygdala and visual cortex
@@ -1017,6 +1025,7 @@ classdef Subject < Project
             self.RunSPMJob(matlabbatch);
             target_file                                                     = regexprep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
             movefile(target_file,self.path_native_atlas);
+        end
         end
     end
     methods %(fmri analysis)                        
@@ -1316,6 +1325,28 @@ classdef Subject < Project
         end
     end
     methods %path_tools which are related to the subject              
+        function out = path_skullstrip_meanepi(self)
+				out = regexprep(self.path_meanepi,'meandata','ss_meandata');
+			end
+		function out  = path_meanepi(self)
+            %returns the path to the meanepi (result of realignment).
+            %returns empty if non-existent. Assumes that the first run contains the mean epi.
+            first_run = self.dicom_target_run(1);
+            out       = strrep( self.path_epi(first_run),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
+        end
+		function out = path_tpm(self,n)
+			%return the path to the Nth TPM image from the spm
+			out = sprintf('%s/TPM.nii,%i',self.tpm_dir,n);
+		end
+		function out = path_meanepi_segmented(self,num)
+			%Returns the path to the output of Segment_meanEPI, N can be a vector.
+			mean_epi = self.path_meanepi;
+			out      = '';
+			for n = num
+				out      = strvcat(out,regexprep(mean_epi,'meandata',sprintf('c%dmeandata',n)))
+			end
+        end        
+		
         function out        = path_skullstrip(self,varargin)
             %returns filename for the skull stripped hr. Use VARARGIN to
             %add a prefix to the output, such as 'w' for example.
@@ -1454,10 +1485,6 @@ classdef Subject < Project
         end       
         function out        = path_midlevel(self,run)
             out = sprintf('%s%smidlevel%s',self.path_data(run),filesep,filesep);
-        end
-        function out        = path_meanepi(self)
-            %path to meanepi.
-           out = strrep( self.path_epi(1),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
         end
         function out        = dir_epi(self,nrun)
             % simply returns the path to the mrt data.
@@ -2178,24 +2205,27 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;%
-            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.;%add a proper mask here.
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {self.path_skullstrip_meanepi};
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
-            spm_jobman('run', matlabbatch);%create SPM file first
+% % %             spm_jobman('run', matlabbatch);%create SPM file first
             % now adapt for session effects.
-            spm_fmri_concatenate(path_spm, [910 895 self.get_total_volumes(nrun)-910-895]);
+% % %             spm_fmri_concatenate(path_spm, [910 895 self.get_total_volumes(nrun)-910-895]);
             
             matlabbatch = [];
             %estimation
             matlabbatch{1}.spm.stats.fmri_est.spmmat            = {path_spm};
             matlabbatch{1}.spm.stats.fmri_est.method.Classical  = 1;
-            spm_jobman('run', matlabbatch);
+% % %             spm_jobman('run', matlabbatch);
             %                        
             matlabbatch = [];
             beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
+            beta_images(5:end,:) = [];
             %normalize the beta images right away            
             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
 %             self.VolumeSmooth(beta_images);%smooth the native images ('s_' will be added, resulting in 's_')
-            beta_images = self.path_beta(nrun(1),model_num,'w_');%smooth the normalized images too.
+            beta_images = self.path_beta(nrun(1),model_num,'wEPI_');%smooth the normalized images too.
+            self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
+            beta_images = self.path_beta(nrun(1),model_num,'wCAT_');%smooth the normalized images too.
             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
             %%                        
         end
@@ -3154,7 +3184,7 @@ classdef Subject < Project
             
             
             %this initial part is exactly the same as model_02
-            model_num      = 10000+learning_rate*10000;            
+            model_num      = round(10000+learning_rate*10000);            
             
             L              = self.get_log(1);%get the log file.
             stim_onsets    = L(:,2) == 3;%all stim events.
@@ -3248,7 +3278,7 @@ classdef Subject < Project
             cond(4).duration = zeros(1,sum(i));
             cond(4).tmod     = 0;
             cond(4).pmod     = struct('name',{},'param',{},'poly',{});            
-            model_path       = self.path_model(1,round(model_num));
+            model_path       = self.path_model(1,model_num);
             model_dir        = fileparts(model_path);
             if ~exist(model_dir);mkdir(model_dir);end
             save(model_path,'cond');

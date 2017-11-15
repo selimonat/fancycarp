@@ -45,7 +45,7 @@ classdef Project < handle
         %project
 
         path_project          = '/projects/fearamy/data/';        
-        path_spm              = '/common/apps/spm12-6685/';        
+        path_spm              = '/home/onat/Documents/Code/Matlab/spm12-6685/';        
         trio_sessions         = {  '' '' '' '' 'TRIO_17468' 'TRIO_17476' 'TRIO_17477' 'TRIO_17478' 'TRIO_17479' 'TRIO_17480' 'TRIO_17481' 'TRIO_17482' 'TRIO_17483' 'TRIO_17484' 'TRIO_17485' 'TRIO_17486' 'TRIO_17487' 'TRIO_17488' 'TRIO_17514' 'TRIO_17515' 'TRIO_17516' 'TRIO_17517'  'TRIO_17520' 'TRIO_17521' 'TRIO_17522' 'TRIO_17523' 'TRIO_17524' 'TRIO_17525' 'TRIO_17526' 'TRIO_17527' 'TRIO_17557' 'TRIO_17558' 'TRIO_17559' 'TRIO_17560'  'TRIO_17563' 'TRIO_17564' 'TRIO_17565' 'TRIO_17566' 'TRIO_17567' 'TRIO_17568' 'TRIO_17569' 'TRIO_17570' 'TRIO_17571' 'TRIO_17572'};
         dicom_serie_selector  = {  [] [] []   []      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [5 6 7]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]      [3 4 5]       [3 4 5]       [3 4 5]      [3 4 5]      [3 4 5]    [3 4 5]       [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]       [3 4 5]      [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]        [3 4 5]     [3 4 5]       [3 4 5]      [3 4 5]       [3 4 5]     [3 4 5]     [4 5 6]      [3 4 5]    };
         %this is necessary to tell matlab which series corresponds to which
@@ -94,6 +94,7 @@ classdef Project < handle
         eye_data_type         = 'countw';
         select_scr_trials     = 5;
         tuning_criterium      = 1;        
+        normalization_method  = 'EPI';%which normalization method to use. possibilities are EPI or CAT
     end    
 	methods
         function DU         = SanityCheck(self,runs,measure,varargin)
@@ -1209,7 +1210,7 @@ classdef Project < handle
                 matlabbatch{1}.spm.spatial.smooth.prefix = sprintf('s%02d_',sk);
                 spm_jobman('run', matlabbatch);
             end
-        end        
+        end         
         function [xSPM]                     = SecondLevel_ANOVA(self,ngroup,run,model,beta_image_index,sk,covariate_id)
             %%
             %[xSPM]     = SecondLevel_ANOVA(self,ngroup,run,model,beta_image_index,sk,covariate_id)
@@ -1247,7 +1248,7 @@ classdef Project < handle
                 for ns = subjects.list(:)'
                     s          = Subject(ns);
                     %store all the beta_images in a 3D array
-                    beta_files = cat(3,beta_files,s.path_beta(run,model,sprintf('s%02d_w_',sk),beta_image_index)');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
+                    beta_files = cat(3,beta_files,s.path_beta(run,model,sprintf('s%02d_w%s_',sk,s.normalization_method),beta_image_index)');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
                 end
                 %% integrate them to the matlabbatch
                 c = 0;
@@ -1304,14 +1305,14 @@ classdef Project < handle
                     SPM                                                          = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any
                     tbetas                                                       = length(beta_image_index);
                     
-                    if model == 7 | model == 3 | model == 33
+                    if model == 7 | model == 3 | model == 33 | model >= 1000
                         tcontrast   = size(SPM.xX.xKXs.X,2);           
                         M = [[0 0 0 ]' eye(3)];
                         SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
                         M(1,2)      = 0;
                         SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
                         
-                    elseif model == 4 | model >= 100
+                    elseif model == 4 
                         M           = [[0 0 0 0 0]' eye(5)];
                         SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
                         M(1,2)      = 0;
