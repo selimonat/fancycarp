@@ -96,7 +96,7 @@ classdef Project < handle
         tuning_criterium      = 1;        
     end  
 	properties (Hidden)
-        normalization_method  = 'EPI';%which normalization method to use. possibilities are EPI or CAT
+        normalization_method  = 'CAT';%which normalization method to use. possibilities are EPI or CAT
 	end
 		methods
         function DU         = SanityCheck(self,runs,measure,varargin)
@@ -1213,16 +1213,18 @@ classdef Project < handle
                 spm_jobman('run', matlabbatch);
             end
         end         
-        function [xSPM]                     = SecondLevel_ANOVA(self,ngroup,run,model,beta_image_index,sk,covariate_id)
+        function [xSPM]                     = SecondLevel_ANOVA(self,ngroup,run,models,beta_image_index,sk,covariate_id)
             %%
-            %[xSPM]     = SecondLevel_ANOVA(self,ngroup,run,model,beta_image_index,sk,covariate_id)
+            %[xSPM]     = SecondLevel_ANOVA(self,ngroup,run,models,beta_image_index,sk,covariate_id)
             %
             %
             % This method runs a second level analysis for a model defined
-            % in MODEL using beta images indexed in BETA_IMAGE_INDEX. The
+            % in MODELS using beta images indexed in BETA_IMAGE_INDEX. The
             % same model can be ran at different smoothening levels (SK) as well
             % as for different subject groups (NGROUP, see
-            % self.get_selected_subjects).
+            % self.get_selected_subjects). If MODELS is a vector then
+            % multiple first level analyses are combined into one
+            % second-level.
             %
             % Covariate_id = 0 means no covariate
             %
@@ -1241,25 +1243,39 @@ classdef Project < handle
             end
             %% depending on subject group and smoothening, generate a directory name for this spm analysis.
             subjects   = self.get_selected_subjects(ngroup(1),ngroup(2));
-            spm_dir    = regexprep(self.dir_spmmat(run,model),'sub...','second_level');%convert to second-level path, replace the sub... to second-level.
+            spm_dir    = regexprep(self.dir_spmmat(run,models(1)),'sub...','second_level');%convert to second-level path, replace the sub... to second-level.
             spm_dir    = sprintf('%scov_id_%s/%02dmm/fitfun_%02d/group_%s/normalization_%s/',spm_dir,covariate_id,sk,self.selected_fitfun,subjects.name,self.normalization_method);
+            %% if multiple models are needed to be analized in one single second-level anaylsis change the spmdir to reflect this
+            if length(models)>1
+                folder      = sprintf('%d+',models([1 end]));
+                folder(end) = [];
+                spm_dir     = regexprep(spm_dir,mat2str(models(1)),folder);%I shortened the folder name not to exceed the path length limit
+            end
             xspm_path  = sprintf('%sxSPM.mat',spm_dir);
+            %%
             if exist(xspm_path) == 0;
-                %% create path to beta images;                
-                beta_files = [];
-                for ns = subjects.list(:)'
-                    s          = Subject(ns);
-                    %store all the beta_images in a 3D array
-                    beta_files = cat(3,beta_files,s.path_beta(run,model,sprintf('s%02d_w%s_',sk,s.normalization_method),beta_image_index)');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
-                end
+                %% create path to beta images;                                
+                beta_files2= [];
+                for ns = subjects.list(:)'                
+                    beta_files = [];      
+                        for model = models(:)'                        
+                        s          = Subject(ns);
+                        %store all the beta_images in a 3D array
+                        beta_files = cat(3,beta_files,s.path_beta(run,model,sprintf('s%02d_w%s_',sk,s.normalization_method),beta_image_index)');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
+                    end
+                    beta_files2 = cat(4,beta_files2,beta_files);
+                end     
+                beta_files = beta_files2;%[path,betas,models,subjects]
                 %% integrate them to the matlabbatch
-                c = 0;
-                for ind = 1:length(beta_image_index)
+                c = 0;                
+                for nmodel = 1:size(beta_files,3)
+                    for ind = 1:size(beta_files,2)
                     %take single beta_images across all subjects and store them
                     %in a cell
                     c                                                                  = c +1;
-                    files                                                              = squeeze(beta_files(:,ind,:))';
+                    files                                                              = squeeze(beta_files(:,ind,nmodel,:))';
                     matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files);
+                    end
                 end                                
                 %% 
                 matlabbatch{1}.spm.stats.factorial_design.dir                    = cellstr(spm_dir);
@@ -1299,49 +1315,61 @@ classdef Project < handle
                 matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
                 %                                
                 spm_jobman('run', matlabbatch);
+                %%
                 if isempty(covariate_id)                   
                     %UPDATE THE SPM.mat with the contrast
                     %create the contrast that we are interested in, this could
                     %be later extended into a for loop
                     load(sprintf('%s/SPM.mat',spm_dir));
-                    SPM                                                          = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any
-                    tbetas                                                       = length(beta_image_index);
-                    
-                    if model == 7 | model == 3 | model == 33 | model >= 1000
-                        tcontrast   = size(SPM.xX.xKXs.X,2);           
-                        M = [[0 0 0 ]' eye(3)];
-                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
-                        M(1,2)      = 0;
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
-                        
-                    elseif model == 4 
-                        M           = [[0 0 0 0 0]' eye(5)];
-                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
-                        M(1,2)      = 0;
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
-                        M           = zeros(5,6)
-                        M(3,4)      = 1;
-                        SPM.xCon(3) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
-                    elseif model == 5
-                        M           = [[0 0 0 0 0 0 0 0]' eye(8)];
-                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
-                        M(1,2)      = 0;
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
-%                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' zeros(3) [0 0 0 ]' eye(3)]'  ,SPM.xX.xKXs);
-                    elseif model == 8
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[zeros(1,11)]' eye(11) ]',SPM.xX.xKXs);
-                    elseif model == 88
-                        SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[zeros(1,20)]' eye(20) ]',SPM.xX.xKXs);                    
+                    SPM                                                          = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any                    
+                    if length(models) ==1
+                        if models == 7 | models == 3 | models == 33 | models >= 1000                            
+                            M = [[0 0 0 ]' eye(3)];
+                            SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                            M(1,2)      = 0;
+                            SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                            
+                        elseif models == 4
+                            M           = [[0 0 0 0 0]' eye(5)];
+                            SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                            M(1,2)      = 0;
+                            SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                            M           = zeros(5,6)
+                            M(3,4)      = 1;
+                            SPM.xCon(3) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                        elseif models == 5
+                            M           = [[0 0 0 0 0 0 0 0]' eye(8)];
+                            SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                            M(1,2)      = 0;
+                            SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                            %                        SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[[0 0 0 ]' zeros(3) [0 0 0 ]' eye(3)]'  ,SPM.xX.xKXs);
+                        elseif models == 8
+                            SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[zeros(1,11)]' eye(11) ]',SPM.xX.xKXs);
+                        elseif models == 88
+                            SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[[zeros(1,20)]' eye(20) ]',SPM.xX.xKXs);
+                        end
+                    else %multiple models entered, this specific to the RW analysis right now
+                        tmodel      = size(beta_files,3);
+                        tbeta       = size(beta_files,2);
+                        tcolumn     = tmodel*tbeta;
+                        for nmodel  = 1:tmodel
+                            M                   = [zeros(3,4*(nmodel-1))  [[0 0 0 ]' eye(3)] zeros(3,tcolumn-4*(nmodel))];
+                            SPM.xCon(nmodel) = spm_FcUtil('set',sprintf('eoi-%03d',nmodel-1),'F','c',[M]',SPM.xX.xKXs);
+                        end
+                        M               = eye(tmodel*tbeta);
+                        SPM.xCon(end+1) = spm_FcUtil('set','time','F','c',M(repmat([0 1 0 0],1,tmodel)==1,:),SPM.xX.xKXs);
+                        SPM.xCon(end+1) = spm_FcUtil('set','gau','F','c',M(repmat([0 0 1 0],1,tmodel)==1,:),SPM.xX.xKXs);
+                        SPM.xCon(end+1) = spm_FcUtil('set','timeXgau','F','c',M(repmat([0 0 0 1],1,tmodel)==1,:),SPM.xX.xKXs);
                     end
-%                     
+                    %%  
                     save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
                     %xSPM is used to threshold according to a contrast.
                     %                 xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');                    
-                    xSPM = struct('swd', spm_dir,'title','eoi','Ic',length(SPM.xCon),'n',[],'Im',[],'pm',[],'Ex',[],'u',.05,'k',0,'thresDesc','FWE');
+%                     xSPM = struct('swd', spm_dir,'title','eoi','Ic',length(SPM.xCon),'n',[],'Im',[],'pm',[],'Ex',[],'u',.05,'k',0,'thresDesc','FWE');
                     %replace 'none' to make FWE corrections.
-                    [SPM xSPM] = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
-                    save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
-                    save(xspm_path,'xSPM');
+%                     [SPM xSPM] = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
+%                     save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
+%                     save(xspm_path,'xSPM');
                 end
             else
                 load(xspm_path);                

@@ -2207,15 +2207,15 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;%
             matlabbatch{1}.spm.stats.fmri_spec.mask                              = {self.path_skullstrip_meanepi};
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
-% % %             spm_jobman('run', matlabbatch);%create SPM file first
+            spm_jobman('run', matlabbatch);%create SPM file first
             % now adapt for session effects.
-% % %             spm_fmri_concatenate(path_spm, [910 895 self.get_total_volumes(nrun)-910-895]);
+            spm_fmri_concatenate(path_spm, [910 895 self.get_total_volumes(nrun)-910-895]);
             
             matlabbatch = [];
             %estimation
             matlabbatch{1}.spm.stats.fmri_est.spmmat            = {path_spm};
             matlabbatch{1}.spm.stats.fmri_est.method.Classical  = 1;
-% % %             spm_jobman('run', matlabbatch);
+            spm_jobman('run', matlabbatch);
             %                        
             matlabbatch = [];
             beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
