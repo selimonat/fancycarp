@@ -763,15 +763,24 @@ classdef Subject < Project
             %s.VolumeNormalize(s.path_beta(1,1))
             %s.VolumeNormalize(s.path_skullstrip);
             
+            if strcmp(self.normalization_method,'EPI')
+                %                 deformationfield =  self.pathmrfiles(1,'mean_EPIdartel/y_meandata.nii');
+                deformationfield = strrep(self.path_meanepi,'meandata.nii','y_meandata.nii');
+                prefix           =  'w_mE_';
+            elseif strcmp(self.normalization_method,'CAT')
+                deformationfield  =  strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep));
+                prefix            = 'w_CAT_';
+            end
             for nf = 1:size(path2image,1)
-
-                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));
+                
+                %                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(deformationfield);
                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
-                                                                              78 76 85];
+                    78 76 85];
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
-                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'w_';
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = prefix;
             end
             %
             self.RunSPMJob(matlabbatch);
@@ -901,11 +910,11 @@ classdef Subject < Project
                 out = sprintf('%s%s_%s',self.dir_hr,varargin{1},'ss_data.nii');
             end
         end
-			function out  = path_meanepi(self)
+        function out  = path_meanepi(self)
             %returns the path to the meanepi (result of realignment).
             %returns empty if non-existent. Assumes that the first run contains the mean epi.
             first_run = self.dicom_target_run(1);
-	    out       = strrep( self.path_epi(first_run),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
+            out       = strrep( self.path_epi(first_run),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
         end
 		function out = path_tpm(self,n)
 			%return the path to the Nth TPM image from the spm
