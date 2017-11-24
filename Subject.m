@@ -81,7 +81,7 @@ classdef Subject < Project
                 movefile(files,regexprep(files,sprintf('%ssPRISMA.*$',filesep),sprintf('%sdata.nii',filesep)));%rename it to data.nii
             end
         end
-        function p          = get_paradigm(self,nrun)
+        function p      = get_paradigm(self,nrun)
             %will load the paradigm file saved during your psychophysics
             %session.
             filename = self.path_data(nrun,'stimulation');
@@ -196,11 +196,11 @@ classdef Subject < Project
         function preprocess_pipeline(self,runs)
             %meta method to run all the required steps for hr
             %preprocessing. RUNS specifies the functional runs, make it a
-            %vector if needed.
+            %vector if needed. RUNS will be used with Re_Coreg.
             if nargin > 1
 	    		self.SegmentSurface_HR;%cat12 segmentation
             	self.SkullStrip;%removes non-neural voxels
-            	self.MNI2Native;%brings the atlas to native space
+            	self.MNI2Native;%brings the atlas (if present) to native space
             	self.Re_Coreg(runs);%realignment and coregistration
             	self.Segment_meanEPI;%segments mean EPI with new segment
 				self.SkullStrip_meanEPI;%creates a native mask
@@ -376,16 +376,26 @@ classdef Subject < Project
             %s.VolumeNormalize(s.path_skullstrip);
             
             for nf = 1:size(path2image,1)
-
-                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,'meandata','y_meandata'));
                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
                                                                               78 76 85];
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
-                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'w_';
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
             end
-            %
+            self.RunSPMJob(matlabbatch);
+            %% Normalize with CAT12 segmentation
+            matlabbatch =[];
+            for nf = 1:size(path2image,1)
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));               
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
+                                                                              78 76 85];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wCAT_';
+            end
             self.RunSPMJob(matlabbatch);
         end        
         function MNI2Native(self)
@@ -413,108 +423,23 @@ classdef Subject < Project
     	    else
 	    fprintf('For MNI2Native Analysis you need to have a atlas in %s\n',self.path_atlas);
 	    end
-        end        
-        function [X,N,K]=spm_DesignMatrix(self,nrun,model_num)
-            %will return the same design matrix used by spm in an efficient
-            %way. see also: GetTimeSeries, spm_GetBetas
-
-            %% Design matrix X
-            cond                  = self.get_modelonsets(nrun,model_num);            
-            fMRI_T                = 16;
-            fMRI_T0               = 1;
-            xBF.T                 = fMRI_T;
-            xBF.T0                = fMRI_T0;
-            xBF.dt                = self.TR/xBF.T;
-            xBF.UNITS             = 'scans';
-            xBF.Volterra          = 1;
-            xBF.name              = 'hrf';
-            xBF                   = spm_get_bf(xBF);            
-            %
-            for i = 1:length(cond);%one regressor for each condition
-                Sess.U(i).dt        = xBF.dt;%- time bin (seconds)                
-                Sess.U(i).ons       = cond(i).onset;%- onsets    (in SPM.xBF.UNITS)
-                Sess.U(i).name      = {sprintf('%02d',i)};%- cell of names for each input or cause                
-                %no parametric modulation here
-                Sess.U(i).dur    =  repmat(0,length(Sess.U(i).ons),1);%- durations (in SPM.xBF.UNITS)
-                Sess.U(i).P.name =  'none';
-                Sess.U(i).P.P    =  'none';
-                Sess.U(i).P.h    =  0;%- order of polynomial expansion
-                Sess.U(i).P.i    =  1;%- sub-indices of u pertaining to P
-            end
-            %
-            k                       = self.total_volumes(nrun);
-            SPM.xBF                 = xBF;
-            SPM.nscan               = k;
-            SPM.Sess                = Sess;
-            SPM.Sess.U              = spm_get_ons(SPM,1);            
-            %
-            % Convolve stimulus functions with basis functions
-            [X,Xn,Fc]               = spm_Volterra(SPM.Sess.U,SPM.xBF.bf,SPM.xBF.Volterra);
-            % Resample regressors at acquisition times (32 bin offset)
-            X                       = X((0:(k - 1))*fMRI_T + fMRI_T0 + 32,:);
-            %% Nuissance Parameters
-            N                       = self.get_param_nuissance(nrun);
-            %% Get high-pass filter
-            %this is how it should be, but due to fearamy specificities, we
-            %have to make work around. Note that this cannot be merge to
-            %/mrt/xx or                        
-            %% get the filtering strcture a la spm.
-            run_borders              = [[0 910 910+895]+1;[910 910+895  self.total_volumes(nrun)]];            
-            K(1:size(run_borders,2)) = struct('HParam', self.HParam, 'row',    [] , 'RT',     self.TR ,'X0',[]);
-            c = 0;            
-            for b = run_borders
-                c        = c + 1;
-                K(c).row = b(1);
-                K(c)     = spm_filter(K(c));
-                K(c).X0  = [ones(length(K(c).row),1)*std(K(c).X0(:)) K(c).X0];                
-            end
-            
-        end        
-        function beta = spm_GetBetas(self,nrun,model_num,mask_id)
-            %will compute beta weights manually without calling SPM.            
-            [X N K ]  = self.spm_DesignMatrix(nrun,model_num);%returns the Design Matrix, Nuissiance Matrix, and High-pass Filtering Matrix
-            Y         = self.TimeSeries(nrun,mask_id);
-            Y         = zscore(Y);
-            Y         = spm_filter(K,Y);%high-pass filtering.
-            %            
-            DM        = [X N ones(size(X,1),1)];%append together Onsets, Nuissances and a constant
-            DM        = spm_filter(K,DM);%filter also the design matrix
-            DM        = spm_sp('Set',DM);
-            DM        = spm_sp('x-',DM);% projector;
-            beta      = DM*Y;
-        end        
-        function [D,XYZvox] = TimeSeries(self,nrun,mask_id)
-            %will read the time series from NRUN. MASK can be used to mask
-            %the volume, otherwise all data will be returned (dangerous).
-            
-            vh          = spm_vol(self.path_epi(nrun,'r'));
-            XYZmm       = self.get_nativeatlas2mask(mask_id);%in world space from native mask
-            
-            if spm_check_orientations(vh)
-                XYZvox  = vh(1).mat\XYZmm;%in EPI voxel space.
-                XYZvox  = unique(XYZvox','rows')';
-            else
-                 keyboard;%sanity check;
-            end
-            XYZvox      = round(XYZvox);
-            D           = spm_get_data(vh,XYZvox);
-        end              
+        end                
     end
     methods %path_tools which are related to the subject              
-        	function out = path_skullstrip_meanepi(self)
+        function out        = path_skullstrip_meanepi(self)
 				out = regexprep(self.path_meanepi,'meandata','ss_meandata');
-			end
-			function out  = path_meanepi(self)
+            end
+        function out        = path_meanepi(self)
             %returns the path to the meanepi (result of realignment).
             %returns empty if non-existent. Assumes that the first run contains the mean epi.
             first_run = self.dicom_target_run(1);
 	    out       = strrep( self.path_epi(first_run),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
         end
-		function out = path_tpm(self,n)
+		function out        = path_tpm(self,n)
 			%return the path to the Nth TPM image from the spm
 			out = sprintf('%s/TPM.nii,%i',self.tpm_dir,n);
 		end
-		function out = path_meanepi_segmented(self,num)
+		function out        = path_meanepi_segmented(self,num)
 			%Returns the path to the output of Segment_meanEPI, N can be a vector.
 			mean_epi = self.path_meanepi;
 			out      = '';
@@ -653,37 +578,7 @@ classdef Subject < Project
         end       
     end
    
-    methods %(plotters)
-        function plot_log(self,nrun)
-            %will plot the events that are logged during the experiment.
-            L       = self.get_log(nrun);
-            tevents = size(L,1);            
-            plot(L(1:tevents,1),L(1:tevents,2),'o','markersize',10);%plot events as dots.
-            % plot lines for pulses
-            hold on;            
-            scan_events = find(L(:,2) == 0);            
-            scan_times  = L(scan_events,1);            
-            plot([scan_times(5:5:end) scan_times(5:5:end)],ylim,'k','linewidth',.1);%plot every 5 th pulse event as a line
-            % text pulse indices for each line as well.
-            t_scan = length(scan_times);
-            text(scan_times(5:5:t_scan),repmat(0,length(5:5:t_scan),1),num2str([5:5:t_scan]'),'color','r');
-            % mark with a star missing pulses (if any)
-            miss        = find(diff(scan_times) > self.TR*1.1);
-            if ~isempty(miss)
-                plot(scan_times(miss)+self.TR,0,'mp','markersize',40);
-            end
-            % text condition ids on dots.
-            stim_events = find(L(:,2) == 3);
-            stim_types  = L(stim_events,3);
-            stim_times  = L(stim_events,1);
-            text(stim_times,repmat(3,length(stim_times),1),num2str(stim_types),'color','r');            
-            %
-            hold off;            
-            set(gca,'ytick',[-2:8],'yticklabel',{'Rating On','Text','Pulse','Tracker+','Cross+','Stim+','CrossMov','UCS','Stim-','Key+','Tracker-'});
-            grid off;box off;
-            ylim([-5 15]);
-            drawnow;
-        end       
+    methods %(plotters)        
         function plot_motionparams(self,nrun)
             dummy = self.get_param_motion(nrun);
             subplot(2,1,1);
@@ -703,118 +598,9 @@ classdef Subject < Project
             ylim([-5 5].*10.^-2)
             set(gca,'ygrid','on')
         end            
-        function plot_logcomparison(self,nrun)
-            %plots the data logged by the stim pc together with data logged
-            %in the physio-computer. Will mark with a star the missing
-            %pulses.
-            clf;
-            self.plot_log(nrun);
-            hold on;
-            L = self.get_physio2log;
-            plot(L(:,1),L(:,2),'r+');
-            hold off;
-        end
     end
-    methods %(fmri analysis)
-        function [stim_scanunit,stim_ids]=StimTime2ScanUnit(self,run)
-            %will return stim onsets in units of scan. Will check the Log
-            %for stim onsets, it will discard those trials occuring outside
-            %the first and last scans based on their time-stamps. In
-            %FearAmy, we have the reference measurements, i.e. scanner
-            %stops for a while during the experiment. Those onsets are also
-            %excluded (if the next scan unit is more than the TR far away).
-            
-            L               = self.get_log(run);
-            scan_times      = L(L(:,2) == 0,1);%find all scan events and get their times            
-            scan_id         = 1:length(scan_times);%label pulses with increasing numbers
-            last_scan_time  = max(scan_times);%time of the last
-            first_scan_time = min(scan_times);
-            %collect info on stim onsets and discard those not occurring
-            %during scanning.
-            stim_times      = L(find(L(:,2)==3),1)';            
-            valid           = stim_times<last_scan_time & stim_times>first_scan_time;%i.e. during scanning
-            if sum(valid) ~= length(stim_times)
-                keyboard
-            end            
-            %%     
-            stim_ids        = L(find(L(:,2)==3),3)';
-            stim_scanunit   = stim_ids;
-            trial           = 0;
-            for stim_time = stim_times;%run stim by stim          
-                trial                = trial + 1;
-                stim_scanunit(trial) = floor(stim_time./self.TR)+1 + mod(stim_time./self.TR,1);                
-            end            
-        end
-        function FitFIR(self,nrun,model_num)
-            %run the model MODEL_NUM for data in NRUN.
-            %NRUN can be a vector, but then care has to be taken that
-            %model_num is correctly set for different runs.
-                       
-            spm_dir = sprintf('%s%smodel_fir_%02d%s',self.spm_dir,filesep,model_num,filesep);
-            spm_path= sprintf('%s%smodel_fir_%02d%sSPM.mat',self.spm_dir,filesep,model_num,filesep);
-
-            
-            if ~exist(self.path_spm);mkdir(spm_dir);end
-            
-            matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
-            matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
-            matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
-            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
-            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
-            
-            for session = nrun
-                %load files using ...,1, ....,2 format
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(self.mrt_data_expanded(session));
-                %load the onsets
-                dummy                                                   = get_modelonsets(nrun,model_num);
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
-                %load nuissance parameters
-                N                                                       = self.GetNuissance(nrun);                
-                for nNuis = 1:size(nuis,2)
-                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
-                    matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).name  = mat2str(nNuis);
-                end
-                %
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi               = {''};
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi_reg           = {''};
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = 128;
-            end
-            matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
-            matlabbatch{1}.spm.stats.fmri_spec.bases.fir.length                  = self.TR*15;
-            matlabbatch{1}.spm.stats.fmri_spec.bases.fir.order                   = 10;
-            matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
-            matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
-            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
-            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
-            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
-            %estimation
-            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spm};
-            matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
-            spm_jobman('run', matlabbatch);
-        end
-        function CreateModels(self,runs)
-            %%%%%%%%%%%%%%%%%%%%%%
-            model_num  = 1;
-            for run = runs                
-                model_path = self.path_model(run,model_num);
-                if ~exist(fileparts(model_path));mkdir(fileparts(model_path));end
-                [scan,id]  = self.StimTime2ScanUnit(run);
-                counter    = 0;
-                for current_condition = unique(id)
-                    counter                = counter + 1;
-                    cond(counter).name     = mat2str(current_condition);
-                    cond(counter).onset    = scan(id == current_condition);
-                    cond(counter).duration = zeros(1,length(cond(counter).onset));
-                    cond(counter).tmod     = 0;
-                    cond(counter).pmod     = struct('name',{},'param',{},'poly',{});
-                end
-                save(model_path,'cond');
-                %%%%%%%%%%%%%%%%%%%%%%
-            end
-        end
-        function FitHRF(self,nrun,model_num)
-
+    methods %(fmri analysis)                
+        function analysis_spm_firstlevel(self,nrun,model_num)            
             %run the model MODEL_NUM for data in NRUN.
             %NRUN can be a vector, but then care has to be taken that
             %model_num is correctly set for different runs.
@@ -823,8 +609,7 @@ classdef Subject < Project
             spm_dir  = self.dir_spmmat(nrun(1),model_num);
             path_spm = self.path_spmmat(nrun(1),model_num);%stuff is always saved to the first run.
             if ~exist(self.path_spm);mkdir(spm_dir);end
-
-            
+                        
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
             matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
             matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
@@ -833,7 +618,7 @@ classdef Subject < Project
             
             for session = nrun
                 %load files using ...,1, ....,2 format
-
+                
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(spm_select('expand',self.path_epi(session,'r')));%use always the realigned data.
                 %load the onsets
                 dummy                                                   = load(self.path_model(session,model_num));
@@ -849,25 +634,27 @@ classdef Subject < Project
                 %
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi               = {''};
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi_reg           = {''};
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = 128;
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = self.HParam;
             end
             matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
             matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs                  = self.derivatives;%we have [0 0], [ 1 0] or [ 1 1] for 1, 2, or 3 regressors.
             matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
-            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;
-            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
+            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;%
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {self.path_skullstrip_meanepi};
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
-            %estimation
-            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spm};
-            matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
-            spm_jobman('run', matlabbatch);
+            spm_jobman('run', matlabbatch);%create SPM file first            
+            %% normalize and smooth beta images right away.            
+            beta_images          = self.path_beta(nrun(1),model_num,'');%'' => with no prefix            
             %
-            %normalize the beta images right away
-            beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
-            self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
-            beta_images = self.path_beta(nrun(1),model_num,'w_');%smooth the normalized images.
-            self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
+            %normalize them ('w_EPI' and 'w_CAT' will be added)
+            self.VolumeNormalize(beta_images);
+            %now smooth these normalized images
+            beta_images          = self.path_beta(nrun(1),model_num,'wEPI_');%smooth the normalized images too.
+            self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
+            beta_images          = self.path_beta(nrun(1),model_num,'wCAT_');%smooth the normalized images too.
+            self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
+            %%                        
         end
      end
 end
