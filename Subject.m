@@ -198,8 +198,14 @@ classdef Subject < Project
             %preprocessing. RUNS specifies the functional runs, make it a
             %vector if needed. RUNS will be used with Re_Coreg.
             if nargin > 1
-                self.ComputeVDM;
-                self.ApplyVDM;
+                try
+					fprintf('Will attempt field corrections\n');
+					self.ComputeVDM;
+                	self.ApplyVDM;
+					self.epi_prefix = 'u_';%if we came that far, change the default EPI prefix.
+				catch
+					fprintf('Failed... Will work on non-field corrected EPIs\n');
+				end
                 %
 	    		self.SegmentSurface_HR;%cat12 segmentation
             	self.SkullStrip;%removes non-neural voxels
@@ -212,45 +218,57 @@ classdef Subject < Project
 		    end
         end
         function ComputeVDM(self)
-            %goes through alll the fieldmaps and computes VDM file.
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.data.presubphasemag.phase = cellstr(phase_nii);
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.data.presubphasemag.magnitude = cellstr(magnitude_nii);
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.et = [6.12 8.58]; % has to be set for every study
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.maskbrain = 0;
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.blipdir = -1;
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.tert = 32.48; % has to be calculated for every study
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.epifm = 0;
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.ajm = 0;
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.method = 'Mark3D';
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.fwhm = 10;
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.pad = 0;
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.ws = 1;
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.template = {'/common/apps/spm12/toolbox/FieldMap/T1.nii'};
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.fwhm = 5;
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.nerode = 2;
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.ndilate = 4;
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.thresh = 0.5;
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.reg = 0.02;
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.session.epi = cellstr(allfiles(1,:));
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.matchvdm = 1;
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.sessname = 'run';
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.writeunwarped = 1;
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.anat = '';
-            matlabbatch{sub}.spm.tools.fieldmap.calculatevdm.subj.matchanat = 0;
-            
+            %goes through all the fieldmaps and computes VDM file.
+            %!!!!!!!!!!!! WHAT FILEs WILL THIS ROUTINE WRITE ON THE DISK?!!!!!!!!!!!!!!!!
+			
+			for nsession = 1:length(self.runs_fieldmap)
+				run_phase     = self.runs_fieldmap{nsession}(2);
+				run_magnitude = self.runs_fieldmap{nsession}(1);
+				matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.data.presubphasemag.phase = self.path_epi(run_phase);;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.data.presubphasemag.magnitude = self.path_epi(run_magnitude);
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.et = [6.12 8.58]; % !!!!!!!!!wd be nice as a project property. has to be set for every study
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.maskbrain = 0;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.blipdir = -1;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.tert = 32.48; % !!!!!!!!!!wd be nice to have the formula here. has to be calculated for every study
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.epifm = 0;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.ajm = 0;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.method = 'Mark3D';
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.fwhm = 10;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.pad = 0;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.ws = 1;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.template = {self.path_fieldmap};
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.fwhm = 5;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.nerode = 2;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.ndilate = 4;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.thresh = 0.5;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.reg = 0.02;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.session.epi = cellstr(allfiles(1,:));%%%%!!!!!!!!!!!!!!! WHAT IS THIS SUPPOSED TO BE?!!!!!!!!
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.matchvdm = 1;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.sessname = 'run';
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.writeunwarped = 1;
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.anat = '';
+            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.matchanat = 0;
+			end 
+            self.RunSPMJob(matlabbatch);
         end
         function ApplyVDM(self)
-            %applies the VDM files to functional runs.
-            vdm = spm_select('FPList', fielddir, '^vdm5.*.nii');
-            matlabbatch{sub}.spm.tools.fieldmap.applyvdm.data.scans = cellstr(allfiles);
-            matlabbatch{sub}.spm.tools.fieldmap.applyvdm.data.vdmfile = cellstr(vdm);
-            matlabbatch{sub}.spm.tools.fieldmap.applyvdm.roptions.pedir = 2;
-            matlabbatch{sub}.spm.tools.fieldmap.applyvdm.roptions.which = [2 1];
-            matlabbatch{sub}.spm.tools.fieldmap.applyvdm.roptions.rinterp = 4;
-            matlabbatch{sub}.spm.tools.fieldmap.applyvdm.roptions.wrap = [0 0 0];
-            matlabbatch{sub}.spm.tools.fieldmap.applyvdm.roptions.mask = 1;
-            matlabbatch{sub}.spm.tools.fieldmap.applyvdm.roptions.prefix = 'u_';            
-        end
+            %Applies the VDM files to functional runs.
+			%Writes u_data.nii files, which are field corrected EPIs.
+			for nsession = 1:length(self.runs_fieldmap)
+
+				for nrun = self.apply_vdm{nession}(2)
+					epis{nrun} = spm_select('expand',self.path_epi(nr);
+				end
+            	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.data.scans = cellstr(allfiles);%%%%!!!!!!! must be checked
+            	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.data.vdmfile = self.get_vdm(nession);%%%!!!!any idea on filename of this file?
+             	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.pedir = 2;
+            	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.which = [2 1];
+            	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.rinterp = 4;
+            	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.wrap = [0 0 0];
+            	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.mask = 1;
+            	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.prefix = 'u_';            
+        	end
+		end
         function SkullStrip_meanEPI(self)
 			%combines c{1,2,3}meanepi.nii images to create a binary mask in the native space.
 			Vi = self.path_meanepi_segmented(1:3);
@@ -480,7 +498,7 @@ classdef Subject < Project
             %returns the path to the meanepi (result of realignment).
             %returns empty if non-existent. Assumes that the first run contains the mean epi.
             first_run = self.dicom_target_run(1);
-	    out       = strrep( self.path_epi(first_run),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
+	    	out       = strrep( self.path_epi(first_run,self.epi_prefix),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
         end
 		function out        = path_tpm(self,n)
 			%return the path to the Nth TPM image from the spm

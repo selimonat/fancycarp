@@ -57,9 +57,8 @@ classdef Project < handle
         %run (i.e. it doesn't always corresponds to different runs as in FearAmy)
 		%meanEPI.nii detection assumes that the first run is the first functional run.
         dicom2run             = repmat({[1:8]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
-        runs_fieldmap         = [{5 6} {7 8}];
-        apply_vdm             = [{1}   {2 3 4}];
-        epi_prefix            = 'u_';%depending on whether we have fieldmap/blip correction or not this has to be changed. If no correction applied leave it as ''.
+        runs_fieldmap         = [{5 6} {7 8}];%The order is important: first one is the magnitude and the second one is the phase.
+        apply_vdm             = [{1}   {2 3 4}];%The length of this property should be the same as runs_fieldmap
         data_folders          = {'midlevel' 'mrt' 'design'};%if you need another folder, do it here.
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
@@ -70,12 +69,15 @@ classdef Project < handle
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.         
+		path_fieldmap         = sprintf('%stoolbox/FieldMap/T1.nii',Project.path_spm); %path to the TPM images, needed by segment.         
         path_second_level     = sprintf('%sspm/',Project.path_project);%where the second level results has to be stored
         path_atlas            = sprintf('%satlas/data.nii',Project.path_project);%the location of the atlas
 		current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
     end    
-    
+ 	properties (Hidden)
+        epi_prefix            = '';%depending on whether we have fieldmap/blip correction or not this has to be changed. If no correction applied leave it as ''.
+	end
 	methods
         function DU = SanityCheck(self,runs,measure,varargin)
             %DU = SanityCheck(self,runs,measure,varargin)
