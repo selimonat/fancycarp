@@ -712,79 +712,97 @@ classdef Subject < Project
         end
         function Segment_meanEPI(self)            
             % Runs the new segment of SPM12 on the mean EPI image.
-			% Will write to the disk:
-			% meandata_seg8.mat
-			% iy_meandata.nii
+            % Will write to the disk:
+            % meandata_seg8.mat
+            % iy_meandata.nii
             % c{1-5}meandata.nii
-			% y_meandata.nii
-			matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(self.path_meanepi);
-			matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
-			matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
-			matlabbatch{1}.spm.spatial.preproc.channel.write = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm = {self.path_tpm(1)};
-			matlabbatch{1}.spm.spatial.preproc.tissue(1).ngaus = 1;
-			matlabbatch{1}.spm.spatial.preproc.tissue(1).native = [1 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(1).warped = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm = {self.path_tpm(2)};
-			matlabbatch{1}.spm.spatial.preproc.tissue(2).ngaus = 1;
-			matlabbatch{1}.spm.spatial.preproc.tissue(2).native = [1 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(2).warped = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm = {self.path_tpm(3)};
-			matlabbatch{1}.spm.spatial.preproc.tissue(3).ngaus = 2;
-			matlabbatch{1}.spm.spatial.preproc.tissue(3).native = [1 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(3).warped = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm = {self.path_tpm(4)};
-			matlabbatch{1}.spm.spatial.preproc.tissue(4).ngaus = 3;
-			matlabbatch{1}.spm.spatial.preproc.tissue(4).native = [1 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(4).warped = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm = {self.path_tpm(5)};
-			matlabbatch{1}.spm.spatial.preproc.tissue(5).ngaus = 4;
-			matlabbatch{1}.spm.spatial.preproc.tissue(5).native = [1 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(5).warped = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm = {self.path_tpm(6)};
-			matlabbatch{1}.spm.spatial.preproc.tissue(6).ngaus = 2;
-			matlabbatch{1}.spm.spatial.preproc.tissue(6).native = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(6).warped = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.warp.mrf = 1;
-			matlabbatch{1}.spm.spatial.preproc.warp.cleanup = 1;
-			matlabbatch{1}.spm.spatial.preproc.warp.reg = [0 0.001 0.5 0.05 0.2];
-			matlabbatch{1}.spm.spatial.preproc.warp.affreg = 'mni';
-			matlabbatch{1}.spm.spatial.preproc.warp.fwhm = 0;
-			matlabbatch{1}.spm.spatial.preproc.warp.samp = 3;
-			matlabbatch{1}.spm.spatial.preproc.warp.write = [1 1];
-           self.RunSPMJob(matlabbatch);
+            % y_meandata.nii
+            
+            if ~exist(self.dir_meanepi);mkdir(self.dir_meanepi);end
+            if ~exist(self.path_meanepi);
+                file_from_Coreg = strrep(self.path_meanepi,'meanEPI/','');
+                if exist(file_from_Coreg)
+                    copyfile(file_from_Coreg,self.path_meanepi)
+                else
+                    inp = input('Couldn''t find meandata.nii where I looked, do you want to run Re_Coreg again? Press y then. \n.','S')
+                    if strcmp(inp,'y')
+                        self.Re_Coreg(1:self.total_run);
+                    else
+                        return
+                    end
+                end
+            end
+            
+                    matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(self.path_meanepi);
+                    matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
+                    matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
+                    matlabbatch{1}.spm.spatial.preproc.channel.write = [0 0];
+                    matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm = {self.path_tpm(1)};
+                    matlabbatch{1}.spm.spatial.preproc.tissue(1).ngaus = 1;
+                    matlabbatch{1}.spm.spatial.preproc.tissue(1).native = [1 0];
+                    matlabbatch{1}.spm.spatial.preproc.tissue(1).warped = [0 0];
+                    matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm = {self.path_tpm(2)};
+                    matlabbatch{1}.spm.spatial.preproc.tissue(2).ngaus = 1;
+                    matlabbatch{1}.spm.spatial.preproc.tissue(2).native = [1 0];
+                    matlabbatch{1}.spm.spatial.preproc.tissue(2).warped = [0 0];
+                    matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm = {self.path_tpm(3)};
+                    matlabbatch{1}.spm.spatial.preproc.tissue(3).ngaus = 2;
+                    matlabbatch{1}.spm.spatial.preproc.tissue(3).native = [1 0];
+                    matlabbatch{1}.spm.spatial.preproc.tissue(3).warped = [0 0];
+                    matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm = {self.path_tpm(4)};
+                    matlabbatch{1}.spm.spatial.preproc.tissue(4).ngaus = 3;
+                    matlabbatch{1}.spm.spatial.preproc.tissue(4).native = [1 0];
+                    matlabbatch{1}.spm.spatial.preproc.tissue(4).warped = [0 0];
+                    matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm = {self.path_tpm(5)};
+                    matlabbatch{1}.spm.spatial.preproc.tissue(5).ngaus = 4;
+                    matlabbatch{1}.spm.spatial.preproc.tissue(5).native = [1 0];
+                    matlabbatch{1}.spm.spatial.preproc.tissue(5).warped = [0 0];
+                    matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm = {self.path_tpm(6)};
+                    matlabbatch{1}.spm.spatial.preproc.tissue(6).ngaus = 2;
+                    matlabbatch{1}.spm.spatial.preproc.tissue(6).native = [0 0];
+                    matlabbatch{1}.spm.spatial.preproc.tissue(6).warped = [0 0];
+                    matlabbatch{1}.spm.spatial.preproc.warp.mrf = 1;
+                    matlabbatch{1}.spm.spatial.preproc.warp.cleanup = 1;
+                    matlabbatch{1}.spm.spatial.preproc.warp.reg = [0 0.001 0.5 0.05 0.2];
+                    matlabbatch{1}.spm.spatial.preproc.warp.affreg = 'mni';
+                    matlabbatch{1}.spm.spatial.preproc.warp.fwhm = 0;
+                    matlabbatch{1}.spm.spatial.preproc.warp.samp = 3;
+                    matlabbatch{1}.spm.spatial.preproc.warp.write = [1 1];
+                    self.RunSPMJob(matlabbatch);
         end
         function VolumeNormalize(self,path2image)
             %SegmentSurface writes deformation fields (y_*), which are here used
-            %to normalize the native hr images. Adds a prefix w- to    
+            %to normalize the native hr images. Adds a prefix w- to
             %resampled images. path2image is the image to be resampled.
-            %Example: 
+            %Example:
             %
             %s.VolumeNormalize(s.path_beta(1,1))
             %s.VolumeNormalize(s.path_skullstrip);
             
-            if strcmp(self.normalization_method,'EPI')
-                %                 deformationfield =  self.pathmrfiles(1,'mean_EPIdartel/y_meandata.nii');
-                deformationfield = strrep(self.path_meanepi,'meandata.nii','y_meandata.nii');
-                prefix           =  'w_mE_';
-            elseif strcmp(self.normalization_method,'CAT')
-                deformationfield  =  strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep));
-                prefix            = 'w_CAT_';
-            end
+            %% Normalize with mean epi segmentation
             for nf = 1:size(path2image,1)
-                
-                %                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));
-                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(deformationfield);
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,'meandata','y_meandata'));
                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
                     78 76 85];
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
-                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = prefix;
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
             end
-            %
             self.RunSPMJob(matlabbatch);
-        end        
+            %% Normalize with CAT12 segmentation
+            matlabbatch =[];
+            for nf = 1:size(path2image,1)
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
+                    78 76 85];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wCAT_';
+            end
+            self.RunSPMJob(matlabbatch);
+        end
         function MNI2Native(self)
             %brings the atlas to native space and saves it in run000/atlas.
             %Same as VolumeNormalize but uses the inverse deformation
@@ -909,12 +927,18 @@ classdef Subject < Project
             elseif nargin == 2
                 out = sprintf('%s%s_%s',self.dir_hr,varargin{1},'ss_data.nii');
             end
+            end
+        
+        function out  = dir_meanepi(self)
+            %returns the path to the meanepi (result of realignment).
+            %returns empty if non-existent. Assumes that the first run contains the mean epi.
+            first_run = self.dicom_target_run(1);
+            out       = fullfile(self.pathfinder(self.id,first_run),'mrt','meanEPI');
         end
         function out  = path_meanepi(self)
             %returns the path to the meanepi (result of realignment).
             %returns empty if non-existent. Assumes that the first run contains the mean epi.
-            first_run = self.dicom_target_run(1);
-            out       = strrep( self.path_epi(first_run),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
+            out       = fullfile(self.dir_meanepi,'meandata.nii');
         end
 		function out = path_tpm(self,n)
 			%return the path to the Nth TPM image from the spm
@@ -924,7 +948,7 @@ classdef Subject < Project
 			%Returns the path to the output of Segment_meanEPI, N can be a vector.
 			mean_epi = self.path_meanepi;
 			out      = '';
-			for n = num
+			for n = num(:)'
 				out      = strvcat(out,regexprep(mean_epi,'meandata',sprintf('c%dmeandata',n)));
 			end
 		end
@@ -1792,9 +1816,15 @@ classdef Subject < Project
 %             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
         end
         function [path_con, vec] = CreateContrast(self,nrun,model_num,con_num)
-            deleteold = 0;
+            deleteold = 1;
             path_spm = self.path_spmmat(nrun(1),model_num);
             path_con = strrep(path_spm,'SPM.mat',sprintf('con_%04d.nii',con_num));
+%             if exist(path_con) && deleteold ==1
+%                 delete(path_con)
+%                 delete(strrep(path_con,'con','spmT'))
+%                 spmmat = load(self.path_spmmat(nrun,model_num));
+%                 spmmat.SPM.xCon(con_num) = struct([]);
+%             end
             vec = zeros(self.get_Nbetas(nrun,model_num),1);
             
             matlabbatch = [];
@@ -1815,21 +1845,31 @@ classdef Subject < Project
                     end
                 case 2 % all faces vs everything else
                     matlabbatch{1}.spm.stats.con.consess{1}.tcon.name = 'allfaces>rest';
-                    face_betas = self.get_beta_index(nrun,model_num,intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/nulltrial
+                    face_betas = [];
+                    if model_num ==1
+                        face_betas = self.get_beta_index(nrun,model_num,intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/nulltrial
+                    elseif model_num == 2
+                        for cond = intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist))
+                            ind = self.get_beta_index(nrun,model_num,[num2str(cond) 'Face']);
+                            face_betas = [face_betas ind];
+                        end
+                    end
                     vec(face_betas)= ones(1,length(face_betas));
                 case 3 
             end
             matlabbatch{1}.spm.stats.con.spmmat = cellstr(path_spm);
             matlabbatch{1}.spm.stats.con.consess{1}.tcon.convec =  vec;
             matlabbatch{1}.spm.stats.con.consess{1}.tcon.sessrep = 'none';
-            matlabbatch{1}.spm.stats.con.delete = deleteold;
+            matlabbatch{1}.spm.stats.con.delete = 1;
             spm_jobman('run',matlabbatch);
         end
         function Con1stLevel(self,nrun,model_num,con_num)
             pathcon = self.CreateContrast(nrun,model_num,con_num);
             %normalize the con images right away
             self.VolumeNormalize(pathcon);%normalize ('w_' will be added)
-            pathwcon = strrep(pathcon,sprintf('con_%04d',con_num),sprintf('w_con_%04d',con_num));
+            pathwcon = strrep(pathcon,sprintf('con_%04d',con_num),sprintf('wCAT_con_%04d',con_num));
+            self.VolumeSmooth(pathwcon);%('s(fwhm)_' will be added, resulting in 's_ww_')
+            pathwcon = strrep(pathcon,sprintf('con_%04d',con_num),sprintf('wEPI_con_%04d',con_num));
             self.VolumeSmooth(pathwcon);%('s(fwhm)_' will be added, resulting in 's_ww_')
         end
         function plot_con(nrun,model_num,con_num)
