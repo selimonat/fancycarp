@@ -52,12 +52,15 @@ classdef Project < handle
         path_project          = '/mnt/data/project_helen/data/';
         path_spm              = '/home/onat/Documents/Code/Matlab/spm12-6685/';        
         trio_sessions         = { 'PRISMA_19873' };
-        dicom_serie_selector  = {  [8 19 20 21 9 10 22 23 6 7 17 18 ] };
+        dicom_serie_selector  = {  [8 19 20 21 6 7 17 18 ] };
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs as in FearAmy)
 		%meanEPI.nii detection assumes that the first run is the first functional run.
-        dicom2run             = repmat({[1:12]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
-        data_folders          = {'midlevel' 'mrt' };%if you need another folder, do it here.
+        dicom2run             = repmat({[1:8]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
+        runs_fieldmap         = [{5 6} {7 8}];
+        apply_vdm             = [{1}   {2 3 4}];
+        epi_prefix            = 'u_';%depending on whether we have fieldmap/blip correction or not this has to be changed. If no correction applied leave it as ''.
+        data_folders          = {'midlevel' 'mrt' 'design'};%if you need another folder, do it here.
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
