@@ -51,16 +51,42 @@ classdef Project < handle
 
         path_project          = '/mnt/data/project_helen/data/';
         path_spm              = '/home/onat/Documents/Code/Matlab/spm12-6685/';        
-        trio_sessions         = { 'PRISMA_19873' };
-        dicom_serie_selector  = {  [8 19 20 21 6 7 17 18 ] };
+        trio_sessions         = { ...
+            'PRISMA_19542', 'PRISMA_19573', 'PRISMA_19623', ... % 1-3
+            'PRISMA_19672', 'PRISMA_19689', 'PRISMA_19690', ... % 4-6
+            'PRISMA_19708', 'PRISMA_19711', 'PRISMA_19712', ... % 7-9
+            'PRISMA_19713', 'PRISMA_19715', 'PRISMA_19724', ... % 10-12
+            'PRISMA_19797', 'PRISMA_19735', 'PRISMA_19736', ... % 13-15
+            'PRISMA_19737', 'PRISMA_19738', 'PRISMA_19817', ... % 16-18
+            'PRISMA_19822', 'PRISMA_19864', 'PRISMA_19873', ... % 19-21
+            'PRISMA_19880', 'PRISMA_19885', 'PRISMA_19911', ... % 22-24
+            'PRISMA_19920', 'PRISMA_19934', 'PRISMA_19935', ... % 25-27
+            'PRISMA_19936', 'PRISMA_19945', 'PRISMA_19946', ... % 28-30
+            'PRISMA_19954', 'PRISMA_19955', 'PRISMA_19968', ... % 31-33
+            'PRISMA_199', 'PRISMA_199' }; % 34-35
+        % series numbers corrspond to 4 EPI runs + 2x2 fieldmaps
+        % HR is detected automatically ant put into folder run0
+        % at the end commented blips
+        % (we do not have blips for first 6 subjects)
+        dicom_serie_selector  = {  ...
+            [8 19 20 21 6 7 16 17 ], [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 1-3
+            [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 4-6
+            [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 7-9   9 10 22 23
+            [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 10-12 9 10 22 23
+            [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 13-15 9 10 22 23
+            [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 16-18 9 10 22 23
+            [8 6 7  ],               [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 19-21 9 10 22 23
+            [8 19 20 21 6 7 17 18 ], [9 20 21 22 6 7 18 19 ], [8 19 20 21 6 7 17 18 ], ... % 22-24 9 10 22 23
+            [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 25-27 9 10 22 23
+            [8 6 7  ],               [8 19 20 21 6 7 17 18 ], [8 6 7 ],                ... % 28-30 9 10 22 23
+            [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 31-33 9 10 22 23
+            [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ]};                             % 34-35 9 10 22 23
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs as in FearAmy)
-		%meanEPI.nii detection assumes that the first run is the first functional run.
+        %meanEPI.nii detection assumes that the first run is the first functional run.
         dicom2run             = repmat({[1:8]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
-        runs_fieldmap         = [{5 6} {7 8}];%The order is important: first one is the magnitude and the second one is the phase.
-        apply_vdm             = [{1}   {2 3 4}];%The length of this property should be the same as runs_fieldmap
-        data_folders          = {'midlevel' 'mrt' 'design'};%if you need another folder, do it here.
-        TR                    = 0.99;                
+        data_folders          = {'midlevel' 'mrt' };%if you need another folder, do it here.
+        TR                    = 0.967;
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
         smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method
