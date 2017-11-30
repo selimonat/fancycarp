@@ -103,7 +103,9 @@ classdef Project < handle
         current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
     end
-    
+ 	properties (Hidden)
+        epi_prefix            = '';%depending on whether we have fieldmap/blip correction or not this has to be changed. If no correction applied leave it as ''.
+	end   
     methods
         function DU = SanityCheck(self,runs,measure,varargin)
             %DU = SanityCheck(self,runs,measure,varargin)
