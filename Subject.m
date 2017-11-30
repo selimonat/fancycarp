@@ -22,21 +22,20 @@ classdef Subject < Project
     %
     %   Plotter methods plot things as their name suggests.
     %
-    % 
-    
+
     properties (Hidden)
         paradigm
-        default_run       = 1;   
+        default_run       = 1;
         dicom_serie_id    = [];
         dicom_folders     = [];
-        dicom_target_run  = [];                
-        derivatives       = [0 0];%specifies expansion degree of the cHRF when running models.         
+        dicom_target_run  = [];
+        derivatives       = [0 0];%specifies expansion degree of the cHRF when running models.
     end
     properties (SetAccess = private)
         id
-        path        
+        path
         trio_session  = [];
-        total_run     = [];        
+        total_run     = [];
     end
     %%
     methods
@@ -61,19 +60,17 @@ classdef Subject < Project
         end
     end
     
-    methods %(Getters)        
+    methods %(Getters)
         function get_hr(self)
             %will download the latest HR for this subject to default hr
             %path (which is run000)
             %
-        
-            
-            fprintf('get_hr:\nWill now dump the latest HR (%s)\n',self.current_time);            
-            %target location for the hr: self.dir_hr;            
+            fprintf('get_hr:\nWill now dump the latest HR (%s)\n',self.current_time);
+            %target location for the hr: self.dir_hr;
             %create it if necess.
             if exist(self.dir_hr) == 0
                 mkdir(self.dir_hr);
-            end   
+            end
             self.DicomDownload(self.path_hr_dicom,self.dir_hr);
             self.ConvertDicom(self.dir_hr);
             files       = spm_select('FPListRec',self.dir_hr,'^sPRISMA');
@@ -88,16 +85,15 @@ classdef Subject < Project
             p = [];
             if exist(filename)
                 p = load(filename);
-                p = p.p;                
+                p = p.p;
             end
-        end 
+        end
         function get_epi(self)
             %Will dump all DICOMS based on Sessions entered in the
             %Project object. trio_folders are folders in the dicom server,
             %trio2run dictates in which run these folders should be dumped
             %to.
             %
-            
             %spit out some info for sanity checks
             self.dicomserver_request;
             fprintf('You told me to download the following series: ');
@@ -106,42 +102,42 @@ classdef Subject < Project
             paths               = self.dicomserver_paths;
             if ~isempty(paths)
                 self.dicom_folders  = paths(self.dicom_serie_id);
-                fprintf('Will now dump series (%s)\n',self.current_time);            
+                fprintf('Will now dump series (%s)\n',self.current_time);
             end
-            %% save the desired runs to disk            
-			for source = self.dicom_folders(:)'
-				%
+            %% save the desired runs to disk
+            n = 0;
+            for source = self.dicom_folders(:)'
+                %
                 n 				 = n+1
-                dest             = self.dir_epi(n);                                
+                dest             = self.dir_epi(n);
                 if exist(dest)
-					self.DicomDownload(source{1},dest);                
-					self.DicomTo4D(dest);
-				else
-					fprintf('Stopped here as a sanity check\nIt seems the destination folder doesn''t exist.')
-					keyboard
-				end
+                    self.DicomDownload(source{1},dest);
+                    self.DicomTo4D(dest);
+                else
+                    fprintf('Stopped here as a sanity check\nIt seems the destination folder doesn''t exist.')
+                    keyboard
+                end
             end
             
-        end            
+        end
         function [o]    = get.total_run(self)
             %% returns the total number of runs in a folder (except run000)
             o      = length(dir(self.path))-3;%exclude the directories .., ., and run000
-        end        
+        end
         function L      = get_log(self,run)
             % Loads the ptb log. Removes all events before/after the
             % first/last scan and defines zero as the first scan.
-            %
-            
+            %  
             L               = self.paradigm{run}.out.log;
             %sort things according to time rather than order of being logged
             [~,i]           = sort(L(:,1),'ascend');
             L               = L(i,:);
             % delete all the events that are after the last scanning..
-            scan_times      = L(find(L(:,2) == 0),1);                        
+            scan_times      = L(find(L(:,2) == 0),1);
             %
             first_scan_time = min(scan_times);
             last_scan_time  = max(scan_times);
-            %            
+            %
             L(L(:,1) < first_scan_time,:) = [];
             L(L(:,1) > last_scan_time,:)  = [];
             L(:,1)          = L(:,1) - first_scan_time;
@@ -149,14 +145,14 @@ classdef Subject < Project
         function o      = get_param_motion(self,run)
             %will load the realignment parameters, of course you have to
             %realign the EPIs first.
-
+            
             filename = sprintf('%smrt%srp_data.txt',self.path_data(run),filesep);
             if exist(filename)
                 o = load(filename);
             else
                 fprintf('File:\n %s doesn''t exist.\n Most likely realignment is not yet done.\n');
-            end            
-        end                
+            end
+        end
         function cond   = get_modelonsets(self,nrun,model_num)
             %returns stimulus onsets for NRUN defined by model specified by
             %MODEL_NUM
@@ -172,109 +168,115 @@ classdef Subject < Project
             % will tell you how many volumes are in a 4D image.
             bla = spm_vol_nifti(self.path_epi(run),1);%simply read the first images header
             t   = bla.private.dat.dim(4);
-        end        
+        end
         function out    = get_totalvolumelogged(self,run)
             %returns number of pulses logged in stimulus computer during the experiment
             L   = self.get_log(run);
             out = sum(L(:,2) == 0);
-        end        
+        end
         function XYZmm  = get_nativeatlas2mask(self,mask_id)
             %Will return XYZ coordinates from ROI specified by MASK_INDEX
-            %thresholded by the default value. XYZ values are in world 
+            %thresholded by the default value. XYZ values are in world
             %space, so they will need to be brought to the voxel space of
-            %the EPIs.            
+            %the EPIs.
             mask_handle = spm_vol(self.path_native_atlas(mask_id));%read the mask
-            mask_ind    = spm_read_vols(mask_handle) > self.atlas2mask_threshold;%threshold it            
+            mask_ind    = spm_read_vols(mask_handle) > self.atlas2mask_threshold;%threshold it
             [X Y Z]     = ind2sub(mask_handle.dim,find(mask_ind));%get voxel indices
             XYZ         = [X Y Z ones(sum(mask_ind(:)),1)]';%this is in hr's voxels space.
-            XYZmm       = mask_handle.mat*XYZ;%this is world space.            
+            XYZmm       = mask_handle.mat*XYZ;%this is world space.
             XYZmm       = unique(XYZmm','rows')';%remove repetititons.
         end
     end
     
-    methods %(mri, preprocessing))              
+    methods %(mri, preprocessing))
         function preprocess_pipeline(self,runs)
             %meta method to run all the required steps for hr
             %preprocessing. RUNS specifies the functional runs, make it a
             %vector if needed. RUNS will be used with Re_Coreg.
             if nargin > 1
                 try
-					fprintf('Will attempt field corrections\n');
-					self.ComputeVDM;
-                	self.ApplyVDM;
-					self.epi_prefix = 'u_';%if we came that far, change the default EPI prefix.
-				catch
-					fprintf('Failed... Will work on non-field corrected EPIs\n');
-				end
+                    fprintf('Will attempt field corrections\n');
+                    self.ComputeVDM;
+                    self.ApplyVDM;
+                    self.epi_prefix = 'u_';%if we came that far, change the default EPI prefix.
+                catch
+                    fprintf('Failed... Will work on non-field corrected EPIs\n');
+                end
                 %
-	    		self.SegmentSurface_HR;%cat12 segmentation
-            	self.SkullStrip;%removes non-neural voxels
-            	self.MNI2Native;%brings the atlas (if present) to native space
-            	self.Re_Coreg(runs);%realignment and coregistration
-            	self.Segment_meanEPI;%segments mean EPI with new segment
-				self.SkullStrip_meanEPI;%creates a native mask
-	    	else
-				fprintf('One input argument is required!\n');
-		    end
+                self.SegmentSurface_HR;%cat12 segmentation
+                self.SkullStrip;%removes non-neural voxels
+                self.MNI2Native;%brings the atlas (if present) to native space
+                self.Re_Coreg(runs);%realignment and coregistration
+                self.Segment_meanEPI;%segments mean EPI with new segment
+                self.SkullStrip_meanEPI;%creates a native mask
+            else
+                fprintf('One input argument is required!\n');
+            end
         end
         function ComputeVDM(self)
             %goes through all the fieldmaps and computes VDM file.
-            %!!!!!!!!!!!! WHAT FILEs WILL THIS ROUTINE WRITE ON THE DISK?!!!!!!!!!!!!!!!!
-			
-			for nsession = 1:length(self.runs_fieldmap)
-				run_phase     = self.runs_fieldmap{nsession}(2);
-				run_magnitude = self.runs_fieldmap{nsession}(1);
-				matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.data.presubphasemag.phase = self.path_epi(run_phase);;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.data.presubphasemag.magnitude = self.path_epi(run_magnitude);
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.et = [6.12 8.58]; % !!!!!!!!!wd be nice as a project property. has to be set for every study
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.maskbrain = 0;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.blipdir = -1;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.tert = 32.48; % !!!!!!!!!!wd be nice to have the formula here. has to be calculated for every study
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.epifm = 0;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.ajm = 0;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.method = 'Mark3D';
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.fwhm = 10;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.pad = 0;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.ws = 1;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.template = {self.path_fieldmap};
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.fwhm = 5;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.nerode = 2;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.ndilate = 4;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.thresh = 0.5;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.reg = 0.02;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.session.epi = cellstr(allfiles(1,:));%%%%!!!!!!!!!!!!!!! WHAT IS THIS SUPPOSED TO BE?!!!!!!!!
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.matchvdm = 1;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.sessname = 'run';
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.writeunwarped = 1;
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.anat = '';
-            	matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.matchanat = 0;
-			end 
+            %files written:
+            %vdm5_scdata.nii
+            %fpm_scdata.nii
+            %scdata.nii
+            
+            for nsession = 1:length(self.runs_fieldmap)
+                run_phase     = self.runs_fieldmap{nsession}(2);
+                run_magnitude = self.runs_fieldmap{nsession}(1);
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.data.presubphasemag.phase      = cellstr(sprintf('%s,1',self.path_epi(run_phase)));
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.data.presubphasemag.magnitude  = cellstr(sprintf('%s,2',self.path_epi(run_magnitude)));
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.et        = [6.12 8.58]; % !!!!!!!!!wd be nice as a project property. has to be set for every study
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.maskbrain = 0;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.blipdir   = -1;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.tert      = 32.48; % !!!!!!!!!!wd be nice to have the formula here. has to be calculated for every study
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.epifm     = 0;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.ajm       = 0;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.method = 'Mark3D';
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.fwhm = 10;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.pad  = 0;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.ws   = 1;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.template = {self.path_fieldmap};
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.fwhm    = 5;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.nerode  = 2;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.ndilate = 4;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.thresh  = 0.5;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.reg = 0.02;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.session.epi                     = cellstr(sprintf('%s,1',self.path_epi(self.apply_vdm{nsession}(1))));
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.matchvdm = 1;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.sessname = 'run';
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.writeunwarped = 1;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.anat = '';
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.matchanat = 0;
+            end
             self.RunSPMJob(matlabbatch);
         end
         function ApplyVDM(self)
             %Applies the VDM files to functional runs.
-			%Writes u_data.nii files, which are field corrected EPIs.
-			for nsession = 1:length(self.runs_fieldmap)
-
-				for nrun = self.apply_vdm{nession}(2)
-					epis{nrun} = spm_select('expand',self.path_epi(nr);
-				end
-            	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.data.scans = cellstr(allfiles);%%%%!!!!!!! must be checked
-            	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.data.vdmfile = self.get_vdm(nession);%%%!!!!any idea on filename of this file?
-             	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.pedir = 2;
-            	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.which = [2 1];
-            	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.rinterp = 4;
-            	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.wrap = [0 0 0];
-            	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.mask = 1;
-            	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.prefix = 'u_';            
-        	end
-		end
+            %Writes u_data.nii files, which are field corrected EPIs.
+            for nsession = 1:length(self.runs_fieldmap)
+                c = 0;
+                epis = [];
+                for nrun = self.apply_vdm{nsession}(:)'
+                    c = c+1;
+                    epis{c} = spm_select('expand',self.path_epi(nrun));
+                end
+                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.data.scans   = cellstr(strvcat(epis{:}));
+                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.data.vdmfile = cellstr(regexprep(self.path_epi(self.runs_fieldmap{nsession}(2)),'data','vdm5_scdata'));
+                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.pedir = 2;
+                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.which = [2 1];
+                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.rinterp = 4;
+                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.wrap = [0 0 0];
+                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.mask = 1;
+                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.prefix = 'u_';
+            end
+            self.RunSPMJob(matlabbatch);
+        end
         function SkullStrip_meanEPI(self)
-			%combines c{1,2,3}meanepi.nii images to create a binary mask in the native space.
-			Vi = self.path_meanepi_segmented(1:3);
-			Vo = self.path_skullstrip_meanepi;
-			spm_imcalc(Vi,Vo,'(i1+i2+i3)>0');
-		end
+            %combines c{1,2,3}meanepi.nii images to create a binary mask in the native space.
+            Vi = self.path_meanepi_segmented(1:3);
+            Vo = self.path_skullstrip_meanepi;
+            spm_imcalc(Vi,Vo,'(i1+i2+i3)>0');
+        end
         function SkullStrip(self)
             %needs results of SegmentSurface, will produce a skullstripped
             %version of hr (filename: ss_data.nii). It will also
@@ -285,7 +287,7 @@ classdef Subject < Project
             %path to p1 and p2 images created by SegmentSurface
             c1         = strrep(self.path_hr,sprintf('mrt%sdata',filesep),sprintf('mrt%smri%sp1data',filesep,filesep));
             c2         = strrep(self.path_hr,sprintf('mrt%sdata',filesep),sprintf('mrt%smri%sp2data',filesep,filesep));
-
+            
             if exist(c1) && exist(c2)
                 matlabbatch{1}.spm.util.imcalc.input            = cellstr(strvcat(self.path_hr,c1,c2));
                 matlabbatch{1}.spm.util.imcalc.output           = self.path_skullstrip;
@@ -302,9 +304,9 @@ classdef Subject < Project
             else
                 fprintf('Need to run segment first...\n')
             end
-        end                
+        end
         function Re_Coreg(self,runs)
-            %will realign and coregister. 
+            %will realign and coregister.
             
             %% collect all the EPIs as a cell array of cellstr
             PREFIX = self.epi_prefix;
@@ -352,15 +354,15 @@ classdef Subject < Project
             self.RunSPMJob(matlabbatch);
             
         end
-        function SegmentSurface_HR(self)            
+        function SegmentSurface_HR(self)
             % Runs CAT12 Segment Surface routine.
-			% Will write to the disk:
-			% mri and report folders
-			% mri/iy_data.nii
-			% mri/p1data.nii
-			% mri/p2data.nii
-			% mri/wmdata.nii
-			% mri_y_data.nii
+            % Will write to the disk:
+            % mri and report folders
+            % mri/iy_data.nii
+            % mri/p1data.nii
+            % mri/p2data.nii
+            % mri/wmdata.nii
+            % mri_y_data.nii
             matlabbatch{1}.spm.tools.cat.estwrite.data = {spm_select('expand',self.path_hr)};
             matlabbatch{1}.spm.tools.cat.estwrite.nproc = 0;
             matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm = {sprintf('%sTPM.nii',self.tpm_dir)};
@@ -384,55 +386,55 @@ classdef Subject < Project
             %
             self.RunSPMJob(matlabbatch);
         end
-        function Segment_meanEPI(self)            
+        function Segment_meanEPI(self)
             % Runs the new segment of SPM12 on the mean EPI image.
-			% Will write to the disk:
-			% meandata_seg8.mat
-			% iy_meandata.nii
+            % Will write to the disk:
+            % meandata_seg8.mat
+            % iy_meandata.nii
             % c{1-5}meandata.nii
-			% y_meandata.nii
-			matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(self.path_meanepi);
-			matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
-			matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
-			matlabbatch{1}.spm.spatial.preproc.channel.write = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm = {self.path_tpm(1)};
-			matlabbatch{1}.spm.spatial.preproc.tissue(1).ngaus = 1;
-			matlabbatch{1}.spm.spatial.preproc.tissue(1).native = [1 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(1).warped = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm = {self.path_tpm(2)};
-			matlabbatch{1}.spm.spatial.preproc.tissue(2).ngaus = 1;
-			matlabbatch{1}.spm.spatial.preproc.tissue(2).native = [1 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(2).warped = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm = {self.path_tpm(3)};
-			matlabbatch{1}.spm.spatial.preproc.tissue(3).ngaus = 2;
-			matlabbatch{1}.spm.spatial.preproc.tissue(3).native = [1 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(3).warped = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm = {self.path_tpm(4)};
-			matlabbatch{1}.spm.spatial.preproc.tissue(4).ngaus = 3;
-			matlabbatch{1}.spm.spatial.preproc.tissue(4).native = [1 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(4).warped = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm = {self.path_tpm(5)};
-			matlabbatch{1}.spm.spatial.preproc.tissue(5).ngaus = 4;
-			matlabbatch{1}.spm.spatial.preproc.tissue(5).native = [1 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(5).warped = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm = {self.path_tpm(6)};
-			matlabbatch{1}.spm.spatial.preproc.tissue(6).ngaus = 2;
-			matlabbatch{1}.spm.spatial.preproc.tissue(6).native = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.tissue(6).warped = [0 0];
-			matlabbatch{1}.spm.spatial.preproc.warp.mrf = 1;
-			matlabbatch{1}.spm.spatial.preproc.warp.cleanup = 1;
-			matlabbatch{1}.spm.spatial.preproc.warp.reg = [0 0.001 0.5 0.05 0.2];
-			matlabbatch{1}.spm.spatial.preproc.warp.affreg = 'mni';
-			matlabbatch{1}.spm.spatial.preproc.warp.fwhm = 0;
-			matlabbatch{1}.spm.spatial.preproc.warp.samp = 3;
-			matlabbatch{1}.spm.spatial.preproc.warp.write = [1 1];
-           self.RunSPMJob(matlabbatch);
+            % y_meandata.nii
+            matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(self.path_meanepi);
+            matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
+            matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
+            matlabbatch{1}.spm.spatial.preproc.channel.write = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm = {self.path_tpm(1)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).ngaus = 1;
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).native = [1 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm = {self.path_tpm(2)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).ngaus = 1;
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).native = [1 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm = {self.path_tpm(3)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).ngaus = 2;
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).native = [1 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm = {self.path_tpm(4)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).ngaus = 3;
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).native = [1 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm = {self.path_tpm(5)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).ngaus = 4;
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).native = [1 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm = {self.path_tpm(6)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).ngaus = 2;
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).native = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.warp.mrf = 1;
+            matlabbatch{1}.spm.spatial.preproc.warp.cleanup = 1;
+            matlabbatch{1}.spm.spatial.preproc.warp.reg = [0 0.001 0.5 0.05 0.2];
+            matlabbatch{1}.spm.spatial.preproc.warp.affreg = 'mni';
+            matlabbatch{1}.spm.spatial.preproc.warp.fwhm = 0;
+            matlabbatch{1}.spm.spatial.preproc.warp.samp = 3;
+            matlabbatch{1}.spm.spatial.preproc.warp.write = [1 1];
+            self.RunSPMJob(matlabbatch);
         end
         function VolumeNormalize(self,path2image)
             %SegmentSurface writes deformation fields (y_*), which are here used
-            %to normalize the native hr images. Adds a prefix w- to    
+            %to normalize the native hr images. Adds a prefix w- to
             %resampled images. path2image is the image to be resampled.
-            %Example: 
+            %Example:
             %
             %s.VolumeNormalize(s.path_beta(1,1))
             %s.VolumeNormalize(s.path_skullstrip);
@@ -441,7 +443,7 @@ classdef Subject < Project
                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,'meandata','y_meandata'));
                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
-                                                                              78 76 85];
+                    78 76 85];
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
@@ -450,83 +452,83 @@ classdef Subject < Project
             %% Normalize with CAT12 segmentation
             matlabbatch =[];
             for nf = 1:size(path2image,1)
-                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));               
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));
                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
-                                                                              78 76 85];
+                    78 76 85];
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wCAT_';
             end
             self.RunSPMJob(matlabbatch);
-        end        
+        end
         function MNI2Native(self)
             %brings the atlas to native space and saves it in run000/atlas.
             %Same as VolumeNormalize but uses the inverse deformation
             %fields but same batch. Currently functions only with the 120th
             %volume (which is right amygdala).
             if exist(self.path_atlas)
-            %copy the atlas to subject's folder.
-            copyfile(fileparts(self.path_atlas),[self.path_data(0) sprintf('atlas%s',filesep)]);
-            %
-            filename = self.path_native_atlas(120);%for test purposes and to gain speed I focus on amygdala right now.
-            nf = 1;
-            matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%siy_data.nii',filesep)));%iy_ not y_!
-            matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {filename};
-            matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
-                78 76 85];
-            matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
-            matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
-            matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'w';%inverse warped                        
-            %
-            self.RunSPMJob(matlabbatch);
-            target_file = strrep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
-            movefile(target_file,self.path_native_atlas);
-    	    else
-	    fprintf('For MNI2Native Analysis you need to have a atlas in %s\n',self.path_atlas);
-	    end
-        end                
+                %copy the atlas to subject's folder.
+                copyfile(fileparts(self.path_atlas),[self.path_data(0) sprintf('atlas%s',filesep)]);
+                %
+                filename = self.path_native_atlas(120);%for test purposes and to gain speed I focus on amygdala right now.
+                nf = 1;
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%siy_data.nii',filesep)));%iy_ not y_!
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {filename};
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
+                    78 76 85];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'w';%inverse warped
+                %
+                self.RunSPMJob(matlabbatch);
+                target_file = strrep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
+                movefile(target_file,self.path_native_atlas);
+            else
+                fprintf('For MNI2Native Analysis you need to have a atlas in %s\n',self.path_atlas);
+            end
+        end
     end
-    methods %path_tools which are related to the subject              
+    methods %path_tools which are related to the subject
         function out        = path_vdm(self)
             %returns path to VDM files as a cell array.
         end
         function out        = path_skullstrip_meanepi(self)
-				out = regexprep(self.path_meanepi,'meandata','ss_meandata');
-            end
+            out = regexprep(self.path_meanepi,'meandata','ss_meandata');
+        end
         function out        = path_meanepi(self)
             %returns the path to the meanepi (result of realignment).
             %returns empty if non-existent. Assumes that the first run contains the mean epi.
-            first_run = self.dicom_target_run(1);
-	    	out       = strrep( self.path_epi(first_run,self.epi_prefix),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
+            first_run = self.dicom_target_run(1);c
+            out       = strrep( self.path_epi(first_run,self.epi_prefix),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
         end
-		function out        = path_tpm(self,n)
-			%return the path to the Nth TPM image from the spm
-			out = sprintf('%s/TPM.nii,%i',self.tpm_dir,n);
-		end
-		function out        = path_meanepi_segmented(self,num)
-			%Returns the path to the output of Segment_meanEPI, N can be a vector.
-			mean_epi = self.path_meanepi;
-			out      = '';
-			for n = num
-				out      = strvcat(out,regexprep(mean_epi,'meandata',sprintf('c%dmeandata',n)))
-			end
-		end
+        function out        = path_tpm(self,n)
+            %return the path to the Nth TPM image from the spm
+            out = sprintf('%s/TPM.nii,%i',self.tpm_dir,n);
+        end
+        function out        = path_meanepi_segmented(self,num)
+            %Returns the path to the output of Segment_meanEPI, N can be a vector.
+            mean_epi = self.path_meanepi;
+            out      = '';
+            for n = num
+                out      = strvcat(out,regexprep(mean_epi,'meandata',sprintf('c%dmeandata',n)))
+            end
+        end
         function out        = path_skullstrip(self,varargin)
             %returns filename for the skull stripped hr. Use VARARGIN to
             %add a prefix to the output, such as 'w' for example.
             if nargin == 1
                 out = sprintf('%s%s',self.dir_hr,'ss_data.nii');
             elseif nargin == 2
-
+                
                 out = sprintf('%s%s_%s',self.dir_hr,varargin{1},'ss_data.nii');
-            end        
-        end        
+            end
+        end
         function out        = dir_spmmat(self,nrun,model_num)
             %Returns the path to SPM folder in a given NRUN responsible for
-            %the model MODEL_NUM. VARARGIN is used for the derivatives.            
+            %the model MODEL_NUM. VARARGIN is used for the derivatives.
             out = sprintf('%sspm%smodel_%02d_chrf_%d%d%s',self.path_data(nrun),filesep,model_num,self.derivatives(1),self.derivatives(2),filesep);
-
+            
         end
         function out        = path_model(self,run,model_num)
             %returns the path to a model specified by MODEL_NUM in run RUN.
@@ -536,7 +538,7 @@ classdef Subject < Project
             %returns the path to spm folder for run RUN.
             dummy = self.dir_spmmat(nrun(1),model_num);
             out   = sprintf('%s%sSPM.mat',dummy,filesep);
-        end        
+        end
         function out        = path_native_atlas(self,varargin)
             %path to subjects native atlas, use VARARGIN to slice out a
             %given 3D volume.
@@ -552,34 +554,34 @@ classdef Subject < Project
         function out        = path_hr(self)
             %the directory where hr is located
             out = sprintf('%smrt%sdata.nii',self.pathfinder(self.id,0),filesep);
-        end                                
+        end
         function out        = path_epi(self,nrun,varargin)
             % simply returns the path to the mrt data. use VARARGIN to add
             % prefixes.
             if nargin == 2
-                out = sprintf('%smrt%sdata.nii',self.pathfinder(self.id,nrun),filesep);                
+                out = sprintf('%smrt%sdata.nii',self.pathfinder(self.id,nrun),filesep);
             elseif nargin == 3
                 out = sprintf('%smrt%s%sdata.nii',self.pathfinder(self.id,nrun),filesep,varargin{1});
-            else                
-                fprintf('Need to give an input...\n')
-                return
-            end
-        end                        
-        function out        = dir_epi(self,nrun)
-            % simply returns the path to the mrt data.
-            
-            if nargin == 2                
-                out = sprintf('%smrt%s',self.pathfinder(self.id,self.dicom_target_run(nrun)),filesep);                
             else
                 fprintf('Need to give an input...\n')
                 return
             end
-        end   
+        end
+        function out        = dir_epi(self,nrun)
+            % simply returns the path to the mrt data.
+            
+            if nargin == 2
+                out = sprintf('%smrt%s',self.pathfinder(self.id,self.dicom_target_run(nrun)),filesep);
+            else
+                fprintf('Need to give an input...\n')
+                return
+            end
+        end
         function out        = path_beta(self,nrun,model_num,prefix,varargin)
             %returns the path for beta images computed in NRUN for
             %MODEL_NUM. Use VARARGIN to select a subset by indexing.
             %Actually spm_select is not even necessary here.
-           
+            
             out = self.dir_spmmat(nrun,model_num);
             out = spm_select('FPList',out,sprintf('^%sbeta_*',prefix'));
             if isempty(out)
@@ -591,24 +593,24 @@ classdef Subject < Project
                 selector        = varargin{1};
                 out             = out(selector,:);
             end
-        end        
+        end
         function [HRPath]   = path_hr_dicom(self)
             % finds the dicom path to the latest HR measurement for this
             % subject.
-             
+            
             HRPath = [];
             if ~ismac & ~ispc
                 [status2 DicqOutputFull] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders',self.trio_session));
                 %take the latest anatomical scan.
                 [status2 HRLine] = system(sprintf('/common/apps/bin/dicq --verbose  --series --exam=%s --folders | grep mprage | tail -n 1',self.trio_session));
-                %                
+                %
                 if ~isempty(HRLine);
-					HRLine = regexp(HRLine,'Series.*','match');
-					HRLine = HRLine{1};
+                    HRLine = regexp(HRLine,'Series.*','match');
+                    HRLine = HRLine{1};
                     HRPath = regexp(HRLine,'/common.*','match');
                     HRPath = HRPath{1};
                     HRPath = regexprep(HRPath,'\n','');
-					%HRPath = GetDicomPath(HRLine);
+                    %HRPath = GetDicomPath(HRLine);
                     fprintf('Dicom Server returns:\n=====\n')
                     fprintf(DicqOutputFull);
                     fprintf('=====\n');
@@ -640,14 +642,14 @@ classdef Subject < Project
             if length(varargin) == 2
                 path2data = strrep(path2data,'mat',varargin{2});
             end
-        end       
+        end
     end
-   
-    methods %(plotters)        
+    
+    methods %(plotters)
         function plot_motionparams(self,nrun)
             dummy = self.get_param_motion(nrun);
             subplot(2,1,1);
-            plot(dummy(:,1:3));           
+            plot(dummy(:,1:3));
             legend({'x','y' 'z'})
             legend boxoff;ylabel('mm');box off
             axis tight
@@ -662,10 +664,10 @@ classdef Subject < Project
             axis tight
             ylim([-5 5].*10.^-2)
             set(gca,'ygrid','on')
-        end            
+        end
     end
-    methods %(fmri analysis)                
-        function analysis_spm_firstlevel(self,nrun,model_num)            
+    methods %(fmri analysis)
+        function analysis_spm_firstlevel(self,nrun,model_num)
             %run the model MODEL_NUM for data in NRUN.
             %NRUN can be a vector, but then care has to be taken that
             %model_num is correctly set for different runs.
@@ -674,7 +676,7 @@ classdef Subject < Project
             spm_dir  = self.dir_spmmat(nrun(1),model_num);
             path_spm = self.path_spmmat(nrun(1),model_num);%stuff is always saved to the first run.
             if ~exist(self.path_spm);mkdir(spm_dir);end
-                        
+            
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
             matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
             matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
@@ -708,9 +710,9 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;%
             matlabbatch{1}.spm.stats.fmri_spec.mask                              = {self.path_skullstrip_meanepi};
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
-            spm_jobman('run', matlabbatch);%create SPM file first            
-            %% normalize and smooth beta images right away.            
-            beta_images          = self.path_beta(nrun(1),model_num,'');%'' => with no prefix            
+            spm_jobman('run', matlabbatch);%create SPM file first
+            %% normalize and smooth beta images right away.
+            beta_images          = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
             %
             %normalize them ('w_EPI' and 'w_CAT' will be added)
             self.VolumeNormalize(beta_images);
@@ -719,7 +721,7 @@ classdef Subject < Project
             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
             beta_images          = self.path_beta(nrun(1),model_num,'wCAT_');%smooth the normalized images too.
             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
-            %%                        
+            %%
         end
-     end
+    end
 end

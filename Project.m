@@ -11,12 +11,12 @@ classdef Project < handle
     %
     % The first set of properties has to be entered by hand. For example
     % TRIO_SESSIONS should be entered manually for your experiment. The
-    % other properties drive from these. 
+    % other properties drive from these.
     %
     % To create the standard project structure you will need to call the
     % CreateFolderHierarchy method. Based on dicom2run, trio_sessions,
-    % data_folders properties, the folder hierarchy will be created. These 
-	% folders will later be populated by dump_epi and dump_hr methods. 
+    % data_folders properties, the folder hierarchy will be created. These
+    % folders will later be populated by dump_epi and dump_hr methods.
     %
     % Once you data is nicely loaded into the subject/run/ structure,
     % SanityCheck method comes very handy to ensure that your project
@@ -24,11 +24,11 @@ classdef Project < handle
     %
     % Don't forget to add spm, smr to your path, they are defined below,
     % however automatic changing of path names is not recommended.
-	% 
-	% Current methods:
-	%
+    %
+    % Current methods:
+    %
     % CreateFolderHierarchy: Will create a folder hierarchy to store data
-	% SanityCheck: Will bar-plot the content of your folders
+    % SanityCheck: Will bar-plot the content of your folders
     % DicomDownload: connects to dicom server and dumps the epi and hr data
     % DicomTo4D: 3D 2 4D conversion
     % MergeTo4D: 3D 2 4D conversion
@@ -36,21 +36,21 @@ classdef Project < handle
     % dicomserver_request: unix-specific commands to talk with dicomserser.
     % dicomserver_paths: unix-specific commands to talk with dicomserser.
     % dartel_templates: location of dartel templates
-	% SecondLevel_ANOVA: conducts secondlevel analysis.
+    % SecondLevel_ANOVA: conducts secondlevel analysis.
     % VolumeGroupAverage: can average lots of images.
     % VolumeSmooth: smooths volumes
     % RunSPMJob: runs spm jobs.
     %
     % Feel free to improve this help section.
     %
-    % 
+    %
     
     properties (Hidden, Constant)%adapt these properties for your project
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
-
-        path_project          = '/mnt/data/project_helen/data/';
-        path_spm              = '/home/onat/Documents/Code/Matlab/spm12-6685/';        
+        
+        path_project          = '/projects/crunchie/expectb';
+        path_spm              = '/home/hblank/matlab/spm12-7219/';
         trio_sessions         = { ...
             'PRISMA_19542', 'PRISMA_19573', 'PRISMA_19623', ... % 1-3
             'PRISMA_19672', 'PRISMA_19689', 'PRISMA_19690', ... % 4-6
@@ -76,8 +76,8 @@ classdef Project < handle
             [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 13-15 9 10 22 23
             [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 16-18 9 10 22 23
             [8 6 7  ],               [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 19-21 9 10 22 23
-            [8 19 20 21 6 7 17 18 ], [9 20 21 22 6 7 18 19 ], [8 19 20 21 6 7 17 18 ], ... % 22-24 9 10 22 23
-            [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 25-27 9 10 22 23
+            [8 19 20 21 6 7 17 18 ], [8 19 21 22 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 22-24 9 10 22 23
+            [8 19 20 21 6 7 17 18 ], [9 20 21 22 6 7 18 19 ], [8 19 20 21 6 7 17 18 ], ... % 25-27 9 10 22 23
             [8 6 7  ],               [8 19 20 21 6 7 17 18 ], [8 6 7 ],                ... % 28-30 9 10 22 23
             [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 31-33 9 10 22 23
             [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ]};                             % 34-35 9 10 22 23
@@ -85,29 +85,29 @@ classdef Project < handle
         %run (i.e. it doesn't always corresponds to different runs as in FearAmy)
         %meanEPI.nii detection assumes that the first run is the first functional run.
         dicom2run             = repmat({[1:8]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
-        data_folders          = {'midlevel' 'mrt' };%if you need another folder, do it here.
+        data_folders          = {'midlevel' 'mrt' 'design'}; % if you need another folder, do it here.
+        runs_fieldmap         = {[5 6] [7 8]};  % The order is important: first one is the magnitude and the secnd one is the phase
+        apply_vdm             = {[1 ] [2 3 4]}; % The length of this property should be the same as the runs_fieldmap
         TR                    = 0.967;
         HParam                = 128;%parameter for high-pass filtering
-        surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
+        surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)
         smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method
-        atlas2mask_threshold  = 50;%where ROI masks are computed, this threshold is used.        
+        atlas2mask_threshold  = 50;%where ROI masks are computed, this threshold is used.
         path_smr              = sprintf('%s%ssmrReader%s',fileparts(which('Project')),filesep,filesep);%path to .SMR importing files in the fancycarp toolbox.
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
-        tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.         
-		path_fieldmap         = sprintf('%stoolbox/FieldMap/T1.nii',Project.path_spm); %path to the TPM images, needed by segment.         
+        tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.
         path_second_level     = sprintf('%sspm/',Project.path_project);%where the second level results has to be stored
+        path_fieldmap         = sprintf('%stoolbox/FieldMap/T1.nii',Project.path_spm); %path to the TPM images, needed by segment.         
         path_atlas            = sprintf('%satlas/data.nii',Project.path_project);%the location of the atlas
-		current_time          = datestr(now,'hh:mm:ss');
+        current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
-    end    
- 	properties (Hidden)
-        epi_prefix            = '';%depending on whether we have fieldmap/blip correction or not this has to be changed. If no correction applied leave it as ''.
-	end
-	methods
+    end
+    
+    methods
         function DU = SanityCheck(self,runs,measure,varargin)
             %DU = SanityCheck(self,runs,measure,varargin)
-			%will run through subject folders and will plot their disk
+            %will run through subject folders and will plot their disk
             %space. Use a string in VARARGIN to focus only on a subfolder.
             %MEASURE has to be 'size' or 'amount', for disk usage and
             %number of files, respectively. This only works on Unix systems.
@@ -120,10 +120,10 @@ classdef Project < handle
                     fprintf('Requesting folder size for subject %03d and run %03d\n',ns,nr);
                     subject_run = self.pathfinder(ns,nr);
                     if ~isempty(subject_run)
-                        fullpath = fullfile(subject_run,varargin{:});                    
+                        fullpath = fullfile(subject_run,varargin{:});
                         if strcmp(measure,'size')
                             [a b]       = system(sprintf('/usr/bin/du -cd0 %s | grep -e total | grep -oh -e [0-9]*',fullpath));
-                             DU(ns,nr+1)= str2double(b)./1024;
+                            DU(ns,nr+1)= str2double(b)./1024;
                         elseif strcmp(measure,'amount')
                             [a b]       = system(sprintf('/usr/bin/find %s | wc -l',fullpath));
                             DU(ns,nr+1) = str2double(b);
@@ -134,7 +134,7 @@ classdef Project < handle
                     else
                         fprintf('Folder doesn''t exist: %s\n',subject_run);
                     end
-                end                
+                end
             end
             %%
             if isempty(varargin)
@@ -144,7 +144,7 @@ classdef Project < handle
             for nr = runs
                 n = n + 1;
                 subplot(length(runs),1,n)
-                bar(DU(:,n));ylabel('MB or #','fontsize',10);xlabel('Subjects','fontsize',10);box off                
+                bar(DU(:,n));ylabel('MB or #','fontsize',10);xlabel('Subjects','fontsize',10);box off
                 title(sprintf('Subfolder: %s Run: %i',varargin{1},nr),'fontsize',10);
             end
             warning('on','all');
@@ -196,7 +196,7 @@ classdef Project < handle
             matlabbatch{1}.spm.util.cat.vols  = cellstr(files);
             matlabbatch{1}.spm.util.cat.name  = 'data.nii';
             matlabbatch{1}.spm.util.cat.dtype = 0;
-            self.RunSPMJob(matlabbatch);            
+            self.RunSPMJob(matlabbatch);
             fprintf('Finished... (%s)\n',self.current_time);
             fprintf('Deleting 3D images in (%s)\n%s\n',self.current_time,destination);
             files = cellstr(files);
@@ -209,7 +209,7 @@ classdef Project < handle
             %
             
             matlabbatch = [];
-            files       = spm_select('FPListRec',destination,'^MR');            
+            files       = spm_select('FPListRec',destination,'^MR');
             if ~isempty(files)
                 fprintf('ConvertDicom:\nFound %i files...\n',size(files,1));
                 
@@ -219,7 +219,7 @@ classdef Project < handle
                 matlabbatch{1}.spm.util.import.dicom.protfilter       = '.*';
                 matlabbatch{1}.spm.util.import.dicom.convopts.format  = 'nii';
                 matlabbatch{1}.spm.util.import.dicom.convopts.icedims = 0;
-                               
+                
                 fprintf('Dicom conversion s#%i... (%s)\n',self.id,self.current_time);
                 self.RunSPMJob(matlabbatch);
                 fprintf('Finished... (%s)\n',datestr(now,'hh:mm:ss'));
@@ -227,11 +227,11 @@ classdef Project < handle
                 fprintf('Deleting DICOM images in (%s)\n%s\n',self.current_time,destination);
                 files = cellstr(files);
                 delete(files{:});
-                fprintf('Finished... (%s)\n',self.current_time);                
+                fprintf('Finished... (%s)\n',self.current_time);
             else
                 fprintf('No dicom files found for %i\n',self.id);
             end
-        end        
+        end
         function [result]   = dicomserver_request(self)
             %will make a normal dicom request. use this to see the state of
             %folders
@@ -261,7 +261,7 @@ classdef Project < handle
             %subject
             % empty [] above can be replaced with any phase number.
             data_path = self.path_project;
-            for no = [subject run]                
+            for no = [subject run]
                 file_list        = dir(data_path);%next round of the forloop will update this
                 i                = regexp({file_list(:).name},sprintf('[0,a-Z]%d$',no));%find all folders which starts with
                 i                = find(cellfun(@(bla) ~isempty(bla), i  ));
@@ -271,12 +271,12 @@ classdef Project < handle
                 else
                     data_path    = [];
                     return
-                end                
+                end
             end
             data_path(end+1)         = filesep;
         end
         function [out]      = dartel_templates(self,n)
-            %returns the path to Nth Dartel template                                    
+            %returns the path to Nth Dartel template
             out = fullfile(self.path_spm,'toolbox','cat12','templates_1.50mm',sprintf('Template_%i_IXI555_MNI152.nii',n) );
         end
         function CreateFolderHierarchy(self)
@@ -284,11 +284,11 @@ classdef Project < handle
             %first to create an hiearchy and fill this with data.
             for ns = 1:length(self.trio_sessions)
                 for nr = 0:length(self.dicom2run{1})
-                    for nf = 1:length(self.data_folders)                        
+                    for nf = 1:length(self.data_folders)
                         path2subject = sprintf('%s%ssub%03d%srun%03d%s%s',self.path_project,filesep,ns,filesep,nr,filesep,self.data_folders{nf});
                         if ~isempty(self.trio_sessions{ns})
                             a = fullfile(path2subject);
-							a
+                            a
                             mkdir(a);
                         end
                     end
@@ -298,30 +298,30 @@ classdef Project < handle
         function t          = get.current_time(self)
             t = datestr(now,'hh:mm:ss');
         end
-
+        
     end
     methods(Static) %SPM analysis related methods.
-       
+        
         function RunSPMJob(matlabbatch)
             %will run the spm matlabbatch using the parallel toolbox.
             fprintf('Will call spm_jobman...\n');
-           
+            
             for n = 1:length(matlabbatch)
                 fprintf('Running SPM jobman %i...\n',n);
                 spm_jobman('run', matlabbatch(n));
-            end            
+            end
         end
         
         function plot_orthview(filename)
             %will plot the volume using spm_image;
-            global st                        
+            global st
             spm_image('init',filename)
             spm_clf;
             spm_orthviews('Image',filename)
-%             spm_image('display',filename)
+            %             spm_image('display',filename)
             spm_orthviews('AddColourBar',h(1),1);
             spm_orthviews('AddContext',h(1));
-        end        
+        end
         
     end
     methods %methods that does something on all subjects one by one
@@ -329,7 +329,7 @@ classdef Project < handle
             %Averages all IMAGES across all subjects. This can only be done
             %on normalized images. The result will be saved to the
             %project/midlevel/. The string SELECTOR is appended to the
-            %folder RUN.             
+            %folder RUN.
             %
             %For example to take avarage skullstripped image use: RUN = 0,
             %SELECTOR = 'mrt/w_ss_data.nii' (which is the normalized skullstripped
@@ -353,7 +353,7 @@ classdef Project < handle
             dummy.fname = target_path;
             mkdir(fileparts(target_path));
             spm_write_vol(dummy,V);
-        end   
+        end
         function VolumeSmooth(self,files)
             %will smooth the files by the factor defined as Project
             %property.
@@ -361,7 +361,7 @@ classdef Project < handle
             matlabbatch{1}.spm.spatial.smooth.fwhm   = repmat(self.smoothing_factor,[1 3]);
             matlabbatch{1}.spm.spatial.smooth.dtype  = 0;
             matlabbatch{1}.spm.spatial.smooth.im     = 0;
-            matlabbatch{1}.spm.spatial.smooth.prefix = 's_';            
+            matlabbatch{1}.spm.spatial.smooth.prefix = 's_';
             spm_jobman('run', matlabbatch);
         end
         function SecondLevel_ANOVA(self,run,model,beta_image_index)
@@ -373,12 +373,12 @@ classdef Project < handle
                 s        = Subject(ns);
                 beta_files = cat(3,beta_files,self.beta_path(run,model,'s_w_')');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
             end
-            %            
+            %
             c = 0;
-            for ind = beta_image_index;    
+            for ind = beta_image_index;
                 %take single beta_images across all subjects and store them
                 %in a cell
-                c = c +1;                
+                c = c +1;
                 files                                                              = squeeze(beta_files(:,ind,:))';
                 matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files);
             end
