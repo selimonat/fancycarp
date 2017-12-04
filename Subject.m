@@ -198,17 +198,17 @@ classdef Subject < Project
                     fprintf('Will attempt field corrections\n');
                     self.ComputeVDM;
                     self.ApplyVDM;
-                    self.epi_prefix = 'u_';%if we came that far, change the default EPI prefix.
+                    self.epi_prefix = 'vdm_';%if we came that far, change the default EPI prefix.
                 catch
                     fprintf('Failed... Will work on non-field corrected EPIs\n');
                 end
-                %
-                self.SegmentSurface_HR;%cat12 segmentation
-                self.SkullStrip;%removes non-neural voxels
-                self.MNI2Native;%brings the atlas (if present) to native space
+                self.SegmentSurface_HR;%cat12 segmentation                
+                %self.MNI2Native;%brings the atlas (if present) to native space
                 self.Re_Coreg(runs);%realignment and coregistration
                 self.Segment_meanEPI;%segments mean EPI with new segment
-                self.SkullStrip_meanEPI;%creates a native mask
+                
+                self.SkullStrip_meanEPI;%creates a native mask                
+                self.SkullStrip;%removes non-neural voxels
             else
                 fprintf('One input argument is required!\n');
             end
@@ -267,7 +267,7 @@ classdef Subject < Project
                 matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.rinterp = 4;
                 matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.wrap = [0 0 0];
                 matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.mask = 1;
-                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.prefix = 'u_';
+                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.prefix = 'vdm_';
             end
             self.RunSPMJob(matlabbatch);
         end
@@ -439,8 +439,9 @@ classdef Subject < Project
             %s.VolumeNormalize(s.path_beta(1,1))
             %s.VolumeNormalize(s.path_skullstrip);
             
+            %% Normalize with MEANEPI segmentation
             for nf = 1:size(path2image,1)
-                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,'meandata','y_meandata'));
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,['mean_' self.epi_prefix '_data'],'y_meandata'));
                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
                     78 76 85];
@@ -449,6 +450,7 @@ classdef Subject < Project
                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
             end
             self.RunSPMJob(matlabbatch);
+            
             %% Normalize with CAT12 segmentation
             matlabbatch =[];
             for nf = 1:size(path2image,1)
@@ -462,6 +464,7 @@ classdef Subject < Project
             end
             self.RunSPMJob(matlabbatch);
         end
+        
         function MNI2Native(self)
             %brings the atlas to native space and saves it in run000/atlas.
             %Same as VolumeNormalize but uses the inverse deformation
@@ -499,8 +502,9 @@ classdef Subject < Project
         function out        = path_meanepi(self)
             %returns the path to the meanepi (result of realignment).
             %returns empty if non-existent. Assumes that the first run contains the mean epi.
-            first_run = self.dicom_target_run(1);c
-            out       = strrep( self.path_epi(first_run,self.epi_prefix),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
+            first_run             = self.dicom_target_run(1);                       
+            [folder, filename, ext] = fileparts(self.path_epi(first_run,self.epi_prefix));
+            out                    = sprintf('%s%s%s%s%s',folder,filesep,'mean',filename,ext);
         end
         function out        = path_tpm(self,n)
             %return the path to the Nth TPM image from the spm
