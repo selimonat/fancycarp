@@ -682,7 +682,7 @@ classdef Subject < Project
             if ~exist(self.path_spm);mkdir(spm_dir);end
             
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
-            matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
+            matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'secs';% for my experiment i need time in seconds 'scans';%more robust
             matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
