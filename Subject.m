@@ -22,7 +22,7 @@ classdef Subject < Project
     %
     %   Plotter methods plot things as their name suggests.
     %
-
+    
     properties (Hidden)
         paradigm
         default_run       = 1;
@@ -127,7 +127,7 @@ classdef Subject < Project
         function L      = get_log(self,run)
             % Loads the ptb log. Removes all events before/after the
             % first/last scan and defines zero as the first scan.
-            %  
+            %
             L               = self.paradigm{run}.out.log;
             %sort things according to time rather than order of being logged
             [~,i]           = sort(L(:,1),'ascend');
@@ -146,7 +146,7 @@ classdef Subject < Project
             %will load the realignment parameters, of course you have to
             %realign the EPIs first.
             
-            filename = sprintf('%smrt%srp_data.txt',self.path_data(run),filesep);
+            filename = sprintf('%smrt%srp_vdm_data.txt',self.path_data(run),filesep);
             if exist(filename)
                 o = load(filename);
             else
@@ -202,13 +202,13 @@ classdef Subject < Project
                 catch
                     fprintf('Failed... Will work on non-field corrected EPIs\n');
                 end
-                self.SegmentSurface_HR; % cat12 segmentation                
+                self.SegmentSurface_HR; % cat12 segmentation
                 %self.MNI2Native; % brings the atlas (if present) to native space
                 self.SkullStrip;%removes non-neural voxels
                 self.Re_Coreg(runs); %realignment and coregistration
                 self.Segment_meanEPI; % segments mean EPI with new segment
                 
-                self.SkullStrip_meanEPI;%creates a native mask                
+                self.SkullStrip_meanEPI;%creates a native mask
             else
                 fprintf('One input argument is required!\n');
             end
@@ -440,16 +440,16 @@ classdef Subject < Project
             %s.VolumeNormalize(s.path_skullstrip);
             
             %% Normalize with MEANEPI segmentation
-%             for nf = 1:size(path2image,1)
-%                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,['mean_' self.epi_prefix '_data'],'y_meandata'));
-%                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
-%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
-%                     78 76 85];
-%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
-%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
-%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
-%             end
-%             self.RunSPMJob(matlabbatch);
+            %             for nf = 1:size(path2image,1)
+            %                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,['mean_' self.epi_prefix '_data'],'y_meandata'));
+            %                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
+            %                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
+            %                     78 76 85];
+            %                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
+            %                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
+            %                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
+            %             end
+            %             self.RunSPMJob(matlabbatch);
             
             %% Normalize with CAT12 segmentation
             matlabbatch =[];
@@ -497,12 +497,13 @@ classdef Subject < Project
             %returns path to VDM files as a cell array.
         end
         function out        = path_skullstrip_meanepi(self)
-            out = regexprep(self.path_meanepi,'meandata','ss_meandata');
+            out = regexprep(self.path_meanepi,['mean_' self.epi_prefix '_data'],'ss_meandata');
+            %out = regexprep(self.path_meanepi,'meandata','ss_meandata');
         end
         function out        = path_meanepi(self)
             %returns the path to the meanepi (result of realignment).
             %returns empty if non-existent. Assumes that the first run contains the mean epi.
-            first_run             = self.dicom_target_run(1);                       
+            first_run             = self.dicom_target_run(1);
             [folder, filename, ext] = fileparts(self.path_epi(first_run,self.epi_prefix));
             out                    = sprintf('%s%s%s%s%s',folder,filesep,'mean',filename,ext);
         end
@@ -531,7 +532,7 @@ classdef Subject < Project
         function out        = dir_spmmat(self,nrun,model_num)
             %Returns the path to SPM folder in a given NRUN responsible for
             %the model MODEL_NUM. VARARGIN is used for the derivatives.
-            out = sprintf('%sspm%smodel_%02d_chrf_%d%d%s',self.path_data(nrun),filesep,model_num,self.derivatives(1),self.derivatives(2),filesep);
+            out = sprintf('%sspm%smodel_%02d_chrf_%d%d%s',self.path_data(nrun),filesep,model_num,self.derivatives(1),self.derivatives(2));%,filesep);
             
         end
         function out        = path_model(self,run,model_num)
@@ -544,19 +545,19 @@ classdef Subject < Project
             out   = sprintf('%s%sSPM.mat',dummy,filesep);
         end
         function out        = path_native_atlas(self,varargin)
-            %path to subjects native atlas, use VARARGIN to slice out a
-            %given 3D volume.
+            % path to subjects native atlas, use VARARGIN to slice out a
+            % given 3D volume.
             out = sprintf('%satlas%sdata.nii',self.path_data(0),filesep);
             if nargin > 1
                 out = sprintf('%s,%d',out,varargin{1});
             end
         end
         function out        = dir_hr(self)
-            %the directory where hr is located
+            % the directory where hr is located
             out = sprintf('%smrt%s',self.pathfinder(self.id,0),filesep);
         end
         function out        = path_hr(self)
-            %the directory where hr is located
+            % the directory where hr is located
             out = sprintf('%smrt%sdata.nii',self.pathfinder(self.id,0),filesep);
         end
         function out        = path_epi(self,nrun,varargin)
@@ -672,40 +673,41 @@ classdef Subject < Project
     end
     methods %(fmri analysis)
         function analysis_spm_firstlevel(self,nrun,model_num)
-            %run the model MODEL_NUM for data in NRUN.
-            %NRUN can be a vector, but then care has to be taken that
-            %model_num is correctly set for different runs.
+            % run the model MODEL_NUM for data in NRUN.
+            % NRUN can be a vector, but then care has to be taken that
+            % model_num is correctly set for different runs.
             
-            %set spm dir: saves always to run1
+            % set spm dir: saves always to run1
+            self.epi_prefix = 'vdm_'; % I only use fieldmap-corrected data
             spm_dir  = self.dir_spmmat(nrun(1),model_num);
-            path_spm = self.path_spmmat(nrun(1),model_num);%stuff is always saved to the first run.
+            path_spm = self.path_spmmat(nrun(1),model_num); % stuff is always saved to the first run.
             if ~exist(self.path_spm);mkdir(spm_dir);end
             
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
-            matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'secs';% for my experiment i need time in seconds 'scans';%more robust
+            matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'secs'; % for my experiment I need time in seconds (Selim:'scans';%more robust)
             matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
             
-            for session = nrun
+            for session = 1:length(nrun)
                 %load files using ...,1, ....,2 format
                 
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(spm_select('expand',self.path_epi(session,'r')));%use always the realigned data.
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).scans  = cellstr(spm_select('expand',self.path_epi(nrun(session),'rvdm_'))); % I use the realigned + fieldmap-corrected data.
                 %load the onsets
-                dummy                                                   = load(self.path_model(session,model_num));
+                dummy                                                   = load(self.path_model(nrun(session),model_num));
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
                 %load nuissance parameters
-                nuis                                                    = self.get_param_motion(session);
+                nuis                                                    = self.get_param_motion(nrun(session));
                 nuis                                                    = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
                 for nNuis = 1:size(nuis,2)
                     matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
                     matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).name  = mat2str(nNuis);
                 end
                 %
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi               = {''};
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi_reg           = {''};
-                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf                 = self.HParam;
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi           = {''};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).multi_reg       = {''};
+                matlabbatch{1}.spm.stats.fmri_spec.sess(session).hpf             = self.HParam;
             end
             matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
             matlabbatch{1}.spm.stats.fmri_spec.bases.hrf.derivs                  = self.derivatives;%we have [0 0], [ 1 0] or [ 1 1] for 1, 2, or 3 regressors.
@@ -714,18 +716,159 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf;%
             matlabbatch{1}.spm.stats.fmri_spec.mask                              = {self.path_skullstrip_meanepi};
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
-            spm_jobman('run', matlabbatch);%create SPM file first
+            % estimation
+            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spm};
+            matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
+            spm_jobman('run', matlabbatch); % create SPM file first
             %% normalize and smooth beta images right away.
-            beta_images          = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
-            %
-            %normalize them ('w_EPI' and 'w_CAT' will be added)
-            self.VolumeNormalize(beta_images);
-            %now smooth these normalized images
-            beta_images          = self.path_beta(nrun(1),model_num,'wEPI_');%smooth the normalized images too.
-            self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
-            beta_images          = self.path_beta(nrun(1),model_num,'wCAT_');%smooth the normalized images too.
-            self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
+            %             beta_images          = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
+            %             %
+            %             %normalize them ('w_EPI' and 'w_CAT' will be added)
+            %             self.VolumeNormalize(beta_images);
+            %             %now smooth these normalized images
+            % %             beta_images          = self.path_beta(nrun(1),model_num,'wEPI_');%smooth the normalized images too.
+            % %             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
+            %             beta_images          = self.path_beta(nrun(1),model_num,'wCAT_');%smooth the normalized images too.
+            %             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
             %%
+        end
+        
+        function path_spm = CreateContrast1stLevel(self,nrun,model_num)
+            % create contrasts for the model MODEL_NUM for data in NRUN.
+            
+            path_spm = self.path_spmmat(nrun(1),model_num);
+            %path_con = strrep(path_spm,'SPM.mat',sprintf('con_%04d.nii',con_num));
+            
+            matlabbatch = [];
+            matlabbatch{1}.spm.stats.con.spmmat = cellstr(path_spm);
+            matlabbatch{1}.spm.stats.con.delete = 1;
+            co = 1;
+            
+            if model_num == 1 % this is the face localizer in the first run
+                
+                % 1. localizer: conditions and contrasts
+                % cond_names = {'scene1', 'scene2', 'scene3', 'face1', 'face2', 'face3', 'faceTask'};
+                face_scene = [-1 -1 -1 1 1 1 0];
+                scene_face = [1 1 1 -1 -1 -1 0];
+                face1  = [0 0 0 1 0 0 0];
+                face2  = [0 0 0 0 1 0 0];
+                face3  = [0 0 0 0 0 1 0];
+                scene1 = [1 0 0 0 0 0 0];
+                scene2 = [0 1 0 0 0 0 0];
+                scene3 = [0 0 1 0 0 0 0];
+                faceTask = [zeros(1,6) 1];
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'face_scene';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [face_scene];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'scene_face';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [scene_face];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'face1';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [face1];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'face2';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [face2];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'face3';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [face3];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'scene1';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [scene1];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'scene2';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [scene2];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'scene3';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [scene3];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'faceTask';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [faceTask];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                
+            elseif model_num == 2  % this is the main part without feedback in the 2nd + 4th run
+                
+                % Main part without feedback: conditions and contrasts
+                exp_Face1lowP_Face2midP_Face3highP = [1 zeros(1,11)];
+                exp_Face1midP_Face2highP_Face3lowP = [0 1 zeros(1,10)];
+                exp_Face1highP_Face2lowP_Face3midP = [zeros(1,2) 1 zeros(1,9)];
+                presentFace1_lowProb  = [zeros(1,3) 1 zeros(1,8)];
+                presentFace1_midProb  = [zeros(1,4) 1 zeros(1,7)];
+                presentFace1_highProb = [zeros(1,5) 1 zeros(1,6)];
+                presentFace2_lowProb  = [zeros(1,6) 1 zeros(1,5)];
+                presentFace2_midProb  = [zeros(1,7) 1 zeros(1,4)];
+                presentFace2_highProb = [zeros(1,8) 1 zeros(1,3)];
+                presentFace3_lowProb  = [zeros(1,9) 1 zeros(1,2)];
+                presentFace3_midProb  = [zeros(1,10) 1 0];
+                presentFace3_highProb = [zeros(1,11) 1 ];
+            end
+            
+            spm_jobman('run',matlabbatch);
+        end
+        
+        function NormContrast1stLevel(self,nrun,model_num,con_num)
+            %pathcon = self.CreateContrast1stLevel(nrun,model_num);
+            path_spm  = self.path_spmmat(nrun(1),model_num);
+            for c = 1 : length(con_num)
+                path_con  = strrep(path_spm,'SPM.mat',sprintf('con_%04d.nii',con_num(c)));
+                path_spmT = strrep(path_spm,'SPM.mat',sprintf('spmT_%04d.nii',con_num(c)));
+                
+                % normalize the con images
+                self.VolumeNormalize(path_con);%normalize ('w_' will be added)
+                % smooth con images
+                pathwcon = strrep(path_con,sprintf('con_%04d',con_num(c)),sprintf('wCAT_con_%04d',con_num(c)));
+                self.VolumeSmooth(pathwcon);%('s(fwhm)_' will be added, resulting in 's_ww_')
+                
+                % normalize the T images
+                self.VolumeNormalize(path_spmT);%normalize ('w_' will be added)
+                % smooth T images
+                pathwt = strrep(path_spmT,sprintf('spmT_%04d',con_num(c)),sprintf('wCAT_spmT_%04d',con_num(c)));
+                self.VolumeSmooth(pathwt);%('s(fwhm)_' will be added, resulting in 's_ww_')
+                
+                %             pathwcon = strrep(path_con,sprintf('con_%04d',con_num),sprintf('wEPI_con_%04d',con_num));
+                %             self.VolumeSmooth(pathwcon);%('s(fwhm)_' will be added, resulting in 's_ww_')
+            end
+        end
+        
+        function out = listcond(self,nrun,model_num)
+            condfile = load(self.path_model(nrun,model_num));
+            cond = condfile.cond;
+            out = [];
+            for n= 1:length(cond);
+                out = char(out,cond(n).name);
+            end
+            out(1,:) = [];
+            out = cellstr(out);
+        end
+        function t = checkcond(self,nrun,model_num)
+            condfile = load(self.path_model(nrun,model_num));
+            cond = condfile.cond;
+            names = self.listcond(nrun,model_num);
+            onset=[];
+            dur = [];
+            for ncond = 1:length(cond)
+                onset(ncond) = length(cond(ncond).onset);
+                dur(ncond) = mean(cond(ncond).duration)*self.TR;
+            end
+            
+            t = table(onset',dur','RowNames',names);
+            t.Properties.VariableNames = {'onset','dur_secs'};
         end
     end
 end
