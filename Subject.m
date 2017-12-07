@@ -802,9 +802,23 @@ classdef Subject < Project
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [faceTask];
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
                 
-            elseif model_num == 2  % this is the main part without feedback in the 2nd + 4th run
-                
+            elseif model_num == 2 ... % this is the main part without feedback in the 2nd + 4th run
+                    || model_num == 3     % this is the main part with feedback in the 3rd run
                 % Main part without feedback: conditions and contrasts
+                % 12 cond names:
+                % 1. onset_exp_Face1lowP_Face2midP_Face3highP;
+                % 2. onset_exp_Face1midP_Face2highP_Face3lowP
+                % 3. onset_exp_Face1highP_Face2lowP_Face3midP
+                % 4. 'onset_presentFace1_lowProb';
+                % 5. 'onset_presentFace1_midProb';
+                % 6. 'onset_presentFace1_highProb';
+                % 7. 'onset_presentFace2_lowProb';
+                % 8. 'onset_presentFace2_midProb';
+                % 9. 'onset_presentFace2_highProb';
+                % 10. 'onset_presentFace3_lowProb';
+                % 11. 'onset_presentFace3_midProb'
+                % 12. 'onset_presentFace3_highProb';
+                
                 exp_Face1lowP_Face2midP_Face3highP = [1 zeros(1,11)];
                 exp_Face1midP_Face2highP_Face3lowP = [0 1 zeros(1,10)];
                 exp_Face1highP_Face2lowP_Face3midP = [zeros(1,2) 1 zeros(1,9)];
@@ -817,6 +831,87 @@ classdef Subject < Project
                 presentFace3_lowProb  = [zeros(1,9) 1 zeros(1,2)];
                 presentFace3_midProb  = [zeros(1,10) 1 0];
                 presentFace3_highProb = [zeros(1,11) 1 ];
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'exp_Face1lowP_Face2midP_Face3highP';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [exp_Face1lowP_Face2midP_Face3highP];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'exp_Face1midP_Face2highP_Face3lowP';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [exp_Face1midP_Face2highP_Face3lowP];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'exp_Face1highP_Face2lowP_Face3midP';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [exp_Face1highP_Face2lowP_Face3midP];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace1_lowProb';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFace1_lowProb];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace1_midProb';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFace1_midProb];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace1_highProb';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFace1_highProb];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace2_lowProb';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFace2_lowProb];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace2_midProb';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFace2_midProb];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace2_highProb';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFace2_highProb];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace3_lowProb';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFace3_lowProb];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace3_midProb';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFace3_midProb];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace3_highProb';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFace3_highProb];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                
+                
+                if model_num == 3 % only for run 3 = model 3 we have feedback
+                    onset_posFeedback  = [zeros(1,12) 1 0 0];
+                    onset_negFeedback  = [zeros(1,12) 0 1 0];
+                    onset_slowFeedback = [zeros(1,12) 0 0 1];
+                    co = co + 1;
+                    
+                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'onset_posFeedback';
+                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [onset_posFeedback];
+                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                    co = co + 1;
+                    
+                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'onset_negFeedback';
+                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [onset_negFeedback];
+                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                    co = co + 1;
+                    
+                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'onset_slowFeedback';
+                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [onset_slowFeedback];
+                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                end
             end
             
             spm_jobman('run',matlabbatch);
