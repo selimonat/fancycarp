@@ -677,11 +677,18 @@ classdef Subject < Project
             % NRUN can be a vector, but then care has to be taken that
             % model_num is correctly set for different runs.
             
+            force_delete = 1;
             % set spm dir: saves always to run1
             self.epi_prefix = 'vdm_'; % I only use fieldmap-corrected data
             spm_dir  = self.dir_spmmat(nrun(1),model_num);
             path_spm = self.path_spmmat(nrun(1),model_num); % stuff is always saved to the first run.
-            if ~exist(self.path_spm);mkdir(spm_dir);end
+            if ~exist(self.path_spm)
+                mkdir(spm_dir);
+            elseif exist(self.path_spm) && (force_delete == 1)
+                delete(path_spm)
+            else
+                fprinf('SPM.mat already exists, and force delete is not active.')
+            end
             
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
             matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'secs'; % for my experiment I need time in seconds (Selim:'scans';%more robust)
@@ -890,8 +897,7 @@ classdef Subject < Project
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace3_highProb';
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFace3_highProb];
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
-                
-                
+                                
                 if model_num == 3 % only for run 3 = model 3 we have feedback
                     onset_posFeedback  = [zeros(1,12) 1 0 0];
                     onset_negFeedback  = [zeros(1,12) 0 1 0];
