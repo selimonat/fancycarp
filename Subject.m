@@ -1346,7 +1346,10 @@ classdef Subject < Project
 				out      = strvcat(out,regexprep(mean_epi,'meandata',sprintf('c%dmeandata',n)))
 			end
         end        
-		
+        function out = path_mask(self,nrun,model);
+            path_spm = self.path_spmmat(nrun,model);
+            out      = sprintf('%smask.nii',fileparts(path_spm));
+        end
         function out        = path_skullstrip(self,varargin)
             %returns filename for the skull stripped hr. Use VARARGIN to
             %add a prefix to the output, such as 'w' for example.
@@ -3217,10 +3220,11 @@ classdef Subject < Project
             %self.analysis_CreateModels01            
             [scan,stim_id,mbi_id]  = self.analysis_StimTime2ScanUnit(L);            
             %sanity check plot
-            figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));hold on;
-            figure(1);plot(stim_id,mbi_id,'ro','markersize',10);title(mat2str(self.id));hold off
+%             figure(1);i=L(:,2)==3;plot(L(i,3),mbi(i),'k.','markersize',20);title(mat2str(self.id));hold on;
+%             figure(1);plot(stim_id,mbi_id,'ro','markersize',10);title(mat2str(self.id));hold off
             %%
             rw_time = rescorlawagner( self.ucs_vector_notcleaned , learning_rate ,Inf, 0);%for each mb we have a coefficient for amp
+            
             figure(2);plot(rw_time,'o-');
             kappa   = .1;
             %create a weight vector for the derivative.
@@ -3228,23 +3232,25 @@ classdef Subject < Project
             x2      = [0:(res-1)]*(360/res)-135;
             x2      = [x2 - (360/res/2) x2(end)+(360/res/2)];
             deriv   = -abs(diff(Tuning.VonMises(x2,1,kappa,0,0)));
-            pmod    = NaN(length(stim_id),6);
-            pmod_rw = NaN(length(stim_id),1);
+            pmod    = NaN(length(stim_id),6);            
             for ntrial = 1:length(stim_id)
                 if stim_id(ntrial) < 1000
                     pmod(ntrial,1)    = 1;%constant term
-                    pmod(ntrial,2)    = mbi_id(ntrial);%time
+                    if learning_rate == 0
+                        pmod(ntrial,2)    = mbi_id(ntrial);%time
+                    else
+                        pmod(ntrial,2)    = rw_time(mbi_id(ntrial));%time
+                    end
+                        
                     pmod(ntrial,3)    = Tuning.VonMises( stim_id(ntrial),1,kappa,0,0);%amp
                     pmod(ntrial,5)    = deriv(mod(stim_id(ntrial)./45+4-1,8)+1);%sigma
-                    %
-                    pmod_rw(ntrial,1) = rw_time(mbi_id(ntrial));
+                    %                    
                 end
             end
-            %%             
-            pmod_rw          = nandemean(pmod_rw);
+            %%                         
             pmod(:,2:3)      = nandemean(pmod(:,2:3));%time and amp            
             pmod(:,5)        = nandemean(pmod(:,5));%dsigma mean corrected
-            pmod(:,4)        = pmod_rw(:,1).*pmod(:,3);%time_rw x amp            
+            pmod(:,4)        = pmod(:,2).*pmod(:,3);%time_rw x amp            
             pmod(:,6)        = pmod(:,2).*pmod(:,5);%time x dsigma
             pmod(:,2:end)    = nanzscore(pmod(:,2:end));
             %%                        
