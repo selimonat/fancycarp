@@ -379,7 +379,7 @@ classdef Project < handle
             out = join(out,self.getgroup_facecircle_param);
             out = join(out,self.getgroup_detected_oddballs);
             out = join(out,self.getgroup_detected_face);                        
-            out = join(out,self.getgroup_scr_param);
+%             out = join(out,self.getgroup_scr_param);
             %%
             if nargin > 1%if given take only the selected subjects
                 if varargin{1} ~= 0;
@@ -1357,14 +1357,15 @@ classdef Project < handle
                             SPM.xCon(nmodel) = spm_FcUtil('set',sprintf('eoi-%03d',nmodel-1),'F','c',[M]',SPM.xX.xKXs);
                         end
                         M               = eye(tmodel*tbeta);
-                        SPM.xCon(end+1) = spm_FcUtil('set','time','F','c',M(repmat([0 1 0 0],1,tmodel)==1,:),SPM.xX.xKXs);
-                        SPM.xCon(end+1) = spm_FcUtil('set','gau','F','c',M(repmat([0 0 1 0],1,tmodel)==1,:),SPM.xX.xKXs);
-                        SPM.xCon(end+1) = spm_FcUtil('set','timeXgau','F','c',M(repmat([0 0 0 1],1,tmodel)==1,:),SPM.xX.xKXs);
+                        SPM.xCon(end+1) = spm_FcUtil('set','time','F','c',M(repmat([0 1 0 0],1,tmodel)==1,:)',SPM.xX.xKXs);
+                        SPM.xCon(end+1) = spm_FcUtil('set','gau','F','c',M(repmat([0 0 1 0],1,tmodel)==1,:)',SPM.xX.xKXs);
+                        SPM.xCon(end+1) = spm_FcUtil('set','timeXgau','F','c',M(repmat([0 0 0 1],1,tmodel)==1,:)',SPM.xX.xKXs);
                     end
                     %%  
+                    spm_contrasts(SPM);
                     save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
                     %xSPM is used to threshold according to a contrast.
-                    %                 xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');                    
+%                     xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');                    
 %                     xSPM = struct('swd', spm_dir,'title','eoi','Ic',length(SPM.xCon),'n',[],'Im',[],'pm',[],'Ex',[],'u',.05,'k',0,'thresDesc','FWE');
                     %replace 'none' to make FWE corrections.
 %                     [SPM xSPM] = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
@@ -2021,6 +2022,81 @@ classdef Project < handle
             catch
                 fprintf('call back doesn''t run\n')
             end
+        end
+        function callback_rw(self)
+            %s=Subject(5);global SPM;global xSPM;global st;st.callback = @s.callback_rw;clear global t;t=s.getgroup_all_param(0);global t
+            global st
+            global SPM
+            global t                        
+            p = pwd;
+            figure(1000);clf;
+            fs = 10;
+            common = {'fontsize',fs,'fontweight','bold'};
+            try                
+                %%
+                coor      = st.centre;
+                XYZvox    = self.get_mm2vox([coor(:) ;1],SPM.xCon(1).Vspm);
+                %%                
+                tsubject         = max(SPM.xX.I(:,1));
+                treg             = max(SPM.xX.I(:,2));
+                data             = reshape(spm_get_data([SPM.xY.VY],XYZvox(:)),tsubject,treg);
+                t.brain_time     = data(:,2);
+                t.brain_gau      = data(:,3);
+                t.brain_time_gau = data(:,4);            
+                %%                
+                subplot(6,6,[1 2 3 7 8 9 13 14 15]);               
+                predictors = {'time','gau' 'time\_gau'}
+                bar(2:4,mean(data(:,2:end)),'k');
+                hold on;
+                errorbar(2:4,mean(data(:,2:end)),std(data(:,2:end))./sqrt(tsubject),'ro','linewidth',2);
+                hold off;
+                set(gca,'xticklabel',predictors,'XTickLabelRotation',45,common{:});                                
+                ylabel(sprintf('Mean Predictor Weight (SEM) \n(n = %d)',size(data,1)),common{:});
+                box off;
+                xlim([1 5])                
+                [h p] = ttest(data);                
+                for n = 2:4
+                    if p(n) <= .05                        
+                        text(n,max(ylim),pval2asterix(p(n)),'HorizontalAlignment','center',common{:},'fontsize',20);
+                    end
+                end
+                %%
+                subplot(6,6,[1 2 3 7 8 9 13 14 15]+3);
+                [pmod]      = self.get_pmodmat(3);%most complex model                                
+                contourf(reshape(pmod*mean(data)',8,520/8)',9,'color','none');
+                S         = get(gca,'position');
+                h         = colorbar('Location','WestOutside');
+                h.Box     = 'off';
+                cbarticks = linspace(min(h.Ticks),max(h.Ticks),3);
+                h.Ticks   = cbarticks;
+                axis xy;
+                box off
+                set(gca,'ytick',[],'xtick',[2 4 6 8],'xticklabel',{sprintf('-90%c',char(176))  'CS+' sprintf('90%c',char(176)) 'CS-'},common{:}); 
+                grid on;
+                ylabel('time',common{:});
+                %%
+                o =  fitlm(t,'rating_nonparam ~ 1 + brain_time + brain_gau + brain_time_gau')
+                pos = {[25 26 31 32] [27 28 33 34] [ 29 30 35 36]};
+
+                for n = 1:3
+                    h(n) = subplot(6,6,pos{n});
+                    scatter(t.rating_nonparam(:),data(:,n+1),200,'.');
+                    xlabel('rating tuning',common{:});
+                    ylabel(predictors{n},common{:});
+                    hl = lsline;
+                    hl.LineWidth= 3;
+                    hl.Color = [.3 .3 .3];
+                    grid on;
+                    xlim([-2 2.5])
+                    title(sprintf('W: %0.3g\npval: %0.3g',o.Coefficients.Estimate(1+n),o.Coefficients.pValue(1+n)),common{:})
+                    box off;
+                    drawnow;
+                end
+                subplotChangeSize(h,-.05,0)                                         
+            catch
+                fprintf('call back doesn''t run\n')
+            end
+            cd(p)
         end
         function test(self,SPM,xSPM)
                         
