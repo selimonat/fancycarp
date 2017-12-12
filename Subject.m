@@ -190,9 +190,9 @@ classdef Subject < Project
     
     methods %(mri, preprocessing))
         function preprocess_pipeline(self,runs)
-            %meta method to run all the required steps for hr
-            %preprocessing. RUNS specifies the functional runs, make it a
-            %vector if needed. RUNS will be used with Re_Coreg.
+            % meta method to run all the required steps for hr
+            % preprocessing. RUNS specifies the functional runs, make it a
+            % vector if needed. RUNS will be used with Re_Coreg.
             if nargin > 1
                 try
                     fprintf('Will attempt field corrections\n');
@@ -202,23 +202,22 @@ classdef Subject < Project
                 catch
                     fprintf('Failed... Will work on non-field corrected EPIs\n');
                 end
-                self.SegmentSurface_HR; % cat12 segmentation
+                self.SegmentSurface_HR;  % cat12 segmentation                
+                self.SkullStrip;         % removes non-neural voxels
+                self.Re_Coreg(runs);     % realignment and coregistration
+                self.Segment_meanEPI;    % segments mean EPI with new segment
+                self.SkullStrip_meanEPI; % creates a native mask
                 %self.MNI2Native; % brings the atlas (if present) to native space
-                self.SkullStrip;%removes non-neural voxels
-                self.Re_Coreg(runs); %realignment and coregistration
-                self.Segment_meanEPI; % segments mean EPI with new segment
-                
-                self.SkullStrip_meanEPI;%creates a native mask
             else
                 fprintf('One input argument is required!\n');
             end
         end
         function ComputeVDM(self)
-            %goes through all the fieldmaps and computes VDM file.
-            %files written:
-            %vdm5_scdata.nii
-            %fpm_scdata.nii
-            %scdata.nii
+            % goes through all the fieldmaps and computes VDM file.
+            % files written:
+            % vdm5_scdata.nii
+            % fpm_scdata.nii
+            % scdata.nii
             
             for nsession = 1:length(self.runs_fieldmap)
                 run_phase     = self.runs_fieldmap{nsession}(2);
@@ -232,27 +231,27 @@ classdef Subject < Project
                 matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.epifm     = 0;
                 matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.ajm       = 0;
                 matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.method = 'Mark3D';
-                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.fwhm = 10;
-                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.pad  = 0;
-                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.ws   = 1;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.fwhm   = 10;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.pad    = 0;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.uflags.ws     = 1;
                 matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.template = {self.path_fieldmap};
-                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.fwhm    = 5;
-                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.nerode  = 2;
-                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.ndilate = 4;
-                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.thresh  = 0.5;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.fwhm     = 5;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.nerode   = 2;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.ndilate  = 4;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.thresh   = 0.5;
                 matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.defaults.defaultsval.mflags.reg = 0.02;
                 matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.session.epi                     = cellstr(sprintf('%s,1',self.path_epi(self.apply_vdm{nsession}(1))));
-                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.matchvdm = 1;
-                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.sessname = 'run';
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.matchvdm      = 1;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.sessname      = 'run';
                 matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.writeunwarped = 1;
-                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.anat = '';
-                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.matchanat = 0;
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.anat          = '';
+                matlabbatch{nsession}.spm.tools.fieldmap.calculatevdm.subj.matchanat     = 0;
             end
             self.RunSPMJob(matlabbatch);
         end
         function ApplyVDM(self)
-            %Applies the VDM files to functional runs.
-            %Writes u_data.nii files, which are field corrected EPIs.
+            % Applies the VDM files to functional runs.
+            % Writes vdm_data.nii files, which are field corrected EPIs.
             for nsession = 1:length(self.runs_fieldmap)
                 c = 0;
                 epis = [];
@@ -262,29 +261,23 @@ classdef Subject < Project
                 end
                 matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.data.scans   = cellstr(strvcat(epis{:}));
                 matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.data.vdmfile = cellstr(regexprep(self.path_epi(self.runs_fieldmap{nsession}(2)),'data','vdm5_scdata'));
-                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.pedir = 2;
-                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.which = [2 1];
+                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.pedir   = 2;
+                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.which   = [2 1]; % mean applied vdm image
                 matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.rinterp = 4;
-                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.wrap = [0 0 0];
-                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.mask = 1;
-                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.prefix = 'vdm_';
+                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.wrap    = [0 0 0];
+                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.mask    = 1;
+                matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.roptions.prefix  = 'vdm_';
             end
             self.RunSPMJob(matlabbatch);
         end
-        function SkullStrip_meanEPI(self)
-            %combines c{1,2,3}meanepi.nii images to create a binary mask in the native space.
-            Vi = self.path_meanepi_segmented(1:3);
-            Vo = self.path_skullstrip_meanepi;
-            spm_imcalc(Vi,Vo,'(i1+i2+i3)>0');
-        end
         function SkullStrip(self)
-            %needs results of SegmentSurface, will produce a skullstripped
-            %version of hr (filename: ss_data.nii). It will also
-            %automatically create a normalized version as well
-            %(w_ss_data.nii).
-            %c
+            % needs results of SegmentSurface, will produce a skullstripped
+            % version of hr (filename: ss_data.nii). It will also
+            % automatically create a normalized version as well
+            % (w_ss_data.nii).
+            % c
             
-            %path to p1 and p2 images created by SegmentSurface
+            % path to p1 and p2 images created by SegmentSurface
             c1         = strrep(self.path_hr,sprintf('mrt%sdata',filesep),sprintf('mrt%smri%sp1data',filesep,filesep));
             c2         = strrep(self.path_hr,sprintf('mrt%sdata',filesep),sprintf('mrt%smri%sp2data',filesep,filesep));
             
@@ -306,9 +299,10 @@ classdef Subject < Project
             end
         end
         function Re_Coreg(self,runs)
-            %will realign and coregister.
+            % will realign and coregister.
             
             %% collect all the EPIs as a cell array of cellstr
+            self.epi_prefix = 'vdm_'; % I only use fieldmap-corrected data
             PREFIX = self.epi_prefix;
             c = 0;
             for nr = runs
@@ -320,33 +314,33 @@ classdef Subject < Project
             %% path to the mean_epi
             mean_epi    = self.path_meanepi;
             
-            %double-pass realign EPIs and reslice the mean image only.
-            matlabbatch{1}.spm.spatial.realign.estwrite.data = epi_run;
+            %% double-pass realign EPIs and reslice the mean image only.
+            matlabbatch{1}.spm.spatial.realign.estwrite.data             = epi_run;
             matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.quality = 0.9;
-            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.sep = 4;
-            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.fwhm = 5;
-            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.rtm = 1;%double pass
-            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.interp = 2;
-            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.wrap = [0 0 0];
-            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.weight = '';
-            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.which = [0 1];%reslice only the mean image.
-            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.interp = 4;
-            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.wrap = [0 0 0];
-            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.mask = 1;
-            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.prefix = 'r';
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.sep     = 4;
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.fwhm    = 5;
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.rtm     = 1; % double pass
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.interp  = 2;
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.wrap    = [0 0 0];
+            matlabbatch{1}.spm.spatial.realign.estwrite.eoptions.weight  = '';
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.which   = [0 1];%reslice only the mean image.
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.interp  = 4;
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.wrap    = [0 0 0];
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.mask    = 1;
+            matlabbatch{1}.spm.spatial.realign.estwrite.roptions.prefix  = 'r';
             
-            %%coregister EPIs to skullstrip (only the affine matrix is modified)
+            %% coregister EPIs to skullstrip (only the affine matrix is modified)
             matlabbatch{2}.spm.spatial.coreg.estimate.ref    = cellstr(self.path_skullstrip);
             matlabbatch{2}.spm.spatial.coreg.estimate.source = cellstr(mean_epi);
             matlabbatch{2}.spm.spatial.coreg.estimate.other  = vertcat(epi_run{:});
             matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.cost_fun = 'nmi';
-            matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.sep = [4 2];
-            matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.tol = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];
-            matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.fwhm = [7 7];
+            matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.sep      = [4 2];
+            matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.tol      = [0.02 0.02 0.02 0.001 0.001 0.001 0.01 0.01 0.01 0.001 0.001 0.001];
+            matlabbatch{2}.spm.spatial.coreg.estimate.eoptions.fwhm     = [7 7];
             % %
-            %%write EPIs
+            %% write EPIs
             matlabbatch{3}.spm.spatial.realign.write.data            = vertcat(epi_run{:});
-            matlabbatch{3}.spm.spatial.realign.write.roptions.which  = [2 1];%all images as well as the mean image.
+            matlabbatch{3}.spm.spatial.realign.write.roptions.which  = [2 1]; % all images as well as the mean image.
             matlabbatch{3}.spm.spatial.realign.write.roptions.interp = 4;
             matlabbatch{3}.spm.spatial.realign.write.roptions.wrap   = [0 0 0];
             matlabbatch{3}.spm.spatial.realign.write.roptions.mask   = 1;
@@ -363,26 +357,26 @@ classdef Subject < Project
             % mri/p2data.nii
             % mri/wmdata.nii
             % mri_y_data.nii
-            matlabbatch{1}.spm.tools.cat.estwrite.data = {spm_select('expand',self.path_hr)};
-            matlabbatch{1}.spm.tools.cat.estwrite.nproc = 0;
-            matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm = {sprintf('%sTPM.nii',self.tpm_dir)};
-            matlabbatch{1}.spm.tools.cat.estwrite.opts.affreg = 'mni';
-            matlabbatch{1}.spm.tools.cat.estwrite.extopts.APP = 1;
-            matlabbatch{1}.spm.tools.cat.estwrite.extopts.LASstr = 0.5;
-            matlabbatch{1}.spm.tools.cat.estwrite.extopts.gcutstr = 0.5;
+            matlabbatch{1}.spm.tools.cat.estwrite.data               = {spm_select('expand',self.path_hr)};
+            matlabbatch{1}.spm.tools.cat.estwrite.nproc              = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm           = {sprintf('%sTPM.nii',self.tpm_dir)};
+            matlabbatch{1}.spm.tools.cat.estwrite.opts.affreg        = 'mni';
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.APP        = 1;
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.LASstr     = 0.5;
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.gcutstr    = 0.5;
             matlabbatch{1}.spm.tools.cat.estwrite.extopts.cleanupstr = 0.5;
-            matlabbatch{1}.spm.tools.cat.estwrite.extopts.darteltpm = {self.dartel_templates(1)};
-            matlabbatch{1}.spm.tools.cat.estwrite.extopts.vox = 1.5;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.surface = self.surface_wanted;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.native = 1;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.mod = 0;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.dartel = 0;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.native = 1;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.mod = 0;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.dartel = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.darteltpm  = {self.dartel_templates(1)};
+            matlabbatch{1}.spm.tools.cat.estwrite.extopts.vox        = 1.5;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.surface     = self.surface_wanted;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.native   = 1;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.mod      = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.GM.dartel   = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.native   = 1;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.mod      = 0;
+            matlabbatch{1}.spm.tools.cat.estwrite.output.WM.dartel   = 0;
             matlabbatch{1}.spm.tools.cat.estwrite.output.bias.warped = 1;
             matlabbatch{1}.spm.tools.cat.estwrite.output.jacobian.warped = 0;
-            matlabbatch{1}.spm.tools.cat.estwrite.output.warps = [1 1];
+            matlabbatch{1}.spm.tools.cat.estwrite.output.warps           = [1 1];
             %
             self.RunSPMJob(matlabbatch);
         end
@@ -393,42 +387,51 @@ classdef Subject < Project
             % iy_meandata.nii
             % c{1-5}meandata.nii
             % y_meandata.nii
-            matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(self.path_meanepi);
-            matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
+            self.epi_prefix = 'vdm_'; % I only use fieldmap-corrected data
+            
+            matlabbatch{1}.spm.spatial.preproc.channel.vols     = cellstr(self.path_meanepi);
+            matlabbatch{1}.spm.spatial.preproc.channel.biasreg  = 0.001;
             matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
-            matlabbatch{1}.spm.spatial.preproc.channel.write = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm = {self.path_tpm(1)};
-            matlabbatch{1}.spm.spatial.preproc.tissue(1).ngaus = 1;
+            matlabbatch{1}.spm.spatial.preproc.channel.write    = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm    = {self.path_tpm(1)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).ngaus  = 1;
             matlabbatch{1}.spm.spatial.preproc.tissue(1).native = [1 0];
             matlabbatch{1}.spm.spatial.preproc.tissue(1).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm = {self.path_tpm(2)};
-            matlabbatch{1}.spm.spatial.preproc.tissue(2).ngaus = 1;
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm    = {self.path_tpm(2)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).ngaus  = 1;
             matlabbatch{1}.spm.spatial.preproc.tissue(2).native = [1 0];
             matlabbatch{1}.spm.spatial.preproc.tissue(2).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm = {self.path_tpm(3)};
-            matlabbatch{1}.spm.spatial.preproc.tissue(3).ngaus = 2;
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm    = {self.path_tpm(3)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).ngaus  = 2;
             matlabbatch{1}.spm.spatial.preproc.tissue(3).native = [1 0];
             matlabbatch{1}.spm.spatial.preproc.tissue(3).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm = {self.path_tpm(4)};
-            matlabbatch{1}.spm.spatial.preproc.tissue(4).ngaus = 3;
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm    = {self.path_tpm(4)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).ngaus  = 3;
             matlabbatch{1}.spm.spatial.preproc.tissue(4).native = [1 0];
             matlabbatch{1}.spm.spatial.preproc.tissue(4).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm = {self.path_tpm(5)};
-            matlabbatch{1}.spm.spatial.preproc.tissue(5).ngaus = 4;
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm    = {self.path_tpm(5)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).ngaus  = 4;
             matlabbatch{1}.spm.spatial.preproc.tissue(5).native = [1 0];
             matlabbatch{1}.spm.spatial.preproc.tissue(5).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm = {self.path_tpm(6)};
-            matlabbatch{1}.spm.spatial.preproc.tissue(6).ngaus = 2;
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm    = {self.path_tpm(6)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).ngaus  = 2;
             matlabbatch{1}.spm.spatial.preproc.tissue(6).native = [0 0];
             matlabbatch{1}.spm.spatial.preproc.tissue(6).warped = [0 0];
-            matlabbatch{1}.spm.spatial.preproc.warp.mrf = 1;
+            matlabbatch{1}.spm.spatial.preproc.warp.mrf     = 1;
             matlabbatch{1}.spm.spatial.preproc.warp.cleanup = 1;
-            matlabbatch{1}.spm.spatial.preproc.warp.reg = [0 0.001 0.5 0.05 0.2];
-            matlabbatch{1}.spm.spatial.preproc.warp.affreg = 'mni';
-            matlabbatch{1}.spm.spatial.preproc.warp.fwhm = 0;
-            matlabbatch{1}.spm.spatial.preproc.warp.samp = 3;
-            matlabbatch{1}.spm.spatial.preproc.warp.write = [1 1];
+            matlabbatch{1}.spm.spatial.preproc.warp.reg     = [0 0.001 0.5 0.05 0.2];
+            matlabbatch{1}.spm.spatial.preproc.warp.affreg  = 'mni';
+            matlabbatch{1}.spm.spatial.preproc.warp.fwhm    = 0;
+            matlabbatch{1}.spm.spatial.preproc.warp.samp    = 3;
+            matlabbatch{1}.spm.spatial.preproc.warp.write   = [1 1];
             self.RunSPMJob(matlabbatch);
+        end
+         function SkullStrip_meanEPI(self)
+            % combines c{1,2,3}meanepi.nii images to create a binary mask in the native space.
+            self.epi_prefix = 'vdm_'; % I only use fieldmap-corrected data
+            Vi = self.path_meanepi_segmented(1:3);
+            Vo = self.path_skullstrip_meanepi;
+            spm_imcalc(Vi,Vo,'(i1+i2+i3)>0');
         end
         function VolumeNormalize(self,path2image)
             %SegmentSurface writes deformation fields (y_*), which are here used
@@ -497,7 +500,7 @@ classdef Subject < Project
             %returns path to VDM files as a cell array.
         end
         function out        = path_skullstrip_meanepi(self)
-            out = regexprep(self.path_meanepi,['mean_' self.epi_prefix '_data'],'ss_meandata');
+            out = regexprep(self.path_meanepi,['mean' self.epi_prefix 'data'],['ss_mean' self.epi_prefix 'data']);
             %out = regexprep(self.path_meanepi,'meandata','ss_meandata');
         end
         function out        = path_meanepi(self)
@@ -516,7 +519,7 @@ classdef Subject < Project
             mean_epi = self.path_meanepi;
             out      = '';
             for n = num
-                out      = strvcat(out,regexprep(mean_epi,'meandata',sprintf('c%dmeandata',n)))
+                out      = strvcat(out,regexprep(mean_epi,['mean' self.epi_prefix 'data'],sprintf(['c%dmean' self.epi_prefix 'data'],n)))
             end
         end
         function out        = path_skullstrip(self,varargin)
@@ -681,11 +684,11 @@ classdef Subject < Project
             % set spm dir: saves always to run1
             self.epi_prefix = 'vdm_'; % I only use fieldmap-corrected data
             spm_dir  = self.dir_spmmat(nrun(1),model_num);
-            path_spm = self.path_spmmat(nrun(1),model_num); % stuff is always saved to the first run.
-            if ~exist(self.path_spm)
+            spmMat   = self.path_spmmat(nrun(1),model_num); % stuff is always saved to the first run.
+            if ~exist(spmMat)
                 mkdir(spm_dir);
-            elseif exist(self.path_spm) && (force_delete == 1)
-                delete(path_spm)
+            elseif exist(spmMat) && (force_delete == 1)
+                delete(spmMat)
             else
                 fprinf('SPM.mat already exists, and force delete is not active.')
             end
@@ -724,7 +727,7 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.mask                              = {self.path_skullstrip_meanepi};
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
             % estimation
-            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spm};
+            matlabbatch{2}.spm.stats.fmri_est.spmmat            = {spmMat};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
             spm_jobman('run', matlabbatch); % create SPM file first
             %% normalize and smooth beta images right away.
@@ -838,6 +841,10 @@ classdef Subject < Project
                 presentFace3_lowProb  = [zeros(1,9) 1 zeros(1,2)];
                 presentFace3_midProb  = [zeros(1,10) 1 0];
                 presentFace3_highProb = [zeros(1,11) 1 ];
+                presentFace_lowProb   = [zeros(1,3) 1 0 0 1 0 0 1 0 0];
+                presentFace_midProb   = [zeros(1,4) 1 0 0 1 0 0 1 0];
+                presentFace_highProb  = [zeros(1,5) 1 0 0 1 0 0 1];
+                onset_slowFeedback    = [zeros(1,12) 1 ];
                 
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'exp_Face1lowP_Face2midP_Face3highP';
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [exp_Face1lowP_Face2midP_Face3highP];
@@ -897,12 +904,31 @@ classdef Subject < Project
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace3_highProb';
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFace3_highProb];
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
-                                
-                if model_num == 3 % only for run 3 = model 3 we have feedback
-                    onset_posFeedback  = [zeros(1,12) 1 0 0];
-                    onset_negFeedback  = [zeros(1,12) 0 1 0];
-                    onset_slowFeedback = [zeros(1,12) 0 0 1];
-                    co = co + 1;
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace_lowProb';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFace_lowProb];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace_midProb';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFace_midProb];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace_highProb';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFace_highProb];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'onset_slowFeedback';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [onset_slowFeedback];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
+                if model_num == 3 % only for run 3 = model 3 we have feedback                    
+                    onset_posFeedback = [zeros(1,12) 0 1 0];
+                    onset_negFeedback = [zeros(1,12) 0 0 1];
                     
                     matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'onset_posFeedback';
                     matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [onset_posFeedback];
@@ -911,19 +937,14 @@ classdef Subject < Project
                     
                     matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'onset_negFeedback';
                     matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [onset_negFeedback];
-                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
-                    co = co + 1;
-                    
-                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'onset_slowFeedback';
-                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [onset_slowFeedback];
-                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';                    
                 end
             end
             
             spm_jobman('run',matlabbatch);
         end
         
-        function NormContrast1stLevel(self,nrun,model_num,con_num)
+        function NormSmoothContrast1stLevel(self,nrun,model_num,con_num)
             %pathcon = self.CreateContrast1stLevel(nrun,model_num);
             path_spm  = self.path_spmmat(nrun(1),model_num);
             for c = 1 : length(con_num)
@@ -931,7 +952,7 @@ classdef Subject < Project
                 path_spmT = strrep(path_spm,'SPM.mat',sprintf('spmT_%04d.nii',con_num(c)));
                 
                 % normalize the con images
-                self.VolumeNormalize(path_con);%normalize ('w_' will be added)
+                self.VolumeNormalize(path_con); % normalize ('w_' will be added)
                 % smooth con images
                 pathwcon = strrep(path_con,sprintf('con_%04d',con_num(c)),sprintf('wCAT_con_%04d',con_num(c)));
                 self.VolumeSmooth(pathwcon);%('s(fwhm)_' will be added, resulting in 's_ww_')
