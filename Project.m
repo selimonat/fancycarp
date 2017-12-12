@@ -49,7 +49,7 @@ classdef Project < handle
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
         
-        path_project          = '/projects/crunchie/expectb';
+        path_project          = '/projects/crunchie/expectb/';
         path_spm              = '/home/hblank/matlab/spm12-7219/';
         trio_sessions         = { ...
             'PRISMA_19542', 'PRISMA_19573', 'PRISMA_19623', ... % 1-3
@@ -63,7 +63,7 @@ classdef Project < handle
             'PRISMA_19920', 'PRISMA_19934', 'PRISMA_19935', ... % 25-27
             'PRISMA_19936', 'PRISMA_19945', 'PRISMA_19946', ... % 28-30
             'PRISMA_19954', 'PRISMA_19955', 'PRISMA_19968', ... % 31-33
-            'PRISMA_199', 'PRISMA_199' }; % 34-35
+            'PRISMA_20002', }; %'PRISMA_200' };                     % 34-35
         % series numbers corrspond to 4 EPI runs + 2x2 fieldmaps
         % HR is detected automatically ant put into folder run0
         % at the end commented blips
@@ -80,32 +80,32 @@ classdef Project < handle
             [8 19 20 21 6 7 17 18 ], [9 20 21 22 6 7 18 19 ], [8 19 20 21 6 7 17 18 ], ... % 25-27 9 10 22 23
             [8 6 7  ],               [8 19 20 21 6 7 17 18 ], [8 6 7 ],                ... % 28-30 9 10 22 23
             [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ], ... % 31-33 9 10 22 23
-            [8 19 20 21 6 7 17 18 ], [8 19 20 21 6 7 17 18 ]};                             % 34-35 9 10 22 23
-        %this is necessary to tell matlab which series corresponds to which
-        %run (i.e. it doesn't always corresponds to different runs as in FearAmy)
-        %meanEPI.nii detection assumes that the first run is the first functional run.
+            [8 19 20 21 6 7 17 18 ],};% [8 19 20 21 6 7 17 18 ]};                             % 34-35 9 10 22 23
+        % this is necessary to tell matlab which series corresponds to which
+        % run (i.e. it doesn't always corresponds to different runs as in FearAmy)
+        % meanEPI.nii detection assumes that the first run is the first functional run.
         dicom2run             = repmat({[1:8]},1,length(Project.dicom_serie_selector));%how to distribute TRIO sessiosn to folders.
         data_folders          = {'midlevel' 'mrt' 'design'}; % if you need another folder, do it here.
         runs_fieldmap         = {[5 6] [7 8]};  % The order is important: first one is the magnitude and the secnd one is the phase
         apply_vdm             = {[1 ] [2 3 4]}; % The length of this property should be the same as the runs_fieldmap
         TR                    = 0.967;
-        HParam                = 128;%parameter for high-pass filtering
-        surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)
-        smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method
-        atlas2mask_threshold  = 50;%where ROI masks are computed, this threshold is used.
+        HParam                = 128; % parameter for high-pass filtering
+        surface_wanted        = 0;   % do you want CAT12 toolbox to generate surfaces during segmentation (0/1)
+        smoothing_factor      = 8;   % how many mm images should be smoothened when calling the SmoothVolume method
+        atlas2mask_threshold  = 50;  % where ROI masks are computed, this threshold is used.
         path_smr              = sprintf('%s%ssmrReader%s',fileparts(which('Project')),filesep,filesep);%path to .SMR importing files in the fancycarp toolbox.
     end
-    properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
+    properties (Constant,Hidden) % These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.
-        path_second_level     = sprintf('%sspm/',Project.path_project);%where the second level results has to be stored
-        path_fieldmap         = sprintf('%stoolbox/FieldMap/T1.nii',Project.path_spm); %path to the TPM images, needed by segment.         
+        path_second_level     = sprintf('%s2ndLevel/',Project.path_project);%where the second level results has to be stored
+        path_fieldmap         = sprintf('%stoolbox/FieldMap/T1.nii',Project.path_spm); %path to the TPM images, needed by segment.
         path_atlas            = sprintf('%satlas/data.nii',Project.path_project);%the location of the atlas
         current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
     end
- 	properties (Hidden)
+    properties (Hidden)
         epi_prefix            = '';%depending on whether we have fieldmap/blip correction or not this has to be changed. If no correction applied leave it as ''.
-	end   
+    end
     methods
         function DU = SanityCheck(self,runs,measure,varargin)
             %DU = SanityCheck(self,runs,measure,varargin)
@@ -326,7 +326,7 @@ classdef Project < handle
         end
         
     end
-    methods %methods that does something on all subjects one by one
+    methods % methods that does something on all subjects one by one
         function VolumeGroupAverage(self,run,selector)
             %Averages all IMAGES across all subjects. This can only be done
             %on normalized images. The result will be saved to the
@@ -366,44 +366,74 @@ classdef Project < handle
             matlabbatch{1}.spm.spatial.smooth.prefix = 's_';
             spm_jobman('run', matlabbatch);
         end
-        function SecondLevel_ANOVA(self,run,model,beta_image_index)
-            % This method runs a second level analysis for a model defined in MODEL using beta images indexed in BETA_IMAGE_INDEX.
+        
+        function [xSPM] = SecondLevel_Ttest(self,run,models,con_index)
+            %%
+            % [xSPM]    = SecondLevel_Ttest(self,run,models,con_index)
+            %
+            % This method runs a second level analysis for a model defined
+            % in MODELS using contrast images indexed in CON_INDEX. 
+            %
+            % Results are saved at the project root. xSPM structure is also
+            % saved in the analysis SPM dir. If this file is present, it is
+            % directly loaded, so the second level analysis is not reran.
+            %
+            % Example:
+            % for sk=0:10;for ngroup = 0:4;s.SecondLevel_ANOVA(ngroup,1,3,1:4,sk,0);end;end
+            %
+            % !! If you add covariates change the folder name aswell.
             
-            %store all the beta_images in a 3D array
-            beta_files = [];
-            for ns = self.subject_indices
-                s        = Subject(ns);
-                beta_files = cat(3,beta_files,self.beta_path(run,model,'s_w_')');%2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
+            %% generate a directory name for this spm analysis.
+            spm_dir    = [sprintf('%smodel0',  self.path_second_level) mat2str(models(1)) '/'];
+            xspm_path  = sprintf('%sxSPM.mat',spm_dir);
+            %%
+            if exist(xspm_path) == 0;
+                %% create path to con images;
+                con_files2 = [];
+                for ns = self.subject_indices
+                    con_files = [];
+                    for model = models(:)'
+                        s          = Subject(ns);
+                        % store all the con_images in a 3D array
+                        % 2nd level only makes sense with smoothened and normalized images, thus prefix s_w_
+                        con_files   = [con_files; strrep(s.path_spmmat(run,models),'SPM.mat',sprintf('s_wCAT_con_%04d.nii',con_index))];
+                    end
+                    % concatenate con images of all subjects
+                    con_files2 = [con_files2; con_files];
+                end
+                
+                %%
+                matlabbatch{1}.spm.stats.factorial_design.dir                    = cellstr(spm_dir);
+                matlabbatch{1}.spm.stats.factorial_design.des.t1.scans           = cellstr(con_files2);
+                matlabbatch{1}.spm.stats.factorial_design.cov                    = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
+                matlabbatch{1}.spm.stats.factorial_design.multi_cov              = struct('files', {}, 'iCFI', {}, 'iCC', {});
+                matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none     = 1;
+                matlabbatch{1}.spm.stats.factorial_design.masking.im             = 1;
+                matlabbatch{1}.spm.stats.factorial_design.masking.em             = {''};
+                matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit         = 1;
+                matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
+                matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm        = 1;
+                % estimate SPM
+                matlabbatch{2}.spm.stats.fmri_est.spmmat                         = {[spm_dir '/SPM.mat']};
+                matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
+                
+                %%
+                if models == 1 && con_index == 1
+                    matlabbatch{3}.spm.stats.con.consess{1}.tcon.name = 'Face > Scene';
+                    matlabbatch{3}.spm.stats.con.consess{1}.tcon.weights = 1;
+                    matlabbatch{3}.spm.stats.con.consess{1}.tcon.sessrep = 'none';
+                    
+                elseif models == 1 && con_index == 2
+                    matlabbatch{3}.spm.stats.con.consess{1}.tcon.name = 'Scene > Face';
+                    matlabbatch{3}.spm.stats.con.consess{1}.tcon.weights = 1;
+                    matlabbatch{3}.spm.stats.con.consess{1}.tcon.sessrep = 'none';
+                end
+                % run SPM job
+                spm_jobman('run', matlabbatch);
             end
-            %
-            c = 0;
-            for ind = beta_image_index;
-                %take single beta_images across all subjects and store them
-                %in a cell
-                c = c +1;
-                files                                                              = squeeze(beta_files(:,ind,:))';
-                matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files);
-            end
-            %
-            spm_dir                                                          = regexprep(s.spmmat_dir(1,1),'sub...','second_level');%convert to second-level path
-            matlabbatch{1}.spm.stats.factorial_design.dir                    = cellstr(spm_dir);
-            matlabbatch{1}.spm.stats.factorial_design.des.anova.dept         = 0;
-            matlabbatch{1}.spm.stats.factorial_design.des.anova.variance     = 1;
-            matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca        = 0;
-            matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova       = 0;
-            matlabbatch{1}.spm.stats.factorial_design.cov                    = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
-            matlabbatch{1}.spm.stats.factorial_design.multi_cov              = struct('files', {}, 'iCFI', {}, 'iCC', {});
-            matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none     = 1;
-            matlabbatch{1}.spm.stats.factorial_design.masking.im             = 1;
-            matlabbatch{1}.spm.stats.factorial_design.masking.em             = {''};
-            matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit         = 1;
-            matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
-            matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm        = 1;
-            %
-            matlabbatch{2}.spm.stats.fmri_est.spmmat                         = {[spm_dir '/SPM.mat']};
-            matlabbatch{2}.spm.stats.fmri_est.method.Classical               =  1;
-            %
-            spm_jobman('run', matlabbatch);
+            
         end
+        
     end
 end
+
