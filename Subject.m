@@ -844,6 +844,7 @@ classdef Subject < Project
                 presentFace_midProb   = [zeros(1,4) 1 0 0 1 0 0 1 0];
                 presentFace_highProb  = [zeros(1,5) 1 0 0 1 0 0 1];
                 onset_slowFeedback    = [zeros(1,12) 1 ];
+                presentFaceSurprise   = [zeros(1,3) 1 0 -1 1 0 -1 1 0 -1];
                 
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'exp_Face1lowP_Face2midP_Face3highP';
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [exp_Face1lowP_Face2midP_Face3highP];
@@ -925,6 +926,11 @@ classdef Subject < Project
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
                 co = co + 1;
                 
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'presentFace_surprise';
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [presentFaceSurprise];
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                co = co + 1;
+                
                 if model_num == 3 % only for run 3 = model 3 we have feedback
                     onset_posFeedback = [zeros(1,12) 0 1 0];
                     onset_negFeedback = [zeros(1,12) 0 0 1];
@@ -962,7 +968,7 @@ classdef Subject < Project
                 self.VolumeNormalize(path_spmT);%normalize ('w_' will be added)
                 % smooth T images
                 pathwtCAT = strrep(path_spmT,sprintf('spmT_%04d',con_num(c)),sprintf('wCAT_spmT_%04d',con_num(c)));
-                self.VolumeSmooth(pathwtCAT);%('s(fwhm)_' will be added, resulting in 's_ww_')                
+                self.VolumeSmooth(pathwtCAT);%('s(fwhm)_' will be added, resulting in 's_ww_')
                 pathwtMeanEPI = strrep(path_spmT,sprintf('spmT_%04d',con_num(c)),sprintf('wEPI_spmT_%04d',con_num(c)));
                 self.VolumeSmooth(pathwtMeanEPI);%('s(fwhm)_' will be added, resulting in 's_ww_')
             end
