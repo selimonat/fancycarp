@@ -202,7 +202,7 @@ classdef Subject < Project
                 catch
                     fprintf('Failed... Will work on non-field corrected EPIs\n');
                 end
-                self.SegmentSurface_HR;  % cat12 segmentation                
+                self.SegmentSurface_HR;  % cat12 segmentation
                 self.SkullStrip;         % removes non-neural voxels
                 self.Re_Coreg(runs);     % realignment and coregistration
                 self.Segment_meanEPI;    % segments mean EPI with new segment
@@ -426,7 +426,7 @@ classdef Subject < Project
             matlabbatch{1}.spm.spatial.preproc.warp.write   = [1 1];
             self.RunSPMJob(matlabbatch);
         end
-         function SkullStrip_meanEPI(self)
+        function SkullStrip_meanEPI(self)
             % combines c{1,2,3}meanepi.nii images to create a binary mask in the native space.
             self.epi_prefix = 'vdm_'; % I only use fieldmap-corrected data
             Vi = self.path_meanepi_segmented(1:3);
@@ -442,17 +442,17 @@ classdef Subject < Project
             %s.VolumeNormalize(s.path_beta(1,1))
             %s.VolumeNormalize(s.path_skullstrip);
             
-            %% Normalize with MEANEPI segmentation
-            %             for nf = 1:size(path2image,1)
-            %                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,['mean_' self.epi_prefix '_data'],'y_meandata'));
-            %                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
-            %                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
-            %                     78 76 85];
-            %                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
-            %                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
-            %                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
-            %             end
-            %             self.RunSPMJob(matlabbatch);
+            % Normalize with MEANEPI segmentation
+            for nf = 1:size(path2image,1)
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,['mean' self.epi_prefix 'data'], ['y_mean' self.epi_prefix 'data']));
+                matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
+                    78 76 85];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
+                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
+            end
+            self.RunSPMJob(matlabbatch);
             
             %% Normalize with CAT12 segmentation
             matlabbatch =[];
@@ -506,9 +506,9 @@ classdef Subject < Project
         function out        = path_meanepi(self)
             %returns the path to the meanepi (result of realignment).
             %returns empty if non-existent. Assumes that the first run contains the mean epi.
-            first_run             = self.dicom_target_run(1);
+            first_run               = self.dicom_target_run(1);
             [folder, filename, ext] = fileparts(self.path_epi(first_run,self.epi_prefix));
-            out                    = sprintf('%s%s%s%s%s',folder,filesep,'mean',filename,ext);
+            out                     = sprintf('%s%s%s%s%s',folder,filesep,'mean',filename,ext);
         end
         function out        = path_tpm(self,n)
             %return the path to the Nth TPM image from the spm
@@ -535,7 +535,7 @@ classdef Subject < Project
         function out        = dir_spmmat(self,nrun,model_num)
             %Returns the path to SPM folder in a given NRUN responsible for
             %the model MODEL_NUM. VARARGIN is used for the derivatives.
-            out = sprintf('%sspm%smodel_%02d_chrf_%d%d%s',self.path_data(nrun),filesep,model_num,self.derivatives(1),self.derivatives(2));%,filesep);
+            out = sprintf('%sspm%smodel_%02d',self.path_data(nrun),filesep,model_num);%,filesep);
             
         end
         function out        = path_model(self,run,model_num)
@@ -730,24 +730,23 @@ classdef Subject < Project
             matlabbatch{2}.spm.stats.fmri_est.spmmat            = {spmMat};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
             spm_jobman('run', matlabbatch); % create SPM file first
+            
             %% normalize and smooth beta images right away.
             %             beta_images          = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
             %             %
             %             %normalize them ('w_EPI' and 'w_CAT' will be added)
             %             self.VolumeNormalize(beta_images);
             %             %now smooth these normalized images
-            % %             beta_images          = self.path_beta(nrun(1),model_num,'wEPI_');%smooth the normalized images too.
-            % %             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
+            %             beta_images          = self.path_beta(nrun(1),model_num,'wEPI_');%smooth the normalized images too.
+            %             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
             %             beta_images          = self.path_beta(nrun(1),model_num,'wCAT_');%smooth the normalized images too.
             %             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_w_')
-            %%
         end
         
         function path_spm = CreateContrast1stLevel(self,nrun,model_num)
             % create contrasts for the model MODEL_NUM for data in NRUN.
             
             path_spm = self.path_spmmat(nrun(1),model_num);
-            %path_con = strrep(path_spm,'SPM.mat',sprintf('con_%04d.nii',con_num));
             
             matlabbatch = [];
             matlabbatch{1}.spm.stats.con.spmmat = cellstr(path_spm);
@@ -926,7 +925,7 @@ classdef Subject < Project
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
                 co = co + 1;
                 
-                if model_num == 3 % only for run 3 = model 3 we have feedback                    
+                if model_num == 3 % only for run 3 = model 3 we have feedback
                     onset_posFeedback = [zeros(1,12) 0 1 0];
                     onset_negFeedback = [zeros(1,12) 0 0 1];
                     
@@ -937,7 +936,7 @@ classdef Subject < Project
                     
                     matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = 'onset_negFeedback';
                     matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = [onset_negFeedback];
-                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';                    
+                    matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
                 end
             end
             
@@ -954,17 +953,18 @@ classdef Subject < Project
                 % normalize the con images
                 self.VolumeNormalize(path_con); % normalize ('w_' will be added)
                 % smooth con images
-                pathwcon = strrep(path_con,sprintf('con_%04d',con_num(c)),sprintf('wCAT_con_%04d',con_num(c)));
-                self.VolumeSmooth(pathwcon);%('s(fwhm)_' will be added, resulting in 's_ww_')
+                pathwconCAT = strrep(path_con,sprintf('con_%04d',con_num(c)),sprintf('wCAT_con_%04d',con_num(c)));
+                self.VolumeSmooth(pathwconCAT);%('s(fwhm)_' will be added, resulting in 's_ww_')
+                pathwconMeanEPI = strrep(path_con,sprintf('con_%04d',con_num(c)),sprintf('wEPI_con_%04d',con_num(c)));
+                self.VolumeSmooth(pathwconMeanEPI);%('s(fwhm)_' will be added, resulting in 's_ww_')
                 
                 % normalize the T images
                 self.VolumeNormalize(path_spmT);%normalize ('w_' will be added)
                 % smooth T images
-                pathwt = strrep(path_spmT,sprintf('spmT_%04d',con_num(c)),sprintf('wCAT_spmT_%04d',con_num(c)));
-                self.VolumeSmooth(pathwt);%('s(fwhm)_' will be added, resulting in 's_ww_')
-                
-                %             pathwcon = strrep(path_con,sprintf('con_%04d',con_num),sprintf('wEPI_con_%04d',con_num));
-                %             self.VolumeSmooth(pathwcon);%('s(fwhm)_' will be added, resulting in 's_ww_')
+                pathwtCAT = strrep(path_spmT,sprintf('spmT_%04d',con_num(c)),sprintf('wCAT_spmT_%04d',con_num(c)));
+                self.VolumeSmooth(pathwtCAT);%('s(fwhm)_' will be added, resulting in 's_ww_')                
+                pathwtMeanEPI = strrep(path_spmT,sprintf('spmT_%04d',con_num(c)),sprintf('wEPI_spmT_%04d',con_num(c)));
+                self.VolumeSmooth(pathwtMeanEPI);%('s(fwhm)_' will be added, resulting in 's_ww_')
             end
         end
         
