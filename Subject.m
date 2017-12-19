@@ -166,7 +166,7 @@ classdef Subject < Project
         end
         function [t]    = get_total_volumes(self,run)
             % will tell you how many volumes are in a 4D image.
-            bla = spm_vol_nifti(self.path_epi(run),1);%simply read the first images header
+            bla = spm_vol_nifti(self.path_epi(run),1); % simply read the first images header
             t   = bla.private.dat.dim(4);
         end
         function out    = get_totalvolumelogged(self,run)
@@ -443,16 +443,16 @@ classdef Subject < Project
             %s.VolumeNormalize(s.path_skullstrip);
             
             % Normalize with MEANEPI segmentation
-            for nf = 1:size(path2image,1)
-                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,['mean' self.epi_prefix 'data'], ['y_mean' self.epi_prefix 'data']));
-                matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
-                matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
-                    78 76 85];
-                matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
-                matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
-                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
-            end
-            self.RunSPMJob(matlabbatch);
+%             for nf = 1:size(path2image,1)
+%                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,['mean' self.epi_prefix 'data'], ['y_mean' self.epi_prefix 'data']));
+%                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
+%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
+%                     78 76 85];
+%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
+%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
+%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
+%             end
+%             self.RunSPMJob(matlabbatch);
             
             %% Normalize with CAT12 segmentation
             matlabbatch =[];
