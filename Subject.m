@@ -22,15 +22,15 @@ classdef Subject < Project
     %
     %   Plotter methods plot things as their name suggests.
     %
-    % 
+    %
     
     properties (Hidden)
         paradigm
-        default_run       = 1;   
+        default_run       = 1;
         dicom_serie_id    = [];
         dicom_folders     = [];
-        dicom_target_run  = [];                
-        derivatives       = [0 0];%specifies expansion degree of the cHRF when running models.         
+        dicom_target_run  = [];
+        derivatives       = [0 0];%specifies expansion degree of the cHRF when running models.
     end
     properties (SetAccess = private)
         id
@@ -41,7 +41,7 @@ classdef Subject < Project
         trio_session  = [];
         hr_session    = [];
         total_run     = [];
-        rating_fit    = [];    
+        rating_fit    = [];
     end
     %%
     methods
@@ -60,7 +60,7 @@ classdef Subject < Project
                     s.paradigm{nrun} = s.get_paradigm(nrun);
                 end
                 s.csp = s.paradigm{s.default_run}.stim.cs_plus;
-%                 s.scr = SCR(s);
+                %                 s.scr = SCR(s);
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path);
                 fprintf('Your path might also be wrong...\n');
@@ -68,19 +68,18 @@ classdef Subject < Project
         end
     end
     
-    methods %(Getters)        
+    methods %(Getters)
         function get_hr(self)
             %will download the latest HR for this subject to default hr
             %path (which is run000)
             %
-        
             
-            fprintf('get_hr:\nWill now dump the latest HR (%s)\n',self.current_time);            
-            %target location for the hr: self.dir_hr;            
+            fprintf('get_hr:\nWill now dump the latest HR (%s)\n',self.current_time);
+            %target location for the hr: self.dir_hr;
             %create it if necess.
             if exist(self.dir_hr) == 0
                 mkdir(self.dir_hr);
-            end   
+            end
             self.DicomDownload(self.path_hr_dicom,self.dir_hr);
             self.ConvertDicom(self.dir_hr);
             files       = spm_select('FPListRec',self.dir_hr,'^sPRISMA');
@@ -95,9 +94,9 @@ classdef Subject < Project
             p = [];
             if exist(filename)
                 p = load(filename);
-                p = p.p;                
+                p = p.p;
             end
-        end 
+        end
         function get_epi(self)
             %Will dump all DICOMS based on Sessions entered in the
             %Project object. trio_folders are folders in the dicom server,
@@ -113,7 +112,7 @@ classdef Subject < Project
             paths               = self.dicomserver_paths;
             if ~isempty(paths)
                 self.dicom_folders  = paths(self.dicom_serie_id);
-                fprintf('Will now dump series (%s)\n',self.current_time);            
+                fprintf('Will now dump series (%s)\n',self.current_time);
             end
             %% save the desired runs to disk
             n = 0;
@@ -133,7 +132,7 @@ classdef Subject < Project
         function [o]    = get.total_run(self)
             %% returns the total number of runs in a folder (except run000)
             o      = length(dir(self.path))-4;%exclude the directories .., ., and run000 and run005 (bc no brain data)
-        end        
+        end
         function L      = get_log(self,run)
             % Loads the ptb log. Removes all events before/after the
             % first/last scan and defines zero as the first scan.
@@ -144,26 +143,26 @@ classdef Subject < Project
             [~,i]           = sort(L(:,1),'ascend');
             L               = L(i,:);
             % delete all the events that are after the last scanning..
-            scan_times      = L(find(L(:,2) == 0),1);                        
+            scan_times      = L(find(L(:,2) == 0),1);
             %
             first_scan_time = min(scan_times);
             last_scan_time  = max(scan_times);
-            %            
+            %
             L(L(:,1) < first_scan_time,:) = [];
-%             L(L(:,1) > last_scan_time,:)  = [];
+            %             L(L(:,1) > last_scan_time,:)  = [];
             L(:,1)          = L(:,1) - first_scan_time;
         end
         function o      = get_param_motion(self,run)
             %will load the realignment parameters, of course you have to
             %realign the EPIs first.
-
+            
             filename = sprintf('%smrt%srp_data.txt',self.path_data(run),filesep);
             if exist(filename)
                 o = load(filename);
             else
                 fprintf('File:\n %s doesn''t exist.\n Most likely realignment is not yet done.\n',filename);
-            end            
-        end                
+            end
+        end
         function cond   = get_modelonsets(self,nrun,model_num)
             %returns stimulus onsets for NRUN defined by model specified by
             %MODEL_NUM
@@ -211,17 +210,17 @@ classdef Subject < Project
         end
         function XYZmm  = get_nativeatlas2mask(self,mask_id)
             %Will return XYZ coordinates from ROI specified by MASK_INDEX
-            %thresholded by the default value. XYZ values are in world 
+            %thresholded by the default value. XYZ values are in world
             %space, so they will need to be brought to the voxel space of
-            %the EPIs.            
+            %the EPIs.
             mask_handle = spm_vol(self.path_native_atlas(mask_id));%read the mask
-            mask_ind    = spm_read_vols(mask_handle) > self.atlas2mask_threshold;%threshold it            
+            mask_ind    = spm_read_vols(mask_handle) > self.atlas2mask_threshold;%threshold it
             [X Y Z]     = ind2sub(mask_handle.dim,find(mask_ind));%get voxel indices
             XYZ         = [X Y Z ones(sum(mask_ind(:)),1)]';%this is in hr's voxels space.
-            XYZmm       = mask_handle.mat*XYZ;%this is world space.            
+            XYZmm       = mask_handle.mat*XYZ;%this is world space.
             XYZmm       = unique(XYZmm','rows')';%remove repetititons.
         end
-          function L      = get_physio2log(self)
+        function L      = get_physio2log(self)
             %returns logged events from the physio computer in the same
             %format as the log file. Events are aligned to the first valid
             %scan pulse.
@@ -261,7 +260,7 @@ classdef Subject < Project
             selected = self.get_paradigm(5).out.selectedface;
         end
     end
-     methods %(behavioral analysis)
+    methods %(behavioral analysis)
         function [out, raw, triallist] = get_rating(self,varargin)
             % this function is mostly to get ratings so that we can fit
             % it.. so it puts it to out.x and out.y, and also only for
@@ -325,17 +324,22 @@ classdef Subject < Project
             end
         end
         
-        function out = get_pain(varargin)
+        function out = get_pain(self,varargin)
             if isempty(varargin)
                 fprintf('No run selected, collecting all runs.\n')
                 for run = 1:4
                     try
                         a = self.get_paradigm(run);
                         dummy = a.log.ratings.pain;
-                        out{run} = dummy(~isnan(dummy(:,3)),3);
+                        dummy = dummy(~isnan(dummy(:,3)),3);
+                        if run < 3
+                            out(:,run) = [dummy(1:3); NaN];
+                        else
+                            out(:,run) = dummy(1:4);
+                        end
                     catch
                         warning('Problem while loading paradigm at run %d.',run)
-                        out{run} = NaN;
+                        out(:,run) = nan(4,1);
                     end
                 end
             else
@@ -347,10 +351,15 @@ classdef Subject < Project
                     try
                         a = self.get_paradigm(run);
                         dummy = a.log.ratings.pain;
-                        out{rc} = dummy(~isnan(dummy(:,3)),3);
+                        dummy = dummy(~isnan(dummy(:,3)),3);
+                        if run < 3
+                            out = dummy(1:3);
+                        else
+                            out = dummy(1:4);
+                        end
                     catch
                         warning('Problem while loading paradigm at run %d.',run)
-                        out{rc} = NaN;
+                        out = NaN;
                     end
                 end
             end
@@ -475,30 +484,30 @@ classdef Subject < Project
                 export_fig(gcf,savepng,'-transparent')
             end
         end
-     end
+    end
     %%
-    methods %(mri, preprocessing))              
+    methods %(mri, preprocessing))
         function preprocess_pipeline(self,runs)
             %meta method to run all the required steps for hr
             %preprocessing. RUNS specifies the functional runs, make it a
             %vector if needed.
             if nargin > 1
-	    		self.SegmentSurface_HR;%cat12 segmentation
-            	self.SkullStrip;%removes non-neural voxels
-%             	self.MNI2Native;%brings the atlas to native space
-            	self.Re_Coreg(runs);%realignment and coregistration
-            	self.Segment_meanEPI;%segments mean EPI with new segment
-				self.SkullStrip_meanEPI;%creates a native mask
-	    	else
-				fprintf('One input argument is required!\n');
-		    end
+                self.SegmentSurface_HR;%cat12 segmentation
+                self.SkullStrip;%removes non-neural voxels
+                %             	self.MNI2Native;%brings the atlas to native space
+                self.Re_Coreg(runs);%realignment and coregistration
+                self.Segment_meanEPI;%segments mean EPI with new segment
+                self.SkullStrip_meanEPI;%creates a native mask
+            else
+                fprintf('One input argument is required!\n');
+            end
         end
-		function SkullStrip_meanEPI(self)
-			%combines c{1,2,3}meanepi.nii images to create a binary mask in the native space.
-			Vi = self.path_meanepi_segmented(1:3);
-			Vo = self.path_skullstrip_meanepi;
-			spm_imcalc(Vi,Vo,'(i1+i2+i3)>0');
-		end
+        function SkullStrip_meanEPI(self)
+            %combines c{1,2,3}meanepi.nii images to create a binary mask in the native space.
+            Vi = self.path_meanepi_segmented(1:3);
+            Vo = self.path_skullstrip_meanepi;
+            spm_imcalc(Vi,Vo,'(i1+i2+i3)>0');
+        end
         function SkullStrip(self)
             %needs results of SegmentSurface, will produce a skullstripped
             %version of hr (filename: ss_data.nii). It will also
@@ -509,7 +518,7 @@ classdef Subject < Project
             %path to p1 and p2 images created by SegmentSurface
             c1         = strrep(self.path_hr,sprintf('mrt%sdata',filesep),sprintf('mrt%smri%sp1data',filesep,filesep));
             c2         = strrep(self.path_hr,sprintf('mrt%sdata',filesep),sprintf('mrt%smri%sp2data',filesep,filesep));
-
+            
             if exist(c1) && exist(c2)
                 matlabbatch{1}.spm.util.imcalc.input            = cellstr(strvcat(self.path_hr,c1,c2));
                 matlabbatch{1}.spm.util.imcalc.output           = self.path_skullstrip;
@@ -526,10 +535,10 @@ classdef Subject < Project
             else
                 fprintf('Need to run segment first...\n')
             end
-        end                
+        end
         function Re_Coreg(self,runs)
-            %will realign and coregister. 
-              
+            %will realign and coregister.
+            
             %% collect all the EPIs as a cell array of cellstr
             c = 0;
             for nr = runs
@@ -575,15 +584,15 @@ classdef Subject < Project
             self.RunSPMJob(matlabbatch);
             
         end
-        function SegmentSurface_HR(self)            
+        function SegmentSurface_HR(self)
             % Runs CAT12 Segment Surface routine.
-			% Will write to the disk:
-			% mri and report folders
-			% mri/iy_data.nii
-			% mri/p1data.nii
-			% mri/p2data.nii
-			% mri/wmdata.nii
-			% mri_y_data.nii
+            % Will write to the disk:
+            % mri and report folders
+            % mri/iy_data.nii
+            % mri/p1data.nii
+            % mri/p2data.nii
+            % mri/wmdata.nii
+            % mri_y_data.nii
             matlabbatch{1}.spm.tools.cat.estwrite.data = {spm_select('expand',self.path_hr)};
             matlabbatch{1}.spm.tools.cat.estwrite.nproc = 0;
             matlabbatch{1}.spm.tools.cat.estwrite.opts.tpm = {sprintf('%sTPM.nii',self.tpm_dir)};
@@ -710,7 +719,7 @@ classdef Subject < Project
             
             self.RunSPMJob(matlabbatch);
         end
-        function Segment_meanEPI(self)            
+        function Segment_meanEPI(self)
             % Runs the new segment of SPM12 on the mean EPI image.
             % Will write to the disk:
             % meandata_seg8.mat
@@ -733,42 +742,42 @@ classdef Subject < Project
                 end
             end
             
-                    matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(self.path_meanepi);
-                    matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
-                    matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
-                    matlabbatch{1}.spm.spatial.preproc.channel.write = [0 0];
-                    matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm = {self.path_tpm(1)};
-                    matlabbatch{1}.spm.spatial.preproc.tissue(1).ngaus = 1;
-                    matlabbatch{1}.spm.spatial.preproc.tissue(1).native = [1 0];
-                    matlabbatch{1}.spm.spatial.preproc.tissue(1).warped = [0 0];
-                    matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm = {self.path_tpm(2)};
-                    matlabbatch{1}.spm.spatial.preproc.tissue(2).ngaus = 1;
-                    matlabbatch{1}.spm.spatial.preproc.tissue(2).native = [1 0];
-                    matlabbatch{1}.spm.spatial.preproc.tissue(2).warped = [0 0];
-                    matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm = {self.path_tpm(3)};
-                    matlabbatch{1}.spm.spatial.preproc.tissue(3).ngaus = 2;
-                    matlabbatch{1}.spm.spatial.preproc.tissue(3).native = [1 0];
-                    matlabbatch{1}.spm.spatial.preproc.tissue(3).warped = [0 0];
-                    matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm = {self.path_tpm(4)};
-                    matlabbatch{1}.spm.spatial.preproc.tissue(4).ngaus = 3;
-                    matlabbatch{1}.spm.spatial.preproc.tissue(4).native = [1 0];
-                    matlabbatch{1}.spm.spatial.preproc.tissue(4).warped = [0 0];
-                    matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm = {self.path_tpm(5)};
-                    matlabbatch{1}.spm.spatial.preproc.tissue(5).ngaus = 4;
-                    matlabbatch{1}.spm.spatial.preproc.tissue(5).native = [1 0];
-                    matlabbatch{1}.spm.spatial.preproc.tissue(5).warped = [0 0];
-                    matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm = {self.path_tpm(6)};
-                    matlabbatch{1}.spm.spatial.preproc.tissue(6).ngaus = 2;
-                    matlabbatch{1}.spm.spatial.preproc.tissue(6).native = [0 0];
-                    matlabbatch{1}.spm.spatial.preproc.tissue(6).warped = [0 0];
-                    matlabbatch{1}.spm.spatial.preproc.warp.mrf = 1;
-                    matlabbatch{1}.spm.spatial.preproc.warp.cleanup = 1;
-                    matlabbatch{1}.spm.spatial.preproc.warp.reg = [0 0.001 0.5 0.05 0.2];
-                    matlabbatch{1}.spm.spatial.preproc.warp.affreg = 'mni';
-                    matlabbatch{1}.spm.spatial.preproc.warp.fwhm = 0;
-                    matlabbatch{1}.spm.spatial.preproc.warp.samp = 3;
-                    matlabbatch{1}.spm.spatial.preproc.warp.write = [1 1];
-                    self.RunSPMJob(matlabbatch);
+            matlabbatch{1}.spm.spatial.preproc.channel.vols = cellstr(self.path_meanepi);
+            matlabbatch{1}.spm.spatial.preproc.channel.biasreg = 0.001;
+            matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
+            matlabbatch{1}.spm.spatial.preproc.channel.write = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm = {self.path_tpm(1)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).ngaus = 1;
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).native = [1 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm = {self.path_tpm(2)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).ngaus = 1;
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).native = [1 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm = {self.path_tpm(3)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).ngaus = 2;
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).native = [1 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm = {self.path_tpm(4)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).ngaus = 3;
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).native = [1 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm = {self.path_tpm(5)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).ngaus = 4;
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).native = [1 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm = {self.path_tpm(6)};
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).ngaus = 2;
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).native = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.warp.mrf = 1;
+            matlabbatch{1}.spm.spatial.preproc.warp.cleanup = 1;
+            matlabbatch{1}.spm.spatial.preproc.warp.reg = [0 0.001 0.5 0.05 0.2];
+            matlabbatch{1}.spm.spatial.preproc.warp.affreg = 'mni';
+            matlabbatch{1}.spm.spatial.preproc.warp.fwhm = 0;
+            matlabbatch{1}.spm.spatial.preproc.warp.samp = 3;
+            matlabbatch{1}.spm.spatial.preproc.warp.write = [1 1];
+            self.RunSPMJob(matlabbatch);
         end
         function VolumeNormalize(self,path2image)
             %SegmentSurface writes deformation fields (y_*), which are here used
@@ -828,13 +837,13 @@ classdef Subject < Project
             else
                 fprintf('For MNI2Native Analysis you need to have a atlas in %s\n',self.path_atlas);
             end
-        end        
+        end
         function [X,N,K]=spm_DesignMatrix(self,nrun,model_num)
             %will return the same design matrix used by spm in an efficient
             %way. see also: GetTimeSeries, spm_GetBetas
-
+            
             %% Design matrix X
-            cond                  = self.get_modelonsets(nrun,model_num);            
+            cond                  = self.get_modelonsets(nrun,model_num);
             fMRI_T                = 16;
             fMRI_T0               = 1;
             xBF.T                 = fMRI_T;
@@ -843,12 +852,12 @@ classdef Subject < Project
             xBF.UNITS             = 'scans';
             xBF.Volterra          = 1;
             xBF.name              = 'hrf';
-            xBF                   = spm_get_bf(xBF);            
+            xBF                   = spm_get_bf(xBF);
             %
             for i = 1:length(cond);%one regressor for each condition
-                Sess.U(i).dt        = xBF.dt;%- time bin (seconds)                
+                Sess.U(i).dt        = xBF.dt;%- time bin (seconds)
                 Sess.U(i).ons       = cond(i).onset;%- onsets    (in SPM.xBF.UNITS)
-                Sess.U(i).name      = {sprintf('%02d',i)};%- cell of names for each input or cause                
+                Sess.U(i).name      = {sprintf('%02d',i)};%- cell of names for each input or cause
                 %no parametric modulation here
                 Sess.U(i).dur    =  repmat(0,length(Sess.U(i).ons),1);%- durations (in SPM.xBF.UNITS)
                 Sess.U(i).P.name =  'none';
@@ -861,7 +870,7 @@ classdef Subject < Project
             SPM.xBF                 = xBF;
             SPM.nscan               = k;
             SPM.Sess                = Sess;
-            SPM.Sess.U              = spm_get_ons(SPM,1);            
+            SPM.Sess.U              = spm_get_ons(SPM,1);
             %
             % Convolve stimulus functions with basis functions
             [X,Xn,Fc]               = spm_Volterra(SPM.Sess.U,SPM.xBF.bf,SPM.xBF.Volterra);
@@ -872,32 +881,32 @@ classdef Subject < Project
             %% Get high-pass filter
             %this is how it should be, but due to fearamy specificities, we
             %have to make work around. Note that this cannot be merge to
-            %/mrt/xx or                        
+            %/mrt/xx or
             %% get the filtering strcture a la spm.
-            run_borders              = [[0 910 910+895]+1;[910 910+895  self.total_volumes(nrun)]];            
+            run_borders              = [[0 910 910+895]+1;[910 910+895  self.total_volumes(nrun)]];
             K(1:size(run_borders,2)) = struct('HParam', self.HParam, 'row',    [] , 'RT',     self.TR ,'X0',[]);
-            c = 0;            
+            c = 0;
             for b = run_borders
                 c        = c + 1;
                 K(c).row = b(1);
                 K(c)     = spm_filter(K(c));
-                K(c).X0  = [ones(length(K(c).row),1)*std(K(c).X0(:)) K(c).X0];                
+                K(c).X0  = [ones(length(K(c).row),1)*std(K(c).X0(:)) K(c).X0];
             end
             
-        end        
+        end
         function beta = spm_GetBetas(self,nrun,model_num,mask_id)
-            %will compute beta weights manually without calling SPM.            
+            %will compute beta weights manually without calling SPM.
             [X N K ]  = self.spm_DesignMatrix(nrun,model_num);%returns the Design Matrix, Nuissiance Matrix, and High-pass Filtering Matrix
             Y         = self.TimeSeries(nrun,mask_id);
             Y         = zscore(Y);
             Y         = spm_filter(K,Y);%high-pass filtering.
-            %            
+            %
             DM        = [X N ones(size(X,1),1)];%append together Onsets, Nuissances and a constant
             DM        = spm_filter(K,DM);%filter also the design matrix
             DM        = spm_sp('Set',DM);
             DM        = spm_sp('x-',DM);% projector;
             beta      = DM*Y;
-        end        
+        end
         function [D,XYZvox] = TimeSeries(self,nrun,mask_id)
             %will read the time series from NRUN. MASK can be used to mask
             %the volume, otherwise all data will be returned (dangerous).
@@ -909,17 +918,17 @@ classdef Subject < Project
                 XYZvox  = vh(1).mat\XYZmm;%in EPI voxel space.
                 XYZvox  = unique(XYZvox','rows')';
             else
-                 keyboard;%sanity check;
+                keyboard;%sanity check;
             end
             XYZvox      = round(XYZvox);
             D           = spm_get_data(vh,XYZvox);
-        end              
+        end
     end
-    methods %path_tools which are related to the subject              
-        	function out = path_skullstrip_meanepi(self)
-				out = regexprep(self.path_meanepi,'meandata','ss_meandata');
-            end
-            function out        = path_skullstrip(self,varargin)
+    methods %path_tools which are related to the subject
+        function out = path_skullstrip_meanepi(self)
+            out = regexprep(self.path_meanepi,'meandata','ss_meandata');
+        end
+        function out        = path_skullstrip(self,varargin)
             %returns filename for the skull stripped hr. Use VARARGIN to
             %add a prefix to the output, such as 'w' for example.
             if nargin == 1
@@ -927,7 +936,7 @@ classdef Subject < Project
             elseif nargin == 2
                 out = sprintf('%s%s_%s',self.dir_hr,varargin{1},'ss_data.nii');
             end
-            end
+        end
         
         function out  = dir_meanepi(self)
             %returns the path to the meanepi (result of realignment).
@@ -940,24 +949,24 @@ classdef Subject < Project
             %returns empty if non-existent. Assumes that the first run contains the mean epi.
             out       = fullfile(self.dir_meanepi,'meandata.nii');
         end
-		function out = path_tpm(self,n)
-			%return the path to the Nth TPM image from the spm
-			out = sprintf('%s/TPM.nii,%i',self.tpm_dir,n);
-		end
-		function out = path_meanepi_segmented(self,num)
-			%Returns the path to the output of Segment_meanEPI, N can be a vector.
-			mean_epi = self.path_meanepi;
-			out      = '';
-			for n = num(:)'
-				out      = strvcat(out,regexprep(mean_epi,'meandata',sprintf('c%dmeandata',n)));
-			end
-		end
-       
+        function out = path_tpm(self,n)
+            %return the path to the Nth TPM image from the spm
+            out = sprintf('%s/TPM.nii,%i',self.tpm_dir,n);
+        end
+        function out = path_meanepi_segmented(self,num)
+            %Returns the path to the output of Segment_meanEPI, N can be a vector.
+            mean_epi = self.path_meanepi;
+            out      = '';
+            for n = num(:)'
+                out      = strvcat(out,regexprep(mean_epi,'meandata',sprintf('c%dmeandata',n)));
+            end
+        end
+        
         function out        = dir_spmmat(self,nrun,model_num)
             %Returns the path to SPM folder in a given NRUN responsible for
-            %the model MODEL_NUM. VARARGIN is used for the derivatives.            
+            %the model MODEL_NUM. VARARGIN is used for the derivatives.
             out = sprintf('%sspm%smodel_%02d_chrf_%d%d%s',self.path_data(nrun),filesep,model_num,self.derivatives(1),self.derivatives(2),filesep);
-
+            
         end
         function out        = path_model(self,run,model_num)
             %returns the path to a model specified by MODEL_NUM in run RUN.
@@ -967,7 +976,7 @@ classdef Subject < Project
             %returns the path to spm folder for run RUN.
             dummy = self.dir_spmmat(nrun(1),model_num);
             out   = sprintf('%s%sSPM.mat',dummy,filesep);
-        end        
+        end
         function out        = path_native_atlas(self,varargin)
             %path to subjects native atlas, use VARARGIN to slice out a
             %given 3D volume.
@@ -983,34 +992,34 @@ classdef Subject < Project
         function out        = path_hr(self)
             %the directory where hr is located
             out = sprintf('%smrt%sdata.nii',self.pathfinder(self.id,0),filesep);
-        end                                
+        end
         function out        = path_epi(self,nrun,varargin)
             % simply returns the path to the mrt data. use VARARGIN to add
             % prefixes.
             if nargin == 2
-                out = sprintf('%smrt%sdata.nii',self.pathfinder(self.id,nrun),filesep);                
+                out = sprintf('%smrt%sdata.nii',self.pathfinder(self.id,nrun),filesep);
             elseif nargin == 3
                 out = sprintf('%smrt%s%sdata.nii',self.pathfinder(self.id,nrun),filesep,varargin{1});
-            else                
-                fprintf('Need to give an input...\n')
-                return
-            end
-        end                        
-        function out        = dir_epi(self,nrun)
-            % simply returns the path to the mrt data.
-            
-            if nargin == 2                
-                out = sprintf('%smrt%s',self.pathfinder(self.id,self.dicom_target_run(nrun)),filesep);                
             else
                 fprintf('Need to give an input...\n')
                 return
             end
-        end   
+        end
+        function out        = dir_epi(self,nrun)
+            % simply returns the path to the mrt data.
+            
+            if nargin == 2
+                out = sprintf('%smrt%s',self.pathfinder(self.id,self.dicom_target_run(nrun)),filesep);
+            else
+                fprintf('Need to give an input...\n')
+                return
+            end
+        end
         function out        = path_beta(self,nrun,model_num,prefix,varargin)
             %returns the path for beta images computed in NRUN for
             %MODEL_NUM. Use VARARGIN to select a subset by indexing.
             %Actually spm_select is not even necessary here.
-           
+            
             out = self.dir_spmmat(nrun,model_num);
             out = spm_select('FPList',out,sprintf('^%sbeta_*',prefix'));
             if isempty(out)
@@ -1022,8 +1031,44 @@ classdef Subject < Project
                 selector        = varargin{1};
                 out             = out(selector,:);
             end
-        end     
-         function [HRPath]   = path_hr_dicom(self)
+        end
+         function out        = path_con(self,nrun,model_num,prefix,varargin)
+            %returns the path for beta images computed in NRUN for
+            %MODEL_NUM. Use VARARGIN to select a subset by indexing.
+            %Actually spm_select is not even necessary here.
+            
+            out = self.dir_spmmat(nrun,model_num);
+            out = spm_select('FPList',out,sprintf('^%scon_*',prefix'));
+            if isempty(out)
+                fprintf('No con images found, probably wrong prefix is entered...\n');
+                keyboard%sanity check
+            end
+            %select if VARARGIN provided
+            if nargin > 4
+                selector        = varargin{1};
+                out             = out(selector,:);
+            end
+         end
+         function out        = path_contrast(self,nrun,model_num,prefix,type,varargin)
+             %returns path to spm{T,F}_XXXX.nii contrast volumes in NRUN for
+             %MODEL_NUM. Use PREFIX to select a subset, such s_ or s_w_.
+             %TYPE selects for T or F.
+             
+             out = self.dir_spmmat(nrun,model_num);
+             fprintf('Searching for beta images in:\n%s\n',out)
+             out = spm_select('FPList',out,sprintf('^%sspm%s_*',prefix',type));
+             if isempty(out)
+                 cprintf([1 0 0],'No SPM{F,T} images found, probably wrong prefix/run/etc is entered...\n');
+                 fprintf('%s\n',out)
+                 keyboard%sanity check
+             end
+             %select if VARARGIN provided
+             if nargin > 5
+                 selector        = varargin{1};
+                 out             = out(selector,:);
+             end
+         end
+        function [HRPath]   = path_hr_dicom(self)
             % finds the dicom path to the latest HR measurement for this
             % subject.
             
@@ -1059,7 +1104,7 @@ classdef Subject < Project
                 fprintf('path_hr_dicom: To use dicom query you have to use one of the institute''s linux boxes\n');
             end
         end
-      
+        
         function path2data  = path_data(self,run,varargin)
             % s.path_data(4) will return the path to the subject's phase 4
             % s.path_data(4,'eye') return the path to the eye data file at the
@@ -1078,10 +1123,10 @@ classdef Subject < Project
             if length(varargin) == 2
                 path2data = strrep(path2data,'mat',varargin{2});
             end
-        end       
+        end
     end
-     methods %analysis
-        function [out] = get_beta_index(self,nrun,model_num,conds)
+    methods %analysis
+        function [out] = get_beta_index(self,nrun,model_num,conds) % CAVE: for concatenated runs 3 and 4, gives only first index. so you need to compute the second yourself.
             load(self.path_model(nrun,model_num));
             
             out = [];
@@ -1100,7 +1145,7 @@ classdef Subject < Project
                     out(cc) = find(strcmp({cond.name},conds(cc)));
                 end
             elseif ischar(conds)
-                    out = find(strcmp({cond.name},conds));
+                out = find(strcmp({cond.name},conds));
             end
         end
         function [out] = get_Nbetas(self,nrun,model_num)
@@ -1179,7 +1224,7 @@ classdef Subject < Project
         end
     end
     methods %(plotters)
-       function plot_log(self,nrun)
+        function plot_log(self,nrun)
             %will plot the events that are logged during the experiment.
             L       = self.get_log(nrun);
             tevents = size(L,1);
@@ -1213,12 +1258,13 @@ classdef Subject < Project
         function plot_motionparams(self,nrun)
             dummy = self.get_param_motion(nrun);
             subplot(2,1,1);
-            plot(dummy(:,1:3));           
+            plot(dummy(:,1:3));
             legend({'x','y' 'z'})
             legend boxoff;ylabel('mm');box off
             axis tight
             ylim([-5 5])
-            set(gca,'ygrid','on')
+            set(gca,'ygrid','on');
+            title(sprintf('sub %02d phase %02d.\n',self.id,nrun))
             %
             subplot(2,1,2)
             plot(dummy(:,4:6));
@@ -1228,7 +1274,8 @@ classdef Subject < Project
             axis tight
             ylim([-5 5].*10.^-2)
             set(gca,'ygrid','on')
-        end            
+            export_fig(strrep(self.path_data(nrun,'midlevel'),'data.mat',sprintf('motionparams_sub%03d_run%03d.png',self.id,nrun)))
+        end
         function plot_logcomparison(self,nrun)
             %plots the data logged by the stim pc together with data logged
             %in the physio-computer. Will mark with a star the missing
@@ -1242,7 +1289,7 @@ classdef Subject < Project
         end
     end
     methods %(fmri analysis)
-          function [Ndummy] = KickDummies(self)
+        function [Ndummy] = KickDummies(self)
             kick  = 0;
             runs = 1:self.total_run-1;
             rc = 0;
@@ -1455,7 +1502,7 @@ classdef Subject < Project
                         load(modelpath);
                     end
                 case 2
-                      modelname = 'FaceAndRampOnset'; %tonic pain is baseline, everything else is modelled
+                    modelname = 'FaceAndRampOnset'; %tonic pain is baseline, everything else is modelled
                     
                     if ~exist(modelpath) || force == 1
                         if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
@@ -1571,7 +1618,7 @@ classdef Subject < Project
                             cond(cc+Ncols).name     = [mat2str(c) 'Face'];
                             cond(cc+Ncols).onset    = FaceOnsets(trial_ind);
                             cond(cc+Ncols).duration = repmat(1.5,length(FaceOnsets(trial_ind)),1); % including the little jitter:  RampDownOnsets(trial_ind)-FaceOnsets(trial_ind);
-                         
+                            
                             if verbalize ==1
                                 fprintf('Number of onsets for cond %04g: %d.\n',c,length(cond(cc).onset));
                                 fprintf('Mean duration: %04.2f seconds.\n',mean(cond(cc).duration));
@@ -1639,7 +1686,7 @@ classdef Subject < Project
                         end
                         if any(find(strcmp({cond.name}, '3000Face')==1))
                             cond(strcmp({cond.name}, '3000Face')==1).name = 't0Face';
-                        end                        
+                        end
                         save(modelpath,'cond');
                     else
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
@@ -1648,43 +1695,43 @@ classdef Subject < Project
                     
             end
         end
-%         function [stim_scanunit,stim_ids]=StimTime2ScanUnit(self,run)
-%             %will return stim onsets in units of scan. Will check the Log
-%             %for stim onsets, it will discard those trials occuring outside
-%             %the first and last scans based on their time-stamps. In
-%             %FearAmy, we have the reference measurements, i.e. scanner
-%             %stops for a while during the experiment. Those onsets are also
-%             %excluded (if the next scan unit is more than the TR far away).
-%             
-%             L               = self.get_log(run);
-%             scan_times      = L(L(:,2) == 0,1);%find all scan events and get their times            
-%             scan_id         = 1:length(scan_times);%label pulses with increasing numbers
-%             last_scan_time  = max(scan_times);%time of the last
-%             first_scan_time = min(scan_times);
-%             %collect info on stim onsets and discard those not occurring
-%             %during scanning.
-%             stim_times      = L(find(L(:,2)==3),1)';            
-%             valid           = stim_times<last_scan_time & stim_times>first_scan_time;%i.e. during scanning
-%             if sum(valid) ~= length(stim_times)
-%                 keyboard
-%             end            
-%             %%     
-%             stim_ids        = L(find(L(:,2)==3),3)';
-%             stim_scanunit   = stim_ids;
-%             trial           = 0;
-%             for stim_time = stim_times;%run stim by stim          
-%                 trial                = trial + 1;
-%                 stim_scanunit(trial) = floor(stim_time./self.TR)+1 + mod(stim_time./self.TR,1);                
-%             end            
-%         end
+        %         function [stim_scanunit,stim_ids]=StimTime2ScanUnit(self,run)
+        %             %will return stim onsets in units of scan. Will check the Log
+        %             %for stim onsets, it will discard those trials occuring outside
+        %             %the first and last scans based on their time-stamps. In
+        %             %FearAmy, we have the reference measurements, i.e. scanner
+        %             %stops for a while during the experiment. Those onsets are also
+        %             %excluded (if the next scan unit is more than the TR far away).
+        %
+        %             L               = self.get_log(run);
+        %             scan_times      = L(L(:,2) == 0,1);%find all scan events and get their times
+        %             scan_id         = 1:length(scan_times);%label pulses with increasing numbers
+        %             last_scan_time  = max(scan_times);%time of the last
+        %             first_scan_time = min(scan_times);
+        %             %collect info on stim onsets and discard those not occurring
+        %             %during scanning.
+        %             stim_times      = L(find(L(:,2)==3),1)';
+        %             valid           = stim_times<last_scan_time & stim_times>first_scan_time;%i.e. during scanning
+        %             if sum(valid) ~= length(stim_times)
+        %                 keyboard
+        %             end
+        %             %%
+        %             stim_ids        = L(find(L(:,2)==3),3)';
+        %             stim_scanunit   = stim_ids;
+        %             trial           = 0;
+        %             for stim_time = stim_times;%run stim by stim
+        %                 trial                = trial + 1;
+        %                 stim_scanunit(trial) = floor(stim_time./self.TR)+1 + mod(stim_time./self.TR,1);
+        %             end
+        %         end
         function FitFIR(self,nrun,model_num)
             %run the model MODEL_NUM for data in NRUN.
             %NRUN can be a vector, but then care has to be taken that
             %model_num is correctly set for different runs.
-                       
+            
             spm_dir = sprintf('%s%smodel_fir_%02d%s',self.spm_dir,filesep,model_num,filesep);
             spm_path= sprintf('%s%smodel_fir_%02d%sSPM.mat',self.spm_dir,filesep,model_num,filesep);
-
+            
             
             if ~exist(self.path_spm);mkdir(spm_dir);end
             
@@ -1702,7 +1749,7 @@ classdef Subject < Project
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 matlabbatch{1}.spm.stats.fmri_spec.sess(session).cond   = dummy.cond;
                 %load nuissance parameters
-                N                                                       = self.GetNuissance(nrun);                
+                N                                                       = self.GetNuissance(nrun);
                 for nNuis = 1:size(nuis,2)
                     matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).val   = nuis(:,nNuis);
                     matlabbatch{1}.spm.stats.fmri_spec.sess(session).regress(nNuis).name  = mat2str(nNuis);
@@ -1728,7 +1775,7 @@ classdef Subject < Project
         function CreateModels(self,runs)
             %%%%%%%%%%%%%%%%%%%%%%
             model_num  = 1;
-            for run = runs                
+            for run = runs
                 model_path = self.path_model(run,model_num);
                 if ~exist(fileparts(model_path));mkdir(fileparts(model_path));end
                 [scan,id]  = self.StimTime2ScanUnit(run);
@@ -1756,7 +1803,7 @@ classdef Subject < Project
             path_spmmat = self.path_spmmat(nrun(1),model_num);
             if ~exist(path_spmmat)
                 mkdir(spm_dir)
-            elseif exist(path_spmmat) && (force_delete == 1) 
+            elseif exist(path_spmmat) && (force_delete == 1)
                 delete(path_spmmat)
             else
                 fprintf('SPM.mat already exists, and force_delete is not active, what do you want to do?\n')
@@ -1764,7 +1811,7 @@ classdef Subject < Project
                 keyboard
                 if force_delete ==1
                     delete(path_spmmat)
-                else 
+                else
                     error('not solved, aborting')
                 end
             end
@@ -1810,71 +1857,132 @@ classdef Subject < Project
             spm_jobman('run', matlabbatch);
             %
             %normalize the beta images right away
-%             beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
-%             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
-%             beta_images = self.path_beta(nrun(1),model_num,'w_');%smooth the normalized images.
-%             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
+            %             beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
+            %             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
+            %             beta_images = self.path_beta(nrun(1),model_num,'w_');%smooth the normalized images.
+            %             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
         end
-        function [path_con, vec] = CreateContrast(self,nrun,model_num,con_num)
-            deleteold = 1;
-            path_spm = self.path_spmmat(nrun(1),model_num);
-            path_con = strrep(path_spm,'SPM.mat',sprintf('con_%04d.nii',con_num));
-%             if exist(path_con) && deleteold ==1
-%                 delete(path_con)
-%                 delete(strrep(path_con,'con','spmT'))
-%                 spmmat = load(self.path_spmmat(nrun,model_num));
-%                 spmmat.SPM.xCon(con_num) = struct([]);
-%             end
-            vec = zeros(self.get_Nbetas(nrun,model_num),1);
+        function [total_cons] = CreateContrasts(self,nrun,model_num)
             
+            path_spm = self.path_spmmat(nrun(1),model_num);
+            %             path_con = strrep(path_spm,'SPM.mat',sprintf('con_%04d.nii',con_num));
+            %
             matlabbatch = [];
-            switch con_num
-                case 1 % CSP > CSN
-                    if nrun == 1
-                        vec(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
-                        matlabbatch{1}.spm.stats.con.consess{1}.tcon.name = 'CSP>CSN';
-                    elseif nrun == 2
-                        warning('Can''t compare CSP to CSN here, not defined. Using UCS > CSN instead.')
-                        vec(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
-                        matlabbatch{1}.spm.stats.con.consess{1}.tcon.name = 'UCS>CSN';
-                    elseif nrun == 3
-                        vec = zeros(self.get_Nbetas(nrun,model_num)./2,1);
-                        vec(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
-                        vec = repmat(vec,2,1); % for two sessions.
-                        matlabbatch{1}.spm.stats.con.consess{1}.tcon.name = 'CSP>CSN';
+            n = 0;
+            name = [];
+            vec = [];
+            convec = struct([]);
+            
+            switch model_num
+                case 1 % only face onsets modelled,not the RampDown
+                    
+                    %                     % contrast 1
+                    %                     % all faces vs everything else
+                    %                     n = n + 1;
+                    %                     vec = zeros(self.get_Nbetas(nrun,model_num),1);
+                    %                     name{n} = 'allfaces > rest';
+                    %                     face_betas = self.get_beta_index(nrun,model_num,intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/nulltrial
+                    %                     vec(face_betas) = 1;
+                    %                     convec{n} = vec;
+                    %
+                    %                     % contrast 2
+                    %                     % CSP > CSN (or UCS > CSN in Cond)
+                    %                     n = n + 1;
+                    %                     vec = zeros(self.get_Nbetas(nrun,model_num),1);
+                    %                     switch nrun
+                    %                         case 1
+                    %                             vec(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
+                    %                             convec{n} = vec;
+                    %                             name{n} = 'CSP>CSN';
+                    %                         case 2
+                    %                             warning('Can''t compare CSP to CSN here, not defined. Using UCS > CSN instead.')
+                    %                             vec(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
+                    %                             convec{n} = vec;
+                    %                             name{n} = 'UCS>CSN';
+                    %                         case 3
+                    %                             vec = zeros(self.get_Nbetas(nrun,model_num)./2,1);
+                    %                             vec(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
+                    %                             convec{n} = repmat(vec,2,1);
+                    %                             name{n} = 'CSP>CSN';
+                    %                     end
+                    
+                case 2 %Face Onsets and RampDown modelled seperately
+                    Nbetas = self.get_Nbetas(nrun,model_num);
+                    if nrun == 3
+                        Nbetas = Nbetas./2;
                     end
-                case 2 % all faces vs everything else
-                    matlabbatch{1}.spm.stats.con.consess{1}.tcon.name = 'allfaces>rest';
+                    
+                    % contrast 1
+                    % all faces vs everything else
+                    n = n + 1;
+                    name{n} = 'allfaces > rest';
                     face_betas = [];
-                    if model_num ==1
-                        face_betas = self.get_beta_index(nrun,model_num,intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/nulltrial
-                    elseif model_num == 2
-                        for cond = intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist))
-                            ind = self.get_beta_index(nrun,model_num,[num2str(cond) 'Face']);
-                            face_betas = [face_betas ind];
-                        end
+                    convec{n} = zeros(1,Nbetas);
+                    for cond = intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist))
+                        ind = self.get_beta_index(nrun,model_num,[num2str(cond) 'Face']);
+                        face_betas = [face_betas ind];
                     end
-                    vec(face_betas)= ones(1,length(face_betas));
-                case 3 
+                    convec{n}(face_betas) = deal(1);
+                    
+                    
+                    % contrast 2
+                    % CSP > CSN (or UCS > CSN in Cond)
+                    % given by ramp
+                    n = n + 1;
+                    convec{n} = zeros(1,Nbetas);
+                    if nrun == 2
+                        fprintf('Can''t compare CSP to CSN here, not defined. Using UCS > CSN instead.\n')
+                        convec{n}(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
+                        name{n} = 'UCS>CSN';
+                    else
+                        convec{n}(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
+                        name{n} = 'CSP>CSN';
+                    end
+                    
+                    % contrast 3
+                    % all Relief trials vs else, also UCS trials included
+                    % (which is included in Project.facecond anyway)
+                    n = n + 1;
+                    convec{n} = zeros(1,Nbetas);
+                    name{n} = 'RampDown > rest';
+                    thisphaseconds = intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist));
+                    convec{n}(self.get_beta_index(nrun, model_num,thisphaseconds)) = 1;
             end
+            %%
+            total_cons = n;
+            
+            % build the batch
             matlabbatch{1}.spm.stats.con.spmmat = cellstr(path_spm);
-            matlabbatch{1}.spm.stats.con.consess{1}.tcon.convec =  vec;
-            matlabbatch{1}.spm.stats.con.consess{1}.tcon.sessrep = 'none';
+            for co = 1:numel(name)
+                if nrun == 3
+                    convec{co} = repmat(convec{co},1,2);
+                end
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name   = name{co};
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec =  convec{co};
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                %sanity check
+                if length(convec{co})~= self.get_Nbetas(nrun,model_num)
+                    fprintf('Problem with length of convec at contrast %d. Please debug.\n',co);
+                    keyboard
+                end
+            end
             matlabbatch{1}.spm.stats.con.delete = 1;
             spm_jobman('run',matlabbatch);
         end
-        function Con1stLevel(self,nrun,model_num,con_num)
-            pathcon = self.CreateContrast(nrun,model_num,con_num);
-            %normalize the con images right away
-            self.VolumeNormalize(pathcon);%normalize ('w_' will be added)
-            pathwcon = strrep(pathcon,sprintf('con_%04d',con_num),sprintf('wCAT_con_%04d',con_num));
-            self.VolumeSmooth(pathwcon);%('s(fwhm)_' will be added, resulting in 's_ww_')
-            pathwcon = strrep(pathcon,sprintf('con_%04d',con_num),sprintf('wEPI_con_%04d',con_num));
-            self.VolumeSmooth(pathwcon);%('s(fwhm)_' will be added, resulting in 's_ww_')
+        function Con1stLevel(self,nrun,model_num)
+            n_con = self.CreateContrasts(nrun,model_num);
+            fprintf('%d contrasts computed for phase %d, Model %d. \n',n_con,nrun,model_num)
+            %normalize the con images right away            
+            self.VolumeNormalize(self.path_con(nrun,model_num,''));%normalize ('wCAT_' and 'wEPI_'' will be added)
+            % count all contrasts here.
+            wcon = self.path_con(nrun,model_num,'wCAT_'); %should find both wCAT and wEPI.
+            self.VolumeSmooth(wcon);%('s(fwhm)_' will be added, resulting in 's_ww_')
+            wcon = self.path_con(nrun,model_num,'wEPI_'); %should find both wCAT and wEPI.
+            self.VolumeSmooth(wcon);%('s(fwhm)_' will be added, resulting in 's_ww_')
         end
-        function plot_con(nrun,model_num,con_num)
-            self.CreateContrast(nrun,model_num,con_num);
-        end  
+        %         function plot_con(nrun,model_num,con_num)
+        %             self.CreateContrast(nrun,model_num,con_num);
+        %         end
         function out = listcond(self,nrun,model_num)
             condfile = load(self.path_model(nrun,model_num));
             cond = condfile.cond;
@@ -1899,5 +2007,5 @@ classdef Subject < Project
             t = table(onset',dur','RowNames',names);
             t.Properties.VariableNames = {'onset','dur_secs'};
         end
-     end
+    end
 end
