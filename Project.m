@@ -84,6 +84,7 @@ classdef Project < handle
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm_version); %path to the TPM images, needed by segment.
         path_second_level     = sprintf('%sspm/',Project.path_project);%where the second level results has to be stored
+        path_groupmeans       = fullfile(Project.path_project,'spm','groupmeans');%where the second level results has to be stored
         path_atlas            = sprintf('%satlas/data.nii',Project.path_project);%the location of the atlas
         current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
@@ -580,7 +581,7 @@ classdef Project < handle
             %%
             hold on;
             if nargin == 3
-                errorbar(X,Y,SEM,'k.','LineWidth',1.5);%add error bars
+                errorbar(X,Y,SEM,'k.','LineWidth',2);%add error bars
             end
             
             %%
