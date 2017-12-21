@@ -1,6 +1,6 @@
 classdef Tuning < handle
     properties (Hidden)
-        visualization = 1;%visualization of fit results
+        visualization = 0;%visualization of fit results
         gridsize      = 20;%resolution per parameter for initial estimation.
         options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
         singlesubject_data = [];%will contain the fit results for individual subjects
@@ -12,7 +12,7 @@ classdef Tuning < handle
         ids    = [];
         y_mean = [];
         y_std  = [];
-        groupfit        
+        groupfit
         params;
         pval;
         fit_results;
@@ -46,9 +46,13 @@ classdef Tuning < handle
             for unit = 1:length(self.singlesubject_data)
                 self.fit_results.params(unit,:)   = self.singlesubject_data{unit}.Est;
                 self.fit_results.ExitFlag(unit,1) = self.singlesubject_data{unit}.ExitFlag;
+                self.fit_results.Likelihood(unit,1) = self.singlesubject_data{unit}.Likelihood;
                 self.fit_results.pval(unit,1)     = self.singlesubject_data{unit}.pval;
-                self.fit_results.x(unit,:)        = self.singlesubject_data{unit}.x;  
+                self.fit_results.x(unit,:)        = self.singlesubject_data{unit}.x;
                 self.fit_results.y_fitted(unit,:) = self.singlesubject_data{unit}.fit;
+                self.fit_results.x_HD(unit,:)     = self.singlesubject_data{unit}.x_HD;
+                self.fit_results.fit_HD(unit,:) = self.singlesubject_data{unit}.fit_HD;
+                
             end
         end
         
@@ -56,7 +60,7 @@ classdef Tuning < handle
             %pools different subjects and fit FUNTYPE
             self.groupfit = self.Fit(self.x(:),self.y(:),funtype);
             %
-        end        
+        end
         function result = Fit(self,x,y,funtype)
             %Fits FUNTYPE to a tuning defined in x and y
             
@@ -74,16 +78,16 @@ classdef Tuning < handle
             elseif funtype == 2
                 result.fitfun = @(x,p) make_gaussian_fmri(x,p(1),p(2),p(3));%2 amp, std, offset
                 L           = [-range(y)*2    0       mean(y)-range(y)*2          .01    ];
-                U           = [range(y)*2     180      mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];%                
+                U           = [range(y)*2     180      mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];%
                 result.dof    = 3;
                 result.funname= 'gaussian';
             elseif funtype == 3
                 result.fitfun = @(x,p) self.make_gaussian_fmri_zeromean(x,p(1),p(2));%2 amp fwhm
-
-                L           = [ -range(y)*2    5          .01    ];
+                
+                L           = [ -range(y)*2    0          .01    ];
                 U           = [ range(y)*2    180       std(y(:)+rand(length(y),1).*eps)*2 ];
-
-                result.dof    = 3;
+                
+                result.dof    = 2;
                 result.funname= 'gaussian_ZeroMean';
                 %detect the mean, store it and subtract it
                 CONSTANT    = mean(y);
@@ -115,16 +119,19 @@ classdef Tuning < handle
             elseif funtype == 8
                 result.fitfun = @(x,p) self.VonMises(x,p(1),p(2),p(3),p(4));%amp,kappa,centerX,offset
                 L             = [ eps             0.1        min(x)   min(y(:))-std(y)   eps ];
-                U             = [ range(y(:))      15        max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
+                U             = [ range(y(:))      15        max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];
                 %                 L      = [ eps                   0.1   eps     -pi   eps ];
                 %                 U      = [ min(10,range(y)*1.1)  20   2*pi   pi   10];
-                result.dof    = 3;
+                result.dof    = 4;
                 result.funname= 'vonmisses_mobile';
             end
+            
+            %% add some small noise in case of super-flat ratings
+            if sum(diff(y)) == 0;y = y + rand(length(y),1)*.001;end
             %% set the objective function
             result.likelihoodfun  = @(params) sum(-log( normpdf( y - result.fitfun( x,params(1:end-1)) , 0,params(end)) ));
             
-            %% Initial estimation of the parameters  
+            %% Initial estimation of the parameters
             %if gabor or gaussian, make a grid-estimatation
             if funtype > 1
                 Init = self.RoughEstimator(x,y,result.fitfun,L(1:end-1),U(1:end-1));%[7.1053 15.5556 1.0382];
@@ -165,9 +172,12 @@ classdef Tuning < handle
                 result.dof   = result.dof - 1;%the DOF of the null hypothesis is 0.
                 result.pval  = -log10(1-chi2cdf(-2*(result.Likelihood - result.null_Likelihood),result.dof) + eps);
             end
+            
             result.x       = unique(x);
-            x_HD           = linspace(min(result.x),max(result.x),100);
-            result.fit     = result.fitfun(result.x,result.Est);
+            result.fit     = result.fitfun(result.x,result.Est)+CONSTANT;
+            result.x_HD    = linspace(min(result.x),max(result.x),100);
+            result.fit_HD = result.fitfun(result.x_HD,result.Est)+CONSTANT;
+            
             
             %% show fit if wanted
             if self.visualization
@@ -183,26 +193,26 @@ classdef Tuning < handle
                     Y_sem(c,1)      = Y_std(c,1)./sqrt(tsub);
                 end
                 
-                figure(100);clf
-                plot(x_HD,result.fitfun(x_HD,result.Est),'ro','linewidth',3);
+                figure(1000);clf
+                plot(result.x_HD,result.fit_HD,'ro','linewidth',3);
                 hold on
-                plot(x_HD, result.fitfun(x_HD,Init)  ,'color',[.3 .3 .3] ,'linewidth',3);                                
-                errorbar(result.x, Y_ave+CONSTANT, Y_sem   , 'b'   ,'linewidth', 3);                                
+                plot(result.x_HD, result.fit_HD  ,'color',[.3 .3 .3] ,'linewidth',3);
+                errorbar(result.x, Y_ave+CONSTANT, Y_sem   , 'b'   ,'linewidth', 3);
                 hold off
                 if funtype > 1
                     title(sprintf('Likelihood: %03g (p = %5.5g)',result.Likelihood,result.pval));
                 end
                 xlim([min(x(:)) max(x(:))]);
                 drawnow;
-                grid on;                      
+                grid on;
+                
             end
-%            pause
+            %            pause
         end
-        
         function [params]=RoughEstimator(self,x,y,fun,L,U)
             %will roughly estimate free parameter values bounded between L
-            %and U for FUN and x values. Error is computed according to Y.        
-            %% get a grid            
+            %and U for FUN and x values. Error is computed according to Y.
+            %% get a grid
             tparam   = length(L);
             for n = 1:tparam
                 grid_in{n} = linspace(L(n),U(n),self.gridsize);
@@ -220,6 +230,7 @@ classdef Tuning < handle
             [m i]  = min(error);
             params = double(G(i,:));
         end
+        
     end
     methods (Static)
         function  [out] = VonMises(X,amp,kappa,centerX,offset)
@@ -230,12 +241,12 @@ classdef Tuning < handle
             out    =  (exp(kappa*cos(deg2rad(X-centerX)))-exp(-kappa))./(exp(kappa)-exp(-kappa));%put it btw [0 and 1]
             out    =  amp*out + offset;%and now scale it
         end
-        function [out] = make_gaussian_fmri_zeromean(x,amp,sd)            
+        function [out] = make_gaussian_fmri_zeromean(x,amp,sd)
             %
             %	Generates a Gaussian with AMP, FWHM and offset parameters. The center location is
-            %	fixed to zero. 
-                                                
-            d = mean(diff(x));                
+            %	fixed to zero.
+            
+            d = mean(diff(x));
             %for speed length(X) can be precomputed
             XT = length(x);
             %as well as d
@@ -243,6 +254,36 @@ classdef Tuning < handle
             %out      = amp.*exp(-tau*(x.^2)/2) - amp*sqrt(2*pi/tau)./d./XT;
             
             out      = amp.*exp(-(x./sd).^2/2) - amp*sqrt(2*pi*sd.^2)./d./XT;
+        end
+        function [fwhm, sigma] = vM2FWHM(kappa)
+            %fwhm = vM2FWHM(kappa)
+            %transforms a given vonMises function's kappa parameter to FWHM. Kappa
+            %parameter has no intuition, however FWHM is easily understandable.
+            amp     = 1;
+            centerX = 0;
+            offset  = 0;
+            %
+            s       = size(kappa);
+            kappa   = kappa(:);
+            
+            for nka = 1:length(kappa)
+                X           = linspace(-180,180,100000);%degrees
+                Y           = Tuning.VonMises(X,amp,kappa(nka),centerX,offset);%requires degrees, converts to rads inside.
+                
+                half_height = [max(Y)-min(Y)]./2+min(Y);%
+                d           = abs(Y - half_height);
+                
+                [~,i]       =  min(d(X > centerX));
+                i = i+sum(X < centerX);
+                [~,i2]      =  min(d(X < centerX));
+                
+                % plot(abs(Y-half_height));
+                
+                fwhm(nka)        =  abs(diff(X([i i2])));
+                sigma(nka)       =  fwhm(nka)./2.35482;
+            end
+            fwhm  = reshape(fwhm,[s]);
+            sigma = reshape(sigma,[s]);
         end
     end
 end
