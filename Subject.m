@@ -1026,7 +1026,7 @@ classdef Subject < Project
             target_file                                                     = regexprep(self.path_native_atlas,'data.nii','wdata.nii');%created by the above batch;
             movefile(target_file,self.path_native_atlas);
         end
-        end
+        end        
     end
     methods %(fmri analysis)                        
         function beta       = analysis_firstlevel(self,nrun,model_num,mask_id)
@@ -1325,20 +1325,20 @@ classdef Subject < Project
         end
     end
     methods %path_tools which are related to the subject              
-        function out = path_skullstrip_meanepi(self)
+        function out        = path_skullstrip_meanepi(self)
 				out = regexprep(self.path_meanepi,'meandata','ss_meandata');
 			end
-		function out  = path_meanepi(self)
+		function out        = path_meanepi(self)
             %returns the path to the meanepi (result of realignment).
             %returns empty if non-existent. Assumes that the first run contains the mean epi.
             first_run = self.dicom_target_run(1);
             out       = strrep( self.path_epi(first_run),sprintf('mrt%sdata',filesep),sprintf('mrt%smeandata',filesep));
         end
-		function out = path_tpm(self,n)
+		function out        = path_tpm(self,n)
 			%return the path to the Nth TPM image from the spm
 			out = sprintf('%s/TPM.nii,%i',self.tpm_dir,n);
 		end
-		function out = path_meanepi_segmented(self,num)
+		function out        = path_meanepi_segmented(self,num)
 			%Returns the path to the output of Segment_meanEPI, N can be a vector.
 			mean_epi = self.path_meanepi;
 			out      = '';
@@ -1346,9 +1346,13 @@ classdef Subject < Project
 				out      = strvcat(out,regexprep(mean_epi,'meandata',sprintf('c%dmeandata',n)))
 			end
         end        
-        function out = path_mask(self,nrun,model);
+        function out        = path_mask(self,nrun,model);
             path_spm = self.path_spmmat(nrun,model);
             out      = sprintf('%smask.nii',fileparts(path_spm));
+        end
+        function out        = path_normalized_mask(self,run,model);
+            [folder filename ext] = fileparts(self.path_mask(run,model));
+            out                   = sprintf('%s/w%s_%s%s',folder,self.normalization_method,filename,ext);
         end
         function out        = path_skullstrip(self,varargin)
             %returns filename for the skull stripped hr. Use VARARGIN to
@@ -2273,6 +2277,15 @@ classdef Subject < Project
             spmt_images = self.path_contrast(nrun,model_num,'w_','T');
             self.VolumeSmooth(spmt_images);%('s_' will be added, resulting in 's_w_')
         end
+        function out                               = normalize_mask(self,run,model)
+            %normalizes the mask image computed during the first level
+            %analysis for a MODEL in RUN. Both EPI and CAT normalization
+            %will be applied. Will write wCAT_mask.nii and wEPI_mask.nii
+            %file.
+            fprintf('Normalizing mask computed in run %d for model %d\n',run,model);
+            p = self.path_mask(run,model);
+            self.VolumeNormalize(p);
+        end
     end
     methods %(clearly fearamy specific)
         function analysis_CreateModel01(self)
@@ -3183,7 +3196,7 @@ classdef Subject < Project
         function analysis_CreateModel_RW(self,learning_rate)
             %same as 04, however interaction with ampxtime uses RW derived
             %temporal factors.
-            % for ns = s.get_selected_subjects(0).list;s=Subject(ns);for rw = logspace(-3,0,25);s.analysis_CreateModel_RW(rw);end;end
+            % for ns = s.get_selected_subjects(0).list;s=Subject(ns);for rw = linspace(0,.9,25);s.analysis_CreateModel_RW(rw);end;end
             
             
             %this initial part is exactly the same as model_02

@@ -55,7 +55,7 @@ classdef Project < handle
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
-        smoothing_factor      = 1:10;%how many mm images should be smoothened when calling the SmoothVolume method                
+        smoothing_factor      = [4 6 8];%how many mm images should be smoothened when calling the SmoothVolume method                
         path_smr              = sprintf('%s%ssmrReader%s',fileparts(which('Project')),filesep,filesep);%path to .SMR importing files in the fancycarp toolbox.
         gs                    = [5 6 7 8 9 12 14 16 17 18 19 20 21 24 25 27 28 30 32 34 35 37 39 40 41 42 43 44];
         subjects              = [];
@@ -76,7 +76,7 @@ classdef Project < handle
         tpm_dir               = sprintf('%stpm/',Project.path_spm); %path to the TPM images, needed by segment.         
         path_second_level     = sprintf('%sspm/',Project.path_project);%where the second level results has to be stored        
 		current_time          = datestr(now,'hh:mm:ss');
-        subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
+        subject_indices       = setdiff(find(cellfun(@(x) ~isempty(x),Project.trio_sessions)),15);% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.15 has huge motion artefacts.
         PixelPerDegree        = 29;
         screen_resolution     = [768 1024];%%%;%this is the size of the face on the facecircle;[212 212];
         path_stim             = sprintf('%sstim/ave.png',Project.path_project);
@@ -97,8 +97,8 @@ classdef Project < handle
     end  
 	properties (Hidden)
         normalization_method  = 'CAT';%which normalization method to use. possibilities are EPI or CAT
-	end
-		methods
+    end
+    methods
         function DU         = SanityCheck(self,runs,measure,varargin)
             %DU = SanityCheck(self,runs,measure,varargin)
 			%will run through subject folders and will plot their disk
@@ -370,8 +370,15 @@ classdef Project < handle
                 colorbar;
             end                        
         end
+        function [out]   = path_SecondLevel_mask(self,subject_group)
+            %returns the path to the secondlevel mask to be used for second-level analysis.
+            
+            out = sprintf('%s%sw%s_mask_group_%02d.nii',self.path_project,'midlevel/secondlevel_mask/',self.normalization_method,subject_group);
+            
+        end
+        
     end    
-    methods %getters
+    methods %getters                
         function out             = getgroup_all_param(self,varargin)
             %
             out = self.getgroup_pmf_param;
@@ -1180,8 +1187,106 @@ classdef Project < handle
             fs = 10;
             set(gca,'fontsize',fs,'xtick',1:length(labels),'ytick',1:length(labels),'XTickLabelRotation',45,'xticklabels',labels,'fontsize',fs,'YTickLabelRotation',45,'yticklabels',labels,'TickLabelInterpreter','none')
         end        
+        function [learning_rate,t] = GetRWIntervals(self)
+            %we will compute here the interval to use for testing the
+            %RW-based time effect.            
+            step          = .01;
+            learning_rate = [0.001 0.001];%initial learning rate.
+            rw_time0      = rescorlawagner( self.ucs_vector_notcleaned , learning_rate(1) ,Inf, 0);%start time-vector.
+            upper         = 0.9;
+            t             = rw_time0;
+            %%
+            while learning_rate(end) < upper         
+                %%
+                sprintf('Current learning rate is %s \n',mat2str(learning_rate(end)))
+                ok = 1                
+                while ok
+                    learning_rate(end) = learning_rate(end) + .0001%keep updating learning rate until                    
+                    rw_time = rescorlawagner( self.ucs_vector_notcleaned , learning_rate(end) ,Inf, 0);
+                    if (1-corr2(rw_time,rw_time0)) >= step%correlation decreases by STEP then
+                        ok                   = 0;
+                        rw_time0             = rw_time;%keep this one as the baseline
+                        learning_rate(end+1) = learning_rate(end);%and store the learning rate
+                        t                    = [t;rw_time0];
+                    end
+                    if learning_rate(end) >= upper
+                        break
+                    end
+                end
+            end
         end
+        function                     getgroup_firstlevel_RW(self,subjects)
+            
+            learning_rates = self.GetRWIntervals;
+            s =Subject(6);
+            sublist = s.get_selected_subjects(0).list(subjects);;
+            parfor ns = sublist
+                s=Subject(ns);
+                for rw = learning_rates;
+                    modelnum = round(10000+10000*rw);
+                    s.analysis_spm_firstlevel(1,modelnum);
+                end;
+            end
+        end
+        function                   getgroup_meanepi(self,criteria)
+            
+            filename = sprintf('%smidlevel/%s/%02d.nii',self.path_project,'getgroup_meanEPI',criteria)            
+            if exist(filename) == 0 | 0
+                if exist(fileparts(filename)) == 0
+                    mkdir(fileparts(filename))
+                end
+                p = [];
+                for ns = self.get_selected_subjects(criteria).list
+                    s = Subject(ns);
+%                     s.VolumeNormalize(s.path_meanepi);
+                    F = regexprep(s.path_meanepi,'meandata.nii','wCAT_meandata.nii');
+                    p = [ p ; F];
+                end
+                D = spm_vol(p);
+                V = mean(spm_read_vols(D),4);
+                dummy = D(1);
+                dummy.fname = filename
+                spm_write_vol(dummy,V);
+                
+            else
+                load(filename)
+            end            
+        end
+    end
     methods 
+        function out             = SecondLevel_Mask(self,subject_group);
+            %constructs a second-level mask based on normalized mask images
+            %of for a specific subject pool, returns the path if already
+            %computed. Assumes normalized first-level masks already exists.
+            
+            filename = self.path_SecondLevel_mask(subject_group);
+            %
+            force = 1;
+            if exist(filename) == 0 || force
+                %%
+                fprintf('Second Level mask not yet computed will do it now...\n');
+                fprintf('Loading all files...\n');
+                files = [];
+                for ns = self.get_selected_subjects(subject_group).list
+                    s = Subject(ns);
+                    files = [files;cellstr(s.path_normalized_mask(1,3))];
+                end
+                %%
+                vh = spm_vol(files);
+                vh = [vh{:}];
+                V  = spm_read_vols(vh);
+%                 V  = V > .5;
+                V  = sum(V,4) >= (size(files,1)-1);%take voxels present on all participants;                
+                %%
+                dummy       = vh(1);
+                dummy.fname = filename;
+                spm_write_vol(dummy,V);
+                out = filename;
+            else
+                fprintf('Second Level mask has been already computed, here is the path...\n')
+                out = filename;
+            end                                    
+        end
         function                              VolumeGroupAverage(self,selector)
             %Averages all IMAGES across all subjects. This can only be done
             %on normalized images. The result will be saved to the
@@ -1299,14 +1404,14 @@ classdef Project < handle
                     %register beta images and covariate values.                    
                     tcell                                                        = length(matlabbatch{1}.spm.stats.factorial_design.des.anova.icell);
                     ccc                                                          = 0;
-                    mat                                                          = kron(eye(4),demean(c));
+                    mat                                                          = kron(eye(tcell),demean(c));
                     for ncell = 1:tcell 
                         matlabbatch{1}.spm.stats.factorial_design.cov(ncell)     = struct('c', mat(:,ncell), 'cname', sprintf('cov:%s-cell:%02d',covariate_id,ncell), 'iCFI', 1, 'iCC', 1);                        
                     end                    
                 end
                 matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none     = 1;
-                matlabbatch{1}.spm.stats.factorial_design.masking.im             = 1;
-                matlabbatch{1}.spm.stats.factorial_design.masking.em             = {''};
+                matlabbatch{1}.spm.stats.factorial_design.masking.im             = 1;                
+                matlabbatch{1}.spm.stats.factorial_design.masking.em             = {self.SecondLevel_Mask(ngroup(1))};                
                 matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit         = 1;
                 matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
                 matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm        = 1;
@@ -1362,7 +1467,7 @@ classdef Project < handle
                         SPM.xCon(end+1) = spm_FcUtil('set','timeXgau','F','c',M(repmat([0 0 0 1],1,tmodel)==1,:)',SPM.xX.xKXs);
                     end
                     %%  
-                    spm_contrasts(SPM);
+                    SPM = spm_contrasts(SPM);
                     save(sprintf('%s/SPM.mat',spm_dir),'SPM');%save the SPM with the new xCon field
                     %xSPM is used to threshold according to a contrast.
 %                     xSPM = struct('swd', spm_dir,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.00001,'k',0,'thresDesc','none');                    
@@ -2023,63 +2128,90 @@ classdef Project < handle
                 fprintf('call back doesn''t run\n')
             end
         end
+        
+        
         function callback_rw(self)
             %s=Subject(5);global SPM;global xSPM;global st;st.callback = @s.callback_rw;clear global t;t=s.getgroup_all_param(0);global t
             global st
             global SPM
+            global xSPM
             global t                        
             p = pwd;
             figure(1000);clf;
             fs = 10;
-            common = {'fontsize',fs,'fontweight','bold'};
-            try                
+            common = {'fontsize',fs,'fontweight','bold'};            
+            try                                
                 %%
                 coor      = st.centre;
-                XYZvox    = self.get_mm2vox([coor(:) ;1],SPM.xCon(1).Vspm);
-                %%                
-                tsubject         = max(SPM.xX.I(:,1));
-                treg             = max(SPM.xX.I(:,2));
-                data             = reshape(spm_get_data([SPM.xY.VY],XYZvox(:)),tsubject,treg);
-                t.brain_time     = data(:,2);
-                t.brain_gau      = data(:,3);
-                t.brain_time_gau = data(:,4);            
-                %%                
-                subplot(6,6,[1 2 3 7 8 9 13 14 15]);               
-                predictors = {'time','gau' 'time\_gau'}
-                bar(2:4,mean(data(:,2:end)),'k');
+                XYZvox    = self.get_mm2vox([coor(:) ;1],SPM.xCon(xSPM.Ic).Vspm);
+                %%   
+                tsubject            = max(SPM.xX.I(:,1));
+                treg                = max(SPM.xX.I(:,2));
+                data                = reshape(spm_get_data([SPM.xY.VY],XYZvox(:)),tsubject,treg);
+                t.brain_time        = data(:,2);
+                t.brain_gau         = data(:,3);
+                t.brain_time_gau    = data(:,4);            
+                t.brain_dsigma      = data(:,5);            
+                t.brain_time_dsigma = data(:,6);            
+                %%         plot the mean beta values & SEM, and make a ttest.
+                subplot(8,6,[1 2 7 8 13 14]);
+                predictors = {'time','gau' 'time\_gau' 'dsig' 'time\_dsig'};
+                total_beta = size(data,2);
+                bar(2:total_beta,mean(data(:,2:end)),'k');
                 hold on;
-                errorbar(2:4,mean(data(:,2:end)),std(data(:,2:end))./sqrt(tsubject),'ro','linewidth',2);
+                errorbar(2:total_beta,mean(data(:,2:end)),std(data(:,2:end))./sqrt(tsubject),'ro','linewidth',2);
                 hold off;
                 set(gca,'xticklabel',predictors,'XTickLabelRotation',45,common{:});                                
                 ylabel(sprintf('Mean Predictor Weight (SEM) \n(n = %d)',size(data,1)),common{:});
                 box off;
-                xlim([1 5])                
+                xlim([1 total_beta+1])                
                 [h p] = ttest(data);                
-                for n = 2:4
+                for n = 2:total_beta
                     if p(n) <= .05                        
                         text(n,max(ylim),pval2asterix(p(n)),'HorizontalAlignment','center',common{:},'fontsize',20);
                     end
                 end
-                %%
-                subplot(6,6,[1 2 3 7 8 9 13 14 15]+3);
-                [pmod]      = self.get_pmodmat(3);%most complex model                                
+                grid on;
+                %% Plot the fitted temporal dynamics
+                subplot(8,6,[3 4 9 10 15 16]);
+                [pmod]      = self.get_pmodmat(4);%most complex model                                
                 contourf(reshape(pmod*mean(data)',8,520/8)',9,'color','none');
                 S         = get(gca,'position');
-                h         = colorbar('Location','WestOutside');
-                h.Box     = 'off';
-                cbarticks = linspace(min(h.Ticks),max(h.Ticks),3);
-                h.Ticks   = cbarticks;
+%                 h         = colorbar('Location','WestOutside');
+%                 h.Box     = 'off';
+%                 cbarticks = linspace(min(h.Ticks),max(h.Ticks),3);
+%                 h.Ticks   = cbarticks;
                 axis xy;
                 box off
                 set(gca,'ytick',[],'xtick',[2 4 6 8],'xticklabel',{sprintf('-90%c',char(176))  'CS+' sprintf('90%c',char(176)) 'CS-'},common{:}); 
                 grid on;
                 ylabel('time',common{:});
+                %% plot the RW model
+                subplot(8,6,[5 6 11 12 17 18]);
+                files = [];                
+                load ~/Desktop/a
+                total_step=length(a)
+                ppp = '/mnt/data/project_fearamy/data/second_level/run001/spm/model_10010+19001_chrf_0_0/cov_id_/06mm/fitfun_08/group_00_all/normalization_CAT/';
+%                 ppp = '/mnt/data/project_fearamy/data/second_level/run001/spm/model_10010+19001_chrf_0_0/cov_id_/06mm/fitfun_08/group_Rating_vM_1/normalization_CAT/';
+                for i = 1:total_step
+                    files = [files;sprintf('%sspmF_%04d.nii',ppp,i)];
+                end
+                datarw = spm_get_data(spm_vol(files),XYZvox(:))
+                k = bar(datarw,.9,'k')           
+                k.EdgeColor = [.5 .5 .5];
+                box off
+                xlim([0 total_step])                
+                models = a;
+                i = 1:4:total_step;
+                set(gca,'xtick',i,'xticklabels',models(i),'xticklabelrotation',-45,'YAxisLocation','right',common{:});
+                ylabel('F-value')
+              
                 %%
-                o =  fitlm(t,'rating_nonparam ~ 1 + brain_time + brain_gau + brain_time_gau')
-                pos = {[25 26 31 32] [27 28 33 34] [ 29 30 35 36]};
-
-                for n = 1:3
-                    h(n) = subplot(6,6,pos{n});
+                o   =  fitlm(t,'rating_nonparam ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
+                pos =  {[25 26 31 32] [27 28 33 34] [ 29 30 35 36] [39 40 45 46] [41 42 47 48] };
+                h   =  [];
+                for n = 1:total_beta-1
+                    h(n) = subplot(8,6,pos{n});
                     scatter(t.rating_nonparam(:),data(:,n+1),200,'.');
                     xlabel('rating tuning',common{:});
                     ylabel(predictors{n},common{:});
@@ -2088,15 +2220,32 @@ classdef Project < handle
                     hl.Color = [.3 .3 .3];
                     grid on;
                     xlim([-2 2.5])
-                    title(sprintf('W: %0.3g\npval: %0.3g',o.Coefficients.Estimate(1+n),o.Coefficients.pValue(1+n)),common{:})
+                    title(sprintf('W: %0.3g pval: %0.3g',o.Coefficients.Estimate(1+n),o.Coefficients.pValue(1+n)),common{:})
+                    set(gca,common{:})
                     box off;
                     drawnow;
+                    axis square
                 end
-                subplotChangeSize(h,-.05,0)                                         
-            catch
+                %%
+                subplotChangeSize(h,-.05,-.05);                
+                try
+                    [fileparts(SPM.swd) filesep 'normalization_CAT' filesep SPM.xCon(xSPM.Ic).Vspm.fname]
+                    [fileparts(SPM.swd) filesep 'normalization_EPI' filesep SPM.xCon(xSPM.Ic).Vspm.fname]
+                    f_cat = spm_get_data(spm_vol([fileparts(SPM.swd) filesep 'normalization_CAT' filesep SPM.xCon(xSPM.Ic).Vspm.fname]),XYZvox(:));
+                    f_epi = spm_get_data(spm_vol([fileparts(SPM.swd) filesep 'normalization_EPI' filesep SPM.xCon(xSPM.Ic).Vspm.fname]),XYZvox(:));
+                    
+                    mysupertext = sprintf('[%3.4g mm, %3.4g mm, %3.4g mm]\n F value = [%3.4g vs. %3.4g]\n for CAT vs. EPI normalization.',coor(1),coor(2),coor(3),f_cat,f_epi);
+                    supertitle(mysupertext,1,common{:});
+                catch
+                    mysupertext = sprintf('[%3.4g mm, %3.4g mm, %3.4g mm]\n',coor(1),coor(2),coor(3));
+                    supertitle(mysupertext,1,common{:});
+                end
+              
+            catch ME
                 fprintf('call back doesn''t run\n')
+                rethrow(ME)                
             end
-            cd(p)
+%             cd(p)
         end
         function test(self,SPM,xSPM)
                         
@@ -3043,8 +3192,8 @@ classdef Project < handle
 %                        keyboard
                     end
                 end
-            end            
-            [yp xp]            = find(r == max(r(:)));            
+            end
+            [yp xp]            = find(r == max(r(:)));
             out.learning_rates = learning_rates;
             out.r              = r;
             out.stds           = stds;            
@@ -3074,6 +3223,6 @@ classdef Project < handle
             elseif tuning_criterium == 2
                 out.FearTuning = logical((out.LL > -log10(pval)));                
             end
-        end
+        end        
     end
 end
