@@ -1032,7 +1032,7 @@ classdef Subject < Project
                 out             = out(selector,:);
             end
         end
-         function out        = path_con(self,nrun,model_num,prefix,varargin)
+        function out        = path_con(self,nrun,model_num,prefix,varargin)
             %returns the path for beta images computed in NRUN for
             %MODEL_NUM. Use VARARGIN to select a subset by indexing.
             %Actually spm_select is not even necessary here.
@@ -1048,36 +1048,36 @@ classdef Subject < Project
                 selector        = varargin{1};
                 out             = out(selector,:);
             end
-         end
-         function out        = path_FIR(self,nrun,model_num,order,nametag,varargin)
+        end
+        function out        = path_FIR(self,nrun,model_num,order,nametag,varargin)
             %returns the path for FIR model
             out = self.dir_spmmat(nrun,model_num);
             out = strrep(out,'chrf',sprintf('FIR_%02d_%s',order,nametag));
-          
+            
             %select certain nifti if VARARGIN provided
             if nargin > 5
                 out = spm_select('FPList',out,sprintf('%s.nii',varargin{1}));
             end
-         end
-         function out        = path_contrast(self,nrun,model_num,prefix,type,varargin)
-             %returns path to spm{T,F}_XXXX.nii contrast volumes in NRUN for
-             %MODEL_NUM. Use PREFIX to select a subset, such s_ or s_w_.
-             %TYPE selects for T or F.
-             
-             out = self.dir_spmmat(nrun,model_num);
-             fprintf('Searching for beta images in:\n%s\n',out)
-             out = spm_select('FPList',out,sprintf('^%sspm%s_*',prefix',type));
-             if isempty(out)
-                 cprintf([1 0 0],'No SPM{F,T} images found, probably wrong prefix/run/etc is entered...\n');
-                 fprintf('%s\n',out)
-                 keyboard%sanity check
-             end
-             %select if VARARGIN provided
-             if nargin > 5
-                 selector        = varargin{1};
-                 out             = out(selector,:);
-             end
-         end
+        end
+        function out        = path_contrast(self,nrun,model_num,prefix,type,varargin)
+            %returns path to spm{T,F}_XXXX.nii contrast volumes in NRUN for
+            %MODEL_NUM. Use PREFIX to select a subset, such s_ or s_w_.
+            %TYPE selects for T or F.
+            
+            out = self.dir_spmmat(nrun,model_num);
+            fprintf('Searching for beta images in:\n%s\n',out)
+            out = spm_select('FPList',out,sprintf('^%sspm%s_*',prefix',type));
+            if isempty(out)
+                cprintf([1 0 0],'No SPM{F,T} images found, probably wrong prefix/run/etc is entered...\n');
+                fprintf('%s\n',out)
+                keyboard%sanity check
+            end
+            %select if VARARGIN provided
+            if nargin > 5
+                selector        = varargin{1};
+                out             = out(selector,:);
+            end
+        end
         function [HRPath]   = path_hr_dicom(self)
             % finds the dicom path to the latest HR measurement for this
             % subject.
@@ -1495,8 +1495,8 @@ classdef Subject < Project
                             fprintf('Number of onsets for CoolDown %d.\n',length(cond(end).onset))
                         end
                         
-                    
-                         %% housekeeping
+                        
+                        %% housekeeping
                         for counter = 1:length(cond)
                             cond(counter).onset    = cond(counter).onset./TR;
                             cond(counter).duration = cond(counter).duration./TR;
@@ -1703,7 +1703,7 @@ classdef Subject < Project
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
                         load(modelpath);
                     end
-              case 3
+                case 3
                     modelname = 'CoolOnsets'; %tonic pain is baseline, everything else is modelled, except faces. they go into ISI.
                     
                     if ~exist(modelpath) || force == 1
@@ -1761,7 +1761,7 @@ classdef Subject < Project
                         scan_times          = L(L(:,2) == 0,1);%find all scan events and get their times
                         scan_id             = 1:length(scan_times);%label pulses with increasing numbers, assumes no pulses is missing.
                         
-                       %% get onsets
+                        %% get onsets
                         
                         conds = [4 11 9 18];% (13 = face is gone) 4 = RampDown, 11 = RateTreat, 9=RatePain 18 = CoolDown at very end.
                         if verbalize ==1
@@ -1875,7 +1875,7 @@ classdef Subject < Project
                     else
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
                         load(modelpath);
-                    end       
+                    end
             end
         end
         %         function [stim_scanunit,stim_ids]=StimTime2ScanUnit(self,run)
@@ -1911,6 +1911,7 @@ classdef Subject < Project
             %run the model MODEL_NUM for data in NRUN.
             %NRUN can be a vector, but then care has to be taken that
             %model_num is correctly set for different runs.
+            empty1stlevel = 1;
             FIRparam  = 14;
             
             spm_dir  = strrep(self.dir_spmmat(nrun(1),model_num),'chrf',sprintf('FIR_%02d_10conds',FIRparam));
@@ -1918,11 +1919,15 @@ classdef Subject < Project
             
             if ~exist(path_spmmat);mkdir(spm_dir);end
             
+            if empty1stlevel == 1
+                if exist(spm_dir); system(sprintf('rm -fr %s*',strrep(spm_dir,'//','/')));end %this is AG style.
+            end
+            
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
             matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
             matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
-%             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
-%             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
+            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
+            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
             
             se = 0;
             for session = nrun(:)'
@@ -1933,11 +1938,11 @@ classdef Subject < Project
                 dummy                                              = load(self.path_model(session,model_num));
                 switch session
                     case 1
-                         dummy.cond = dummy.cond(1:9); % 8 faces, t0
+                        dummy.cond = dummy.cond(1:9); % 8 faces, t0
                     case 2
                         dummy.cond = dummy.cond(1:3);   % CSP, UCS, t0
                     case 3
-                         dummy.cond = dummy.cond(1:10); % 8 faces, UCS, t0
+                        dummy.cond = dummy.cond(1:10); % 8 faces, UCS, t0
                 end
                 for c = 1:numel(dummy.cond)
                     dummy.cond(c).duration = 0;
@@ -1945,7 +1950,7 @@ classdef Subject < Project
                 end
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).cond   = dummy.cond;
- 
+                
                 %load nuissance parameters
                 nuis                                               = self.get_param_motion(session);
                 nuis                                               = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
@@ -2018,8 +2023,8 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
             matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
             matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
-%             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
-%             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
+            %             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
+            %             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
             
             se = 0;
             for session = nrun
@@ -2072,155 +2077,146 @@ classdef Subject < Project
             vec = [];
             convec = struct([]);
             
-            switch model_num
-                case 1 % only face onsets modelled,not the RampDown
-                    
-                    %                     % contrast 1
-                    %                     % all faces vs everything else
-                    %                     n-c = n + 1;
-                    %                     vec = zeros(self.get_Nbetas(nrun,model_num),1);
-                    %                     name{n} = 'allfaces > rest';
-                    %                     face_betas = self.get_beta_index(nrun,model_num,intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/nulltrial
-                    %                     vec(face_betas) = 1;
-                    %                     convec{n} = vec;
-                    %
-                    %                     % contrast 2
-                    %                     % CSP > CSN (or UCS > CSN in Cond)
-                    %                     n = n + 1;
-                    %                     vec = zeros(self.get_Nbetas(nrun,model_num),1);
-                    %                     switch nrun
-                    %                         case 1
-                    %                             vec(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
-                    %                             convec{n} = vec;
-                    %                             name{n} = 'CSP>CSN';
-                    %                         case 2
-                    %                             warning('Can''t compare CSP to CSN here, not defined. Using UCS > CSN instead.')
-                    %                             vec(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
-                    %                             convec{n} = vec;
-                    %                             name{n} = 'UCS>CSN';
-                    %                         case 3
-                    %                             vec = zeros(self.get_Nbetas(nrun,model_num)./2,1);
-                    %                             vec(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
-                    %                             convec{n} = repmat(vec,2,1);
-                    %                             name{n} = 'CSP>CSN';
-                    %                     end
-                    
-                case 2 %Face Onsets and RampDown modelled seperately
-                    Nbetas = self.get_Nbetas(nrun,model_num);
-                    if nrun == 3
-                        Nbetas = Nbetas./2;
+            if model_num  == 2
+                %% is this correct for sub 15?
+                Nbetas = self.get_Nbetas(nrun,model_num);
+                if nrun == 3
+                    Nbetas = Nbetas./2;
+                end
+                
+                % contrast 1
+                % all faces vs everything else
+                n = n + 1;
+                name{n} = 'allfaces > rest';
+                face_betas = [];
+                convec{n} = zeros(1,Nbetas);
+                for cond = intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist))
+                    ind = self.get_beta_index(nrun,model_num,[num2str(cond) 'Face']);
+                    face_betas = [face_betas ind];
+                end
+                convec{n}(face_betas) = deal(1);
+                
+                
+                % contrast 2
+                % CSP > CSN (or UCS > CSN in Cond)
+                % given by ramp
+                n = n + 1;
+                convec{n} = zeros(1,Nbetas);
+                if nrun == 2
+                    fprintf('Can''t compare CSP to CSN here, not defined. Using UCS > CSN instead.\n')
+                    convec{n}(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
+                    name{n} = 'UCS>CSN';
+                else
+                    convec{n}(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
+                    name{n} = 'CSP>CSN';
+                end
+                
+                % contrast 3
+                % all Relief trials vs else, also UCS trials included
+                % (which is included in Project.facecond anyway)
+                n = n + 1;
+                convec{n} = zeros(1,Nbetas);
+                name{n} = 'RampDown > rest';
+                thisphaseconds = intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist));
+                convec{n}(self.get_beta_index(nrun, model_num,thisphaseconds)) = 1;
+                
+            else
+                % contrast 1
+                % all faces vs everything else
+                n = n + 1;
+                if nrun == 3
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num)./2);
+                    if self.id ==15
+                        vec = zeros(1,self.get_Nbetas(nrun,model_num));
                     end
-                    
-                    % contrast 1
-                    % all faces vs everything else
-                    n = n + 1;
-                    name{n} = 'allfaces > rest';
-                    face_betas = [];
-                    convec{n} = zeros(1,Nbetas);
-                    for cond = intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist))
-                        ind = self.get_beta_index(nrun,model_num,[num2str(cond) 'Face']);
-                        face_betas = [face_betas ind];
+                else
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                end
+                name{n} = 'faces > rest';
+                face_betas = self.get_beta_index(nrun,model_num,intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/nulltrial
+                vec(face_betas) = 1;
+                if nrun == 3
+                    convec{n} = repmat(vec,1,2);
+                    if self.id ==15
+                        convec{n} = vec;
                     end
-                    convec{n}(face_betas) = deal(1);
-                    
-                    
-                    % contrast 2
-                    % CSP > CSN (or UCS > CSN in Cond)
-                    % given by ramp
-                    n = n + 1;
-                    convec{n} = zeros(1,Nbetas);
-                    if nrun == 2
-                        fprintf('Can''t compare CSP to CSN here, not defined. Using UCS > CSN instead.\n')
-                        convec{n}(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
-                        name{n} = 'UCS>CSN';
-                    else
-                        convec{n}(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
+                else
+                    convec{n} = vec;
+                end
+                
+                % contrast 2
+                % CSP > CSN (or UCS > CSN in Cond)
+                n = n + 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                switch nrun
+                    case 1
+                        vec(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
                         name{n} = 'CSP>CSN';
-                    end
-                    
-                    % contrast 3
-                    % all Relief trials vs else, also UCS trials included
-                    % (which is included in Project.facecond anyway)
-                    n = n + 1;
-                    convec{n} = zeros(1,Nbetas);
-                    name{n} = 'RampDown > rest';
-                    thisphaseconds = intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist));
-                    convec{n}(self.get_beta_index(nrun, model_num,thisphaseconds)) = 1;
-                    
-                case 3
-                    % contrast 1
-                    % all Cooldowns vs everything else
-                    n = n + 1;
-                    if nrun == 3
-                        vec = zeros(1,self.get_Nbetas(nrun,model_num)./2);
-                    else
-                        vec = zeros(1,self.get_Nbetas(nrun,model_num));
-                    end
-                    name{n} = 'relief > rest';
-                    face_betas = self.get_beta_index(nrun,model_num,intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/nulltrial
-                    vec(face_betas) = 1;
-                    if nrun == 3
-                        convec{n} = repmat(vec,1,2);
-                    else
-                        convec{n} = vec;
-                    end
-                    
-                    % contrast 2
-                    % CSP > CSN (or UCS > CSN in Cond)
-                    n = n + 1;
-                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
-                    switch nrun
-                        case 1
+                    case 2
+                        warning('Can''t compare CSP to CSN here, not defined. Using UCS > CSN instead.')
+                        vec(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
+                        name{n} = 'UCS>CSN';
+                    case 3
+                        vec = zeros(1,self.get_Nbetas(nrun,model_num)./2); %replace upper vec, because already double
+                        vec(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
+                        vec = repmat(vec,1,2);
+                        if self.id == 15
+                            vec = zeros(1,self.get_Nbetas(nrun,model_num));
                             vec(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
                             name{n} = 'CSP>CSN';
-                        case 2
-                            warning('Can''t compare CSP to CSN here, not defined. Using UCS > CSN instead.')
-                            vec(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
-                            name{n} = 'UCS>CSN';
-                        case 3
-                            vec = zeros(1,self.get_Nbetas(nrun,model_num)./2); %replace upper vec, because already double
-                            vec(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
-                            vec = repmat(vec,1,2);
-                            name{n} = 'CSP>CSN';
-                    end
-                    convec{n} = vec;
-                    
-                    % contrast 3
-                    % all Cooldowns NEGATIVE
-                    n = n + 1;
-                    if nrun == 3
-                        vec = zeros(1,self.get_Nbetas(nrun,model_num)./2);
-                    else
+                        end
+                        name{n} = 'CSP>CSN';
+                end
+                convec{n} = vec;
+                
+                % contrast 3
+                % all Cooldowns NEGATIVE
+                n = n + 1;
+                if nrun == 3
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num)./2);
+                    if self.id ==15
                         vec = zeros(1,self.get_Nbetas(nrun,model_num));
                     end
-                    name{n} = 'relief > rest';
-                    face_betas = self.get_beta_index(nrun,model_num,intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/nulltrial 
-                    vec(face_betas) = -1;
-                    if nrun == 3
-                        convec{n} = repmat(vec,1,2);
-                    else
+                else
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                end
+                name{n} = 'faces > rest (neg)';
+                face_betas = self.get_beta_index(nrun,model_num,intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/nulltrial
+                vec(face_betas) = -1;
+                if nrun == 3
+                    convec{n} = repmat(vec,1,2);
+                    if self.id ==15
                         convec{n} = vec;
                     end
-                    
-                    % contrast 4
-                    % CSN > CSP/UCS
-                    n = n + 1;
-                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
-                    switch nrun
-                        case 1
-                            vec(self.get_beta_index(nrun,model_num,[0 180]))= [-1 1];
-                            name{n} = 'CSN>CSP';
-                        case 2
-                            warning('Can''t compare CSP to CSN here, not defined. Using CSN > UCS instead.')
-                            vec(self.get_beta_index(nrun,model_num,[500 180]))= [-1 1];
-                            name{n} = 'CSN>UCS';
-                        case 3
-                            vec = zeros(1,self.get_Nbetas(nrun,model_num)./2); %replace upper vec, because already double
-                            vec(self.get_beta_index(nrun,model_num,[0 180]))= [-1 1];
-                            vec = repmat(vec,1,2);
-                            name{n} = 'CSN>CSP';
-                    end
+                else
                     convec{n} = vec;
+                end
+                
+                % contrast 4
+                % CSN > CSP/UCS
+                n = n + 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                switch nrun
+                    case 1
+                        vec(self.get_beta_index(nrun,model_num,[0 180]))= [-1 1];
+                        name{n} = 'CSN>CSP';
+                    case 2
+                        warning('Can''t compare CSP to CSN here, not defined. Using CSN > UCS instead.')
+                        vec(self.get_beta_index(nrun,model_num,[500 180]))= [-1 1];
+                        name{n} = 'CSN>UCS';
+                    case 3
+                        vec = zeros(1,self.get_Nbetas(nrun,model_num)./2); %replace upper vec, because already double
+                        vec(self.get_beta_index(nrun,model_num,[0 180]))= [-1 1];
+                        vec = repmat(vec,1,2);
+                        name{n} = 'CSN>CSP';
+                        if self.id == 15
+                            vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                            vec(self.get_beta_index(nrun,model_num,[0 180]))= [-1 1];
+                            name{n} = 'CSN>CSP';
+                        end
+                end
+                convec{n} = vec;
+                
             end
             %%
             total_cons = n;
@@ -2243,7 +2239,7 @@ classdef Subject < Project
         function Con1stLevel(self,nrun,model_num)
             n_con = self.CreateContrasts(nrun,model_num);
             fprintf('%d contrasts computed for phase %d, Model %d. \n',n_con,nrun,model_num)
-            %normalize the con images right away            
+            %normalize the con images right away
             self.VolumeNormalize(self.path_con(nrun,model_num,''));%normalize ('wCAT_' and 'wEPI_'' will be added)
             % count all contrasts here.
             wcon = self.path_con(nrun,model_num,'wCAT_'); %should find both wCAT and wEPI.
