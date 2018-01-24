@@ -2154,18 +2154,44 @@ classdef Project < handle
                 data{narea}    = dummy(:,2:end);
             end                        
             %% get the canonical correlation weights for all pair-wise combinations. [NxN]
+            tSite = length(data);
             for n = 1:tSite
                 for m = 1:tSite
+                    [n m ]
                     R      = 1-squareform(pdist([data{n},data{m}]','correlation'));
                     R      = R(1:5,6:10);
-                    X      = reshape(demean(Vectorize(eye(5))),[5 5]);
+                    SUPER  = eye(5);
+%                     SUPER  = [0 0 0 0 0; 0 0 0 1 1;0 0 0 1 1;0 0 0 0 0 ;0 0 0 0 0];
+%                     SUPER  = [0 0 0 0 0; 0 1 1 0 0;0 1 1 0 0;0 0 0 0 0 ;0 0 0 0 0];
+%                     SUPER  = [0 0 0 0 0; 0 0 0 0 0;0 0 0 0 0;0 0 0 1 1 ;0 0 0 1 1];
+                    SUPER = [ 0 1 1 1 1; 0 0 0 0 0; 0 0 0 0 0 ; 0 0 0 0 0 ; 0 0 0 0 0 ];
+                    X      = reshape(demean(Vectorize(SUPER)),[5 5]);
                     C      = ones(5);
-                    dummy  = fitlm([zscore(X(:)) C(:)],zscore(R(:)));
+                    dummy  = fitlm(zscore(X(:)),zscore(R(:)));
                     B(n,m) = dummy.Rsquared.Ordinary;
+                    M = anova(dummy,'summary');
+                    P(n,m) = any(M.pValue < .01);
                 end
             end
             %% test amp2amp, sigma2sigma, amp2sigma, sigma2amp and time2all models
-      
+            clf;
+            for n = 1:tSite
+                for m = 1:tSite
+                    if n ~= m
+                        h1 = plot(coors(2,[n m]),-coors(1,[n m]),'o','markersize',20);
+                        h1.MarkerFaceColor = [1 0 0 ];
+                        h1.MarkerEdgeColor = [1 0 0 ];
+                        if P(n,m)                                                        
+                            h = line(coors(2,[n m]),-coors(1,[n m]));
+                            hold on;
+                            h.LineWidth = (B(n,m)*3).^4;
+                            h.Color = [0 0.45 0.74 .3]
+                        end
+                    end
+                end
+            end
+            axis equal
+            hold off
         end
         
         function callback_rw(self)
