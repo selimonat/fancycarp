@@ -55,7 +55,7 @@ classdef Project < handle
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
-        smoothing_factor      = [4 6 8];%how many mm images should be smoothened when calling the SmoothVolume method                
+        smoothing_factor      = [3];%how many mm images should be smoothened when calling the SmoothVolume method                
         path_smr              = sprintf('%s%ssmrReader%s',fileparts(which('Project')),filesep,filesep);%path to .SMR importing files in the fancycarp toolbox.
         gs                    = [5 6 7 8 9 12 14 16 17 18 19 20 21 24 25 27 28 30 32 34 35 37 39 40 41 42 43 44];
         subjects              = [];
@@ -959,14 +959,12 @@ classdef Project < handle
                 pmod = pmod(:,[1 2 3 4 7 8 5 6 9]);
             end
         end
-        function [coors]         = get_SecondLevel_ANOVA_coordinates(self,ngroup,sk);
+        function [coors]         = get_SecondLevel_ANOVA_coordinates(self,ngroup,run,models,beta_image_index,sk,covariate_id,nC);            
             %returns the coordiantes displayed on spm figure;
-            model       = 3;
-            reg_i       = 1:4;
-            xSPM        = self.SecondLevel_ANOVA(ngroup,1,model,reg_i,sk,[]);
-            xSPM        = struct('swd', xSPM.swd,'title','eoi','Ic',1,'n',1,'Im',[],'pm',[],'Ex',[],'u',.001,'k',0,'thresDesc','none');
-            %replace 'none' to make FWE corrections.
-            [SPM xSPM]  = spm_getSPM(xSPM);%now get the tresholded data, this will fill in the xSPM struct with lots of information.
+            %%            
+            SPM         = self.SecondLevel_ANOVA(ngroup,run,models,beta_image_index,sk,covariate_id);
+            xSPM        = struct('swd', SPM.swd,'title',SPM.xCon(nC).name,'Ic',nC,'n',[],'Im',[],'pm',[],'Ex',[],'u',.001,'k',0,'thresDesc','none');
+            [SPM, xSPM] = spm_getSPM(xSPM);
             t           = spm_list('table',xSPM);
             coors       = [t.dat{:,end};ones(1,size(t.dat,1))];
         end
@@ -1229,7 +1227,8 @@ classdef Project < handle
             end
         end
         function                   getgroup_meanepi(self,criteria)
-            
+            %computes a mean EPI image based on subject pool defined by
+            %CRITERIA
             filename = sprintf('%smidlevel/%s/%02d.nii',self.path_project,'getgroup_meanEPI',criteria)            
             if exist(filename) == 0 | 0
                 if exist(fileparts(filename)) == 0
@@ -1251,15 +1250,16 @@ classdef Project < handle
             else
                 load(filename)
             end            
-        end
+        end        
     end
-    methods 
-        function out             = SecondLevel_Mask(self,subject_group);
+    methods         
+        function out                        = SecondLevel_Mask(self,subject_group);
             %constructs a second-level mask based on normalized mask images
             %of for a specific subject pool, returns the path if already
             %computed. Assumes normalized first-level masks already exists.
             
-            filename = self.path_SecondLevel_mask(subject_group);
+            filename         = self.path_SecondLevel_mask(subject_group);
+            path_average_hr  = sprintf('%smidlevel/run000/mrt/w_ss_data.nii',self.path_project);
             %
             force = 1;
             if exist(filename) == 0 || force
@@ -1276,7 +1276,17 @@ classdef Project < handle
                 vh = [vh{:}];
                 V  = spm_read_vols(vh);
 %                 V  = V > .5;
-                V  = sum(V,4) >= (size(files,1)-1);%take voxels present on all participants;                
+                V  = sum(V,4) >= (size(files,1));%take voxels present on all participants;
+                %% multiply this with the binarized mean skull-stripped image to remove out of brain voxels
+                %first get the skull mask using magic wand
+                H = spm_vol(path_average_hr);
+                vH = spm_read_vols(H);
+                M = zeros(size(vH));
+                for nslice = 1:size(vH,3)
+                    M(:,:,nslice) = ~logical(magicwand(repmat(vH(:,:,nslice),[1 1 3]),1,1,5));
+                end
+                %%
+                V = V.*M;
                 %%
                 dummy       = vh(1);
                 dummy.fname = filename;
@@ -1318,9 +1328,9 @@ classdef Project < handle
                 spm_jobman('run', matlabbatch);
             end
         end         
-        function [xSPM]                     = SecondLevel_ANOVA(self,ngroup,run,models,beta_image_index,sk,covariate_id)
+        function [SPM]                     = SecondLevel_ANOVA(self,ngroup,run,models,beta_image_index,sk,covariate_id)
             %%
-            %[xSPM]     = SecondLevel_ANOVA(self,ngroup,run,models,beta_image_index,sk,covariate_id)
+            %[SPM]     = SecondLevel_ANOVA(self,ngroup,run,models,beta_image_index,sk,covariate_id)
             %
             %
             % This method runs a second level analysis for a model defined
@@ -1350,15 +1360,15 @@ classdef Project < handle
             subjects   = self.get_selected_subjects(ngroup(1),ngroup(2));
             spm_dir    = regexprep(self.dir_spmmat(run,models(1)),'sub...','second_level');%convert to second-level path, replace the sub... to second-level.
             spm_dir    = sprintf('%scov_id_%s/%02dmm/fitfun_%02d/group_%s/normalization_%s/',spm_dir,covariate_id,sk,self.selected_fitfun,subjects.name,self.normalization_method);
+            spm_path   = sprintf('%sSPM.mat',spm_dir);
             %% if multiple models are needed to be analized in one single second-level anaylsis change the spmdir to reflect this
             if length(models)>1
                 folder      = sprintf('%d+',models([1 end]));
                 folder(end) = [];
                 spm_dir     = regexprep(spm_dir,mat2str(models(1)),folder);%I shortened the folder name not to exceed the path length limit
-            end
-            xspm_path  = sprintf('%sxSPM.mat',spm_dir);
+            end            
             %%
-            if exist(xspm_path) == 0;
+            if exist(spm_path) == 0;
                 %% create path to beta images;                                
                 beta_files2= [];
                 for ns = subjects.list(:)'                
@@ -1478,8 +1488,7 @@ classdef Project < handle
 %                     save(xspm_path,'xSPM');
                 end
             else
-                load(xspm_path);                
-                t                                 = spm_list('table',xSPM{2}.rating);
+                load(spm_path);                                
             end            
 
         end        
@@ -2128,7 +2137,36 @@ classdef Project < handle
                 fprintf('call back doesn''t run\n')
             end
         end
-        
+        function feargen_canonical_correlation(self,ngroup,run,models,beta_image_index,sk,covariate_id,NCONTRAST)
+            %% [SPM xSPM] = spm_getSPM
+            SPM         = self.SecondLevel_ANOVA(ngroup,run,models,beta_image_index,sk,covariate_id);
+%             xSPM        = struct('swd', SPM.swd,'title',SPM.xCon(NCONTRAST).name,'Ic',NCONTRAST,'n',[],'Im',[],'pm',[],'Ex',[],'u',.001,'k',0,'thresDesc','none');
+            %% get coordinates from the xSPM [1x3]
+            coors       = self.get_SecondLevel_ANOVA_coordinates(ngroup,run,models,beta_image_index,sk,[],NCONTRAST)
+            tSite       = size(coors,2);
+            %% get the data matrix [Nx5]
+            data  = {};
+            narea = 0;
+            for coor = coors
+                narea          = narea+1;
+                XYZvox         = self.get_mm2vox(coor(:),SPM.xCon(NCONTRAST).Vspm);
+                dummy          = reshape(spm_get_data([SPM.xY.VY],XYZvox),39,6);
+                data{narea}    = dummy(:,2:end);
+            end                        
+            %% get the canonical correlation weights for all pair-wise combinations. [NxN]
+            for n = 1:tSite
+                for m = 1:tSite
+                    R      = 1-squareform(pdist([data{n},data{m}]','correlation'));
+                    R      = R(1:5,6:10);
+                    X      = reshape(demean(Vectorize(eye(5))),[5 5]);
+                    C      = ones(5);
+                    dummy  = fitlm([zscore(X(:)) C(:)],zscore(R(:)));
+                    B(n,m) = dummy.Rsquared.Ordinary;
+                end
+            end
+            %% test amp2amp, sigma2sigma, amp2sigma, sigma2amp and time2all models
+      
+        end
         
         function callback_rw(self)
             %s=Subject(5);global SPM;global xSPM;global st;st.callback = @s.callback_rw;clear global t;t=s.getgroup_all_param(0);global t
@@ -2138,7 +2176,7 @@ classdef Project < handle
             global t                        
             p = pwd;
             figure(1000);clf;
-            fs = 10;
+            fs = 8;
             common = {'fontsize',fs,'fontweight','bold'};            
             try                                
                 %%
@@ -2150,9 +2188,9 @@ classdef Project < handle
                 data                = reshape(spm_get_data([SPM.xY.VY],XYZvox(:)),tsubject,treg);
                 t.brain_time        = data(:,2);
                 t.brain_gau         = data(:,3);
-                t.brain_time_gau    = data(:,4);            
-                t.brain_dsigma      = data(:,5);            
-                t.brain_time_dsigma = data(:,6);            
+                t.brain_time_gau    = data(:,4);
+                t.brain_dsigma      = data(:,5);
+                t.brain_time_dsigma = data(:,6);
                 %%         plot the mean beta values & SEM, and make a ttest.
                 subplot(8,6,[1 2 7 8 13 14]);
                 predictors = {'time','gau' 'time\_gau' 'dsig' 'time\_dsig'};
@@ -2207,27 +2245,45 @@ classdef Project < handle
                 ylabel('F-value')
               
                 %%
-                o   =  fitlm(t,'rating_nonparam ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
+                o    =  fitlm(t,'rating_nonparam     ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
+                o2   =  fitlm(t,'facecircle_nonparam ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
                 pos =  {[25 26 31 32] [27 28 33 34] [ 29 30 35 36] [39 40 45 46] [41 42 47 48] };
                 h   =  [];
                 for n = 1:total_beta-1
                     h(n) = subplot(8,6,pos{n});
-                    scatter(t.rating_nonparam(:),data(:,n+1),200,'.');
-                    xlabel('rating tuning',common{:});
-                    ylabel(predictors{n},common{:});
+                    %%
+                    s=scatter(data(:,n+1),t.rating_nonparam(:),30,'filled');                    
+                    s.MarkerFaceAlpha = .6;
+                    %
+                    hold on
+                    s = scatter(data(:,n+1),t.facecircle_nonparam(:),30,[.85 .33 .1],'filled');
+                    s.MarkerFaceAlpha = .5
+                    axis tight
+                    ylim([-2 2.5])
                     hl = lsline;
-                    hl.LineWidth= 3;
-                    hl.Color = [.3 .3 .3];
-                    grid on;
-                    xlim([-2 2.5])
-                    title(sprintf('W: %0.3g pval: %0.3g',o.Coefficients.Estimate(1+n),o.Coefficients.pValue(1+n)),common{:})
+                    hl(2).LineWidth= 3;
+                    hl(2).Color = [0 .45 .74];
+                    hl(1).LineWidth= 3;
+                    hl(1).Color = [.85 .33 .1];
+                    hold off
+                    if n == 1
+                        yyaxis left
+                        ylabel('rating tuning',common{:});                    
+                    end
+                    if n == 3
+                        yyaxis right
+                        ylabel('facecircle',common{:});
+                    end
+                    %%
+                    grid on;                    
+                    title(sprintf('%s\nW_r: %4.2g pval: %4.2g\nW_f: %4.2g pval: %4.2g',predictors{n},o.Coefficients.Estimate(1+n),o.Coefficients.pValue(1+n),o2.Coefficients.Estimate(1+n),o2.Coefficients.pValue(1+n)),common{:});
                     set(gca,common{:})
                     box off;
                     drawnow;
                     axis square
                 end
                 %%
-                subplotChangeSize(h,-.05,-.05);                
+                subplotChangeSize(h,-.03,-.03);                
                 try
                     [fileparts(SPM.swd) filesep 'normalization_CAT' filesep SPM.xCon(xSPM.Ic).Vspm.fname]
                     [fileparts(SPM.swd) filesep 'normalization_EPI' filesep SPM.xCon(xSPM.Ic).Vspm.fname]
@@ -3015,7 +3071,7 @@ classdef Project < handle
         end
     end    
     methods (Static)
-        function h = plot_bar(X,Y,SEM)
+        function h           = plot_bar(X,Y,SEM)
             % input vector of 8 faces in Y, angles in X, and SEM. All
             % vectors of 1x8;
             %%
@@ -3069,7 +3125,7 @@ classdef Project < handle
 %             t2.SingleSubjectFit(7);
 %             t2.SingleSubjectFit(3);
         end
-        function RunSPMJob(matlabbatch)
+        function               RunSPMJob(matlabbatch)
             %will run the spm matlabbatch using the parallel toolbox.
             fprintf('Will call spm_jobman...\n');
            
