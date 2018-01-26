@@ -1914,7 +1914,7 @@ classdef Subject < Project
             empty1stlevel = 1;
             FIRparam  = 14;
             
-            spm_dir  = strrep(self.dir_spmmat(nrun(1),model_num),'chrf',sprintf('FIR_%02d_10conds',FIRparam));
+            spm_dir  = strrep(self.dir_spmmat(nrun(1),model_num),'chrf_00',sprintf('FIR_%02d_10conds_00',FIRparam));
             path_spmmat = fullfile(spm_dir,'SPM.mat');
             
             if ~exist(path_spmmat);mkdir(spm_dir);end
@@ -1926,8 +1926,8 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
             matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
             matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
-            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
-            matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
+%             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
+%             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
             
             se = 0;
             for session = nrun(:)'
@@ -1938,11 +1938,13 @@ classdef Subject < Project
                 dummy                                              = load(self.path_model(session,model_num));
                 switch session
                     case 1
-                        dummy.cond = dummy.cond(1:9); % 8 faces, t0
+                        dummy.cond = dummy.cond(1:8); % 8 faces, t0
                     case 2
-                        dummy.cond = dummy.cond(1:3);   % CSP, UCS, t0
+                        dummy.cond = dummy.cond(1:2);   % CSP, UCS, t0
                     case 3
-                        dummy.cond = dummy.cond(1:10); % 8 faces, UCS, t0
+                        dummy.cond = dummy.cond(1:8); % 8 faces, UCS, t0
+                    case 4
+                        dummy.cond = dummy.cond(1:8); % 8 faces, UCS, t0
                 end
                 for c = 1:numel(dummy.cond)
                     dummy.cond(c).duration = 0;
@@ -1970,7 +1972,7 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = .8;
             matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
-            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
+            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'AR(1)';
             %estimation
             matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spmmat};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
@@ -2007,17 +2009,10 @@ classdef Subject < Project
             path_spmmat = self.path_spmmat(nrun(1),model_num);
             if ~exist(path_spmmat)
                 mkdir(spm_dir)
-            elseif exist(path_spmmat) && (force_delete == 1)
-                delete(path_spmmat)
             else
-                fprintf('SPM.mat already exists, and force_delete is not active, what do you want to do?\n')
-                fprintf('Possible solution: type force_delete = 1 or abort.')
-                keyboard
-                if force_delete ==1
-                    delete(path_spmmat)
-                else
-                    error('not solved, aborting')
-                end
+                if force_delete == 1
+                    system(sprintf('rm -fr %s*',strrep(spm_dir,'//','/')));
+                end %this is AG style.
             end
             
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
@@ -2053,7 +2048,7 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf; %default .8
-            matlabbatch{1}.spm.stats.fmri_spec.mask                              = cellstr(spm_select('expand',self.path_skullstrip));%add a proper mask here.
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = cellstr(spm_select('expand',self.path_meanepi));%add a proper mask here.
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'AR(1)';
             %estimation
             matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spmmat};
