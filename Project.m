@@ -55,7 +55,7 @@ classdef Project < handle
         TR                    = 0.99;                
         HParam                = 128;%parameter for high-pass filtering
         surface_wanted        = 0;%do you want CAT12 toolbox to generate surfaces during segmentation (0/1)                
-        smoothing_factor      = [3];%how many mm images should be smoothened when calling the SmoothVolume method                
+        smoothing_factor      = [4 6 8];%how many mm images should be smoothened when calling the SmoothVolume method                
         path_smr              = sprintf('%s%ssmrReader%s',fileparts(which('Project')),filesep,filesep);%path to .SMR importing files in the fancycarp toolbox.
         gs                    = [5 6 7 8 9 12 14 16 17 18 19 20 21 24 25 27 28 30 32 34 35 37 39 40 41 42 43 44];
         subjects              = [];
@@ -921,42 +921,74 @@ classdef Project < handle
             %here is to use this matrix and the fitted coefficients to
             %reconstruct the timexcondition panels.
             %
-            
-            kappa   = .1;
-            %create a weight vector for the derivative.
-            res     = 8;
-            x2      = [0:(res-1)]*(360/res)-135;
-            x2      = [x2 - (360/res/2) x2(end)+(360/res/2)];
-            deriv   = -abs(diff(Tuning.VonMises(x2,1,kappa,0,0)));
-            %this
-            mbi_id  = Vectorize(repmat(1:65,8,1));
-            stim_id = Vectorize(repmat([-135:45:180]',1,65));
-            pmod    = NaN(length(stim_id),6);
-            for ntrial = 1:length(stim_id)
-                if stim_id(ntrial) < 1000
-                    pmod(ntrial,1) = 1;%constant term
-                    pmod(ntrial,2) = mbi_id(ntrial);%onsets
-                    pmod(ntrial,3) = Tuning.VonMises( stim_id(ntrial),1,kappa,0,0);%amp
-                    pmod(ntrial,5) = deriv(mod(stim_id(ntrial)./45+4-1,8)+1);%dsigma
+            if ismember(model,[3 4 5])
+                kappa   = .1;
+                %create a weight vector for the derivative.
+                res     = 8;
+                x2      = [0:(res-1)]*(360/res)-135;
+                x2      = [x2 - (360/res/2) x2(end)+(360/res/2)];
+                deriv   = -abs(diff(Tuning.VonMises(x2,1,kappa,0,0)));
+                %this
+                mbi_id  = Vectorize(repmat(1:65,8,1));
+                stim_id = Vectorize(repmat([-135:45:180]',1,65));
+                pmod    = NaN(length(stim_id),6);
+                for ntrial = 1:length(stim_id)
+                    if stim_id(ntrial) < 1000
+                        pmod(ntrial,1) = 1;%constant term
+                        pmod(ntrial,2) = mbi_id(ntrial);%onsets
+                        pmod(ntrial,3) = Tuning.VonMises( stim_id(ntrial),1,kappa,0,0);%amp
+                        pmod(ntrial,5) = deriv(mod(stim_id(ntrial)./45+4-1,8)+1);%dsigma
+                    end
                 end
-            end
-            %
-            pmod(:,2:3)      = nandemean(pmod(:,2:3));%mean correct
-            pmod(:,7)        = nandemean(pmod(:,2).^2);%poly expansion time;
-            
-            pmod(:,5)        = nandemean(pmod(:,5));%dsigma
-            pmod(:,4)        = pmod(:,2).*pmod(:,3);%time x amp
-            pmod(:,6)        = pmod(:,2).*pmod(:,5);%time x dsigma
-            pmod(:,8)        = pmod(:,7).*pmod(:,3);%time2 x amp
-            pmod(:,9)        = pmod(:,7).*pmod(:,5);%time2 x dsigma
-            pmod(:,2:end)    = nanzscore(pmod(:,2:end));
-            
-            if model == 3
-                pmod = pmod(:,1:4);
-            elseif model == 4
-                pmod = pmod(:,1:6);
-            elseif model == 5
-                pmod = pmod(:,[1 2 3 4 7 8 5 6 9]);
+                %
+                pmod(:,2:3)      = nandemean(pmod(:,2:3));%mean correct
+                pmod(:,7)        = nandemean(pmod(:,2).^2);%poly expansion time;
+                
+                pmod(:,5)        = nandemean(pmod(:,5));%dsigma
+                pmod(:,4)        = pmod(:,2).*pmod(:,3);%time x amp
+                pmod(:,6)        = pmod(:,2).*pmod(:,5);%time x dsigma
+                pmod(:,8)        = pmod(:,7).*pmod(:,3);%time2 x amp
+                pmod(:,9)        = pmod(:,7).*pmod(:,5);%time2 x dsigma
+                pmod(:,2:end)    = nanzscore(pmod(:,2:end));
+                
+                if model == 3
+                    pmod = pmod(:,1:4);
+                elseif model == 4
+                    pmod = pmod(:,1:6);
+                elseif model == 5
+                    pmod = pmod(:,[1 2 3 4 7 8 5 6 9]);
+                end
+            elseif ismember(model,[33 44])
+                base_kappa = 2;
+                X          = (linspace(-135,180,8));
+                deriv      = zscore(Tuning.VonMises(X,1,base_kappa+.05,0,0)-Tuning.VonMises(X,1,base_kappa-.05,0,0));
+                deriv      = deriv - max(deriv);
+                vM         = zscore(Tuning.VonMises(X,1,base_kappa,0,0));                
+                %%
+                mbi_id  = Vectorize(repmat(1:65,8,1));
+                stim_id = Vectorize(repmat([-135:45:180]',1,65));
+                pmod    = NaN(length(stim_id),6);
+                for ntrial = 1:length(stim_id)
+                    if stim_id(ntrial) < 1000
+                        pmod(ntrial,1) = 1;%constant term
+                        pmod(ntrial,2) = mbi_id(ntrial);%time
+                        
+                        cond_id        = mod(stim_id(ntrial)./45+4-1,8)+1;
+                        pmod(ntrial,3) = vM(cond_id);
+                        pmod(ntrial,5) = deriv(cond_id);%sigma
+                    end
+                end
+                %                                
+                pmod(:,2:3)      = nanzscore(pmod(:,2:3));%zscore time and amplitude.
+                pmod(:,4)        = pmod(:,2).*pmod(:,3);%time x amp
+                pmod(:,4)        = nanzscore(pmod(:,4));%zscore also the interaction
+                pmod(:,6)        = pmod(:,2).*pmod(:,5);%time x dsigma (using the same timevector)
+                
+                if model == 33
+                    pmod = pmod(:,1:4);
+                elseif model == 44
+                    pmod = pmod(:,1:6);
+                end
             end
         end
         function [coors]         = get_SecondLevel_ANOVA_coordinates(self,ngroup,run,models,beta_image_index,sk,covariate_id,nC);            
@@ -2157,20 +2189,21 @@ classdef Project < handle
             tSite = length(data);
             for n = 1:tSite
                 for m = 1:tSite
+                    if n < m
                     [n m ]
-                    R      = 1-squareform(pdist([data{n},data{m}]','correlation'));
-                    R      = R(1:5,6:10);
-                    SUPER  = eye(5);
-%                     SUPER  = [0 0 0 0 0; 0 0 0 1 1;0 0 0 1 1;0 0 0 0 0 ;0 0 0 0 0];
-%                     SUPER  = [0 0 0 0 0; 0 1 1 0 0;0 1 1 0 0;0 0 0 0 0 ;0 0 0 0 0];
-%                     SUPER  = [0 0 0 0 0; 0 0 0 0 0;0 0 0 0 0;0 0 0 1 1 ;0 0 0 1 1];
-                    SUPER = [ 0 1 1 1 1; 0 0 0 0 0; 0 0 0 0 0 ; 0 0 0 0 0 ; 0 0 0 0 0 ];
-                    X      = reshape(demean(Vectorize(SUPER)),[5 5]);
-                    C      = ones(5);
-                    dummy  = fitlm(zscore(X(:)),zscore(R(:)));
-                    B(n,m) = dummy.Rsquared.Ordinary;
-                    M = anova(dummy,'summary');
-                    P(n,m) = any(M.pValue < .01);
+                    R        = 1-squareform(pdist([data{n},data{m}]','correlation'));
+                    R        = R(1:5,6:10);
+                    SUPER    = eye(5);
+                    X        = ([Vectorize([0 0 0 0 0; 0 1 1 0 0;0 1 1 0 0;0 0 0 0 0 ;0 0 0 0 0]) Vectorize([0 0 0 0 0; 0 0 0 0 0;0 0 0 0 0;0 0 0 1 1 ;0 0 0 1 1]) Vectorize([0 0 0 0 0; 0 0 0 1 1;0 0 0 1 1;0 1 1 0 0 ;0 1 1 0 0]) Vectorize([ 0 1 1 1 1; 1 0 0 0 0; 1 0 0 0 0 ; 1 0 0 0 0 ; 1 0 0 0 0 ])]);
+                    
+                    dummy    = fitlm(zscore(X),zscore(R(:)),'Intercept',false);
+                    
+                    P(n,m,:)      = dummy.Coefficients.pValue < 0.01;
+                    P(m,n,:)      = P(n,m,:);
+                    
+                    B(n,m,:)      = dummy.Coefficients.Estimate;
+                    B(m,n,:)      = B(n,m,:);
+                    end
                 end
             end
             %% test amp2amp, sigma2sigma, amp2sigma, sigma2amp and time2all models
@@ -2178,20 +2211,39 @@ classdef Project < handle
             for n = 1:tSite
                 for m = 1:tSite
                     if n ~= m
-                        h1 = plot(coors(2,[n m]),-coors(1,[n m]),'o','markersize',20);
-                        h1.MarkerFaceColor = [1 0 0 ];
-                        h1.MarkerEdgeColor = [1 0 0 ];
-                        if P(n,m)                                                        
-                            h = line(coors(2,[n m]),-coors(1,[n m]));
-                            hold on;
-                            h.LineWidth = (B(n,m)*3).^4;
-                            h.Color = [0 0.45 0.74 .3]
-                        end
-                    end
-                end
-            end
-            axis equal
+                        for nRegress = 1:size(X,2)
+                            subplot(2,4,nRegress)
+                            
+                            h1                 = plot(coors(2,[n m]),-coors(1,[n m]),'o','markersize',12);
+                            h1.MarkerFaceColor = [1 0 0 ];
+                            h1.MarkerEdgeColor = [1 0 0 ];
+                            
+                            if P(n,m,nRegress)
+                                h           = line(coors(2,[n m]),-coors(1,[n m]));
+                                hold on;
+                                h.LineWidth = (abs(B(n,m,nRegress))*2).^2;
+                                h.Color     = [0 0.45 0.74 .3];
+                            end                            
+                            
+                            subplot(2,4,nRegress+4)
+                            h1                 = plot(coors(2,[n m]),coors(3,[n m]),'o','markersize',12);
+                            h1.MarkerFaceColor = [1 0 0 ];
+                            h1.MarkerEdgeColor = [1 0 0 ];
+                            if P(n,m,nRegress)
+                                h = line(coors(2,[n m]),coors(3,[n m]));
+                                hold on;
+                                h.LineWidth = (abs(B(n,m,nRegress))*2).^2;
+                                h.Color = [0 0.45 0.74 .3];
+                            end                            
+                        end                        
+                    end                    
+                end               
+            end                
             hold off
+            for n =  1:8
+                subplot(2,4,n)
+                box off;axis equal
+            end
         end
         
         function callback_rw(self)
@@ -2199,6 +2251,9 @@ classdef Project < handle
             global st
             global SPM
             global xSPM
+%             global a 
+%             SPM = a.SPM;
+%             xSPM= a.xSPM;
             global t                        
             p = pwd;
             figure(1000);clf;
@@ -2215,8 +2270,10 @@ classdef Project < handle
                 t.brain_time        = data(:,2);
                 t.brain_gau         = data(:,3);
                 t.brain_time_gau    = data(:,4);
-                t.brain_dsigma      = data(:,5);
-                t.brain_time_dsigma = data(:,6);
+                try
+                    t.brain_dsigma      = data(:,5);
+                    t.brain_time_dsigma = data(:,6);
+                end
                 %%         plot the mean beta values & SEM, and make a ttest.
                 subplot(8,6,[1 2 7 8 13 14]);
                 predictors = {'time','gau' 'time\_gau' 'dsig' 'time\_dsig'};
@@ -2230,6 +2287,8 @@ classdef Project < handle
                 box off;
                 xlim([1 total_beta+1])                
                 [h p] = ttest(data);                
+                [sh sp] = signrank_mat(data);                
+                [p ;sp]
                 for n = 2:total_beta
                     if p(n) <= .05                        
                         text(n,max(ylim),pval2asterix(p(n)),'HorizontalAlignment','center',common{:},'fontsize',20);
@@ -2238,41 +2297,49 @@ classdef Project < handle
                 grid on;
                 %% Plot the fitted temporal dynamics
                 subplot(8,6,[3 4 9 10 15 16]);
-                [pmod]      = self.get_pmodmat(4);%most complex model                                
-                contourf(reshape(pmod*mean(data)',8,520/8)',9,'color','none');
+                [pmod]      = self.get_pmodmat(44);%most complex model                                                
+%                 pmod(:,2) = 0;
+                contourf(reshape(pmod(:,1:size(data,2))*mean(data)',8,520/8)',9,'color','none');
                 S         = get(gca,'position');
 %                 h         = colorbar('Location','WestOutside');
 %                 h.Box     = 'off';
 %                 cbarticks = linspace(min(h.Ticks),max(h.Ticks),3);
 %                 h.Ticks   = cbarticks;
                 axis xy;
-                box off
+                box off;
                 set(gca,'ytick',[],'xtick',[2 4 6 8],'xticklabel',{sprintf('-90%c',char(176))  'CS+' sprintf('90%c',char(176)) 'CS-'},common{:}); 
                 grid on;
                 ylabel('time',common{:});
                 %% plot the RW model
                 subplot(8,6,[5 6 11 12 17 18]);
-                files = [];                
-                load ~/Desktop/a
-                total_step=length(a)
+                files      = [];                
+                b          = load('~/Desktop/a');
+                total_step = length(b.a);
                 ppp = '/mnt/data/project_fearamy/data/second_level/run001/spm/model_10010+19001_chrf_0_0/cov_id_/06mm/fitfun_08/group_00_all/normalization_CAT/';
 %                 ppp = '/mnt/data/project_fearamy/data/second_level/run001/spm/model_10010+19001_chrf_0_0/cov_id_/06mm/fitfun_08/group_Rating_vM_1/normalization_CAT/';
                 for i = 1:total_step
                     files = [files;sprintf('%sspmF_%04d.nii',ppp,i)];
                 end
-                datarw = spm_get_data(spm_vol(files),XYZvox(:))
-                k = bar(datarw,.9,'k')           
+                datarw = spm_get_data(spm_vol(files),XYZvox(:));
+                k = bar(datarw,.9,'k');      
                 k.EdgeColor = [.5 .5 .5];
-                box off
-                xlim([0 total_step])                
-                models = a;
+                box off;
+                xlim([0 total_step]);                
+                models = b.a;
                 i = 1:4:total_step;
                 set(gca,'xtick',i,'xticklabels',models(i),'xticklabelrotation',-45,'YAxisLocation','right',common{:});
                 ylabel('F-value')
               
                 %%
-                o    =  fitlm(t,'rating_nonparam     ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
-                o2   =  fitlm(t,'facecircle_nonparam ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
+                try
+                    o    =  fitlm(t,'rating_nonparam     ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
+                    o2   =  fitlm(t,'facecircle_nonparam ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
+                catch
+                    o    =  fitlm(t,'rating_nonparam     ~ 1 + brain_time + brain_gau + brain_time_gau','RobustOpts','on')
+                    o2   =  fitlm(t,'facecircle_nonparam ~ 1 + brain_time + brain_gau + brain_time_gau','RobustOpts','on')
+                end
+                model2text(o,'~/gdrive/Office/Fearamy/paperfigures/')
+                model2text(o2,'~/gdrive/Office/Fearamy/paperfigures/')
                 pos =  {[25 26 31 32] [27 28 33 34] [ 29 30 35 36] [39 40 45 46] [41 42 47 48] };
                 h   =  [];
                 for n = 1:total_beta-1
@@ -2283,23 +2350,23 @@ classdef Project < handle
                     %
                     hold on
                     s = scatter(data(:,n+1),t.facecircle_nonparam(:),30,[.85 .33 .1],'filled');
-                    s.MarkerFaceAlpha = .5
-                    axis tight
-                    ylim([-2 2.5])
+                    s.MarkerFaceAlpha = .5;
+                    axis tight;
+                    ylim([-2 2.5]);
                     hl = lsline;
                     hl(2).LineWidth= 3;
                     hl(2).Color = [0 .45 .74];
                     hl(1).LineWidth= 3;
                     hl(1).Color = [.85 .33 .1];
                     hold off
-                    if n == 1
-                        yyaxis left
+%                     if n == 1
+                        yyaxis left;
                         ylabel('rating tuning',common{:});                    
-                    end
-                    if n == 3
-                        yyaxis right
+%                     end
+%                     if n == 3
+                        yyaxis right;
                         ylabel('facecircle',common{:});
-                    end
+%                     end
                     %%
                     grid on;                    
                     title(sprintf('%s\nW_r: %4.2g pval: %4.2g\nW_f: %4.2g pval: %4.2g',predictors{n},o.Coefficients.Estimate(1+n),o.Coefficients.pValue(1+n),o2.Coefficients.Estimate(1+n),o2.Coefficients.pValue(1+n)),common{:});
@@ -2309,7 +2376,7 @@ classdef Project < handle
                     axis square
                 end
                 %%
-                subplotChangeSize(h,-.03,-.03);                
+                subplotChangeSize(h,-.06,-.06);                
                 try
                     [fileparts(SPM.swd) filesep 'normalization_CAT' filesep SPM.xCon(xSPM.Ic).Vspm.fname]
                     [fileparts(SPM.swd) filesep 'normalization_EPI' filesep SPM.xCon(xSPM.Ic).Vspm.fname]
@@ -3094,6 +3161,34 @@ classdef Project < handle
                 drawnow;            
                 hold off;
             end            
+        end
+        function plot_model_04_predictors(self)
+            %%
+            base_kappa = 2;
+            deriv      = zscore(Tuning.VonMises(X,1,base_kappa+.05,0,0)-Tuning.VonMises(X,1,base_kappa-.05,0,0));
+            deriv      = deriv - max(deriv);
+            vM         = zscore(Tuning.VonMises(X,1,base_kappa,0,0));
+            i=0;
+            for y = linspace(-12,12,5);
+                for x= linspace(-40,40,5);
+                    i=i+1;
+                    subplot(5,5,i);
+                    plot((x*vM+y*deriv),'k','linewidth',3);
+                    
+                    if i <=5 
+                        title(sprintf('A: %d',x),'fontsize',20);
+                    end
+                    grid on;
+                    set(gca,'xtick',[2 4 6 8],'xticklabel',{'' 'CS+' '' '180'});
+                    if rem(i-1,5)==0
+                        ylabel(sprintf('K: %d',y),'fontsize',20,'fontweight','bold');
+                    end
+                    axis square;
+                    axis tight;
+                    box off;                    
+                end;
+            end
+            EqualizeSubPlotYlim(gcf)
         end
     end    
     methods (Static)
