@@ -788,18 +788,18 @@ classdef Subject < Project
             %s.VolumeNormalize(s.path_beta(1,1))
             %s.VolumeNormalize(s.path_skullstrip);
             
-            %% Normalize with mean epi segmentation
-            for nf = 1:size(path2image,1)
-                matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,'meandata','y_meandata'));
-                matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
-                matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
-                    78 76 85];
-                matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
-                matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
-                matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
-            end
-            self.RunSPMJob(matlabbatch);
-            %% Normalize with CAT12 segmentation
+%             %% Normalize with mean epi segmentation
+%             for nf = 1:size(path2image,1)
+%                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,'meandata','y_meandata'));
+%                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
+%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
+%                     78 76 85];
+%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
+%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
+%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
+%             end
+%             self.RunSPMJob(matlabbatch);
+%             %% Normalize with CAT12 segmentation
             matlabbatch =[];
             for nf = 1:size(path2image,1)
                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));
@@ -1913,6 +1913,7 @@ classdef Subject < Project
             %model_num is correctly set for different runs.
             empty1stlevel = 1;
             FIRparam  = 14;
+            onset_modelnum = 1;
             
             spm_dir  = strrep(self.dir_spmmat(nrun(1),model_num),'chrf_00',sprintf('FIR_%02d_10conds_00',FIRparam));
             path_spmmat = fullfile(spm_dir,'SPM.mat');
@@ -1935,20 +1936,20 @@ classdef Subject < Project
                 %load files using ...,1, ....,2 format
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).scans  = cellstr(spm_select('expand',self.path_epi(session,'r')));
                 %load the onsets
-                dummy                                              = load(self.path_model(session,model_num));
+                dummy                                              = load(self.path_model(session,onset_modelnum));
                 switch session
                     case 1
-                        dummy.cond = dummy.cond(1:8); % 8 faces, t0
+                        dummy.cond = dummy.cond(1:8); % 8 faces,
                     case 2
-                        dummy.cond = dummy.cond(1:2);   % CSP, UCS, t0
+                        dummy.cond = dummy.cond(1:2);   % CSP, UCS
                     case 3
-                        dummy.cond = dummy.cond(1:8); % 8 faces, UCS, t0
+                        dummy.cond = dummy.cond(1:8); % 8 faces 
                     case 4
-                        dummy.cond = dummy.cond(1:8); % 8 faces, UCS, t0
+                        dummy.cond = dummy.cond(1:8); % 8 faces 
                 end
                 for c = 1:numel(dummy.cond)
                     dummy.cond(c).duration = 0;
-                    dummy.cond(c).onset     = dummy.cond(c).onset -2; %take 2 TRs before first stimulus appears. onsets are already in TR, so -2 is correct, not -2.*TR.
+                    dummy.cond(c).onset     = dummy.cond(c).onset -2; %take 2 TRs before first stimulus appears. (onsets are already in unit = TR, so -2 is correct, not -2.*TR).
                 end
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).cond   = dummy.cond;
@@ -1970,9 +1971,9 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.bases.fir.order                   = FIRparam;
             matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
-            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = .8;
-            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here.
-            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'AR(1)';
+            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = .8;-Inf
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here. LK s3 ss
+            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
             %estimation
             matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spmmat};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
@@ -2072,53 +2073,75 @@ classdef Subject < Project
             vec = [];
             convec = struct([]);
             
-            if model_num  == 2
-                %% is this correct for sub 15?
+            if model_num  == 2 %needs special treatment because both face and relief onset are modelled..
                 Nbetas = self.get_Nbetas(nrun,model_num);
                 if nrun == 3
-                    Nbetas = Nbetas./2;
+                    if self.id ~= 15
+                    Nbetas = Nbetas./2; %to care for one session first, not necessary for sub 15, as only one session modelled anyway.
+                    end
                 end
-                
                 % contrast 1
-                % all faces vs everything else
+                % all faces main effect
                 n = n + 1;
-                name{n} = 'allfaces > rest';
+                name{n} = 'allfaces>else';
                 face_betas = [];
                 convec{n} = zeros(1,Nbetas);
-                for cond = intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist))
+                for cond = intersect(self.realconds,unique(self.get_paradigm(nrun).presentation.dist))
                     ind = self.get_beta_index(nrun,model_num,[num2str(cond) 'Face']);
                     face_betas = [face_betas ind];
                 end
                 convec{n}(face_betas) = deal(1);
                 
-                
                 % contrast 2
                 % CSP > CSN (or UCS > CSN in Cond)
-                % given by ramp
+                % given by FACES
                 n = n + 1;
                 convec{n} = zeros(1,Nbetas);
                 if nrun == 2
-                    fprintf('Can''t compare CSP to CSN here, not defined. Using UCS > CSN instead.\n')
-                    convec{n}(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
-                    name{n} = 'UCS>CSN';
+                    convec{n}(self.get_beta_index(nrun,model_num,'500Face'))= 1;
+                    convec{n}(self.get_beta_index(nrun,model_num,'180Face'))= -1;
+                    name{n} = 'UCS>CSN_faces';
                 else
-                    convec{n}(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
-                    name{n} = 'CSP>CSN';
-                end
+                    convec{n}(self.get_beta_index(nrun,model_num,'0Face'))= 1;
+                    convec{n}(self.get_beta_index(nrun,model_num,'180Face'))= -1;
+                    name{n} = 'CSP>CSN_faces';
+                end            
                 
                 % contrast 3
-                % all Relief trials vs else, also UCS trials included
-                % (which is included in Project.facecond anyway)
+                % all Relief trials vs else
                 n = n + 1;
                 convec{n} = zeros(1,Nbetas);
-                name{n} = 'RampDown > rest';
-                thisphaseconds = intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist));
+                name{n} = 'allrampdown>else';
+                thisphaseconds = intersect(self.realconds,unique(self.get_paradigm(nrun).presentation.dist));
                 convec{n}(self.get_beta_index(nrun, model_num,thisphaseconds)) = 1;
                 
+                % contrast 4
+                % CSP > CSN (or UCS > CSN in Cond)
+                % given by RAMP
+                n = n + 1;
+                convec{n} = zeros(1,Nbetas);
+                if nrun == 2
+                    convec{n}(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
+                    name{n} = 'UCS>CSN_ramp';
+                else
+                    convec{n}(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
+                    name{n} = 'CSP>CSN_ramp';
+                end    
+                % take care of the two sessions
+                if nrun ==3 && self.id ~=15
+                    for co = 1:n
+                        convec{co} = repmat(convec{co},1,2);
+                    end
+                end
             else
                 % contrast 1
-                % all faces vs everything else
+                % all faces or Ramp vs everything else
                 n = n + 1;
+                if model_num == 1
+                    name{n} = 'Faces>else';
+                else
+                    name{n} = 'Ramp>else';
+                end
                 if nrun == 3
                     vec = zeros(1,self.get_Nbetas(nrun,model_num)./2);
                     if self.id ==15
@@ -2127,16 +2150,16 @@ classdef Subject < Project
                 else
                     vec = zeros(1,self.get_Nbetas(nrun,model_num));
                 end
-                name{n} = 'faces > rest';
-                face_betas = self.get_beta_index(nrun,model_num,intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/nulltrial
+                face_betas = self.get_beta_index(nrun,model_num,intersect(self.realconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/UCS
                 vec(face_betas) = 1;
+               
                 if nrun == 3
                     convec{n} = repmat(vec,1,2);
-                    if self.id ==15
+                    if self.id == 15
                         convec{n} = vec;
                     end
                 else
-                    convec{n} = vec;
+                    convec{n} = vec; %for phase 1 and 2 not 2 sessions.
                 end
                 
                 % contrast 2
@@ -2148,7 +2171,6 @@ classdef Subject < Project
                         vec(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
                         name{n} = 'CSP>CSN';
                     case 2
-                        warning('Can''t compare CSP to CSN here, not defined. Using UCS > CSN instead.')
                         vec(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
                         name{n} = 'UCS>CSN';
                     case 3
@@ -2163,59 +2185,23 @@ classdef Subject < Project
                         name{n} = 'CSP>CSN';
                 end
                 convec{n} = vec;
-                
-                % contrast 3
-                % all Cooldowns NEGATIVE
-                n = n + 1;
-                if nrun == 3
-                    vec = zeros(1,self.get_Nbetas(nrun,model_num)./2);
-                    if self.id ==15
-                        vec = zeros(1,self.get_Nbetas(nrun,model_num));
-                    end
-                else
-                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+            end
+            
+            %% take care that everything adds to 1 / 0
+            for co = 1:n
+                if mod(co,2) == 1 % allfaces or allramp, odd contrast numbers
+                    convec{co} = convec{co}./sum(convec{co});
+                elseif mod(co,2) == 0 %diff CSP CSn, even contrast numbers
+                    convec{co} = convec{co}./sum(convec{co}>0);
                 end
-                name{n} = 'faces > rest (neg)';
-                face_betas = self.get_beta_index(nrun,model_num,intersect(self.faceconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/nulltrial
-                vec(face_betas) = -1;
-                if nrun == 3
-                    convec{n} = repmat(vec,1,2);
-                    if self.id ==15
-                        convec{n} = vec;
-                    end
-                else
-                    convec{n} = vec;
-                end
-                
-                % contrast 4
-                % CSN > CSP/UCS
-                n = n + 1;
-                vec = zeros(1,self.get_Nbetas(nrun,model_num));
-                switch nrun
-                    case 1
-                        vec(self.get_beta_index(nrun,model_num,[0 180]))= [-1 1];
-                        name{n} = 'CSN>CSP';
-                    case 2
-                        warning('Can''t compare CSP to CSN here, not defined. Using CSN > UCS instead.')
-                        vec(self.get_beta_index(nrun,model_num,[500 180]))= [-1 1];
-                        name{n} = 'CSN>UCS';
-                    case 3
-                        vec = zeros(1,self.get_Nbetas(nrun,model_num)./2); %replace upper vec, because already double
-                        vec(self.get_beta_index(nrun,model_num,[0 180]))= [-1 1];
-                        vec = repmat(vec,1,2);
-                        name{n} = 'CSN>CSP';
-                        if self.id == 15
-                            vec = zeros(1,self.get_Nbetas(nrun,model_num));
-                            vec(self.get_beta_index(nrun,model_num,[0 180]))= [-1 1];
-                            name{n} = 'CSN>CSP';
-                        end
-                end
-                convec{n} = vec;
-                
+            end
+            %% add same contrasts' negative version
+            for co = 1:n
+                convec{co+n} = -1.*convec{co};
+                name{co+n}   = [name{co} '_neg'];
             end
             %%
-            total_cons = n;
-            
+            total_cons = numel(convec);
             % build the batch
             matlabbatch{1}.spm.stats.con.spmmat = cellstr(path_spm);
             for co = 1:numel(name)
@@ -2234,13 +2220,16 @@ classdef Subject < Project
         function Con1stLevel(self,nrun,model_num)
             n_con = self.CreateContrasts(nrun,model_num);
             fprintf('%d contrasts computed for phase %d, Model %d. \n',n_con,nrun,model_num)
-            %normalize the con images right away
-            self.VolumeNormalize(self.path_con(nrun,model_num,''));%normalize ('wCAT_' and 'wEPI_'' will be added)
-            % count all contrasts here.
-            wcon = self.path_con(nrun,model_num,'wCAT_'); %should find both wCAT and wEPI.
-            self.VolumeSmooth(wcon);%('s(fwhm)_' will be added, resulting in 's_ww_')
-            wcon = self.path_con(nrun,model_num,'wEPI_'); %should find both wCAT and wEPI.
-            self.VolumeSmooth(wcon);%('s(fwhm)_' will be added, resulting in 's_ww_')
+            %prepare paths for Normalization and Smoothing
+            path2cons = self.path_con(nrun,model_num,'');
+            spmT = [];
+            for n = 1:size(path2cons,1)
+                spmT = [spmT; strrep(path2cons(n,:),'con','spmT')];
+            end
+            self.VolumeNormalize(path2cons);%normalize ('wCAT_' and 'wEPI_'' will be added)
+            self.VolumeNormalize(spmT);
+            self.VolumeSmooth(self.path_con(nrun,model_num,'wCAT_'));% smooth (s6, or whatever kernel, will be added)
+            self.VolumeSmooth(self.path_con(nrun,model_num,'wEPI_'))
         end
         %         function plot_con(nrun,model_num,con_num)
         %             self.CreateContrast(nrun,model_num,con_num);
