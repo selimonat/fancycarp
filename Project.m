@@ -3,7 +3,7 @@ classdef Project < handle
     % be a child of. Here enters all the project specific data (e.g. the
     % subject ids) and methods (for e.g. getting paths from the dicom
     % server).
-    %
+    %i
     % This branch is mrt/main that is all future branches for new projects
     % should be based on this branch. The CheckConsistency.m file can be
     % used to test the consistency of this branch on a test dataset (the
@@ -50,7 +50,7 @@ classdef Project < handle
         %projectpaths
         
         path_project          = '/projects/treatgen/data/';
-        path_spm_version      = '/common/apps/spm12-6906/';     %6906   % I renamed this to avoid confusion with path_spm as SPM.mat
+        path_spm_version      = '/common/apps/spm12-7219/';     %6906   % I renamed this to avoid confusion with path_spm as SPM.mat
         trio_sessions         = {'' '' '' 'PRISMA_19272' '' 'PRISMA_19279'  'PRISMA_19296' 'PRISMA_19293' 'PRISMA_19286' 'PRISMA_19287' 'PRISMA_19292' 'PRISMA_19291' 'PRISMA_19297' 'PRISMA_19318' 'PRISMA_19319' 'PRISMA_19339' '' 'PRISMA_19329' 'PRISMA_19338' 'PRISMA_19335' 'PRISMA_19336' 'PRISMA_19337' 'PRISMA_19334' 'PRISMA_19352' 'PRISMA_19376' 'PRISMA_19361' '' 'PRISMA_19449' 'PRISMA_19391' 'PRISMA_19392' 'PRISMA_19396' 'PRISMA_19411' 'PRISMA_19419' '' 'PRISMA_19427' 'PRISMA_19441' 'PRISMA_19450' '','PRISMA_19467','','PRISMA_19466','PRISMA_19478','PRISMA_19501','PRISMA_19502','PRISMA_19525','PRISMA_19550','','PRISMA_19536','PRISMA_19537'};
         hr_sessions         = {'' '' '' 'PRISMA_19272' '' 'PRISMA_19279'  'PRISMA_19278' 'PRISMA_19293' 'PRISMA_19286' 'PRISMA_19287' 'PRISMA_19292' 'PRISMA_19291' 'PRISMA_19297' 'PRISMA_19318' 'PRISMA_19319' 'PRISMA_19339' '' 'PRISMA_19329' 'PRISMA_19338' 'PRISMA_19335' 'PRISMA_19336' 'PRISMA_19337' 'PRISMA_19334' 'PRISMA_19352' 'PRISMA_19347' 'PRISMA_19361' '' 'PRISMA_19449' 'PRISMA_19391' 'PRISMA_19392' 'PRISMA_19396' 'PRISMA_19411' 'PRISMA_19419' '' 'PRISMA_19427' 'PRISMA_19441' 'PRISMA_19450' '','PRISMA_19467','','PRISMA_19466','PRISMA_19478','PRISMA_19501','PRISMA_19502','PRISMA_19525','PRISMA_19535','','PRISMA_19536','PRISMA_19537'};
         
