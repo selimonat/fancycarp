@@ -421,7 +421,7 @@ classdef Fixmat < Project
             [~,out.ttest.p,out.ttest.ci] = ttest2(criterion(cluster(imax).subs),criterion(cluster(imin).subs));%compares higgest to smallest bar
             
         end
-        function plot(obj,varargin)
+        function [haxis]=plot(obj,varargin)
             
             M = obj.maps;
             if nargin > 1
@@ -431,7 +431,12 @@ classdef Fixmat < Project
             end
             %get colormap limits.
             if strcmp(cmap,'linear')
-                [d u] = GetColorMapLimits(M,obj.cmap_limits);
+                if length(obj.cmap_limits) == 1                    
+                    [d u] = GetColorMapLimits(M,obj.cmap_limits);
+                elseif length(obj.cmap_limits) == 2
+                    d = obj.cmap_limits(1);
+                    u = obj.cmap_limits(2);
+                end
                 if sum(obj.maps(:) < 0) == 0%if there are no negative values
                     d = 0;
                 end
@@ -449,7 +454,7 @@ classdef Fixmat < Project
                 nsp     = obj.subplot_number;
             end
             for nc = 1:size(M,3)
-                h   = subplot(nsp(1),nsp(2),nc);
+                haxis(nc)   =subplot(nsp(1),nsp(2),nc);
                 
                 %plot the image;
                 imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.stimulus);
@@ -465,8 +470,25 @@ classdef Fixmat < Project
 %                 end
                 drawnow
             end
-%                         thincolorbar('vert');
-colorbar
+            %                         thincolorbar('vert');
+            p = get(gca,'position');
+            h2  =colorbar
+            set(gca,'position',p);
+            pos = get(gca,'position');
+            %% colorbar            
+            set(h2,'location','west');
+            h2.AxisLocation ='out';
+            h2.Box          = 'off';
+            h2.TickLength   = 0;
+            h2.Ticks        = [d 0 u];
+            h2.TickLabels   = {regexprep(mat2str(round(d*10)/10),'0','') '0' regexprep(mat2str(round(u*10)/10),'0','')};
+            h2.FontSize = 12;
+            h2.FontWeight='bold';            
+            set(h2,'Position',[pos(1)-.015 pos(2) .02 .2])
+            
+            
+        
+        
         end
         function contourplot(obj,varargin)
             v = {};
@@ -883,7 +905,7 @@ colorbar
            %% count number of fixations in each roi.
            roi = obj.GetFaceROIs;
            for n = 1:size(roi,3)               
-            count(n) = nanmean(map(:).*Vectorize(roi(:,:,n)));
+                count(n) = nanmean(map(Vectorize(roi(:,:,n))));
            end
            if nargin>2
                if normalize;
@@ -895,19 +917,29 @@ colorbar
          end
          function roi = GetFaceROIs(obj)
              %to visualize
-             %roi=fixmat.GetFaceROIs;h=imagesc(fixmat.stimulus);set(h,'alphadata',roi(:,:,1)+roi(:,:,2));
+             %roi=Fixmat([],[]).GetFaceROIs;h=imagesc(Fixmat([],[]).stimulus);set(h,'alphadata',roi(:,:,1)+roi(:,:,2));
              
              [x y] = meshgrid(1:size(obj.stimulus,2),1:size(obj.stimulus,1));
              %% build rois.
              %coordinates of ROI centers.
-             coor = [[140 172 22 14];[360 172 22 14];[255 269 16 25]; [257 425 30 15]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.
+%              C = 1;
+%              coor = [[140 172 22/C 14/C];[360 172 22/C 14/C];[255 269 16 25]; [257 425 30 15]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.
+%              for n = 1:size(coor,1)
+%                  roi(:,:,n) = sqrt(((x-coor(n,1))./coor(n,3)).^2 + ((y-coor(n,2))./coor(n,4)).^2)<4;
+%              end
+%              roi(:,:,n+1) = sum(roi,3) == 0; %roi(:,:,5) is all ROIs accumulated.
+             
+             C = 1;
+             coor = [[110 220 50 225];[110 220 270 445];[221 375 260-90 260+90]; [376 485 260-150 260+150];[110 220 50 445]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.             
+%              coor = [[66 220 50 225];[66 220 270 445];[221 375 260-90 260+90]; [376 485 260-150 260+150];[110 220 50 445]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.
              for n = 1:size(coor,1)
-                 roi(:,:,n) = sqrt(((x-coor(n,1))./coor(n,3)).^2 + ((y-coor(n,2))./coor(n,4)).^2)<4;
+                 roi(:,:,n) = logical(ismember(x,coor(n,3):coor(n,4)).*ismember(y,coor(n,1):coor(n,2)));
              end
-             roi(:,:,n+1) = sum(roi,3) == 0; %roi(:,:,5) is all ROIs accumulated.
-%                         figure(2);imagesc(obj.stimulus);alpha(sum(roi,3));
-%                         roi(:,:,5) = sum(roi(:,:,1:4),3);
-%                         for n = 1:size(roi,3);figure(n);h=imagesc(obj.stimulus);set(h,'alphaData',roi(:,:,n));drawnow;end
+
+%              roi(:,:,n+1) = sum(roi,3) == 0; %roi(:,:,5) is all ROIs accumulated.
+             
+             
+                        
          end
     end
 end
