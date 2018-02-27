@@ -421,7 +421,7 @@ classdef Fixmat < Project
             [~,out.ttest.p,out.ttest.ci] = ttest2(criterion(cluster(imax).subs),criterion(cluster(imin).subs));%compares higgest to smallest bar
             
         end
-        function plot(obj,varargin)
+        function [haxis]=plot(obj,varargin)
             
             M = obj.maps;
             if nargin > 1
@@ -454,7 +454,7 @@ classdef Fixmat < Project
                 nsp     = obj.subplot_number;
             end
             for nc = 1:size(M,3)
-                h   = subplot(nsp(1),nsp(2),nc);
+                haxis(nc)   =subplot(nsp(1),nsp(2),nc);
                 
                 %plot the image;
                 imagesc(obj.bincenters_x(500),obj.bincenters_y(500),obj.stimulus);
@@ -470,10 +470,25 @@ classdef Fixmat < Project
 %                 end
                 drawnow
             end
-%                         thincolorbar('vert');
-        p = get(gca,'position');
-        H=colorbar                
-        set(gca,'position',p);
+            %                         thincolorbar('vert');
+            p = get(gca,'position');
+            h2  =colorbar
+            set(gca,'position',p);
+            pos = get(gca,'position');
+            %% colorbar            
+            set(h2,'location','west');
+            h2.AxisLocation ='out';
+            h2.Box          = 'off';
+            h2.TickLength   = 0;
+            h2.Ticks        = [d 0 u];
+            h2.TickLabels   = {regexprep(mat2str(round(d*10)/10),'0','') '0' regexprep(mat2str(round(u*10)/10),'0','')};
+            h2.FontSize = 12;
+            h2.FontWeight='bold';            
+            set(h2,'Position',[pos(1)-.015 pos(2) .02 .2])
+            
+            
+        
+        
         end
         function contourplot(obj,varargin)
             v = {};
@@ -915,9 +930,10 @@ classdef Fixmat < Project
 %              roi(:,:,n+1) = sum(roi,3) == 0; %roi(:,:,5) is all ROIs accumulated.
              
              C = 1;
-             coor = [[110 220 50 225];[110 220 270 445];[220 375 260-90 260+90]; [375 485 260-150 260+150];[110 220 50 445]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.             
+             coor = [[110 220 50 225];[110 220 270 445];[221 375 260-90 260+90]; [376 485 260-150 260+150];[110 220 50 445]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.             
+%              coor = [[66 220 50 225];[66 220 270 445];[221 375 260-90 260+90]; [376 485 260-150 260+150];[110 220 50 445]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.
              for n = 1:size(coor,1)
-                 roi(:,:,n) = ismember(x,coor(n,3):coor(n,4)).*ismember(y,coor(n,1):coor(n,2));
+                 roi(:,:,n) = logical(ismember(x,coor(n,3):coor(n,4)).*ismember(y,coor(n,1):coor(n,2)));
              end
 %              roi(:,:,n+1) = sum(roi,3) == 0; %roi(:,:,5) is all ROIs accumulated.
              
