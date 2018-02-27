@@ -958,8 +958,12 @@ classdef Project < handle
                 elseif model == 5
                     pmod = pmod(:,[1 2 3 4 7 8 5 6 9]);
                 end
-            elseif ismember(model,[33 44])
-                base_kappa = 2;
+            elseif ismember(model,[33 32 31 44 43 42])
+                
+                base_kappa([33 44]) = 2;
+                base_kappa([32 43]) = 1;
+                base_kappa([31 42]) = .1;
+                base_kappa = base_kappa(model);
                 X          = (linspace(-135,180,8));
                 deriv      = zscore(Tuning.VonMises(X,1,base_kappa+.05,0,0)-Tuning.VonMises(X,1,base_kappa-.05,0,0));
                 deriv      = deriv - max(deriv);
@@ -984,9 +988,9 @@ classdef Project < handle
                 pmod(:,4)        = nanzscore(pmod(:,4));%zscore also the interaction
                 pmod(:,6)        = pmod(:,2).*pmod(:,5);%time x dsigma (using the same timevector)
                 
-                if model == 33
+                if ismember(model,[33 32 31])
                     pmod = pmod(:,1:4);
-                elseif model == 44
+                elseif ismember(model,[44 43 42])
                     pmod = pmod(:,1:6);
                 end
             end
@@ -1245,7 +1249,7 @@ classdef Project < handle
                 end
             end
         end
-        function                     getgroup_firstlevel_RW(self,subjects)
+        function getgroup_firstlevel_RW(self,subjects)
             
             learning_rates = self.GetRWIntervals;
             s =Subject(6);
@@ -1470,13 +1474,13 @@ classdef Project < handle
                     load(sprintf('%s/SPM.mat',spm_dir));
                     SPM                                                          = rmfield(SPM,'xCon');%result the previous contrasts, there shouldnt by any                    
                     if length(models) ==1
-                        if models == 7 | models == 3 | models == 33 | models >= 1000                            
+                        if models == 7 | models == 3 | models == 33 | models == 31 | models == 32 | models > 1000
                             M = [[0 0 0 ]' eye(3)];
                             SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
                             M(1,2)      = 0;
                             SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
                             
-                        elseif models == 4
+                        elseif models == 4 | models == 44 | models == 43 | models == 42
                             M           = [[0 0 0 0 0]' eye(5)];
                             SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
                             M(1,2)      = 0;
@@ -2251,12 +2255,14 @@ classdef Project < handle
             global st
             global SPM
             global xSPM
+            global model
 %             global a 
 %             SPM = a.SPM;
 %             xSPM= a.xSPM;
             global t                        
             p = pwd;
             figure(1000);clf;
+            set(gcf,'position',[1114 1 800 1093])
             fs = 8;
             common = {'fontsize',fs,'fontweight','bold'};            
             try                                
@@ -2276,7 +2282,8 @@ classdef Project < handle
                 end
                 %%         plot the mean beta values & SEM, and make a ttest.
                 subplot(8,6,[1 2 7 8 13 14]);
-                predictors = {'time','gau' 'time\_gau' 'dsig' 'time\_dsig'};
+                predictors = {'time','Gau' 'timexGau' 'dG/dS' 'time x dG/dS'};
+                    %'$\frac{dG}{d\sigma}$' '$\frac{dG}{d\sigma}$' };
                 total_beta = size(data,2);
                 bar(2:total_beta,mean(data(:,2:end)),'k');
                 hold on;
@@ -2297,7 +2304,7 @@ classdef Project < handle
                 grid on;
                 %% Plot the fitted temporal dynamics
                 subplot(8,6,[3 4 9 10 15 16]);
-                [pmod]      = self.get_pmodmat(44);%most complex model                                                
+                [pmod]      = self.get_pmodmat(model);%most complex model                                                
 %                 pmod(:,2) = 0;
                 contourf(reshape(pmod(:,1:size(data,2))*mean(data)',8,520/8)',9,'color','none');
                 S         = get(gca,'position');
@@ -2311,26 +2318,93 @@ classdef Project < handle
                 grid on;
                 ylabel('time',common{:});
                 %% plot the RW model
-                subplot(8,6,[5 6 11 12 17 18]);
-                files      = [];                
-                b          = load('~/Desktop/a');
-                total_step = length(b.a);
-                ppp = '/mnt/data/project_fearamy/data/second_level/run001/spm/model_10010+19001_chrf_0_0/cov_id_/06mm/fitfun_08/group_00_all/normalization_CAT/';
-%                 ppp = '/mnt/data/project_fearamy/data/second_level/run001/spm/model_10010+19001_chrf_0_0/cov_id_/06mm/fitfun_08/group_Rating_vM_1/normalization_CAT/';
-                for i = 1:total_step
-                    files = [files;sprintf('%sspmF_%04d.nii',ppp,i)];
+                try
+                    subplot(8,6,[5 6 11 12 17 18]);                    
+                    b          = load('~/Desktop/learning_rates.mat');
+                    learning_rates = round(10000+b.learning_rates*10000);
+                    total_step = length(learning_rates);
+                    for groups = {'group_00_all' 'group_Rating_vM_1' 'group_Saliency_vM_1'}
+                        files      = [];betas=[];
+                        for i = 1:total_step
+                            files = [files;sprintf('/mnt/data/project_fearamy/data/second_level/run001/spm/model_%d_chrf_0_0/cov_id_/06mm/fitfun_08/%s/normalization_CAT/spmF_0002.nii',learning_rates(i),groups{1})];
+                            betas = [betas;sprintf('/mnt/data/project_fearamy/data/second_level/run001/spm/model_%d_chrf_0_0/cov_id_/06mm/fitfun_08/%s/normalization_CAT/beta_0004.nii',learning_rates(i),groups{1})];
+                        end
+                        datarw.(groups{1}) = spm_get_data(spm_vol(files),XYZvox(:));
+                        databetas.(groups{1}) = spm_get_data(spm_vol(betas),XYZvox(:));
+                        if strcmp((groups{1}),'group_00_all')
+                            yyaxis right
+                            k = plot(datarw.(groups{1}),'r','linewidth',4);
+%                             k.EdgeColor = [.5 .5 .5];
+                            box off;
+                            xlim([0 total_step]);
+                            models = (learning_rates-10001)/10000;
+                            i = 1:4:total_step;
+                            set(gca,'xtick',i,'xticklabels',models(i),'xticklabelrotation',-45,common{:});
+                            ylabel('F-value')
+                            hold on
+                            yyaxis left;
+                            plot(databetas.(groups{1}) ,'b','linewidth',4)
+                            hold on;
+                            ylabel('TimeXGau Interaction')
+                            ylim([-.1 .35])
+                        elseif strcmp((groups{1}),'group_Rating_vM_1')
+                            yyaxis right;
+                            plot(datarw.(groups{1}),'--r','linewidth',1);
+                            yyaxis left;
+                            plot(databetas.(groups{1}) ,'b','linewidth',1)                            
+%                         elseif strcmp((groups{1}),'group_Saliency_vM_1');
+%                             yyaxis right;
+%                             plot(datarw.(groups{1}),'--r','linewidth',1);
+%                             yyaxis left;
+%                             plot(databetas.(groups{1}) ,'b','linewidth',1);
+%                             ylabel('timeXGau')
+                        end
+                        grid on
+                    end
                 end
-                datarw = spm_get_data(spm_vol(files),XYZvox(:));
-                k = bar(datarw,.9,'k');      
-                k.EdgeColor = [.5 .5 .5];
-                box off;
-                xlim([0 total_step]);                
-                models = b.a;
-                i = 1:4:total_step;
-                set(gca,'xtick',i,'xticklabels',models(i),'xticklabelrotation',-45,'YAxisLocation','right',common{:});
-                ylabel('F-value')
-              
                 %%
+                figure(10001);clf
+                b              = load('~/Desktop/learning_rates.mat');
+                learning_rates = round(10000+b.learning_rates*10000);
+                total_step     = length(learning_rates);
+                
+                betas=[];
+                for ns = t.subject_id(:)';
+                    for i = 1:total_step
+                        betas = [betas;sprintf('/mnt/data/project_fearamy/data/sub%03d/run001/spm/model_%d_chrf_0_0/s06_wCAT_beta_0004.nii',ns,learning_rates(i))];
+                    end
+                end
+                %
+                betas = reshape(spm_get_data(spm_vol(betas),XYZvox(:)),total_step,length(t.subject_id(:)));
+                pos = get(gca,'position');
+                B   = zscore(betas);
+                imagesc(B) 
+                colorbar
+                set(gca,'position',pos);
+                r=[];
+                for i = 1:total_step;r(i)=corr(t.rating_nonparam,B(i,:)');end
+                hold on;
+%                 plot(r*10+20,1:total_step,'r','linewidth',4)                
+                %
+                models = (learning_rates-10001)/10000;
+                i      = 1:4:total_step;
+                set(gca,'ytick',i,'yticklabels',models(i),common{:});
+                xlabel('subjects');
+                grid on
+                title('timexGau')
+                drawnow;
+                %%
+                figure(101212);
+                subplot(1,2,1);
+                plot(mean(betas,2));
+                subplot(1,2,2);
+                [a b c stats] = ttest(betas',0);
+                plot(stats.tstat);     
+                set(gca,'xtick',i,'xticklabels',models(i),common{:});
+                drawnow;
+                %%
+                pause(.4)
+                figure(1000)
                 try
                     o    =  fitlm(t,'rating_nonparam     ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
                     o2   =  fitlm(t,'facecircle_nonparam ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
@@ -2369,7 +2443,7 @@ classdef Project < handle
 %                     end
                     %%
                     grid on;                    
-                    title(sprintf('%s\nW_r: %4.2g pval: %4.2g\nW_f: %4.2g pval: %4.2g',predictors{n},o.Coefficients.Estimate(1+n),o.Coefficients.pValue(1+n),o2.Coefficients.Estimate(1+n),o2.Coefficients.pValue(1+n)),common{:});
+                    title(sprintf('%s \nW_r: %4.2g pval: %4.2g\nW_f: %4.2g pval: %4.2g',predictors{n},o.Coefficients.Estimate(1+n),o.Coefficients.pValue(1+n),o2.Coefficients.Estimate(1+n),o2.Coefficients.pValue(1+n)),common{:});                    
                     set(gca,common{:})
                     box off;
                     drawnow;
@@ -3162,33 +3236,51 @@ classdef Project < handle
                 hold off;
             end            
         end
-        function plot_model_04_predictors(self)
+        function plot_model_04_predictors(self,base_kappas)
             %%
-            base_kappa = 2;
-            deriv      = zscore(Tuning.VonMises(X,1,base_kappa+.05,0,0)-Tuning.VonMises(X,1,base_kappa-.05,0,0));
-            deriv      = deriv - max(deriv);
-            vM         = zscore(Tuning.VonMises(X,1,base_kappa,0,0));
-            i=0;
-            for y = linspace(-12,12,5);
-                for x= linspace(-40,40,5);
-                    i=i+1;
-                    subplot(5,5,i);
-                    plot((x*vM+y*deriv),'k','linewidth',3);
-                    
-                    if i <=5 
-                        title(sprintf('A: %d',x),'fontsize',20);
-                    end
-                    grid on;
-                    set(gca,'xtick',[2 4 6 8],'xticklabel',{'' 'CS+' '' '180'});
-                    if rem(i-1,5)==0
-                        ylabel(sprintf('K: %d',y),'fontsize',20,'fontweight','bold');
-                    end
-                    axis square;
-                    axis tight;
-                    box off;                    
-                end;
+            for base_kappa = base_kappas(:)'
+                old = 0;
+                figure;
+                X          = (linspace(-135,180,8));
+                if ~old
+                    deriv      = zscore(Tuning.VonMises(X,1,base_kappa+.05,0,0)-Tuning.VonMises(X,1,base_kappa-.05,0,0));
+                    deriv      = deriv - max(deriv);
+                else
+                    base_kappa   = .1;
+                    %create a weight vector for the derivative.
+                    res     = 8;
+                    x2      = [0:(res-1)]*(360/res)-135;
+                    x2      = [x2 - (360/res/2) x2(end)+(360/res/2)];
+                    deriv   = -abs(diff(Tuning.VonMises(x2,1,base_kappa,0,0)));
+                    deriv   = zscore(deriv);
+                end
+                vM         = zscore(Tuning.VonMises(X,1,base_kappa,0,0));
+                i=0;
+                for y = linspace(-12,12,5);
+                    for x= linspace(-40,40,5);
+                        i=i+1;
+                        subplot(5,5,i);
+                        plot((x*vM+y*deriv),'ko-','linewidth',3);
+                        
+                        if i <=5
+                            title(sprintf('A: %d',x),'fontsize',20);
+                        end
+                        grid on;
+                        set(gca,'xtick',[2 4 6 8],'xticklabel',{'' 'CS+' '' '180'});
+                        if rem(i-1,5)==0
+                            ylabel(sprintf('K: %d',y),'fontsize',20,'fontweight','bold');
+                        end
+                        axis square;
+                        axis tight;
+                        box off;
+                    end;
+                end
+                EqualizeSubPlotYlim(gcf);
+                set(gcf,'position',[680    92   995   949]);
+                filename = sprintf('~/gdrive/Office/Fearamy/FigureCache/pmod_%d_old_%d.png',base_kappa*10,old);
+                supertitle(filename,1,'interpreter','none');
+                SaveFigure(filename,'-r120');
             end
-            EqualizeSubPlotYlim(gcf)
         end
     end    
     methods (Static)
