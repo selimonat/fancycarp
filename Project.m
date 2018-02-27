@@ -141,7 +141,7 @@ classdef Project < handle
             %%
             hold on;
             if nargin == 3
-                errorbar(X,Y,SEM,'k.');%add error bars
+                errorbar(X,Y,SEM,'k.','LineWidth',1.5);%add error bars
             end
             
             %%

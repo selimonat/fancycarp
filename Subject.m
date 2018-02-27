@@ -28,7 +28,7 @@ classdef Subject < Project
                 end
                 s.csp = s.paradigm{s.default_run}.stim.cs_plus;
                 s.csn = s.paradigm{s.default_run}.stim.cs_neg;
-%                 s.scr            = SCR(s);
+                s.scr            = SCR(s);
                                 
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path)
