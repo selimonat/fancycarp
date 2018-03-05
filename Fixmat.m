@@ -905,13 +905,13 @@ classdef Fixmat < Project
             %% count number of fixations in each roi.
             roi = obj.GetFaceROIs;
             for n = 1:size(roi,3)
-                count(n) = nanmean(map(Vectorize(roi(:,:,n))));
+                count(n) = nansum(map(Vectorize(roi(:,:,n))));
             end
             if nargin>2
                 if normalize;
                     fprintf('Will Normalize...\n');
                     %                    count  = count./sum(count);
-                   count = count./sum(count(1:4));
+                   count = count./nansum(count(1:3)); %last ROI has the whole map
                 end
             end
 
@@ -931,8 +931,9 @@ classdef Fixmat < Project
 %              roi(:,:,n+1) = sum(roi,3) == 0; %roi(:,:,5) is all ROIs accumulated.
              
              C = 1;
-             coor = [[110 220 50 225];[110 220 270 445];[221 375 260-90 260+90]; [376 485 260-150 260+150];[110 220 50 445]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.             
-%              coor = [[66 220 50 225];[66 220 270 445];[221 375 260-90 260+90]; [376 485 260-150 260+150];[110 220 50 445]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.
+              coor = [[110 220 50 445];[221 375 250-90 250+90]; [376 485 250-150 250+150];[0 500 0 500]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.             
+
+%              coor = [[110 220 50 225];[110 220 270 445];[221 375 250-90 250+90]; [376 485 250-150 250+150];[110 220 50 445];[0 500 0 500]];%x and y coordinates for left eye (from my perspective), right eye, nose and mouth.             
              for n = 1:size(coor,1)
                  roi(:,:,n) = logical(ismember(x,coor(n,3):coor(n,4)).*ismember(y,coor(n,1):coor(n,2)));
              end
