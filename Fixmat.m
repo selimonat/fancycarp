@@ -901,18 +901,19 @@ classdef Fixmat < Project
         function replaceselection(obj,new_selection)            
             obj.selection         = new_selection;            
         end
-        function [count]=EyeNoseMouth(obj,map,normalize)                       
-           %% count number of fixations in each roi.
-           roi = obj.GetFaceROIs;
-           for n = 1:size(roi,3)               
+        function [count]=EyeNoseMouth(obj,map,normalize)
+            %% count number of fixations in each roi.
+            roi = obj.GetFaceROIs;
+            for n = 1:size(roi,3)
                 count(n) = nanmean(map(Vectorize(roi(:,:,n))));
-           end
-           if nargin>2
-               if normalize;
-                   fprintf('Will Normalize...\n');
-                   count  = count./sum(count);
-               end           
-           end
+            end
+            if nargin>2
+                if normalize;
+                    fprintf('Will Normalize...\n');
+                    %                    count  = count./sum(count);
+                   count = count./sum(count(1:4));
+                end
+            end
 
          end
          function roi = GetFaceROIs(obj)
