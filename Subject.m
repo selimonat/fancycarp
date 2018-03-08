@@ -1482,7 +1482,7 @@ classdef Subject < Project
                         cc = cc+1;
                         RampDown        = L(L(:,2)==4,1);
                         RampDownEnd     = RampDown(end);
-                        cond(cc).name   = 'CoolDown';
+                        cond(cc).name   = '999';
                         cond(cc).onset  = RampDownEnd;
                         cond(cc).duration = RatePainOnsets(end)-L(find(L(:,2)==4,1,'last'),1);
                         if self.id == 4
@@ -1502,9 +1502,6 @@ classdef Subject < Project
                             cond(counter).duration = cond(counter).duration./TR;
                             cond(counter).tmod      = 0;
                             cond(counter).pmod      = struct('name',{},'param',{},'poly',{});
-                        end
-                        if any(find(strcmp({cond.name}, '3000')==1))
-                            cond(strcmp({cond.name}, '3000')==1).name = 't0';
                         end
                         
                         save(modelpath,'cond');
@@ -1671,7 +1668,7 @@ classdef Subject < Project
                         cc = cc+1;
                         RampDown        = L(L(:,2)==4,1);
                         RampDownEnd     = RampDown(end);
-                        cond(cc).name   = 'CoolDown';
+                        cond(cc).name   = '999';
                         cond(cc).onset  = RampDownEnd;
                         cond(cc).duration = RatePainOnsets(end)-L(find(L(:,2)==4,1,'last'),1);
                         if self.id == 4
@@ -1691,12 +1688,6 @@ classdef Subject < Project
                             cond(counter).duration = cond(counter).duration./TR;
                             cond(counter).tmod      = 0;
                             cond(counter).pmod      = struct('name',{},'param',{},'poly',{});
-                        end
-                        if any(find(strcmp({cond.name}, '3000')==1))
-                            cond(strcmp({cond.name}, '3000')==1).name = 't0';
-                        end
-                        if any(find(strcmp({cond.name}, '3000Face')==1))
-                            cond(strcmp({cond.name}, '3000Face')==1).name = 't0Face';
                         end
                         save(modelpath,'cond');
                     else
@@ -1847,7 +1838,7 @@ classdef Subject < Project
                         cc = cc+1;
                         RampDown        = L(L(:,2)==4,1);
                         RampDownEnd     = RampDown(end);
-                        cond(cc).name   = 'CoolDown';
+                        cond(cc).name   = '999';
                         cond(cc).onset  = RampDownEnd;
                         cond(cc).duration = RatePainOnsets(end)-L(find(L(:,2)==4,1,'last'),1);
                         if self.id == 4
@@ -1867,9 +1858,6 @@ classdef Subject < Project
                             cond(counter).tmod      = 0;
                             cond(counter).pmod      = struct('name',{},'param',{},'poly',{});
                         end
-                        if any(find(strcmp({cond.name}, '3000')==1))
-                            cond(strcmp({cond.name}, '3000')==1).name = 't0';
-                        end
                         
                         save(modelpath,'cond');
                     else
@@ -1878,42 +1866,33 @@ classdef Subject < Project
                     end
             end
         end
-        %         function [stim_scanunit,stim_ids]=StimTime2ScanUnit(self,run)
-        %             %will return stim onsets in units of scan. Will check the Log
-        %             %for stim onsets, it will discard those trials occuring outside
-        %             %the first and last scans based on their time-stamps. In
-        %             %FearAmy, we have the reference measurements, i.e. scanner
-        %             %stops for a while during the experiment. Those onsets are also
-        %             %excluded (if the next scan unit is more than the TR far away).
-        %
-        %             L               = self.get_log(run);
-        %             scan_times      = L(L(:,2) == 0,1);%find all scan events and get their times
-        %             scan_id         = 1:length(scan_times);%label pulses with increasing numbers
-        %             last_scan_time  = max(scan_times);%time of the last
-        %             first_scan_time = min(scan_times);
-        %             %collect info on stim onsets and discard those not occurring
-        %             %during scanning.
-        %             stim_times      = L(find(L(:,2)==3),1)';
-        %             valid           = stim_times<last_scan_time & stim_times>first_scan_time;%i.e. during scanning
-        %             if sum(valid) ~= length(stim_times)
-        %                 keyboard
-        %             end
-        %             %%
-        %             stim_ids        = L(find(L(:,2)==3),3)';
-        %             stim_scanunit   = stim_ids;
-        %             trial           = 0;
-        %             for stim_time = stim_times;%run stim by stim
-        %                 trial                = trial + 1;
-        %                 stim_scanunit(trial) = floor(stim_time./self.TR)+1 + mod(stim_time./self.TR,1);
-        %             end
-        %         end
+        function out = get_pmod(self,nrun,cond)
+            if cond == 999 %turning thermode off in the end -  no relief rating but pain before and after turning off.
+                if self.id == 4
+                    finalrelief = 0;
+                elseif self.id == 15 && nrun == 4;
+                    finalrelief = NaN;
+                else
+                    finalrelief = -diff(self.get_paradigm(nrun).log.ratings.pain(end-1:end,3)); %diff of painratings when thermode is on vs off in the end
+                end
+                out = struct('name',{'999'},'param',{finalrelief},'poly',1);
+            else
+               out = struct('name',{num2str(cond)},'param',{self.get_rating(nrun,cond).y},'poly',1);
+            end
+        end
+          
         function FitFIR(self,nrun,model_num)
             %run the model MODEL_NUM for data in NRUN.
             %NRUN can be a vector, but then care has to be taken that
             %model_num is correctly set for different runs.
-            empty1stlevel = 1;
-            FIRparam  = 14;
-            onset_modelnum = 1;
+            empty1stlevel  =  1;
+            FIRparam       = 14;
+            addpmod        =  0;
+            onset_modelnum =  1;
+           
+            if model_num == 3 
+                addpmod =1;
+            end
             
             spm_dir  = strrep(self.dir_spmmat(nrun(1),model_num),'chrf_00',sprintf('FIR_%02d_10conds_00',FIRparam));
             path_spmmat = fullfile(spm_dir,'SPM.mat');
@@ -1939,17 +1918,22 @@ classdef Subject < Project
                 dummy                                              = load(self.path_model(session,onset_modelnum));
                 switch session
                     case 1
-                        dummy.cond = dummy.cond(1:8); % 8 faces,
+                        dummy.cond = dummy.cond([1:9 end]); % 8 faces + t0
                     case 2
-                        dummy.cond = dummy.cond(1:2);   % CSP, UCS
+                        dummy.cond = dummy.cond([1:3 end]);  % CSP, UCS
                     case 3
-                        dummy.cond = dummy.cond(1:8); % 8 faces 
+                        dummy.cond = dummy.cond([1:10 end]); % 8 faces  + UCS + t0
                     case 4
-                        dummy.cond = dummy.cond(1:8); % 8 faces 
+                        dummy.cond = dummy.cond([1:10 end]); % 8 faces + UCS + t0
                 end
                 for c = 1:numel(dummy.cond)
-                    dummy.cond(c).duration = 0;
+                    dummy.cond(c).duration  = 0;
                     dummy.cond(c).onset     = dummy.cond(c).onset -2; %take 2 TRs before first stimulus appears. (onsets are already in unit = TR, so -2 is correct, not -2.*TR).
+                    if addpmod == 1
+                        if str2double(dummy.cond(c).name)< 900 %don't do it for nulltrial and finalramp, we only have 1 rating here.
+                        dummy.cond(c).pmod = self.get_pmod(session,str2double(dummy.cond(c).name));
+                        end
+                    end
                 end
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).cond   = dummy.cond;
@@ -1967,12 +1951,12 @@ classdef Subject < Project
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).hpf                 = 128;
             end
             matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
-            matlabbatch{1}.spm.stats.fmri_spec.bases.fir.length                  = self.TR*FIRparam;
+            matlabbatch{1}.spm.stats.fmri_spec.bases.fir.length                  = 1*FIRparam;
             matlabbatch{1}.spm.stats.fmri_spec.bases.fir.order                   = FIRparam;
             matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
-            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = .8;-Inf
-            matlabbatch{1}.spm.stats.fmri_spec.mask                              = {''};%add a proper mask here. LK s3 ss
+            matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf; %.8
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = cellstr(fullfile(self.path_data(0),'mrt','s3_ss_data.nii'));%{''};%add a proper mask here. 
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
             %estimation
             matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spmmat};
@@ -2222,14 +2206,8 @@ classdef Subject < Project
             fprintf('%d contrasts computed for phase %d, Model %d. \n',n_con,nrun,model_num)
             %prepare paths for Normalization and Smoothing
             path2cons = self.path_con(nrun,model_num,'');
-            spmT = [];
-            for n = 1:size(path2cons,1)
-                spmT = [spmT; strrep(path2cons(n,:),'con','spmT')];
-            end
             self.VolumeNormalize(path2cons);%normalize ('wCAT_' and 'wEPI_'' will be added)
-            self.VolumeNormalize(spmT);
             self.VolumeSmooth(self.path_con(nrun,model_num,'wCAT_'));% smooth (s6, or whatever kernel, will be added)
-            self.VolumeSmooth(self.path_con(nrun,model_num,'wEPI_'))
         end
         %         function plot_con(nrun,model_num,con_num)
         %             self.CreateContrast(nrun,model_num,con_num);
