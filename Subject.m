@@ -1695,7 +1695,7 @@ classdef Subject < Project
                         load(modelpath);
                     end
                 case 3
-                    modelname = 'CoolOnsets'; %tonic pain is baseline, everything else is modelled, except faces. they go into ISI.
+                    modelname = 'RampOn'; %tonic pain is baseline, everything else is modelled, except faces. they go into ISI.
                     
                     if ~exist(modelpath) || force == 1
                         if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
@@ -2033,7 +2033,7 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf; %default .8
-            matlabbatch{1}.spm.stats.fmri_spec.mask                              = cellstr(spm_select('expand',self.path_meanepi));%add a proper mask here.
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = cellstr(spm_select('expand',strrep(self.path_skullstrip,'ss_data.nii','s3_ss_data.nii')));%add a proper mask here.
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'AR(1)';
             %estimation
             matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spmmat};
@@ -2041,10 +2041,10 @@ classdef Subject < Project
             spm_jobman('run', matlabbatch);
             %
             %normalize the beta images right away
-            %             beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
-            %             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
-            %             beta_images = self.path_beta(nrun(1),model_num,'w_');%smooth the normalized images.
-            %             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
+            beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
+            self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
+            beta_images = self.path_beta(nrun(1),model_num,'wCAT_');%smooth the normalized images.
+            self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
         end
         function [total_cons] = CreateContrasts(self,nrun,model_num)
             
@@ -2123,8 +2123,10 @@ classdef Subject < Project
                 n = n + 1;
                 if model_num == 1
                     name{n} = 'Faces>else';
+                    beta_ind = self.get_beta_index(nrun,model_num,intersect(self.realconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/UCS
                 else
-                    name{n} = 'Ramp>else';
+                    name{n} = 'AnyRelief>else';
+                    beta_ind = self.get_beta_index(nrun,model_num,intersect(self.allconds,unique(self.get_paradigm(nrun).presentation.dist)));%all conds with relie (8faces, t0, UCS, everything)
                 end
                 if nrun == 3
                     vec = zeros(1,self.get_Nbetas(nrun,model_num)./2);
@@ -2134,8 +2136,7 @@ classdef Subject < Project
                 else
                     vec = zeros(1,self.get_Nbetas(nrun,model_num));
                 end
-                face_betas = self.get_beta_index(nrun,model_num,intersect(self.realconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/UCS
-                vec(face_betas) = 1;
+                vec(beta_ind) = 1;
                
                 if nrun == 3
                     convec{n} = repmat(vec,1,2);
@@ -2143,7 +2144,7 @@ classdef Subject < Project
                         convec{n} = vec;
                     end
                 else
-                    convec{n} = vec; %for phase 1 and 2 not 2 sessions.
+                    convec{n} = vec; %for phase 1 and 2 only one session sessions.
                 end
                 
                 % contrast 2
@@ -2152,19 +2153,18 @@ classdef Subject < Project
                 vec = zeros(1,self.get_Nbetas(nrun,model_num));
                 switch nrun
                     case 1
-                        vec(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
+                        vec([4 8])= [1 -1];
                         name{n} = 'CSP>CSN';
                     case 2
-                        vec(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
+                        vec([2 1])= [1 -1];
                         name{n} = 'UCS>CSN';
                     case 3
                         vec = zeros(1,self.get_Nbetas(nrun,model_num)./2); %replace upper vec, because already double
-                        vec(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
+                        vec([4 8])= [1 -1];
                         vec = repmat(vec,1,2);
                         if self.id == 15
                             vec = zeros(1,self.get_Nbetas(nrun,model_num));
-                            vec(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
-                            name{n} = 'CSP>CSN';
+                            vec([4 8])= [1 -1];
                         end
                         name{n} = 'CSP>CSN';
                 end
