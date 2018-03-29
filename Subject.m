@@ -208,6 +208,16 @@ classdef Subject < Project
                 end
             end
         end
+        function [Nvols] = get_lastscan_cooldown(self,nrun)
+            modelnum = 4; %get condfile from there and find out where CoolDown phase started
+            a = load(self.path_model(nrun,modelnum));
+            cond = a.cond;
+            if self.id == 32 && nrun == 1                
+                Nvols = 409;
+            else
+            Nvols = floor(cond(end).onset);
+            end
+        end
         function XYZmm  = get_nativeatlas2mask(self,mask_id)
             %Will return XYZ coordinates from ROI specified by MASK_INDEX
             %thresholded by the default value. XYZ values are in world
@@ -788,18 +798,18 @@ classdef Subject < Project
             %s.VolumeNormalize(s.path_beta(1,1))
             %s.VolumeNormalize(s.path_skullstrip);
             
-%             %% Normalize with mean epi segmentation
-%             for nf = 1:size(path2image,1)
-%                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,'meandata','y_meandata'));
-%                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
-%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
-%                     78 76 85];
-%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
-%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
-%                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
-%             end
-%             self.RunSPMJob(matlabbatch);
-%             %% Normalize with CAT12 segmentation
+            %             %% Normalize with mean epi segmentation
+            %             for nf = 1:size(path2image,1)
+            %                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(regexprep(self.path_meanepi,'meandata','y_meandata'));
+            %                 matlabbatch{nf}.spm.spatial.normalise.write.subj.resample = {path2image(nf,:)};
+            %                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.bb   = [-78 -112 -70
+            %                     78 76 85];
+            %                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.vox    = [Inf Inf Inf];
+            %                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.interp = 4;
+            %                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
+            %             end
+            %             self.RunSPMJob(matlabbatch);
+            %             %% Normalize with CAT12 segmentation
             matlabbatch =[];
             for nf = 1:size(path2image,1)
                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));
@@ -1041,7 +1051,7 @@ classdef Subject < Project
             out = spm_select('FPList',out,sprintf('^%scon_*',prefix'));
             if isempty(out)
                 fprintf('No con images found, probably wrong prefix is entered...\n');
-                keyboard%sanity check
+                %sanity check
             end
             %select if VARARGIN provided
             if nargin > 4
@@ -1335,13 +1345,12 @@ classdef Subject < Project
         function PrepareCondFile(self,run,modelnum)
             
             force = 1;
-            verbalize = 0;
+            verbalize = 1;
             modelpath = self.path_model(run,modelnum);
             
             switch modelnum
                 case 1
                     modelname = 'FaceOnsets'; %tonic pain is baseline, everything else is modelled
-                    
                     if ~exist(modelpath) || force == 1
                         if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
                         if verbalize == 1
@@ -1666,7 +1675,7 @@ classdef Subject < Project
                         
                         % CoolDown phase
                         cc = cc+1;
-                        RampDown        = L(L(:,2)==4,1);
+                        RampDown        =L(L(:,2)==4,1);
                         RampDownEnd     = RampDown(end);
                         cond(cc).name   = '999';
                         cond(cc).onset  = RampDownEnd;
@@ -1807,7 +1816,7 @@ classdef Subject < Project
                         end
                         
                         % Rate Pain
-                        cc = cc+1;
+                        cc = cc+1;  modelname = 'FaceAndRampOnset'; %tonic pain is
                         cond(cc).name   = 'RatePain';
                         cond(cc).onset  = RatePainOnsets;
                         cond(cc).duration = L(L(:,2)==10,1)-RatePainOnsets;
@@ -1864,6 +1873,473 @@ classdef Subject < Project
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
                         load(modelpath);
                     end
+                    
+                case 4
+                    modelname = 'RampOnsetStick'; %based on model_03, onsets are RampOnsets, but we model RampOnsets as stick (but everything else as box)
+                    if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                    if verbalize == 1
+                        fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                    end
+                    if ~exist(modelpath) || force == 1
+                        load(self.path_model(run,3))
+                        set2zero = self.nreliefconds(run);
+                        %% set durations to zero
+                        for counter = 1:set2zero
+                            cond(counter).duration = zeros(size(cond(counter).onset));
+                        end
+                        save(modelpath,'cond')
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 5
+                    modelname = 'RampOnset_NoCool'; %based on model_03, onsets are RampOnsets, but we model RampOnsets as stick (but everything else as box)
+                    if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                    if verbalize == 1
+                        fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                    end
+                    if ~exist(modelpath) || force == 1
+                        load(self.path_model(run,3))
+                        
+                        if self.id ==32 && run ==1
+                             fprintf('Stays like model 4.\n')
+                             save(modelpath,'cond')
+                        else
+                              fprintf('Cutting conds.\n')
+                            %get rid of CoolDown
+                            CoolCond = self.nreliefconds(run)+3;
+                            cond(CoolCond) = [];
+                            %get rid of PainRating at the end
+                            RatePainCond = self.nreliefconds(run)+1;
+                            cond(RatePainCond).onset(end) = [];
+                            cond(RatePainCond).duration(end) = [];
+                            save(modelpath,'cond')
+                        end
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 6
+                    modelname = 'RampOnsetStick_NoCool'; %based on model_03, onsets are RampOnsets, but we model RampOnsets as stick (but everything else as box)
+                    if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                    if verbalize == 1
+                        fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                    end
+                    if ~exist(modelpath) || force == 1
+                        load(self.path_model(run,4))
+                        set2zero = self.nreliefconds(run);
+                        %% set durations to zero
+                        for counter = 1:set2zero
+                            cond(counter).duration = zeros(size(cond(counter).onset));
+                        end
+                        if self.id ==32 && run ==1
+                            fprintf('Stays like model 4.\n')
+                            save(modelpath,'cond')
+                        else
+                            fprintf('Cutting conds.\n')
+                            %get rid of Cooldown
+                            CoolCond = self.nreliefconds(run)+3;
+                            cond(CoolCond) = [];
+                            %get rid of PainRating at the end
+                            RatePainCond = self.nreliefconds(run)+1;
+                            cond(RatePainCond).onset(end) = [];
+                            cond(RatePainCond).duration(end) = [];
+                            save(modelpath,'cond')
+                        end
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 7
+                     modelname = 'RampOnsetStick_allconds_NoCool'; %based on model_03, onsets are RampOnsets, but we model RampOnsets as stick, in one vector
+                    
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        if verbalize == 1
+                            fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                        end
+                        L               = self.get_log(run);
+                        %sort things according to time rather than order of being logged
+                        [~,i]           = sort(L(:,1),'ascend');
+                        L               = L(i,:);
+                        % delete all the events that are after the last scanning..
+                        scan_times      = L(find(L(:,2) == 0),1);
+                        first_scan_time = min(scan_times);
+                        last_scan_time  = max(scan_times);
+                        L(L(:,1) < first_scan_time,:) = [];
+                        L(L(:,1) > last_scan_time,:)  = [];
+                        L(:,1)                        = L(:,1) - first_scan_time; % correct time logging so that it's referring to the first scan as 0. (later first col will be from > dummy trials)
+                        
+                        % correct timings for dummy scans
+                        L(1:6,:) = []; %let dummies go
+                        first_real_scan = L(1,1);
+                        L(:,end+1) = L(:,1); %store it so we still know the original timing
+                        L(:,1) = L(:,1)-first_real_scan;
+                        
+                        %event types are as follows:
+                        %         %Pulse Detection      :     0    info: NaN;
+                        %         %Tracker Onset        :     1
+                        %         %Cross (tonic) Onset  :     2    info: position
+                        %         %Cross (pain) Onset   :     3    info: position
+                        %         %Ramp down Onset      :     4    info: ror
+                        %         %Treatment Plateau    :     5    info: temp
+                        %         %Ramp back onset      :     6    info: ror;
+                        %         %Key Presses          :     7    info: keycode;
+                        %         %Tracker Offset       :     8    info: NaN;
+                        %         %Rate pain Onset		:     9    info: nTrial;
+                        %         %Rate pain Offset     :     10   info: nTrial;
+                        %         %Rate treat Onset     :     11   info: nTrial;
+                        %         %Rate treat Offset    :     12   info: nTrial;
+                        %         %Face Onset           :     13   info: dist;
+                        %         %Face Offset          :     14   info: dist;
+                        %         %FaceStim Fixcross    :     15   info: position(1)
+                        %         %Tonic Pain reached   :     16   info: nTrial
+                        %         %Fixcross Jump        :     17   info:
+                        %         %Cooldown end         :     18   info:
+                        %         %dummy fixflip        :     22   info: NaN;
+                        %         planned trialstart    :     30   info: NaN
+                        %         planned trialend      :     31   info: NaN
+                        
+                        
+                        names = {'VAS','Text','Pulse','Tracker+','CrossTonic','CrossTreat','RampDown','Plateau','RampBack','Keys','TrackerOff','RatePainOn','RatePainOff','RateReliefOn','RateReliefOff','FaceOn','FaceOff','FaceStimFX','PlateauReached','FixJump','CoolDown','TrialStart','TrialEnd'};
+                        condnum = [-2 -1 0 1:18 30 31];
+                        
+                        TR = Project.TR;
+                        scan_times          = L(L(:,2) == 0,1);%find all scan events and get their times
+                        scan_id             = 1:length(scan_times);%label pulses with increasing numbers, assumes no pulses is missing.
+                        
+                        %% get onsets
+                        
+                        conds = [4 11 9 18];% (13 = face is gone) 4 = RampDown, 11 = RateTreat, 9=RatePain 18 = CoolDown at very end.
+                        if verbalize ==1
+                            fprintf('Considering the following conditions:\n')
+                            for c = conds
+                                fprintf('%s\n',names{condnum==c})
+                            end
+                        end
+                        
+                        
+                        all_events          = find(ismember(L(:,2),conds));
+                        LL = L(all_events,:);
+                        
+                        if verbalize ==1
+                            fprintf('Overall we have %d events.\n',length(all_events))
+                        end
+                        
+                        %Conds
+                        
+                        %1 -135
+                        %2 -90
+                        %3 -45
+                        %4  CSP
+                        %5 45
+                        %6 90
+                        %7 135
+                        %8 180
+                        %9 UCS
+                        %10 Null
+                        %11 RatePain
+                        %12 RateRelief
+                        %13 BaselineEnd
+                        
+                        RampdownOnsets   = LL(LL(:,2)==4,1);
+                        RateReliefOnsets = LL(LL(:,2)==11,1);
+                        RatePainOnsets   = LL(LL(:,2)==9,1);
+                        RampdownFinal    = RampdownOnsets(end);
+                        RampdownOnsets(end) = [];
+                        
+                        cc = 0;
+                        cond = [];
+                        cc = cc+1;
+                        cond_list = L(L(:,2)==13,3);
+                        
+                        cond(cc).name     = 'RampDown';
+                        cond(cc).onset    = RampdownOnsets(cond_list < 500);
+                        cond(cc).duration = 0;
+                        if verbalize ==1
+                            fprintf('Number of onsets for %s: %d.\n',cond(1).name,length(cond(1).onset))
+                        end
+                        cc = cc+1;
+                        cond(cc).name     = 'Null';
+                        cond(cc).onset    = RampdownOnsets(cond_list ==3000);
+                        cond(cc).duration = 0;
+                        
+                        if run > 1
+                            cc = cc+1;
+                            cond(cc).name     = 'UCS';
+                            cond(cc).onset    = RampdownOnsets(cond_list == 500);
+                            cond(cc).duration = 0;
+                        end
+                        
+                        % Rate Pain
+                        cc = cc+1;
+                        cond(cc).name   = 'RatePain';
+                        cond(cc).onset  = RatePainOnsets;
+                        cond(cc).duration = L(L(:,2)==10,1)-RatePainOnsets;
+                        if verbalize ==1
+                            fprintf('Number of onsets for RatePain: %d.\n',length(cond(cc).onset))
+                        end
+                        if self.id == 6
+                            corrdur = [1.5 2 2 1]; %scanner stopped too early, during last rating.
+                            cond(cc).duration(end) = corrdur(run);
+                        elseif self.id == 32 && run == 1
+                            cond(cc).onset(end-1:end) = [];
+                            cond(cc).duration(end-1:end) = [];
+                        end
+                        
+                        % Rate Relief
+                        cc = cc+1;
+                        cond(cc).name     = 'RateRelief';
+                        cond(cc).onset    = RateReliefOnsets;
+                        cond(cc).duration = ones(1,length(cond(cc).onset)).*5;
+                        if self.id == 32 && run ==1
+                            cond(cc).duration(end) = 4; % scanner stopped here
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for RateRelief: %d.\n',length(cond(cc).onset))
+                        end
+                        
+%                         % CoolDown phase
+%                         cc = cc+1;
+%                         RampDown        = L(L(:,2)==4,1);
+%                         RampDownEnd     = RampDown(end);
+%                         cond(cc).name   = '999';
+%                         cond(cc).onset  = RampDownEnd;
+%                         cond(cc).duration = RatePainOnsets(end)-L(find(L(:,2)==4,1,'last'),1);
+%                         if self.id == 4
+%                             cond(cc).duration = 32.6; %logging problem.
+%                         elseif self.id == 32 && run == 1 %wrong seq, scanner stopped already
+%                             cond(cc) = [];
+%                         end
+%                         
+%                         if verbalize ==1
+%                             fprintf('Number of onsets for CoolDown %d.\n',length(cond(end).onset))
+%                         end
+                        
+                    
+                        %% housekeeping
+                        for counter = 1:length(cond)
+                            cond(counter).onset    = cond(counter).onset./TR;
+                            cond(counter).duration = cond(counter).duration./TR;
+                            cond(counter).tmod      = 0;
+                            cond(counter).pmod      = struct('name',{},'param',{},'poly',{});
+                        end
+                        
+                        %% Tuning information as pmod, VonMises and derivative dVM/dkappa
+                        conds = -135:45:180;
+                        amp   = 1;
+                        kappa = 1;
+                        delta = .01;
+                        VMlookup = zscore(Tuning.VonMises(conds,amp,kappa,0,0));
+                        dVMlookup = zscore(Tuning.VonMises(conds,amp,kappa+delta,0,0)-Tuning.VonMises(conds,amp,kappa-delta,0,0))./2*delta; %central difference formula
+                        %
+                        condlist = cond_list(cond_list < 500);
+                        for ntrial = 1:length(cond(1).onset)
+                            deltacsp = condlist(ntrial);
+                            ind = Project.deltacsp2ind(deltacsp);
+                            VM(ntrial)    = VMlookup(ind);
+                            dVM(ntrial)   = dVMlookup(ind);
+                        end
+                        
+                        % linear regression y ~ 1 + vM + dVM
+                        % Interaction is done on 2ndlevel (?)
+                        cond(1).pmod  = struct('name',{'vM','dvM'},'param',{VM dVM},'poly',{1 1});
+                        
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 8
+                    modelname = 'RampOnsetStick_allconds_interactVMdVM_NoCool'; %based on model_03, onsets are RampOnsets, but we model RampOnsets as stick, in one vector
+                    
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        if verbalize == 1
+                            fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                        end
+                        L               = self.get_log(run);
+                        %sort things according to time rather than order of being logged
+                        [~,i]           = sort(L(:,1),'ascend');
+                        L               = L(i,:);
+                        % delete all the events that are after the last scanning..
+                        scan_times      = L(find(L(:,2) == 0),1);
+                        first_scan_time = min(scan_times);
+                        last_scan_time  = max(scan_times);
+                        L(L(:,1) < first_scan_time,:) = [];
+                        L(L(:,1) > last_scan_time,:)  = [];
+                        L(:,1)                        = L(:,1) - first_scan_time; % correct time logging so that it's referring to the first scan as 0. (later first col will be from > dummy trials)
+                        
+                        % correct timings for dummy scans
+                        L(1:6,:) = []; %let dummies go
+                        first_real_scan = L(1,1);
+                        L(:,end+1) = L(:,1); %store it so we still know the original timing
+                        L(:,1) = L(:,1)-first_real_scan;
+                        
+                        %event types are as follows:
+                        %         %Pulse Detection      :     0    info: NaN;
+                        %         %Tracker Onset        :     1
+                        %         %Cross (tonic) Onset  :     2    info: position
+                        %         %Cross (pain) Onset   :     3    info: position
+                        %         %Ramp down Onset      :     4    info: ror
+                        %         %Treatment Plateau    :     5    info: temp
+                        %         %Ramp back onset      :     6    info: ror;
+                        %         %Key Presses          :     7    info: keycode;
+                        %         %Tracker Offset       :     8    info: NaN;
+                        %         %Rate pain Onset		:     9    info: nTrial;
+                        %         %Rate pain Offset     :     10   info: nTrial;
+                        %         %Rate treat Onset     :     11   info: nTrial;
+                        %         %Rate treat Offset    :     12   info: nTrial;
+                        %         %Face Onset           :     13   info: dist;
+                        %         %Face Offset          :     14   info: dist;
+                        %         %FaceStim Fixcross    :     15   info: position(1)
+                        %         %Tonic Pain reached   :     16   info: nTrial
+                        %         %Fixcross Jump        :     17   info:
+                        %         %Cooldown end         :     18   info:
+                        %         %dummy fixflip        :     22   info: NaN;
+                        %         planned trialstart    :     30   info: NaN
+                        %         planned trialend      :     31   info: NaN
+                        
+                        
+                        names = {'VAS','Text','Pulse','Tracker+','CrossTonic','CrossTreat','RampDown','Plateau','RampBack','Keys','TrackerOff','RatePainOn','RatePainOff','RateReliefOn','RateReliefOff','FaceOn','FaceOff','FaceStimFX','PlateauReached','FixJump','CoolDown','TrialStart','TrialEnd'};
+                        condnum = [-2 -1 0 1:18 30 31];
+                        
+                        TR = Project.TR;
+                        scan_times          = L(L(:,2) == 0,1);%find all scan events and get their times
+                        scan_id             = 1:length(scan_times);%label pulses with increasing numbers, assumes no pulses is missing.
+                        
+                        %% get onsets
+                        
+                        conds = [4 11 9 18];% (13 = face is gone) 4 = RampDown, 11 = RateTreat, 9=RatePain 18 = CoolDown at very end.
+                        if verbalize ==1
+                            fprintf('Considering the following conditions:\n')
+                            for c = conds
+                                fprintf('%s\n',names{condnum==c})
+                            end
+                        end
+                        
+                        
+                        all_events          = find(ismember(L(:,2),conds));
+                        LL = L(all_events,:);
+                        
+                        if verbalize ==1
+                            fprintf('Overall we have %d events.\n',length(all_events))
+                        end
+                        
+                        %Conds
+                        
+                        %1 -135
+                        %2 -90
+                        %3 -45
+                        %4  CSP
+                        %5 45
+                        %6 90
+                        %7 135
+                        %8 180
+                        %9 UCS
+                        %10 Null
+                        %11 RatePain
+                        %12 RateRelief
+                        %13 BaselineEnd
+                        
+                        RampdownOnsets   = LL(LL(:,2)==4,1);
+                        RateReliefOnsets = LL(LL(:,2)==11,1);
+                        RatePainOnsets   = LL(LL(:,2)==9,1);
+                        RampdownFinal    = RampdownOnsets(end);
+                        RampdownOnsets(end) = [];
+                        
+                        cc = 0;
+                        
+                        cc = cc+1;
+                        cond_list = L(L(:,2)==13,3);
+                        cond = [];
+                        cond(cc).name     = 'RampDown';
+                        cond(cc).onset    = RampdownOnsets(cond_list < 500);
+                        cond(cc).duration = 0;
+                        if verbalize ==1
+                            fprintf('Number of onsets for %s: %d.\n',cond(1).name,length(cond(1).onset))
+                        end
+                        
+                        % Rate Pain
+                        cc = cc+1;
+                        cond(cc).name   = 'RatePain';
+                        cond(cc).onset  = RatePainOnsets;
+                        cond(cc).duration = L(L(:,2)==10,1)-RatePainOnsets;
+                        if verbalize ==1
+                            fprintf('Number of onsets for RatePain: %d.\n',length(cond(cc).onset))
+                        end
+                        if self.id == 6
+                            corrdur = [1.5 2 2 1]; %scanner stopped too early, during last rating.
+                            cond(cc).duration(end) = corrdur(run);
+                        elseif self.id == 32 && run == 1
+                            cond(cc).onset(end-1:end) = [];
+                            cond(cc).duration(end-1:end) = [];
+                        end
+                        
+                        % Rate Relief
+                        cc = cc+1;
+                        cond(cc).name     = 'RateRelief';
+                        cond(cc).onset    = RateReliefOnsets;
+                        cond(cc).duration = ones(1,length(cond(cc).onset)).*5;
+                        if self.id == 32 && run ==1
+                            cond(cc).duration(end) = 4; % scanner stopped here
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for RateRelief: %d.\n',length(cond(cc).onset))
+                        end
+                        
+%                         % CoolDown phase
+%                         cc = cc+1;
+%                         RampDown        = L(L(:,2)==4,1);
+%                         RampDownEnd     = RampDown(end);
+%                         cond(cc).name   = '999';
+%                         cond(cc).onset  = RampDownEnd;
+%                         cond(cc).duration = RatePainOnsets(end)-L(find(L(:,2)==4,1,'last'),1);
+%                         if self.id == 4
+%                             cond(cc).duration = 32.6; %logging problem.
+%                         elseif self.id == 32 && run == 1 %wrong seq, scanner stopped already
+%                             cond(cc) = [];
+%                         end
+%                         
+%                         if verbalize ==1
+%                             fprintf('Number of onsets for CoolDown %d.\n',length(cond(end).onset))
+%                         end
+                        
+                    
+                        %% housekeeping
+                        for counter = 1:length(cond)
+                            cond(counter).onset    = cond(counter).onset./TR;
+                            cond(counter).duration = cond(counter).duration./TR;
+                            cond(counter).tmod      = 0;
+                            cond(counter).pmod      = struct('name',{},'param',{},'poly',{});
+                        end
+                        
+                        %% Tuning information as pmod, VonMises and derivative dVM/dkappa
+                        conds = -135:45:180;
+                        amp   = 1;
+                        kappa = 1;
+                        delta = .01;
+                        VMlookup = zscore(Tuning.VonMises(conds,amp,kappa,0,0));
+                        dVMlookup = zscore(Tuning.VonMises(conds,amp,kappa+delta,0,0)-Tuning.VonMises(conds,amp,kappa-delta,0,0))./2*delta; %central difference formula
+                        %
+                        condlist = cond_list(cond_list < 500);
+                        for ntrial = 1:length(cond(1).onset)
+                            deltacsp = condlist(ntrial);
+                            ind = Project.deltacsp2ind(deltacsp);
+                            VM(ntrial)    = VMlookup(ind);
+                            dVM(ntrial)   = dVMlookup(ind);
+                            VMdVM(ntrial) = VMlookup(ind).*dVMlookup(ind);
+                        end
+                        
+                        % linear regression y ~ 1 + vM + dVM
+                        % Interaction is done on 2ndlevel (?)
+                        cond(1).pmod  = struct('name',{'vM','dvM','vMxdvM'},'param',{VM dVM VMdVM},'poly',{1 1 1});
+                        
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
             end
         end
         function out = get_pmod(self,nrun,cond)
@@ -1877,10 +2353,9 @@ classdef Subject < Project
                 end
                 out = struct('name',{'999'},'param',{finalrelief},'poly',1);
             else
-               out = struct('name',{num2str(cond)},'param',{self.get_rating(nrun,cond).y},'poly',1);
+                out = struct('name',{num2str(cond)},'param',{self.get_rating(nrun,cond).y},'poly',1);
             end
         end
-          
         function FitFIR(self,nrun,model_num)
             %run the model MODEL_NUM for data in NRUN.
             %NRUN can be a vector, but then care has to be taken that
@@ -1889,8 +2364,8 @@ classdef Subject < Project
             FIRparam       = 14;
             addpmod        =  0;
             onset_modelnum =  1;
-           
-            if model_num == 3 
+            
+            if model_num == 3
                 addpmod =1;
             end
             
@@ -1906,8 +2381,8 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.dir                  = {spm_dir};
             matlabbatch{1}.spm.stats.fmri_spec.timing.units         = 'scans';%more robust
             matlabbatch{1}.spm.stats.fmri_spec.timing.RT            = self.TR;
-%             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
-%             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
+            %             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t        = 16;
+            %             matlabbatch{1}.spm.stats.fmri_spec.timing.fmri_t0       = 1;
             
             se = 0;
             for session = nrun(:)'
@@ -1931,7 +2406,7 @@ classdef Subject < Project
                     dummy.cond(c).onset     = dummy.cond(c).onset -2; %take 2 TRs before first stimulus appears. (onsets are already in unit = TR, so -2 is correct, not -2.*TR).
                     if addpmod == 1
                         if str2double(dummy.cond(c).name)< 900 %don't do it for nulltrial and finalramp, we only have 1 rating here.
-                        dummy.cond(c).pmod = self.get_pmod(session,str2double(dummy.cond(c).name));
+                            dummy.cond(c).pmod = self.get_pmod(session,str2double(dummy.cond(c).name));
                         end
                     end
                 end
@@ -1956,7 +2431,7 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf; %.8
-            matlabbatch{1}.spm.stats.fmri_spec.mask                              = cellstr(fullfile(self.path_data(0),'mrt','s3_ss_data.nii'));%{''};%add a proper mask here. 
+            matlabbatch{1}.spm.stats.fmri_spec.mask                              = cellstr(fullfile(self.path_data(0),'mrt','s3_ss_data.nii'));%{''};%add a proper mask here.
             matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
             %estimation
             matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spmmat};
@@ -2012,13 +2487,19 @@ classdef Subject < Project
                 %load files using ...,1, ....,2 format
                 
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).scans  = cellstr(spm_select('expand',self.path_epi(session,'r')));%use always the realigned data.
+                lastscan2include = size(matlabbatch{1}.spm.stats.fmri_spec.sess(se).scans,1);
+                if self.kickcooldown
+                    lastscan2include = self.get_lastscan_cooldown(session);
+                end
+                matlabbatch{1}.spm.stats.fmri_spec.sess(se).scans =  matlabbatch{1}.spm.stats.fmri_spec.sess(se).scans(1:lastscan2include,:);
                 %load the onsets
                 dummy                                              = load(self.path_model(session,model_num));
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).cond   = dummy.cond;
                 %load nuissance parameters
                 nuis                                               = self.get_param_motion(session);
-                nuis                                               = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
+                nuis                                               = nuis(1:lastscan2include,:);
+                nuis                                               = zscore(nuis);%zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
                 for nNuis = 1:size(nuis,2)
                     matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis).val   = nuis(:,nNuis);
                     matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis).name  = mat2str(nNuis);
@@ -2045,6 +2526,10 @@ classdef Subject < Project
             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
             beta_images = self.path_beta(nrun(1),model_num,'wCAT_');%smooth the normalized images.
             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
+            %delete wCAT files, keep s6_wCAT
+            for n = 1:size(beta_images,1)
+                system(sprintf('rm %s',beta_images(n,:)));
+            end
         end
         function [total_cons] = CreateContrasts(self,nrun,model_num)
             
@@ -2061,7 +2546,7 @@ classdef Subject < Project
                 Nbetas = self.get_Nbetas(nrun,model_num);
                 if nrun == 3
                     if self.id ~= 15
-                    Nbetas = Nbetas./2; %to care for one session first, not necessary for sub 15, as only one session modelled anyway.
+                        Nbetas = Nbetas./2; %to care for one session first, not necessary for sub 15, as only one session modelled anyway.
                     end
                 end
                 % contrast 1
@@ -2089,7 +2574,7 @@ classdef Subject < Project
                     convec{n}(self.get_beta_index(nrun,model_num,'0Face'))= 1;
                     convec{n}(self.get_beta_index(nrun,model_num,'180Face'))= -1;
                     name{n} = 'CSP>CSN_faces';
-                end            
+                end
                 
                 % contrast 3
                 % all Relief trials vs else
@@ -2110,7 +2595,7 @@ classdef Subject < Project
                 else
                     convec{n}(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
                     name{n} = 'CSP>CSN_ramp';
-                end    
+                end
                 % take care of the two sessions
                 if nrun ==3 && self.id ~=15
                     for co = 1:n
@@ -2119,64 +2604,67 @@ classdef Subject < Project
                 end
             else
                 % contrast 1
-                % all faces or Ramp vs everything else
-                n = n + 1;
-                if model_num == 1
-                    name{n} = 'Faces>else';
-                    beta_ind = self.get_beta_index(nrun,model_num,intersect(self.realconds,unique(self.get_paradigm(nrun).presentation.dist)));%all except t0/UCS
-                else
-                    name{n} = 'AnyRelief>else';
-                    beta_ind = self.get_beta_index(nrun,model_num,intersect(self.allconds,unique(self.get_paradigm(nrun).presentation.dist)));%all conds with relie (8faces, t0, UCS, everything)
-                end
-                if nrun == 3
-                    vec = zeros(1,self.get_Nbetas(nrun,model_num)./2);
-                    if self.id ==15
-                        vec = zeros(1,self.get_Nbetas(nrun,model_num));
-                    end
-                else
-                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
-                end
-                vec(beta_ind) = 1;
-               
-                if nrun == 3
-                    convec{n} = repmat(vec,1,2);
-                    if self.id == 15
-                        convec{n} = vec;
-                    end
-                else
-                    convec{n} = vec; %for phase 1 and 2 only one session sessions.
-                end
-                
-                % contrast 2
                 % CSP > CSN (or UCS > CSN in Cond)
                 n = n + 1;
                 vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                
+                name{n} = 'CSdiff';
                 switch nrun
                     case 1
                         vec([4 8])= [1 -1];
-                        name{n} = 'CSP>CSN';
                     case 2
                         vec([2 1])= [1 -1];
-                        name{n} = 'UCS>CSN';
                     case 3
-                        vec = zeros(1,self.get_Nbetas(nrun,model_num)./2); %replace upper vec, because already double
-                        vec([4 8])= [1 -1];
-                        vec = repmat(vec,1,2);
-                        if self.id == 15
-                            vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                        if self.id ~=15
+                            vec = zeros(1,self.get_Nbetas(nrun,model_num)./2); %replace upper vec, because already double
+                            vec([4 8])= [1 -1];
+                            vec = repmat(vec,1,2);
+                        else
                             vec([4 8])= [1 -1];
                         end
-                        name{n} = 'CSP>CSN';
                 end
                 convec{n} = vec;
+                
+                if nrun ~= 2
+                    % contrast 2
+                    % go through 8 faceconds and merge the 2 sessions of run 3
+                    % and 4
+                    
+                    %create empty convec with right amount of zeros;
+                    if nrun == 3
+                        if self.id == 15
+                            vec0 = zeros(1,self.get_Nbetas(nrun,model_num));
+                        else
+                            vec0 = zeros(1,self.get_Nbetas(nrun,model_num)./2);
+                        end
+                    else
+                        vec0 = zeros(1,self.get_Nbetas(nrun,model_num));
+                    end
+                    
+                    thisphaseconds = intersect(self.realconds,unique(self.get_paradigm(nrun).presentation.dist));
+                    for cond = thisphaseconds(:)'
+                        vec = vec0;
+                        n = n + 1;
+                        name{n} = sprintf('%04d',cond);
+                        beta_ind = self.get_beta_index(nrun,model_num,cond);
+                        vec(beta_ind) = 1;
+                        if nrun == 3
+                            convec{n} = repmat(vec,1,2);
+                            if self.id == 15
+                                convec{n} = vec;
+                            end
+                        else
+                            convec{n} = vec; %for phase 1 and 2 only one session sessions.
+                        end
+                    end
+                end
             end
-            
             %% take care that everything adds to 1 / 0
             for co = 1:n
-                if mod(co,2) == 1 % allfaces or allramp, odd contrast numbers
+                if  co == 1 % allfaces or allramp, odd contrast numbers
+                    convec{co} =convec{co}./sum(convec{co}>0);
+                else 
                     convec{co} = convec{co}./sum(convec{co});
-                elseif mod(co,2) == 0 %diff CSP CSn, even contrast numbers
-                    convec{co} = convec{co}./sum(convec{co}>0);
                 end
             end
             %% add same contrasts' negative version
@@ -2189,8 +2677,8 @@ classdef Subject < Project
             % build the batch
             matlabbatch{1}.spm.stats.con.spmmat = cellstr(path_spm);
             for co = 1:numel(name)
-                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name   = name{co};
-                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec =  convec{co};
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = name{co};
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = convec{co};
                 matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
                 %sanity check
                 if length(convec{co})~= self.get_Nbetas(nrun,model_num)
@@ -2208,10 +2696,18 @@ classdef Subject < Project
             path2cons = self.path_con(nrun,model_num,'');
             self.VolumeNormalize(path2cons);%normalize ('wCAT_' and 'wEPI_'' will be added)
             self.VolumeSmooth(self.path_con(nrun,model_num,'wCAT_'));% smooth (s6, or whatever kernel, will be added)
+            path2wCAT = self.path_con(nrun,model_num,'wCAT_');
+            %remove the unsmoothed image for storage reasons
+            self.remove_files(path2wCAT);
         end
         %         function plot_con(nrun,model_num,con_num)
         %             self.CreateContrast(nrun,model_num,con_num);
         %         end
+        function remove_files(self,allfiles)
+            for n = 1:size(allfiles)
+                system(sprintf('rm %s',allfiles(n,:)));
+            end
+        end
         function out = listcond(self,nrun,model_num)
             condfile = load(self.path_model(nrun,model_num));
             cond = condfile.cond;
