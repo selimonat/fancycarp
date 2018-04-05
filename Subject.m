@@ -212,10 +212,10 @@ classdef Subject < Project
             modelnum = 4; %get condfile from there and find out where CoolDown phase started
             a = load(self.path_model(nrun,modelnum));
             cond = a.cond;
-            if self.id == 32 && nrun == 1                
+            if self.id == 32 && nrun == 1
                 Nvols = 409;
             else
-            Nvols = floor(cond(end).onset);
+                Nvols = floor(cond(end).onset);
             end
         end
         function XYZmm  = get_nativeatlas2mask(self,mask_id)
@@ -1893,7 +1893,7 @@ classdef Subject < Project
                         load(modelpath);
                     end
                 case 5
-                    modelname = 'RampOnset_NoCool'; %based on model_03, onsets are RampOnsets, but we model RampOnsets as stick (but everything else as box)
+                    modelname = 'RampOnsetBox_NoCool'; %based on model_03, onsets are RampOnsets, but we model RampOnsets as box
                     if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
                     if verbalize == 1
                         fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
@@ -1951,7 +1951,7 @@ classdef Subject < Project
                         load(modelpath);
                     end
                 case 7
-                     modelname = 'RampOnsetStick_allconds_NoCool'; %based on model_03, onsets are RampOnsets, but we model RampOnsets as stick, in one vector
+                     modelname = 'RampOnsetStick_8conds1regr_NoCool'; %based on model_03, onsets are RampOnsets, but we model RampOnsets as sticks, in one vector
                     
                     if ~exist(modelpath) || force == 1
                         if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
@@ -2131,7 +2131,7 @@ classdef Subject < Project
                         kappa = 1;
                         delta = .01;
                         VMlookup = zscore(Tuning.VonMises(conds,amp,kappa,0,0));
-                        dVMlookup = zscore(Tuning.VonMises(conds,amp,kappa+delta,0,0)-Tuning.VonMises(conds,amp,kappa-delta,0,0))./2*delta; %central difference formula
+                        dVMlookup = -zscore((Tuning.VonMises(conds,amp,kappa+delta,0,0)-Tuning.VonMises(conds,amp,kappa-delta,0,0))./(2*delta)); %central difference formula
                         %
                         condlist = cond_list(cond_list < 500);
                         for ntrial = 1:length(cond(1).onset)
@@ -2320,7 +2320,7 @@ classdef Subject < Project
                         kappa = 1;
                         delta = .01;
                         VMlookup = zscore(Tuning.VonMises(conds,amp,kappa,0,0));
-                        dVMlookup = zscore(Tuning.VonMises(conds,amp,kappa+delta,0,0)-Tuning.VonMises(conds,amp,kappa-delta,0,0))./2*delta; %central difference formula
+                        dVMlookup = -zscore((Tuning.VonMises(conds,amp,kappa+delta,0,0)-Tuning.VonMises(conds,amp,kappa-delta,0,0))./(2*delta)); %central difference formula
                         %
                         condlist = cond_list(cond_list < 500);
                         for ntrial = 1:length(cond(1).onset)
@@ -2527,6 +2527,7 @@ classdef Subject < Project
             beta_images = self.path_beta(nrun(1),model_num,'wCAT_');%smooth the normalized images.
             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
             %delete wCAT files, keep s6_wCAT
+            fprintf('Deleting unsmoothed normalized files..\n');
             for n = 1:size(beta_images,1)
                 system(sprintf('rm %s',beta_images(n,:)));
             end
