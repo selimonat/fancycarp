@@ -49,7 +49,7 @@ classdef Project < handle
         %All these properties MUST BE CORRECT and adapted to one owns
         %projectpaths
         
-        path_project          = '/projects/treatgen/data/';
+        path_project          = '/projects/crunchie/treatgen/data/';
         path_spm_version      = '/common/apps/spm12-7219/';     %6906   % I renamed this to avoid confusion with path_spm as SPM.mat
         trio_sessions         = {'' '' '' 'PRISMA_19272' '' 'PRISMA_19279'  'PRISMA_19296' 'PRISMA_19293' 'PRISMA_19286' 'PRISMA_19287' 'PRISMA_19292' 'PRISMA_19291' 'PRISMA_19297' 'PRISMA_19318' 'PRISMA_19319' 'PRISMA_19339' '' 'PRISMA_19329' 'PRISMA_19338' 'PRISMA_19335' 'PRISMA_19336' 'PRISMA_19337' 'PRISMA_19334' 'PRISMA_19352' 'PRISMA_19376' 'PRISMA_19361' '' 'PRISMA_19449' 'PRISMA_19391' 'PRISMA_19392' 'PRISMA_19396' 'PRISMA_19411' 'PRISMA_19419' '' 'PRISMA_19427' 'PRISMA_19441' 'PRISMA_19450' '','PRISMA_19467','','PRISMA_19466','PRISMA_19478','PRISMA_19501','PRISMA_19502','PRISMA_19525','PRISMA_19550','','PRISMA_19536','PRISMA_19537'};
         hr_sessions         = {'' '' '' 'PRISMA_19272' '' 'PRISMA_19279'  'PRISMA_19278' 'PRISMA_19293' 'PRISMA_19286' 'PRISMA_19287' 'PRISMA_19292' 'PRISMA_19291' 'PRISMA_19297' 'PRISMA_19318' 'PRISMA_19319' 'PRISMA_19339' '' 'PRISMA_19329' 'PRISMA_19338' 'PRISMA_19335' 'PRISMA_19336' 'PRISMA_19337' 'PRISMA_19334' 'PRISMA_19352' 'PRISMA_19347' 'PRISMA_19361' '' 'PRISMA_19449' 'PRISMA_19391' 'PRISMA_19392' 'PRISMA_19396' 'PRISMA_19411' 'PRISMA_19419' '' 'PRISMA_19427' 'PRISMA_19441' 'PRISMA_19450' '','PRISMA_19467','','PRISMA_19466','PRISMA_19478','PRISMA_19501','PRISMA_19502','PRISMA_19525','PRISMA_19535','','PRISMA_19536','PRISMA_19537'};
@@ -77,9 +77,11 @@ classdef Project < handle
         realconds             = -135:45:180;
         faceconds             = [-135:45:180 500];
         allconds              = [-135:45:180 500 3000];
+        nreliefconds          = [9 3 10 10]; %faceconds plus t0 and UCS, if there
         plotconds             = [-135:45:180 235 280];
         plottitles            = {'Base' 'Cond' 'Test1' 'Test2' 'Test1/2'};
         condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
+        kickcooldown          = 1;
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm_version); %path to the TPM images, needed by segment.
@@ -447,7 +449,7 @@ classdef Project < handle
                 subs = self.subject_indices;
             end
         end
-        
+     
     end
     methods(Static) %SPM analysis related methods.
         
@@ -554,6 +556,9 @@ classdef Project < handle
         end
     end
     methods (Static) %other methods that might be needed (LK made)
+           function ind = deltacsp2ind(deltacsp)
+             ind = mod(deltacsp./45+4-1,8)+1;
+        end
         function CheckReg(files)
             matlabbatch = [];
             if isa(files,'char')
