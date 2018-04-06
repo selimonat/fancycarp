@@ -2259,6 +2259,18 @@ classdef Subject < Project
                         if verbalize ==1
                             fprintf('Number of onsets for %s: %d.\n',cond(1).name,length(cond(1).onset))
                         end
+                        cc = cc+1;
+                        cond(cc).name     = 'Null';
+                        cond(cc).onset    = RampdownOnsets(cond_list ==3000);
+                        cond(cc).duration = 0;
+                        
+                        if run > 1
+                            cc = cc+1;
+                            cond(cc).name     = 'UCS';
+                            cond(cc).onset    = RampdownOnsets(cond_list == 500);
+                            cond(cc).duration = 0;
+                        end
+                        
                         
                         % Rate Pain
                         cc = cc+1;
@@ -2602,6 +2614,20 @@ classdef Subject < Project
                     for co = 1:n
                         convec{co} = repmat(convec{co},1,2);
                     end
+                end
+            elseif ismember(model_num,[7 8])
+                load([self.dir_spmmat(1,model_num) 'SPM.mat'])
+                for pmod = 1:size(SPM.Sess.U(1).P,2)
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                    n = n+ 1;
+                    name{n} = SPM.Sess.U(1).P(pmod).name;
+                    vec(1+pmod) = 1;
+                    if nrun == 3
+                        if self.id ~= 15
+                            vec = repmat(vec,1,2);
+                        end
+                    end
+                    convec{n} = vec;
                 end
             else
                 % contrast 1
