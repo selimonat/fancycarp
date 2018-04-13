@@ -270,13 +270,13 @@ classdef Group < Project
         end
         %%
         function [scr]    = getSCRs(self,run)
-            %will collect the ratings from single subjects 
+            %will collect the ratings from single subjects
             scr.y = [];
             scr.x = [];
             scr.ids = [];
             for s = 1:length(self.subject)
                 if ~isempty(self.subject{s})
-                  dummy = self.subject{s}.GetSubSCR(run);
+                    dummy = self.subject{s}.GetSubSCR(run);
                     if ~isempty(dummy)
                         scr.y   = [scr.y; dummy.y];
                         scr.x   = [scr.x; dummy.x];
@@ -287,5 +287,90 @@ classdef Group < Project
         end
         
         
+    end
+    methods %(mri))
+        function Fit2ndlevel(self,nrun,modelnum,namestring,varargin)
+            %% 2ndlevel 8conds ANOVA
+            clear2ndlevel = 1;
+            versiontag = 0;
+            statstring = 'anova';
+            prefix = 's6_wCAT_';
+            
+            
+            if nargin == 5
+                statstring = varargin{1};
+            elseif nargin == 6
+                statstring = varargin{1};
+                versiontag = varargin{2};
+            end
+            
+            if strcmp(namestring,'CSdiff')
+                cons2collect   = 1;
+            elseif strcmp(namestring,'8conds')
+                cons2collect = 2:9;
+                if run == 2
+                    cons2collect = 2:3;
+                end
+            elseif strcmp(namestring,'8conds_rate')
+                switch nrun
+                    case 1
+                        cons2collect = 1:8;%WIP
+                    case 2
+                        cons2collect = 2:4;
+                    case 3
+                        cons2collect = 2:4;
+                end
+            end
+            
+            dependencies = 0;
+            unequalvar   = 0;
+            
+            fprintf('Starting 2nd Level model %02d, run %02d, named %s...\n',modelnum,nrun,namestring);
+            
+            path2ndlevel = fullfile(self.path_second_level,sprintf('model_%02d_chrf_%01d_%s_%s',modelnum,versiontag,namestring,self.nrun2phase{nrun}));
+            if exist(path2ndlevel) && (clear2ndlevel==1);
+                system(sprintf('rm -fr %s*',strrep(path2ndlevel,'//','/')));
+            end%this is AG style.
+            if ~exist(path2ndlevel)
+                mkdir(path2ndlevel);
+            end
+              clear matlabbatch
+            % collect all subjects' con images for every cond
+            c = 0;
+            for ncon = cons2collect{n}
+                c = c+1;
+                clear files
+                for ns = 1:numel(subs)
+                    files(ns,:) = strrep(s.path_con(nrun,modelnum,prefix,ncon),'sub004',sprintf('sub%03d',subs(ns)));
+                    fprintf('sub %02d, con_%04d\n',ns,ncon)
+                end
+                matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files); %one cond at a time, but all subs
+            end
+            
+            % specify rest of the model
+            matlabbatch{1}.spm.stats.factorial_design.dir = cellstr(path2ndlevel);
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.dept = dependencies;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.variance = unequalvar;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca = 0;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova = 0;
+            matlabbatch{1}.spm.stats.factorial_design.cov = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
+            matlabbatch{1}.spm.stats.factorial_design.multi_cov = struct('files', {}, 'iCFI', {}, 'iCC', {});
+            matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none = 1;
+            matlabbatch{1}.spm.stats.factorial_design.masking.im = -Inf;
+            matlabbatch{1}.spm.stats.factorial_design.masking.em = {[self.path_groupmeans '/ave_wCAT_s3_ss_data.nii']};
+            matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit = 1;
+            matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
+            matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm = 1;
+          
+            
+            matlabbatch{2}.spm.stats.fmri_est.spmmat = {[path2ndlevel filesep 'SPM.mat']};
+            matlabbatch{2}.spm.stats.fmri_est.method.Classical = 1;
+            spm_jobman('run',matlabbatch);
+       
+            fprintf('\n\nDone estimating N=%d 2nd Level HRF models, version %d, N = %02d subs in %05.2f mins. (Simple one-way anova)\n',length(model_num),versiontag,length(subs),megadone./60)
+
+        end
+        function Con2ndLevel(self,run)
+        end
     end
 end

@@ -78,10 +78,13 @@ classdef Project < handle
         faceconds             = [-135:45:180 500];
         allconds              = [-135:45:180 500 3000];
         nreliefconds          = [9 3 10 10]; %faceconds plus t0 and UCS, if there
+        nsessions             = [1 1 2];
         plotconds             = [-135:45:180 235 280];
         plottitles            = {'Base' 'Cond' 'Test1' 'Test2' 'Test1/2'};
+        nrun2phase            = {'B','C','T'};
         condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
         kickcooldown          = 1;
+        
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm_version); %path to the TPM images, needed by segment.
@@ -558,7 +561,21 @@ classdef Project < handle
     methods (Static) %other methods that might be needed (LK made)
            function ind = deltacsp2ind(deltacsp)
              ind = mod(deltacsp./45+4-1,8)+1;
-        end
+           end
+           function [color]=GetFearGenColors(varargin)
+               %[color]=GetFearGenColors
+               %
+               %   Returns the circular HSV color space in COLOR.
+               
+               color = circshift( hsv(8), [3 0] );
+               color = [color ; [0 0 0] ; [0.5 0.5 0.5]];
+               color    = color + 20/255;
+               color    = min(color,ones(size(color)));
+               
+               if nargin > 0
+                   color = color(varargin{1},:);
+               end
+           end
         function CheckReg(files)
             matlabbatch = [];
             if isa(files,'char')
