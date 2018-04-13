@@ -2388,10 +2388,10 @@ classdef Subject < Project
             %run the model MODEL_NUM for data in NRUN.
             %NRUN can be a vector, but then care has to be taken that
             %model_num is correctly set for different runs.
-            empty1stlevel  =  1;
-            FIRparam       = 14;
-            addpmod        =  0;
-            onset_modelnum =  1;
+            empty1stlevel  =   1;
+            FIRparam       =  14;
+            addpmod        =   0;
+            onset_modelnum =   3;
             
             if model_num == 3
                 addpmod =1;
@@ -2417,18 +2417,29 @@ classdef Subject < Project
                 se = se+1;
                 %load files using ...,1, ....,2 format
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).scans  = cellstr(spm_select('expand',self.path_epi(session,'r')));
+                lastscan2include = size(matlabbatch{1}.spm.stats.fmri_spec.sess(se).scans,1);
+                if self.kickcooldown
+                    lastscan2include = self.get_lastscan_cooldown(session);
+                end
+                matlabbatch{1}.spm.stats.fmri_spec.sess(se).scans =  matlabbatch{1}.spm.stats.fmri_spec.sess(se).scans(1:lastscan2include,:);
+
                 %load the onsets
                 dummy                                              = load(self.path_model(session,onset_modelnum));
-                switch session
-                    case 1
-                        dummy.cond = dummy.cond([1:9 end]); % 8 faces + t0
-                    case 2
-                        dummy.cond = dummy.cond([1:3 end]);  % CSP, UCS
-                    case 3
-                        dummy.cond = dummy.cond([1:10 end]); % 8 faces  + UCS + t0
-                    case 4
-                        dummy.cond = dummy.cond([1:10 end]); % 8 faces + UCS + t0
+                if self.kickcooldown == 0
+                    switch session
+                        case 1
+                            dummy.cond = dummy.cond([1:9 end]); % 8 faces + t0
+                        case 2
+                            dummy.cond = dummy.cond([1:3 end]);  % CSP, UCS
+                        case 3
+                            dummy.cond = dummy.cond([1:10 end]); % 8 faces  + UCS + t0
+                        case 4
+                            dummy.cond = dummy.cond([1:10 end]); % 8 faces + UCS + t0
+                    end
+                elseif self.kickcooldown == 1;
+                    dummy.cond = dummy.cond(1:nreliefconds(session)); % 8 faces + UCS + t0 (if there)
                 end
+                
                 for c = 1:numel(dummy.cond)
                     dummy.cond(c).duration  = 0;
                     dummy.cond(c).onset     = dummy.cond(c).onset -2; %take 2 TRs before first stimulus appears. (onsets are already in unit = TR, so -2 is correct, not -2.*TR).
@@ -2443,7 +2454,8 @@ classdef Subject < Project
                 
                 %load nuissance parameters
                 nuis                                               = self.get_param_motion(session);
-                nuis                                               = zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
+                nuis                                               = nuis(1:lastscan2include,:);
+                nuis                                               = zscore(nuis);%zscore([nuis [zeros(1,size(nuis,2));diff(nuis)] nuis.^2 [zeros(1,size(nuis,2));diff(nuis)].^2 ]);
                 for nNuis = 1:size(nuis,2)
                     matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis).val   = nuis(:,nNuis);
                     matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis).name  = mat2str(nNuis);
@@ -2460,7 +2472,7 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf; %.8
             matlabbatch{1}.spm.stats.fmri_spec.mask                              = cellstr(fullfile(self.path_data(0),'mrt','s3_ss_data.nii'));%{''};%add a proper mask here.
-            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';
+            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'AR(1)';
             %estimation
             matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spmmat};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
