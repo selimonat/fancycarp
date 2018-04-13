@@ -1268,6 +1268,17 @@ classdef Subject < Project
             stim_types  = L(stim_events,3);
             stim_times  = L(stim_events,1);
             text(stim_times,repmat(facelog,length(stim_times),1),num2str(stim_types),'color','k');
+            for dot = 1:numel(stim_events)
+                colorwheel= self.GetFearGenColors;
+                if stim_types(dot)<500
+                    col = colorwheel(self.deltacsp2ind(stim_types(dot)),:);
+                elseif stim_types(dot)==500
+                    col = colorwheel(end-1,:);
+                elseif stim_types(dot)==3000
+                    col = colorwheel(end,:);
+                end
+                plot(stim_times(dot),facelog,'ko','markersize',10,'MarkerFaceColor',col)
+            end
             %
             hold off;
             set(gca,'ytick',[-1:18 30 31 99],'yticklabel',{'Text','Pulse','Tracker+','CrossTonic','CrossTreat','RampDown','Plateau','RampBack','Keys','TrackerOff','RatePainOn','RatePainOff','RateReliefOn','RateReliefOff','FaceOn','FaceOff','FaceStimFX','PainReached','FX Jump','CooledDown','TrialStart','TrialEnd','CooledDownEnd'});
@@ -1341,6 +1352,10 @@ classdef Subject < Project
             if length(Ndummy) < 4
                 Ndummy(end+1) = NaN;
             end
+        end
+        function CompareTriallist2Log(self,run,modelnum)
+            
+            
         end
         function PrepareCondFile(self,run,modelnum)
             
@@ -1816,7 +1831,7 @@ classdef Subject < Project
                         end
                         
                         % Rate Pain
-                        cc = cc+1;  modelname = 'FaceAndRampOnset'; %tonic pain is
+                        cc = cc+1;
                         cond(cc).name   = 'RatePain';
                         cond(cc).onset  = RatePainOnsets;
                         cond(cc).duration = L(L(:,2)==10,1)-RatePainOnsets;
@@ -2127,6 +2142,7 @@ classdef Subject < Project
                         
                         %% Tuning information as pmod, VonMises and derivative dVM/dkappa
                         conds = -135:45:180;
+                        
                         amp   = 1;
                         kappa = 1;
                         delta = .01;
@@ -2142,7 +2158,7 @@ classdef Subject < Project
                         end
                         
                         % linear regression y ~ 1 + vM + dVM
-                        % Interaction is done on 2ndlevel (?)
+                        % Interaction is done on 2ndlevel 
                         cond(1).pmod  = struct('name',{'vM','dvM'},'param',{VM dVM},'poly',{1 1});
                         
                         save(modelpath,'cond');
@@ -2450,26 +2466,26 @@ classdef Subject < Project
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
             spm_jobman('run', matlabbatch);
         end
-        function CreateModels(self,runs)
-            %%%%%%%%%%%%%%%%%%%%%%
-            model_num  = 1;
-            for run = runs
-                model_path = self.path_model(run,model_num);
-                if ~exist(fileparts(model_path));mkdir(fileparts(model_path));end
-                [scan,id]  = self.StimTime2ScanUnit(run);
-                counter    = 0;
-                for current_condition = unique(id)
-                    counter                = counter + 1;
-                    cond(counter).name     = mat2str(current_condition);
-                    cond(counter).onset    = scan(id == current_condition);
-                    cond(counter).duration = zeros(1,length(cond(counter).onset));
-                    cond(counter).tmod     = 0;
-                    cond(counter).pmod     = struct('name',{},'param',{},'poly',{});
-                end
-                save(model_path,'cond');
-                %%%%%%%%%%%%%%%%%%%%%%
-            end
-        end
+%         function CreateModels(self,runs)
+%             %%%%%%%%%%%%%%%%%%%%%%
+%             model_num  = 1;
+%             for run = runs
+%                 model_path = self.path_model(run,model_num);
+%                 if ~exist(fileparts(model_path));mkdir(fileparts(model_path));end
+%                 [scan,id]  = self.StimTime2ScanUnit(run);
+%                 counter    = 0;
+%                 for current_condition = unique(id)
+%                     counter                = counter + 1;
+%                     cond(counter).name     = mat2str(current_condition);
+%                     cond(counter).onset    = scan(id == current_condition);
+%                     cond(counter).duration = zeros(1,length(cond(counter).onset));
+%                     cond(counter).tmod     = 0;
+%                     cond(counter).pmod     = struct('name',{},'param',{},'poly',{});
+%                 end
+%                 save(model_path,'cond');
+%                 %%%%%%%%%%%%%%%%%%%%%%
+%             end
+%         end
         function FitHRF(self,nrun,model_num)
             force_delete = 1;
             %run the model MODEL_NUM for data in NRUN.
@@ -2556,85 +2572,87 @@ classdef Subject < Project
             convec = struct([]);
             
             if model_num  == 2 %needs special treatment because both face and relief onset are modelled..
-                Nbetas = self.get_Nbetas(nrun,model_num);
-                if nrun == 3
-                    if self.id ~= 15
-                        Nbetas = Nbetas./2; %to care for one session first, not necessary for sub 15, as only one session modelled anyway.
-                    end
-                end
-                % contrast 1
-                % all faces main effect
-                n = n + 1;
-                name{n} = 'allfaces>else';
-                face_betas = [];
-                convec{n} = zeros(1,Nbetas);
-                for cond = intersect(self.realconds,unique(self.get_paradigm(nrun).presentation.dist))
-                    ind = self.get_beta_index(nrun,model_num,[num2str(cond) 'Face']);
-                    face_betas = [face_betas ind];
-                end
-                convec{n}(face_betas) = deal(1);
+%                 Nbetas = self.get_Nbetas(nrun,model_num);
+%                 if nrun == 3
+%                     if self.id ~= 15
+%                         Nbetas = Nbetas./2; %to care for one session first, not necessary for sub 15, as only one session modelled anyway.
+%                     end
+%                 end
+%                 % contrast 1
+%                 % all faces main effect
+%                 n = n + 1;
+%                 name{n} = 'allfaces>else';
+%                 face_betas = [];
+%                 convec{n} = zeros(1,Nbetas);
+%                 for cond = intersect(self.realconds,unique(self.get_paradigm(nrun).presentation.dist))
+%                     ind = self.get_beta_index(nrun,model_num,[num2str(cond) 'Face']);
+%                     face_betas = [face_betas ind];
+%                 end
+%                 convec{n}(face_betas) = deal(1);
+%                 
+%                 % contrast 2
+%                 % CSP > CSN (or UCS > CSN in Cond)
+%                 % given by FACES
+%                 n = n + 1;
+%                 convec{n} = zeros(1,Nbetas);
+%                 if nrun == 2
+%                     convec{n}(self.get_beta_index(nrun,model_num,'500Face'))= 1;
+%                     convec{n}(self.get_beta_index(nrun,model_num,'180Face'))= -1;
+%                     name{n} = 'UCS>CSN_faces';
+%                 else
+%                     convec{n}(self.get_beta_index(nrun,model_num,'0Face'))= 1;
+%                     convec{n}(self.get_beta_index(nrun,model_num,'180Face'))= -1;
+%                     name{n} = 'CSP>CSN_faces';
+%                 end
+%                 
+%                 % contrast 3
+%                 % all Relief trials vs else
+%                 n = n + 1;
+%                 convec{n} = zeros(1,Nbetas);
+%                 name{n} = 'allrampdown>else';
+%                 thisphaseconds = intersect(self.realconds,unique(self.get_paradigm(nrun).presentation.dist));
+%                 convec{n}(self.get_beta_index(nrun, model_num,thisphaseconds)) = 1;
+%                 
+%                 % contrast 4
+%                 % CSP > CSN (or UCS > CSN in Cond)
+%                 % given by RAMP
+%                 n = n + 1;
+%                 convec{n} = zeros(1,Nbetas);
+%                 if nrun == 2
+%                     convec{n}(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
+%                     name{n} = 'UCS>CSN_ramp';
+%                 else
+%                     convec{n}(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
+%                     name{n} = 'CSP>CSN_ramp';
+%                 end
+%                 % take care of the two sessions
+%                 if nrun ==3 && self.id ~=15
+%                     for co = 1:n
+%                         convec{co} = repmat(convec{co},1,2);
+%                     end
+%                 end
                 
-                % contrast 2
-                % CSP > CSN (or UCS > CSN in Cond)
-                % given by FACES
-                n = n + 1;
-                convec{n} = zeros(1,Nbetas);
-                if nrun == 2
-                    convec{n}(self.get_beta_index(nrun,model_num,'500Face'))= 1;
-                    convec{n}(self.get_beta_index(nrun,model_num,'180Face'))= -1;
-                    name{n} = 'UCS>CSN_faces';
-                else
-                    convec{n}(self.get_beta_index(nrun,model_num,'0Face'))= 1;
-                    convec{n}(self.get_beta_index(nrun,model_num,'180Face'))= -1;
-                    name{n} = 'CSP>CSN_faces';
-                end
-                
-                % contrast 3
-                % all Relief trials vs else
-                n = n + 1;
-                convec{n} = zeros(1,Nbetas);
-                name{n} = 'allrampdown>else';
-                thisphaseconds = intersect(self.realconds,unique(self.get_paradigm(nrun).presentation.dist));
-                convec{n}(self.get_beta_index(nrun, model_num,thisphaseconds)) = 1;
-                
-                % contrast 4
-                % CSP > CSN (or UCS > CSN in Cond)
-                % given by RAMP
-                n = n + 1;
-                convec{n} = zeros(1,Nbetas);
-                if nrun == 2
-                    convec{n}(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
-                    name{n} = 'UCS>CSN_ramp';
-                else
-                    convec{n}(self.get_beta_index(nrun,model_num,[0 180]))= [1 -1];
-                    name{n} = 'CSP>CSN_ramp';
-                end
-                % take care of the two sessions
-                if nrun ==3 && self.id ~=15
-                    for co = 1:n
-                        convec{co} = repmat(convec{co},1,2);
-                    end
-                end
             elseif ismember(model_num,[7 8])
                 load([self.dir_spmmat(1,model_num) 'SPM.mat'])
-                for pmod = 1:size(SPM.Sess.U(1).P,2)
-                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                for pmod = 1:size(SPM.Sess.U(1).P,2) %loop through the pmods we defined
+                    
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num)-1);
+                    if nrun == 3 && self.id ~= 15
+                        vec = zeros(1,self.get_Nbetas(nrun,model_num)./2-1);
+                    end
                     n = n+ 1;
                     name{n} = SPM.Sess.U(1).P(pmod).name;
-                    vec(1+pmod) = 1;
-                    if nrun == 3
-                        if self.id ~= 15
-                            vec = repmat(vec,1,2);
-                        end
+                    vec(1+pmod) = 1; %skip the main effect
+                    if nrun == 3  && self.id ~= 15
+                        vec = repmat(vec,1,2);
                     end
                     convec{n} = vec;
                 end
             else
-                % contrast 1
+                %% contrast 1: CSdiff
                 % CSP > CSN (or UCS > CSN in Cond)
                 n = n + 1;
-                vec = zeros(1,self.get_Nbetas(nrun,model_num));
-                
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)-1);
                 name{n} = 'CSdiff';
                 switch nrun
                     case 1
@@ -2643,55 +2661,81 @@ classdef Subject < Project
                         vec([2 1])= [1 -1];
                     case 3
                         if self.id ~=15
-                            vec = zeros(1,self.get_Nbetas(nrun,model_num)./2); %replace upper vec, because already double
+                            vec = zeros(1,self.get_Nbetas(nrun,model_num)./2-1); %replace upper vec, because already double
                             vec([4 8])= [1 -1];
                             vec = repmat(vec,1,2);
-                        else
+                        else %self.id==15
                             vec([4 8])= [1 -1];
                         end
                 end
                 convec{n} = vec;
+                %% Contrasts 2:9 or 2:3: single conditions, esp. used to collect both sessions from run 3/4
                 
-                if nrun ~= 2
-                    % contrast 2
-                    % go through 8 faceconds and merge the 2 sessions of run 3
-                    % and 4
-                    
-                    %create empty convec with right amount of zeros;
-                    if nrun == 3
-                        if self.id == 15
-                            vec0 = zeros(1,self.get_Nbetas(nrun,model_num));
-                        else
-                            vec0 = zeros(1,self.get_Nbetas(nrun,model_num)./2);
-                        end
-                    else
-                        vec0 = zeros(1,self.get_Nbetas(nrun,model_num));
-                    end
-                    
-                    thisphaseconds = intersect(self.realconds,unique(self.get_paradigm(nrun).presentation.dist));
-                    for cond = thisphaseconds(:)'
-                        vec = vec0;
-                        n = n + 1;
-                        name{n} = sprintf('%04d',cond);
-                        beta_ind = self.get_beta_index(nrun,model_num,cond);
-                        vec(beta_ind) = 1;
-                        if nrun == 3
-                            convec{n} = repmat(vec,1,2);
-                            if self.id == 15
-                                convec{n} = vec;
-                            end
-                        else
-                            convec{n} = vec; %for phase 1 and 2 only one session sessions.
-                        end
-                    end
-                end
+               thisphaseconds = intersect(self.realconds,unique(self.get_paradigm(nrun).presentation.dist));
+               vec0 = zeros(1,self.get_Nbetas(nrun,model_num)-1);
+               
+               switch nrun
+                   case 1
+                       for cond = thisphaseconds(:)'
+                           vec = vec0; %reset vector, otherwise we accumulate cons [1 0 0 ..] [1 1 0 ..].
+                           n = n + 1;
+                           name{n} = sprintf('%04d',cond);
+                           beta_ind = self.get_beta_index(nrun,model_num,cond);
+                           vec(beta_ind) = 1;
+                           convec{n} = vec; %for phase 1 and 2 only one session sessions.
+                       end
+                   case 2
+                       % correct this, bc 500 doesnt get spit out above.
+                       thisphaseconds = [500 180];
+                       for cond = thisphaseconds(:)'
+                           vec = vec0; %reset vector, otherwise we accumulate cons [1 0 0 ..] [1 1 0 ..].
+                           n = n + 1;
+                           name{n} = sprintf('%04d',cond);
+                           beta_ind = self.get_beta_index(nrun,model_num,cond);
+                           vec(beta_ind) = 1;
+                           convec{n} = vec;
+                       end
+                   case 3
+                       if self.id ~=15
+                           vec0 = zeros(1,self.get_Nbetas(nrun,model_num)./2-1); %otherwise already double.
+                       end
+                       for cond = thisphaseconds(:)'
+                           vec = vec0; %reset vector, otherwise we accumulate cons [1 0 0 ..] [1 1 0 ..].
+                           n = n + 1;
+                           name{n} = sprintf('%04d',cond);
+                           beta_ind = self.get_beta_index(nrun,model_num,cond);
+                           vec(beta_ind) = 1;
+                           if self.id ~= 15
+                               convec{n} = repmat(vec,1,2);
+                           elseif self.id == 15
+                               convec{n} = vec;
+                           end
+                       end
+               end
+               %% last contrasts: rating. if ever want to look at it...
+               n = n+1;
+               vec = vec0;
+               vec(self.nreliefconds(nrun)+2) = 1; %thats where the RateRelief regressor is.
+               name{n} = 'RateRelief';
+               if nrun == 3 && self.id ~=15
+                   convec{n} = repmat(vec,1,2);
+               else
+                   convec{n} = vec;
+               end
             end
-            %% take care that everything adds to 1 / 0
+            %% take care that everything adds to 1 / 0 BEFORE creating neg. versions.
+            
             for co = 1:n
-                if  co == 1 % allfaces or allramp, odd contrast numbers
+                if  sum(convec{co}) == 0 % differential, e.g. CSP>CSN [1 -1], so we need to divide those seperately, otherwise we devide by sum=0;
                     convec{co} =convec{co}./sum(convec{co}>0);
                 else 
                     convec{co} = convec{co}./sum(convec{co});
+                end
+                %pad with number of session constants
+                if self.id == 15 && nrun == 3
+                    convec{co} = [convec{co} zeros(1,self.nsessions(nrun)-1)];
+                else
+                    convec{co} = [convec{co} zeros(1,self.nsessions(nrun))];
                 end
             end
             %% add same contrasts' negative version
@@ -2714,6 +2758,8 @@ classdef Subject < Project
                 end
             end
             matlabbatch{1}.spm.stats.con.delete = 1;
+            A=[];for co = 1:numel(matlabbatch{1}.spm.stats.con.consess);A = [A;matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec];end;
+%             A
             spm_jobman('run',matlabbatch);
         end
         function Con1stLevel(self,nrun,model_num)
