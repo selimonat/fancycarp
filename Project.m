@@ -84,7 +84,7 @@ classdef Project < handle
         nrun2phase            = {'B','C','T'};
         condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
         kickcooldown          = 1;
-        
+        wmcsfregressors       = 1;
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm_version); %path to the TPM images, needed by segment.
@@ -398,7 +398,7 @@ classdef Project < handle
         end
         function [out]      = dartel_templates(self,n)
             %returns the path to Nth Dartel template
-            out = fullfile(self.path_spm,'toolbox','cat12','templates_1.50mm',sprintf('Template_%i_IXI555_MNI152.nii',n) );
+            out = fullfile(self.path_spm_version,'toolbox','cat12','templates_1.50mm',sprintf('Template_%i_IXI555_MNI152.nii',n) );
         end
         function CreateFolderHierarchy(self)
             %Creates a folder hiearchy for a project. You must run this
@@ -559,23 +559,28 @@ classdef Project < handle
         end
     end
     methods (Static) %other methods that might be needed (LK made)
-           function ind = deltacsp2ind(deltacsp)
-             ind = mod(deltacsp./45+4-1,8)+1;
-           end
-           function [color]=GetFearGenColors(varargin)
-               %[color]=GetFearGenColors
-               %
-               %   Returns the circular HSV color space in COLOR.
-               
-               color = circshift( hsv(8), [3 0] );
-               color = [color ; [0 0 0] ; [0.5 0.5 0.5]];
-               color    = color + 20/255;
-               color    = min(color,ones(size(color)));
-               
-               if nargin > 0
-                   color = color(varargin{1},:);
-               end
-           end
+        function [VM, dVM] = compute_VM(conds,amp,kappa,delta_dVM)
+            VM = zscore(Tuning.VonMises(conds,amp,kappa,0,0));
+            dVM = -zscore((Tuning.VonMises(conds,amp,kappa+delta_dVM,0,0)-Tuning.VonMises(conds,amp,kappa-delta_dVM,0,0))./(2*delta_dVM));
+        end
+        
+        function ind = compute_deltacsp2ind(deltacsp)
+            ind = mod(deltacsp./45+4-1,8)+1;
+        end
+        function [color]=GetFearGenColors(varargin)
+            %[color]=GetFearGenColors
+            %
+            %   Returns the circular HSV color space in COLOR.
+            
+            color = circshift( hsv(8), [3 0] );
+            color = [color ; [0 0 0] ; [0.5 0.5 0.5]];
+            color    = color + 20/255;
+            color    = min(color,ones(size(color)));
+            
+            if nargin > 0
+                color = color(varargin{1},:);
+            end
+        end
         function CheckReg(files)
             matlabbatch = [];
             if isa(files,'char')
