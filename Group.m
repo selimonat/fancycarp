@@ -293,24 +293,26 @@ classdef Group < Project
             %% 2ndlevel 8conds ANOVA
             clear2ndlevel = 1;
             versiontag = 0;
-            statstring = 'anova';
             prefix = 's6_wCAT_';
+            foldersuffix = '';
             
-            
-            if nargin == 5
-                statstring = varargin{1};
+            if nargin == 5 %one varargin is given
+                versiontag = varargin{1};
             elseif nargin == 6
-                statstring = varargin{1};
-                versiontag = varargin{2};
+                versiontag = varargin{1};
+                foldersuffix = varargin{2};
             end
             
             if strcmp(namestring,'CSdiff')
                 cons2collect   = 1;
             elseif strcmp(namestring,'8conds')
-                cons2collect = 2:9;
-                if run == 2
+                %go through all conditions, i.e. 8 (B/T) or 2 (C)
+                if ismember(nrun,[1 3])
+                    cons2collect = 2:9;
+                elseif nrun == 2
                     cons2collect = 2:3;
                 end
+                
             elseif strcmp(namestring,'8conds_rate')
                 switch nrun
                     case 1
@@ -320,14 +322,16 @@ classdef Group < Project
                     case 3
                         cons2collect = 2:4;
                 end
+            elseif strcmp(namestring,'VMdVM')
+                cons2collect = 2:3;
             end
             
-            dependencies = 0;
-            unequalvar   = 0;
+            dependencies = 1;
+            unequalvar   = 1;
+                        start = tic;
+            fprintf('Starting 2nd Level for model %02d, run %02d, named %s, with foldersuffix ''%s''...\n',modelnum,nrun,namestring,foldersuffix);
             
-            fprintf('Starting 2nd Level model %02d, run %02d, named %s...\n',modelnum,nrun,namestring);
-            
-            path2ndlevel = fullfile(self.path_second_level,sprintf('model_%02d_chrf_%01d_%s_%s',modelnum,versiontag,namestring,self.nrun2phase{nrun}));
+            path2ndlevel = fullfile(self.path_second_level,sprintf('model_%02d_chrf_%01d_%s_%s%s',modelnum,versiontag,namestring,self.nrun2phase{nrun},foldersuffix));
             if exist(path2ndlevel) && (clear2ndlevel==1);
                 system(sprintf('rm -fr %s*',strrep(path2ndlevel,'//','/')));
             end%this is AG style.
@@ -335,15 +339,19 @@ classdef Group < Project
                 mkdir(path2ndlevel);
             end
               clear matlabbatch
+              
+                load(self.subject{1}.path_spmmat(nrun,modelnum));
             % collect all subjects' con images for every cond
             c = 0;
-            for ncon = cons2collect{n}
+            for ncon = cons2collect(:)'
                 c = c+1;
                 clear files
-                for ns = 1:numel(subs)
-                    files(ns,:) = strrep(s.path_con(nrun,modelnum,prefix,ncon),'sub004',sprintf('sub%03d',subs(ns)));
-                    fprintf('sub %02d, con_%04d\n',ns,ncon)
+                fprintf('Getting con_%04d, %s from sub ',ncon, SPM.xCon(ncon).name)
+                for ns = 1:numel(self.ids)
+                    files(ns,:) = strrep(self.subject{ns}.path_con(nrun,modelnum,prefix,ncon),'sub004',sprintf('sub%03d',self.ids(ns)));
+                    fprintf('%d..',self.ids(ns))
                 end
+                fprintf('.done. (N=%02d).\n',ns)
                 matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files); %one cond at a time, but all subs
             end
             
@@ -365,12 +373,228 @@ classdef Group < Project
             
             matlabbatch{2}.spm.stats.fmri_est.spmmat = {[path2ndlevel filesep 'SPM.mat']};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical = 1;
+
             spm_jobman('run',matlabbatch);
-       
-            fprintf('\n\nDone estimating N=%d 2nd Level HRF models, version %d, N = %02d subs in %05.2f mins. (Simple one-way anova)\n',length(model_num),versiontag,length(subs),megadone./60)
+            done = toc(start);
+            fprintf('\n\nDone estimating 2nd Level for HRF model %d, called %s %s, version %d, N = %02d subs in %05.2f mins. (Simple one-way anova)\n',modelnum,namestring,foldersuffix,versiontag,length(self.ids),done./60)
+            fprintf('Output folder is: %s\n',path2ndlevel)
 
         end
-        function Con2ndLevel(self,run)
+        function Con2ndLevel(self,nrun,modelnum,namestring,versiontag,foldersuffix)
+            nF = 0;
+            nT = 0;
+            n  = 0;
+            
+            path_spmmat = fullfile(self.path_second_level,sprintf('model_%02d_chrf_%01d_%s_%s%s',modelnum,versiontag,namestring,self.nrun2phase{nrun},foldersuffix),'SPM.mat');
+         
+            matlabbatch{1}.spm.stats.con.spmmat = cellstr(path_spmmat);
+            
+            if strcmp(namestring,'CSdiff')
+                n = n + 1; nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'CSP>CSN';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = 1;
+                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                 
+                 matlabbatch{1}.spm.stats.con.delete = 0;
+                 
+            elseif strcmp(namestring,'8conds')
+                if ismember(nrun,[1 3])
+                    nconds = 8;
+                else
+                    nconds = 2;
+                end
+                
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_F_8conds';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(nconds);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'main_allconds';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = ones(1,nconds);
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                if ismember(nrun,[1 3])
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [0 0 0 1 0 0 0 -1];
+                else
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [1 -1];
+                end
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'CSP>CSN';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                            
+                if ismember(nrun,[1 3])
+                    [VM, dVM] = self.compute_VM(-135:45:180,1,1,.001);
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = VM;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'VMtuning';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = dVM;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'dVMtuning';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [-repmat(1/7,1,3) 1 -repmat(1/7,1,3)];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'CSP>rest';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                end
+                
+            elseif strcmp(namestring,'VMdVM')
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'pp';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(2);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n  = n + 1;
+                nF = nF + 1;
+                vec = eye(2); vec(logical(eye(2))) = [1 -1];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'pn';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = vec;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'VM';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [1 0];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'dVM';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [0 1];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+            end
+            
+            if nT > 0
+                for tc = 1:nT
+                    matlabbatch{1}.spm.stats.con.consess{n+tc}.tcon.name =      [matlabbatch{1}.spm.stats.con.consess{nF+tc}.tcon.name '_neg'];
+                    matlabbatch{1}.spm.stats.con.consess{n+tc}.tcon.weights =   -matlabbatch{1}.spm.stats.con.consess{nF+tc}.tcon.weights;
+                    matlabbatch{1}.spm.stats.con.consess{n+tc}.tcon.sessrep =   'none';
+                    nT = nT + 1;
+                end
+            end
+            
+           matlabbatch{1}.spm.stats.con.delete = 1;
+                        
+            spm_jobman('run',matlabbatch);
+
+            ntotal = nT + nF;            
+            fprintf('Done creating %d 2ndlevel contrasts (%d F, %d T) for model %d, run %s, modelname %s %s.\n',ntotal,nF,nT,modelnum,self.nrun2phase{nrun},namestring,foldersuffix)
+            if nF > 0
+                for nnF = 1:nF
+                    disp(['(F) ' matlabbatch{1}.spm.stats.con.consess{nnF}.fcon.name])
+                end
+            end
+            for nnT = 1:nT
+                disp(['(T) ' matlabbatch{1}.spm.stats.con.consess{nF+nnT}.tcon.name])
+            end
+        end
+        function Fit2ndlevel_FIR(self,nrun,modelnum,namestring,varargin)
+            %% 2ndlevel 8conds ANOVA
+            clear2ndlevel = 1;
+            versiontag = 0;
+            prefix = 's6_wCAT_';
+            foldersuffix = '';
+            bins2take = 1:14;
+            
+            if nargin == 5 %one varargin is given
+                versiontag = varargin{1};
+            elseif nargin == 6
+                versiontag = varargin{1};
+                foldersuffix = varargin{2};
+            end
+            
+          
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            if strcmp(namestring,'CSdiff')
+                cons2collect   = 1;
+            elseif strcmp(namestring,'8conds')
+                %go through all conditions, i.e. 8 (B/T) or 2 (C)
+                if ismember(nrun,[1 3])
+                    cons2collect = 2:9;
+                elseif nrun == 2
+                    cons2collect = 2:3;
+                end
+                
+            elseif strcmp(namestring,'8conds_rate')
+                switch nrun
+                    case 1
+                        cons2collect = 1:8;%WIP
+                    case 2
+                        cons2collect = 2:4;
+                    case 3
+                        cons2collect = 2:4;
+                end
+            elseif strcmp(namestring,'VMdVM')
+                cons2collect = 2:3;
+            end
+            
+            dependencies = 1;
+            unequalvar   = 1;
+            start = tic;
+            fprintf('Starting 2nd Level for model %02d, run %02d, named %s, with foldersuffix ''%s''...\n',modelnum,nrun,namestring,foldersuffix);
+            
+            path2ndlevel = fullfile(self.path_second_level,sprintf('model_%02d_chrf_%01d_%s_%s%s',modelnum,versiontag,namestring,self.nrun2phase{nrun},foldersuffix));
+            if exist(path2ndlevel) && (clear2ndlevel==1);
+                system(sprintf('rm -fr %s*',strrep(path2ndlevel,'//','/')));
+            end%this is AG style.
+            if ~exist(path2ndlevel)
+                mkdir(path2ndlevel);
+            end
+              clear matlabbatch
+              
+                load(self.subject{1}.path_spmmat(nrun,modelnum));
+            % collect all subjects' con images for every cond
+            c = 0;
+            for ncon = cons2collect(:)'
+                c = c+1;
+                clear files
+                fprintf('Getting con_%04d, %s from sub ',ncon, SPM.xCon(ncon).name)
+                for ns = 1:numel(self.ids)
+                    files(ns,:) = strrep(self.subject{ns}.path_con(nrun,modelnum,prefix,ncon),'sub004',sprintf('sub%03d',self.ids(ns)));
+                    fprintf('%d..',self.ids(ns))
+                end
+                fprintf('.done. (N=%02d).\n',ns)
+                matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files); %one cond at a time, but all subs
+            end
+            
+            % specify rest of the model
+            matlabbatch{1}.spm.stats.factorial_design.dir = cellstr(path2ndlevel);
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.dept = dependencies;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.variance = unequalvar;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca = 0;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova = 0;
+            matlabbatch{1}.spm.stats.factorial_design.cov = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
+            matlabbatch{1}.spm.stats.factorial_design.multi_cov = struct('files', {}, 'iCFI', {}, 'iCC', {});
+            matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none = 1;
+            matlabbatch{1}.spm.stats.factorial_design.masking.im = -Inf;
+            matlabbatch{1}.spm.stats.factorial_design.masking.em = {[self.path_groupmeans '/ave_wCAT_s3_ss_data.nii']};
+            matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit = 1;
+            matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
+            matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm = 1;
+          
+            
+            matlabbatch{2}.spm.stats.fmri_est.spmmat = {[path2ndlevel filesep 'SPM.mat']};
+            matlabbatch{2}.spm.stats.fmri_est.method.Classical = 1;
+
+            spm_jobman('run',matlabbatch);
+            done = toc(start);
+            fprintf('\n\nDone estimating 2nd Level for HRF model %d, called %s %s, version %d, N = %02d subs in %05.2f mins. (Simple one-way anova)\n',modelnum,namestring,foldersuffix,versiontag,length(self.ids),done./60)
+            fprintf('Output folder is: %s\n',path2ndlevel)
         end
     end
 end
