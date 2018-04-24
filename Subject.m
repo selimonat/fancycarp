@@ -626,6 +626,110 @@ classdef Subject < Project
             %
             self.RunSPMJob(matlabbatch);
         end
+        function SegmentHR_SPMroutine(self)
+            %based on mean epi segmentation script by CB.
+            %prepare folder and file
+            %original HR from run000
+            hrfile = self.path_hr;
+            % create new EPI Dartel thing folder
+            hr_dartel_dir      = strrep( self.path_hr,sprintf('mrt%sdata.nii',filesep),sprintf('mrt%ssegm_dartel',filesep));
+            %make and move.
+            mkdir(hr_dartel_dir);
+            copyfile(hrfile,[hr_dartel_dir filesep 'data.nii'])
+            
+            %------------------------
+            % do the segmentation
+            template = sprintf('%sTPM.nii',self.tpm_dir);
+            
+            sourcefile   = [hr_dartel_dir filesep 'data.nii'];
+            
+            matlabbatch{1}.spm.spatial.preproc.channel.vols     = cellstr(sourcefile);
+            matlabbatch{1}.spm.spatial.preproc.channel.biasreg  = 0.001;
+            matlabbatch{1}.spm.spatial.preproc.channel.biasfwhm = 60;
+            matlabbatch{1}.spm.spatial.preproc.channel.write    = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).tpm    = {[template ',1']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).ngaus  = 1;
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).native = [1 1];
+            matlabbatch{1}.spm.spatial.preproc.tissue(1).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).tpm    = {[template ',2']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).ngaus  = 1;
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).native = [1 1];
+            matlabbatch{1}.spm.spatial.preproc.tissue(2).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).tpm    = {[template ',3']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).ngaus  = 2;
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).native = [1 1];
+            matlabbatch{1}.spm.spatial.preproc.tissue(3).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).tpm    = {[template ',4']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).ngaus  = 3;
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).native = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(4).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).tpm    = {[template ',5']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).ngaus  = 4;
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).native = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(5).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).tpm    = {[template ',6']};
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).ngaus  = 2;
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).native = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.tissue(6).warped = [0 0];
+            matlabbatch{1}.spm.spatial.preproc.warp.mrf         = 1;
+            matlabbatch{1}.spm.spatial.preproc.warp.cleanup     = 1;
+            matlabbatch{1}.spm.spatial.preproc.warp.reg         = [0 0.001 0.5 0.05 0.2];
+            matlabbatch{1}.spm.spatial.preproc.warp.affreg      = 'mni';
+            matlabbatch{1}.spm.spatial.preproc.warp.fwhm        = 0;
+            matlabbatch{1}.spm.spatial.preproc.warp.samp        = 3;
+            matlabbatch{1}.spm.spatial.preproc.warp.write       = [1 1];
+            
+            % DARTEL norm to template
+            rc1_templ         = 'rc1data.nii';
+            rc2_templ         = 'rc2data.nii';
+            rc1_file      = [hr_dartel_dir filesep rc1_templ];
+            rc2_file      = [hr_dartel_dir filesep rc2_templ];
+            
+            
+            matlabbatch{2}.spm.tools.dartel.warp1.images = {cellstr(rc1_file),cellstr(rc2_file)};
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.rform = 0;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(1).its = 3;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(1).rparam = [4 2 1e-06];
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(1).K = 0;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(1).template = {self.dartel_templates(1)};
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(2).its = 3;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(2).rparam = [2 1 1e-06];
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(2).K = 0;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(2).template = {self.dartel_templates(2)};
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(3).its = 3;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(3).rparam = [1 0.5 1e-06];
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(3).K = 1;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(3).template = {self.dartel_templates(3)};
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(4).its = 3;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(4).rparam = [0.5 0.25 1e-06];
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(4).K = 2;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(4).template = {self.dartel_templates(4)};
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(5).its = 3;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(5).rparam = [0.25 0.125 1e-06];
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(5).K = 4;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(5).template = {self.dartel_templates(5)};
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(6).its = 3;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(6).rparam = [0.25 0.125 1e-06];
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(6).K = 6;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.param(6).template = {self.dartel_templates(6)};
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.optim.lmreg = 0.01;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.optim.cyc = 3;
+            matlabbatch{2}.spm.tools.dartel.warp1.settings.optim.its = 3;
+            
+            %-------------------------------
+            %Create warped HR
+            
+            u_rc1_templ       = 'u_rc1data.nii';
+            u_rc1_file  = [hr_dartel_dir filesep u_rc1_templ];
+            
+            matlabbatch{3}.spm.tools.dartel.crt_warped.flowfields = cellstr(u_rc1_file);
+            matlabbatch{3}.spm.tools.dartel.crt_warped.images = {cellstr(sourcefile)};
+            matlabbatch{3}.spm.tools.dartel.crt_warped.jactransf = 0;
+            matlabbatch{3}.spm.tools.dartel.crt_warped.K = 6;
+            matlabbatch{3}.spm.tools.dartel.crt_warped.interp = 1;
+            
+            self.RunSPMJob(matlabbatch);
+        end
         function SegmentMeanEPI_CB(self)
             %prepare folder and file
             %original mean epi from ph1 folder
@@ -1271,7 +1375,7 @@ classdef Subject < Project
             for dot = 1:numel(stim_events)
                 colorwheel= self.GetFearGenColors;
                 if stim_types(dot)<500
-                    col = colorwheel(self.deltacsp2ind(stim_types(dot)),:);
+                    col = colorwheel(self.compute_deltacsp2ind(stim_types(dot)),:);
                 elseif stim_types(dot)==500
                     col = colorwheel(end-1,:);
                 elseif stim_types(dot)==3000
@@ -2152,7 +2256,7 @@ classdef Subject < Project
                         condlist = cond_list(cond_list < 500);
                         for ntrial = 1:length(cond(1).onset)
                             deltacsp = condlist(ntrial);
-                            ind = Project.deltacsp2ind(deltacsp);
+                            ind = Project.compute_deltacsp2ind(deltacsp);
                             VM(ntrial)    = VMlookup(ind);
                             dVM(ntrial)   = dVMlookup(ind);
                         end
@@ -2353,7 +2457,7 @@ classdef Subject < Project
                         condlist = cond_list(cond_list < 500);
                         for ntrial = 1:length(cond(1).onset)
                             deltacsp = condlist(ntrial);
-                            ind = Project.deltacsp2ind(deltacsp);
+                            ind = Project.compute_deltacsp2ind(deltacsp);
                             VM(ntrial)    = VMlookup(ind);
                             dVM(ntrial)   = dVMlookup(ind);
                             VMdVM(ntrial) = VMlookup(ind).*dVMlookup(ind);
@@ -2382,6 +2486,50 @@ classdef Subject < Project
                 out = struct('name',{'999'},'param',{finalrelief},'poly',1);
             else
                 out = struct('name',{num2str(cond)},'param',{self.get_rating(nrun,cond).y},'poly',1);
+            end
+        end
+        function [wmcsf, wm, csf] = get_wmcsf(self,nrun)
+            force = 1;
+            filename = fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_reg_kc%d.mat',self.kickcooldown));
+            if ~exist(filename) || force == 1
+                
+                c2_templ = '^c2meandata.nii';
+                c3_templ = '^c3meandata.nii';
+                
+                segm_dir = strrep(self.path_epi(1,'mean_EPIdartel/'),'data.nii','');
+                
+                white_matter = spm_select('FPList', segm_dir, c2_templ);
+                cs_fluid = spm_select('FPList', segm_dir, c3_templ);
+                
+                
+                WM = spm_vol(white_matter);
+                [y1] = spm_read_vols(WM);
+                
+                CSF = spm_vol(cs_fluid);
+                [y2] = spm_read_vols(CSF);
+                
+                
+                rundir = strrep(self.path_epi(nrun),'data.nii','');
+                nscans = self.get_total_volumes(nrun);
+                if self.kickcooldown
+                      nscans = self.get_lastscan_cooldown(nrun);
+                end
+                files = spm_select('ExtFPList', rundir, '^r.*.nii',1:nscans);
+                
+                
+                V = spm_vol(files);
+                y = spm_read_vols(V);
+                
+                for j = 1:size(files,1)
+                    wm(j) = nanmean(nanmean(nanmean(y1.*y(:,:,:,j))));
+                    csf(j) = nanmean(nanmean(nanmean(y2.*y(:,:,:,j))));
+                end
+                
+                wmcsf = [wm' csf'];
+                savewhere = fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_reg_kc%d.mat',self.kickcooldown));
+                save(filename,'wmcsf','wm','csf');
+            else
+                load(filename);
             end
         end
         function FitFIR(self,nrun,model_num)
@@ -2436,8 +2584,8 @@ classdef Subject < Project
                         case 4
                             dummy.cond = dummy.cond([1:10 end]); % 8 faces + UCS + t0
                     end
-                elseif self.kickcooldown == 1;
-                    dummy.cond = dummy.cond(1:nreliefconds(session)); % 8 faces + UCS + t0 (if there)
+                elseif self.kickcooldown == 1
+                    dummy.cond = dummy.cond(1:self.nreliefconds(session)); % 8 faces + UCS + t0 (if there)
                 end
                 
                 for c = 1:numel(dummy.cond)
@@ -2466,7 +2614,7 @@ classdef Subject < Project
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).hpf                 = 128;
             end
             matlabbatch{1}.spm.stats.fmri_spec.fact                              = struct('name', {}, 'levels', {});
-            matlabbatch{1}.spm.stats.fmri_spec.bases.fir.length                  = 1*FIRparam;
+            matlabbatch{1}.spm.stats.fmri_spec.bases.fir.length                  = Project.TR*FIRparam;
             matlabbatch{1}.spm.stats.fmri_spec.bases.fir.order                   = FIRparam;
             matlabbatch{1}.spm.stats.fmri_spec.volt                              = 1;
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
@@ -2544,6 +2692,11 @@ classdef Subject < Project
                     matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis).val   = nuis(:,nNuis);
                     matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis).name  = mat2str(nNuis);
                 end
+                if self.wmcsfregressors
+                    load(fullfile(self.pathfinder(self.id,nrun),'midlevel','wmcsf_reg_kc1.mat'),'wm','csf');
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis+1).val   = wm';
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis+2).name  = csf';
+                end
                 %
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).multi               = {''};
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).multi_reg           = {''};
@@ -2594,7 +2747,7 @@ classdef Subject < Project
 %                 % all faces main effect
 %                 n = n + 1;
 %                 name{n} = 'allfaces>else';
-%                 face_betas = [];
+%                 face_betas = [];self.path_epi(session,'r')
 %                 convec{n} = zeros(1,Nbetas);
 %                 for cond = intersect(self.realconds,unique(self.get_paradigm(nrun).presentation.dist))
 %                     ind = self.get_beta_index(nrun,model_num,[num2str(cond) 'Face']);
@@ -2630,7 +2783,7 @@ classdef Subject < Project
 %                 % given by RAMP
 %                 n = n + 1;
 %                 convec{n} = zeros(1,Nbetas);
-%                 if nrun == 2
+%                 if nrun == 2self.path_epi(session,'r')
 %                     convec{n}(self.get_beta_index(nrun,model_num,[500 180]))= [1 -1];
 %                     name{n} = 'UCS>CSN_ramp';
 %                 else
