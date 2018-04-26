@@ -85,6 +85,7 @@ classdef Project < handle
         condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
         kickcooldown          = 1;
         wmcsfregressors       = 1;
+        orderfir              = 14;
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm_version); %path to the TPM images, needed by segment.
@@ -96,6 +97,37 @@ classdef Project < handle
     end
     
     methods
+        function [subs,N] = get_subjects(self,varargin)
+            %might be needed later if there are subj.selection criteria
+            badmotion = [12 41 49];
+            maybemotion = 20;
+            missingsession = 15;
+            load(sprintf('%smidlevel/get_subjects_UCSCSN_conditioning.mat',self.path_project));
+            notlearned = out(out(:,3)>.05,end)';
+            
+            if nargin > 1
+                subset = varargin{1};
+                switch subset
+                    case 0
+                        subs = self.subject_indices;
+                        fprintf('These are all subjects with MRI data.\n')
+                    case 1 %excluding subjects that move too much
+                        subs = setdiff(self.subject_indices,[badmotion missingsession]); 
+                        fprintf('These are all subjects with movement params OK and all sessions.\n')
+                    case 2 %strict movement exclusion (i.e. 20 is kicked).
+                            subs = setdiff(self.subject_indices,[badmotion maybemotion missingsession]); 
+                        fprintf('These are all subjects with movement params OK (strict) and all sessions.\n')
+                    case 3
+                        % CS+ vs CS- criterion
+                        subs = setdiff(self.subject_indices, [badmotion maybemotion notlearned missingsession]);
+                        fprintf('These are all subjects with movement params OK (strict), all sessions and CSP>CSN in conditioning.\n')
+                end
+            else
+                subs = self.subject_indices;
+            end
+            N = length(subs);
+        end
+     
         function DU = SanityCheck(self,runs,measure,varargin)
             %DU = SanityCheck(self,runs,measure,varargin)
             %will run through subject folders and will plot their disk
@@ -355,7 +387,6 @@ classdef Project < handle
                 end
             end
         end
-        
         function [path]     = pathspmfiles(self,run,model_num,varargin)
             if isa(self,'Subject')
                 sub = self.id;
@@ -439,19 +470,7 @@ classdef Project < handle
             t = datestr(now,'hh:mm:ss');
         end
         
-        function subs = get_subjects(self,varargin) %might be needed later if there are subj.selection criteria
-            if nargin >1
-                switch varargin{1}
-                    case 1
-                        % CS+ vs CS- criterion
-                        subs = setdiff(self.subject_indices, [9 20 26 41 49]);
-                    case 2
-                        % put sth here
-                end
-            else
-                subs = self.subject_indices;
-            end
-        end
+     
      
     end
     methods(Static) %SPM analysis related methods.
@@ -559,6 +578,13 @@ classdef Project < handle
         end
     end
     methods (Static) %other methods that might be needed (LK made)
+        
+
+        function ind = findcon_FIR(order,cond,bin)
+            maxcond = 20;
+            dummy = reshape(1:maxcond*order,order,maxcond)';%helps to get the right con image confinder(cond,bin)
+            ind = dummy(cond,bin);
+        end
         function [VM, dVM] = compute_VM(conds,amp,kappa,delta_dVM)
             VM = zscore(Tuning.VonMises(conds,amp,kappa,0,0));
             dVM = -zscore((Tuning.VonMises(conds,amp,kappa+delta_dVM,0,0)-Tuning.VonMises(conds,amp,kappa-delta_dVM,0,0))./(2*delta_dVM));
