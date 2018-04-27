@@ -3065,7 +3065,7 @@ classdef Subject < Project
             face_onsets_inds = pfile.out.log(:,2)==13;
             timepoints = round(pfile.out.log(face_onsets_inds,1));
             duration = ceil(pfile.out.log(end,1));
-            designmat = zeros(5-,emt[duration,self.nreliefconds(nrun));
+            designmat = zeros(duration,self.nreliefconds(nrun));
             
             triallist = pfile.presentation.dist;
             colind = self.compute_deltacsp2ind(triallist);
