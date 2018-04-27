@@ -84,7 +84,7 @@ classdef Project < handle
         nrun2phase            = {'B','C','T'};
         condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
         kickcooldown          = 1;
-        wmcsfregressors       = 1;
+        wmcsfregressors       = 0;
         orderfir              = 14;
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
