@@ -490,8 +490,8 @@ classdef Subject < Project
                 EqualizeSubPlotYlim(gcf);
                 
                 savefig(gcf,savefigf)
-                export_fig(gcf,savebmp)
-                export_fig(gcf,savepng,'-transparent')
+%                 export_fig(gcf,savebmp)
+%                 export_fig(gcf,savepng,'-transparent')
             end
         end
     end
@@ -1170,7 +1170,7 @@ classdef Subject < Project
             
             %select certain nifti if VARARGIN provided
             if nargin > 5
-                out = spm_select('FPList',out,sprintf('%s.nii',varargin{1}));
+                out = spm_select('FPList',out,sprintf('%s',varargin{1}));
             end
         end
         function out        = path_contrast(self,nrun,model_num,prefix,type,varargin)
@@ -1409,7 +1409,7 @@ classdef Subject < Project
             axis tight
             ylim([-5 5].*10.^-2)
             set(gca,'ygrid','on')
-            export_fig(strrep(self.path_data(nrun,'midlevel'),'data.mat',sprintf('motionparams_sub%03d_run%03d.png',self.id,nrun)))
+%             export_fig(strrep(self.path_data(nrun,'midlevel'),'data.mat',sprintf('motionparams_sub%03d_run%03d.png',self.id,nrun)))
         end
         function plot_logcomparison(self,nrun)
             %plots the data logged by the stim pc together with data logged
@@ -2472,6 +2472,19 @@ classdef Subject < Project
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
                         load(modelpath);
                     end
+                case 9
+                    modelname = 'RampOnsetStick_wmcsf'; %based on 6, onsets are RampOnsets, but we model RampOnsets as stick (but everything else as box)
+                    if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                    if verbalize == 1
+                        fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                    end
+                    if ~exist(modelpath) || force == 1
+                        load(self.path_model(run,6))
+                        save(modelpath,'cond')
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
             end
         end
         function out = get_pmod(self,nrun,cond)
@@ -2488,7 +2501,7 @@ classdef Subject < Project
                 out = struct('name',{num2str(cond)},'param',{self.get_rating(nrun,cond).y},'poly',1);
             end
         end
-        function [wmcsf, wm, csf] = get_wmcsf(self,nrun)
+        function [wmcsf, wm, csf] = get_wmcsf_epi(self,nrun)
             force = 1;
             filename = fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_reg_kc%d.mat',self.kickcooldown));
             if ~exist(filename) || force == 1
@@ -2530,6 +2543,78 @@ classdef Subject < Project
                 save(filename,'wmcsf','wm','csf');
             else
                 load(filename);
+            end
+        end
+         function [wmcsf, wm, csf] = get_wmcsf_T1(self,nrun)
+            force = 1;
+            filename = fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_reg_kc%d.mat',self.kickcooldown));
+            if ~exist(filename) || force == 1
+                
+                c2_templ = '^c2data.nii';
+                c3_templ = '^c3data.nii';
+                
+                segm_dir = strrep(self.path_hr,'data.nii','segm_dartel');
+                
+                white_matter = spm_select('FPList', segm_dir, c2_templ);
+                cs_fluid = spm_select('FPList', segm_dir, c3_templ);
+                
+                
+                WM = spm_vol(white_matter);
+                [y1] = spm_read_vols(WM);
+                
+                CSF = spm_vol(cs_fluid);
+                [y2] = spm_read_vols(CSF);
+                
+                
+                rundir = strrep(self.path_epi(nrun),'data.nii','');
+                nscans = self.get_total_volumes(nrun);
+                if self.kickcooldown
+                      nscans = self.get_lastscan_cooldown(nrun);
+                end
+                files = spm_select('ExtFPList', rundir, '^r.*.nii',1:nscans);
+                
+                
+                V = spm_vol(files);
+                y = spm_read_vols(V);
+                
+                %this is different from AT's script on segmented epis, bc. diff resolution in T1 and
+                %epis
+                for j = 1%:size(files,1)
+                    wmdummypath  = fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_wm_dummy%d.nii',j));
+                    csfdummypath =  fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_csf_dummy%d.nii',j));
+                    spm_imcalc([y1,y(:,:,:,j)],wmdummypath,'i1*i2');
+                    
+                    spm_imcalc([y2,y(:,:,:,j)],csfdummypath,'i1*i2');
+                    wm(j) = nanmean(nanmean(nanmean(y1.*y(:,:,:,j))));
+                    csf(j) = nanmean(nanmean(nanmean(y2.*y(:,:,:,j))));
+                end
+                
+                wmcsf = [wm' csf'];
+                savewhere = fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_reg_kc%d.mat',self.kickcooldown));
+                save(filename,'wmcsf','wm','csf');
+            else
+                load(filename);
+            end
+        end
+        function [kickcooldownopts, wmcsfopts] = get_model_specs(self,modelnum)
+            kickcooldownopts = self.kickcooldown;
+            wmcsfopts = self.wmcsfregressors;
+            switch modelnum
+                case 5
+                    kickcooldownopts = 1;
+                    wmcsfopts = 0;
+                case 6
+                    kickcooldownopts = 1;
+                    wmcsfopts = 0;
+                case 7
+                    kickcooldownopts = 1;
+                    wmcsfopts = 0;
+                case 8
+                    kickcooldownopts = 1;
+                    wmcsfopts = 0;
+                case 9
+                    kickcooldownopts = 1;
+                    wmcsfopts = 1;
             end
         end
         function FitFIR(self,nrun,model_num)
@@ -2651,7 +2736,8 @@ classdef Subject < Project
             %run the model MODEL_NUM for data in NRUN.
             %NRUN can be a vector, but then care has to be taken that
             %model_num is correctly set for different runs.
-            
+            [kickcd,wmcsfr] = self.get_model_specs(model_num);
+          
             %set spm dir:
             spm_dir  = self.dir_spmmat(nrun(1),model_num);
             path_spmmat = self.path_spmmat(nrun(1),model_num);
@@ -2676,7 +2762,7 @@ classdef Subject < Project
                 
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).scans  = cellstr(spm_select('expand',self.path_epi(session,'r')));%use always the realigned data.
                 lastscan2include = size(matlabbatch{1}.spm.stats.fmri_spec.sess(se).scans,1);
-                if self.kickcooldown
+                if kickcd == 1
                     lastscan2include = self.get_lastscan_cooldown(session);
                 end
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).scans =  matlabbatch{1}.spm.stats.fmri_spec.sess(se).scans(1:lastscan2include,:);
@@ -2692,10 +2778,12 @@ classdef Subject < Project
                     matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis).val   = nuis(:,nNuis);
                     matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis).name  = mat2str(nNuis);
                 end
-                if self.wmcsfregressors
-                    load(fullfile(self.pathfinder(self.id,nrun),'midlevel','wmcsf_reg_kc1.mat'),'wm','csf');
+                if wmcsfr == 1
+                    load(fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_reg_kc%d.mat',kickcd)),'wm','csf');
                     matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis+1).val   = wm';
-                    matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis+2).name  = csf';
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis+1).name  = 'wm';
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis+2).val   = csf';
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis+2).name  = 'csf';
                 end
                 %
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).multi               = {''};
@@ -2969,6 +3057,27 @@ classdef Subject < Project
             
             t = table(onset',dur','RowNames',names);
             t.Properties.VariableNames = {'onset','dur_secs'};
+        end
+        
+        function log2designmat(self,nrun,model_num)
+            load(self.path_spmmat(nrun,model_num))
+            pfile = self.get_paradigm(nrun);
+            face_onsets_inds = pfile.out.log(:,2)==13;
+            timepoints = round(pfile.out.log(face_onsets_inds,1));
+            duration = ceil(pfile.out.log(end,1));
+            designmat = zeros(5-,emt[duration,self.nreliefconds(nrun));
+            
+            triallist = pfile.presentation.dist;
+            colind = self.compute_deltacsp2ind(triallist);
+            colind(1) = 9;
+            
+            for n =1:9
+                designmat(timepoints(colind==n),n)=1;
+            end
+            designmat(1:(floor(min(timepoints))-10),:)=[];
+            figure;
+            subplot(1,2,1);imagesc(designmat)
+            subplot(1,2,2);imagesc(SPM.xX.X(:,1:self.nreliefconds(nrun)));
         end
     end
 end
