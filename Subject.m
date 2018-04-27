@@ -2889,7 +2889,7 @@ classdef Subject < Project
                 load([self.dir_spmmat(1,model_num) 'SPM.mat'])
                 for pmod = 1:size(SPM.Sess.U(1).P,2) %loop through the pmods we defined
                     
-                    vec = zeros(1,self.get_Nbetas(nrun,model_num)-1);
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num)-1); %-1 so that phase constant is left out for now.
                     if nrun == 3 && self.id ~= 15
                         vec = zeros(1,self.get_Nbetas(nrun,model_num)./2-1);
                     end
