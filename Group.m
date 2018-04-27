@@ -290,17 +290,22 @@ classdef Group < Project
     end
     methods %(mri))
         function Fit2ndlevel(self,nrun,modelnum,namestring,varargin)
-            %% 2ndlevel 8conds ANOVA
+            %% 2ndlevel ANOVA
+            
+            dependencies = 0;
+            unequalvar   = 0;
+            
             clear2ndlevel = 1;
             versiontag = 0;
             prefix = 's6_wCAT_';
-            foldersuffix = '';
+             versiontag = 0;
+            foldersuffix = sprintf('_N%02d',self.total_subjects);
             
             if nargin == 5 %one varargin is given
-                versiontag = varargin{1};
+                foldersuffix = varargin{1};
             elseif nargin == 6
-                versiontag = varargin{1};
-                foldersuffix = varargin{2};
+                foldersuffix = varargin{1};
+                versiontag = varargin{2};
             end
             
             if strcmp(namestring,'CSdiff')
@@ -323,13 +328,11 @@ classdef Group < Project
                         cons2collect = 2:4;
                 end
             elseif strcmp(namestring,'VMdVM')
-                cons2collect = 2:3;
+                cons2collect = 1:2; %main effect was not included in 1stlevel contrasts. So 1=VM, 2=dVM
             end
             
-            dependencies = 1;
-            unequalvar   = 1;
-                        start = tic;
-            fprintf('Starting 2nd Level for model %02d, run %02d, named %s, with foldersuffix ''%s''...\n',modelnum,nrun,namestring,foldersuffix);
+            start = tic;
+            fprintf('Starting 2nd Level for model %02d, run %02d, named %s, versiontag %d with foldersuffix ''%s''...\n',modelnum,nrun,namestring,versiontag,foldersuffix);
             
             path2ndlevel = fullfile(self.path_second_level,sprintf('model_%02d_chrf_%01d_%s_%s%s',modelnum,versiontag,namestring,self.nrun2phase{nrun},foldersuffix));
             if exist(path2ndlevel) && (clear2ndlevel==1);
@@ -338,9 +341,9 @@ classdef Group < Project
             if ~exist(path2ndlevel)
                 mkdir(path2ndlevel);
             end
-              clear matlabbatch
+            clear matlabbatch
               
-                load(self.subject{1}.path_spmmat(nrun,modelnum));
+            load(self.subject{1}.path_spmmat(nrun,modelnum));
             % collect all subjects' con images for every cond
             c = 0;
             for ncon = cons2collect(:)'
@@ -380,7 +383,18 @@ classdef Group < Project
             fprintf('Output folder is: %s\n',path2ndlevel)
 
         end
-        function Con2ndLevel(self,nrun,modelnum,namestring,versiontag,foldersuffix)
+        function Con2ndlevel(self,nrun,modelnum,namestring,varargin)
+            
+            foldersuffix = sprintf('_N%02d',self.total_subjects);
+            versiontag = 0;
+             
+            if nargin == 5 %one varargin is given
+                foldersuffix = varargin{1};
+            elseif nargin == 6
+                foldersuffix = varargin{1};
+                versiontag = num2str(varargin{2});
+            end
+            
             nF = 0;
             nT = 0;
             n  = 0;
@@ -393,9 +407,9 @@ classdef Group < Project
                 n = n + 1; nT = nT + 1;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'CSP>CSN';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = 1;
-                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
                  
-                 matlabbatch{1}.spm.stats.con.delete = 0;
+                matlabbatch{1}.spm.stats.con.delete = 0;
                  
             elseif strcmp(namestring,'8conds')
                 if ismember(nrun,[1 3])
@@ -470,6 +484,7 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
             end
             
+            
             if nT > 0
                 for tc = 1:nT
                     matlabbatch{1}.spm.stats.con.consess{n+tc}.tcon.name =      [matlabbatch{1}.spm.stats.con.consess{nF+tc}.tcon.name '_neg'];
@@ -478,7 +493,7 @@ classdef Group < Project
                     nT = nT + 1;
                 end
             end
-            
+                
            matlabbatch{1}.spm.stats.con.delete = 1;
                         
             spm_jobman('run',matlabbatch);
@@ -494,82 +509,98 @@ classdef Group < Project
                 disp(['(T) ' matlabbatch{1}.spm.stats.con.consess{nF+nnT}.tcon.name])
             end
         end
-        function Fit2ndlevel_FIR(self,nrun,modelnum,namestring,varargin)
+        function Fit2ndlevel_FIR(self,nrun,modelnum,order,namestring,varargin)
+            start = tic;
             %% 2ndlevel 8conds ANOVA
             clear2ndlevel = 1;
+            
+            dependencies = 0;
+            unequalvar   = 0;
+            
             versiontag = 0;
             prefix = 's6_wCAT_';
-            foldersuffix = '';
+            namestring1stlevel = '10conds';
+            foldersuffix = sprintf('_N%02d',self.total_subjects);
             bins2take = 1:14;
             
-            if nargin == 5 %one varargin is given
-                versiontag = varargin{1};
-            elseif nargin == 6
-                versiontag = varargin{1};
-                foldersuffix = varargin{2};
-            end
             
-          
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            if strcmp(namestring,'CSdiff')
-                cons2collect   = 1;
-            elseif strcmp(namestring,'8conds')
-                %go through all conditions, i.e. 8 (B/T) or 2 (C)
-                if ismember(nrun,[1 3])
-                    cons2collect = 2:9;
-                elseif nrun == 2
-                    cons2collect = 2:3;
-                end
+            if nargin == 6 %one varargin is given
+                foldersuffix = varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so
+            elseif nargin == 7
+                foldersuffix =  varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so 
+                versiontag = varargin{2};   %probably never needed, better name then with foldersuffix, easier to remember and document
+            elseif nargin > 7
+                fprintf('Too many inputs. Please debug.')
+                keyboard;
                 
-            elseif strcmp(namestring,'8conds_rate')
-                switch nrun
-                    case 1
-                        cons2collect = 1:8;%WIP
-                    case 2
-                        cons2collect = 2:4;
-                    case 3
-                        cons2collect = 2:4;
-                end
-            elseif strcmp(namestring,'VMdVM')
-                cons2collect = 2:3;
             end
+                        
+            fprintf('Starting 2nd Level for FIR model %02d, run %02d, named %s, version %d with foldersuffix ''%s''...\n',modelnum,nrun,namestring,versiontag,foldersuffix);
             
-            dependencies = 1;
-            unequalvar   = 1;
-            start = tic;
-            fprintf('Starting 2nd Level for model %02d, run %02d, named %s, with foldersuffix ''%s''...\n',modelnum,nrun,namestring,foldersuffix);
-            
-            path2ndlevel = fullfile(self.path_second_level,sprintf('model_%02d_chrf_%01d_%s_%s%s',modelnum,versiontag,namestring,self.nrun2phase{nrun},foldersuffix));
+            path2ndlevel = fullfile(self.path_second_level,'FIR',sprintf('model_%02d_FIR_%02d_%s_b%02dto%02d_%s%s',modelnum,versiontag,namestring,bins2take(1),bins2take(end),self.nrun2phase{nrun},foldersuffix));
+          
             if exist(path2ndlevel) && (clear2ndlevel==1);
                 system(sprintf('rm -fr %s*',strrep(path2ndlevel,'//','/')));
             end%this is AG style.
             if ~exist(path2ndlevel)
                 mkdir(path2ndlevel);
             end
-              clear matlabbatch
-              
-                load(self.subject{1}.path_spmmat(nrun,modelnum));
-            % collect all subjects' con images for every cond
-            c = 0;
-            for ncon = cons2collect(:)'
-                c = c+1;
-                clear files
-                fprintf('Getting con_%04d, %s from sub ',ncon, SPM.xCon(ncon).name)
-                for ns = 1:numel(self.ids)
-                    files(ns,:) = strrep(self.subject{ns}.path_con(nrun,modelnum,prefix,ncon),'sub004',sprintf('sub%03d',self.ids(ns)));
-                    fprintf('%d..',self.ids(ns))
+
+            
+            % information, which cons to collect.
+            % on firstlevel, we have bin 1-14 cond 1, bin 1-14 cond 2, etc,
+            % then bin 1-14 CSdiff
+            %
+            % Here: defining 1st con to go for (+ N bins then).
+            if strcmp(namestring,'8conds')
+                switch nrun
+                    case 1
+                        conds2collect = 1:8;
+                    case 2
+                        conds2collect = 1:2;
+                    case 3
+                        conds2collect = 1:8;
                 end
-                fprintf('.done. (N=%02d).\n',ns)
-                matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(c).scans = cellstr(files); %one cond at a time, but all subs
+            elseif strcmp(namestring,'CSPCSN')
+                switch nrun
+                    case 1
+                        conds2collect = [4 8];
+                    case 2
+                        conds2collect = [1 2];
+                    case 3
+                        conds2collect = [4 8];
+                end
+            elseif strcmp(namestring,'CSdiff')
+                 switch nrun
+                    case 1
+                        conds2collect = 9;
+                    case 2
+                        conds2collect = 3;
+                    case 3
+                        conds2collect = 9;
+                 end
+            end
+            clear matlabbatch
+              
+            %load(self.subject{1}.path_spmmat(nrun,modelnum)); %allows lookup of things
+            % collect all subjects' con images for every cond
+            
+            bc = 0;
+            for cond = conds2collect(:)'
+                fprintf('\nCollecting con images for cond %04d:\n',cond)
+                for bin = bins2take(:)' %loop through bins, then subjects. sub01_bin1 sub02_bin1 ... sub01_bin2 sub02_bin etc..
+                    ind = self.findcon_FIR(order,cond,bin);
+                    fprintf('\nbin %02d, i.e. con %03d...',bin,ind)
+                    bc = bc + 1;
+                    clear files
+                    fprintf('Looping through subs: ');
+                    for ns = 1:self.total_subjects
+                        fprintf('%02d - ',ns)
+                        files(ns,:) = cellstr([self.subject{ns}.path_FIR(nrun,modelnum,order,namestring1stlevel), sprintf('%scon_%04d.nii',prefix,ind)]);
+                    end
+                    fprintf('completo.')
+                    matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(bc).scans = cellstr(files); %one bin at a time, but all subs
+                end
             end
             
             % specify rest of the model
@@ -590,11 +621,229 @@ classdef Group < Project
             
             matlabbatch{2}.spm.stats.fmri_est.spmmat = {[path2ndlevel filesep 'SPM.mat']};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical = 1;
-
+            
             spm_jobman('run',matlabbatch);
             done = toc(start);
-            fprintf('\n\nDone estimating 2nd Level for HRF model %d, called %s %s, version %d, N = %02d subs in %05.2f mins. (Simple one-way anova)\n',modelnum,namestring,foldersuffix,versiontag,length(self.ids),done./60)
+            fprintf('\n\nDone estimating 2nd Level for FIR model %d, called %s %s, version %d, N = %02d subs in %05.2f mins. (Simple one-way anova)\n',modelnum,namestring,foldersuffix,versiontag,length(self.ids),done./60)
             fprintf('Output folder is: %s\n',path2ndlevel)
+        end
+        
+        
+         function Con2ndlevel_FIR(self,nrun,modelnum,namestring,varargin)
+            deletecons = 1;
+            
+            versiontag = 0;
+            foldersuffix = sprintf('_N%02d',self.total_subjects);
+            bins2take = 1:14;
+            
+            
+            if nargin == 5 %one varargin is given
+                foldersuffix = varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so
+            elseif nargin == 6
+                foldersuffix =  varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so 
+                versiontag   = varargin{2};   %probably never needed, better name then with foldersuffix, easier to remember and document
+            elseif nargin > 6
+                fprintf('Too many inputs. Please debug.')
+                keyboard;
+            end
+                        
+            fprintf('Starting 2nd Level Contrasts for FIR model %02d, run %02d, named %s, with foldersuffix ''%s''...\n',modelnum,nrun,namestring,foldersuffix);
+            
+            path2ndlevel = fullfile(self.path_second_level,'FIR',sprintf('model_%02d_FIR_%02d_%s_b%02dto%02d_%s%s',modelnum,versiontag,namestring,bins2take(1),bins2take(end),self.nrun2phase{nrun},foldersuffix));
+          
+            if ~exist(path2ndlevel)
+                fprintf('Folder not found, please debug, or run 2ndlevel estimation first.\n')
+            end
+      
+            nF = 0;
+            nT = 0;
+            n  = 0;
+    
+            path_spmmat = fullfile(path2ndlevel,'SPM.mat');
+         
+            matlabbatch{1}.spm.stats.con.spmmat = cellstr(path_spmmat);
+            
+            if ismember(nrun,[1 3])
+                nconds = 8;
+            else
+                nconds = 2;
+            end
+            
+            %% hrf contrast vecs
+            defaultparam = [6 16 1 1 6 0 32];%seconds!
+            prebins   = 2;
+            offset_face = -1.7;%secs
+            offset_rate =  6.0;%secs
+            param2change = 6; %p(1) - delay of response (relative to onset),p(6) - onset {seconds}
+            
+            param_ramp = defaultparam; param_ramp(param2change) = param_ramp(param2change) + prebins;
+            hrf_Ramp = spm_hrf(self.TR,param_ramp);
+            hrf_Ramp = hrf_Ramp(1:self.orderfir)' - mean(hrf_Ramp(1:self.orderfir)');
+            
+            param_face = defaultparam; param_face(param2change) = param_face(param2change) + prebins + offset_face;
+            hrf_Face = spm_hrf(self.TR,param_face);
+            hrf_Face = hrf_Face(1:self.orderfir)' - mean(hrf_Face(1:self.orderfir)');
+            
+            param_rate = defaultparam; param_rate(param2change) = param_rate(param2change) + prebins + offset_rate;
+            hrf_Rating = spm_hrf(self.TR,param_rate);
+            hrf_Rating = hrf_Rating(1:self.orderfir)' - mean(hrf_Rating(1:self.orderfir)');
+            %%
+            
+            if strcmp(namestring,'CSdiff')
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = sprintf('F_eye(%02d)',self.orderfir);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(self.orderfir);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                n = n + 1; nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 't_CSP>CSN';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = ones(1,self.orderfir)./self.orderfir;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                                
+            elseif strcmp(namestring,'CSPCSN')
+                nconds = 2;
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = sprintf('F_eye(%02dx%02d)',nconds,self.orderfir);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(nconds*self.orderfir);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = sprintf('F_%01dxeye(%02d)',nconds,self.orderfir);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = repmat(eye(self.orderfir),1,nconds);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_CSP>CSN';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [eye(self.orderfir) -eye(self.orderfir)];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 't_main_bothCSPCSN';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = ones(1,nconds*self.orderfir)./(nconds*self.orderfir);
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 't_CSP>CSN';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [ones(1,self.orderfir) -ones(1,self.orderfir)]./self.orderfir;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'HRF_CSPCSN_Ramp';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = repmat(hrf_Ramp,1,nconds);
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'HRF_CSPCSN_Face';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = repmat(hrf_Face,1,nconds);
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'HRF_CSPCSN_Rating';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = repmat(hrf_Rating,1,nconds);
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'HRF_CSP>CSN_Ramp';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [hrf_Ramp -hrf_Ramp];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                   
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'HRF_CSP>CSN_Face';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [hrf_Face -hrf_Face];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                   
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'HRF_CSP>CSN_Rating';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [hrf_Rating -hrf_Rating];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                          
+            elseif strcmp(namestring,'8conds')
+              
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = sprintf('F_eye(%02dx%02d)',nconds,self.orderfir);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(nconds*self.orderfir);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                  n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = sprintf('F_%01dxeye(%02d)',nconds,self.orderfir);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = repmat(eye(self.orderfir),1,nconds);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'main_allconds';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = ones(1,nconds);
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                if ismember(nrun,[1 3])
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [0 0 0 1 0 0 0 -1];
+                else
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [1 -1];
+                end
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'CSP>CSN';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                            
+                if ismember(nrun,[1 3])
+                    [VM, dVM] = self.compute_VM(-135:45:180,1,1,.001);
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = VM-mean(VM);
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'VMtuning';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = dVM-mean(dVM);
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'dVMtuning';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [-repmat(1/7,1,3) 1 -repmat(1/7,1,4)];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'CSP>rest';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                end
+        
+            end
+         
+            
+            if nT > 0
+                for tc = 1:nT
+                    matlabbatch{1}.spm.stats.con.consess{n+tc}.tcon.name =      [matlabbatch{1}.spm.stats.con.consess{nF+tc}.tcon.name '_neg'];
+                    matlabbatch{1}.spm.stats.con.consess{n+tc}.tcon.weights =   -matlabbatch{1}.spm.stats.con.consess{nF+tc}.tcon.weights;
+                    matlabbatch{1}.spm.stats.con.consess{n+tc}.tcon.sessrep =   'none';
+                    nT = nT + 1;
+                end
+            end
+            
+           matlabbatch{1}.spm.stats.con.delete = deletecons;
+                        
+            spm_jobman('run',matlabbatch);
+
+            ntotal = nT + nF;            
+            fprintf('Done creating %d 2ndlevel contrasts (%d F, %d T) for model %d, run %s, modelname %s %s.\n',ntotal,nF,nT,modelnum,self.nrun2phase{nrun},namestring,foldersuffix)
+            if nF > 0
+                for nnF = 1:nF
+                    disp(['(F) ' matlabbatch{1}.spm.stats.con.consess{nnF}.fcon.name])
+                end
+            end
+            for nnT = 1:nT
+                disp(['(T) ' matlabbatch{1}.spm.stats.con.consess{nF+nnT}.tcon.name])
+            end
         end
     end
 end
