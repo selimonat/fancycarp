@@ -289,6 +289,31 @@ classdef Group < Project
         
     end
     methods %(mri))
+        function Run1stlevel(self,modelnum)
+          %% wrapper Creating the Onsets, Fitting HRF model to model, and computing contrasts
+          fprintf('Preparing CondFiles\n')
+            for ns = 1:self.total_subjects
+                for ph = 1:4
+                    if self.ids(ns)==15 && ph == 4
+                        continue
+                    else
+                        self.subject{ns}.PrepareCondFile(ph,modelnum);
+                    end
+                end
+            end
+            fprintf('Fitting Subject %02, run %d.\n',self.ids(ns),ph)
+            for ns = 1:self.total_subjects
+                for ph = 1:3
+                    if self.ids(ns)~=15 && ph ==3
+                        ph = [3 4];
+                    end
+                    fprintf('Fitting Subject %02, run %d.\n',self.ids(ns),ph)
+                    self.subject{ns}.FitHRF(ph,modelnum);
+                    fprintf('ConImages for Subject %02, run %d.\n',self.ids(ns),ph)
+                    self.subject{ns}.Con1stLevel(ph(1),modelnum);
+                end
+            end
+        end
         function Fit2ndlevel(self,nrun,modelnum,namestring,varargin)
             %% 2ndlevel ANOVA
             
@@ -548,14 +573,14 @@ classdef Group < Project
             %% 2ndlevel 8conds ANOVA
             clear2ndlevel = 1;
             
-            dependencies = 0;
-            unequalvar   = 0;
+            dependencies = 1;
+            unequalvar   = 1;
             
             versiontag = 0;
             prefix = 's6_wCAT_';
             namestring1stlevel = '10conds';
             foldersuffix = sprintf('_N%02d',self.total_subjects);
-            bins2take = 1:14;
+            bins2take = 1:self.orderfir;
             
             
             if nargin == 6 %one varargin is given
@@ -580,11 +605,16 @@ classdef Group < Project
             end
 
             
-            % information, which cons to collect.
+            % information, which contrasts to collect.
+            %
+            % for models without PMOD:
             % on firstlevel, we have bin 1-14 cond 1, bin 1-14 cond 2, etc,
             % then bin 1-14 CSdiff
             %
-            % Here: defining 1st con to go for (+ N bins then).
+            % For VMdVM, con images on 1stlevel were skipped for main
+            % effect. So just go for contrast 1:Npmod
+            %
+            % Here: defining chunks of contrasts to go for (+ N bins is done by loop later).
             if strcmp(namestring,'8conds')
                 switch nrun
                     case 1
@@ -612,6 +642,11 @@ classdef Group < Project
                     case 3
                         conds2collect = 9;
                  end
+            elseif strcmp(namestring,'VMdVM')
+                conds2collect = [1 2];
+            elseif strcmp(namestring,'VMdVM_BT')
+                conds2collect = [1 2];
+                nrun = [1 3];
             end
             clear matlabbatch
               
@@ -619,20 +654,22 @@ classdef Group < Project
             % collect all subjects' con images for every cond
             
             bc = 0;
-            for cond = conds2collect(:)'
-                fprintf('\nCollecting con images for cond %04d:\n',cond)
-                for bin = bins2take(:)' %loop through bins, then subjects. sub01_bin1 sub02_bin1 ... sub01_bin2 sub02_bin etc..
-                    ind = self.findcon_FIR(order,cond,bin);
-                    fprintf('\nbin %02d, i.e. con %03d...',bin,ind)
-                    bc = bc + 1;
-                    clear files
-                    fprintf('Looping through subs: ');
-                    for ns = 1:self.total_subjects
-                        fprintf('%02d - ',ns)
-                        files(ns,:) = cellstr([self.subject{ns}.path_FIR(nrun,modelnum,order,namestring1stlevel), sprintf('%scon_%04d.nii',prefix,ind)]);
+            for runloop = nrun(:)'
+                for cond = conds2collect(:)'
+                    fprintf('\nCollecting con images for cond %04d:\n',cond)
+                    for bin = bins2take(:)' %loop through bins, then subjects. sub01_bin1 sub02_bin1 ... sub01_bin2 sub02_bin etc..
+                        ind = self.findcon_FIR(order,cond,bin);
+                        fprintf('\nbin %02d, i.e. con %03d...',bin,ind)
+                        bc = bc + 1;
+                        clear files
+                        fprintf('Looping through subs: ');
+                        for ns = 1:self.total_subjects
+                            fprintf('%02d - ',ns)
+                            files(ns,:) = cellstr([self.subject{ns}.path_FIR(runloop,modelnum,order,namestring1stlevel), sprintf('%scon_%04d.nii',prefix,ind)]);
+                        end
+                        fprintf('completo.')
+                        matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(bc).scans = cellstr(files); %one bin at a time, but all subs
                     end
-                    fprintf('completo.')
-                    matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(bc).scans = cellstr(files); %one bin at a time, but all subs
                 end
             end
             
@@ -646,7 +683,12 @@ classdef Group < Project
             matlabbatch{1}.spm.stats.factorial_design.multi_cov = struct('files', {}, 'iCFI', {}, 'iCC', {});
             matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none = 1;
             matlabbatch{1}.spm.stats.factorial_design.masking.im = -Inf;
-            matlabbatch{1}.spm.stats.factorial_design.masking.em = {[self.path_groupmeans '/ave_wCAT_s3_ss_data.nii']};
+            groupmask = [self.path_groupmeans sprintf('/thr20_ave_wCAT_s3_ss_data_%02d.nii',self.total_subjects)];
+            if exist(groupmask)
+                matlabbatch{1}.spm.stats.factorial_design.masking.em = {groupmask};
+            else
+                matlabbatch{1}.spm.stats.factorial_design.masking.em = {[self.path_groupmeans '/ave_wCAT_s3_ss_data.nii']};
+            end
             matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit = 1;
             matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
             matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm = 1;
@@ -668,7 +710,7 @@ classdef Group < Project
             
             versiontag = 0;
             foldersuffix = sprintf('_N%02d',self.total_subjects);
-            bins2take = 1:14;
+            bins2take = 1:self.orderfir;
             
             
             if nargin == 5 %one varargin is given
@@ -702,6 +744,12 @@ classdef Group < Project
             else
                 nconds = 2;
             end
+            %% handy contrast tiles
+            square0 = zeros(self.orderfir,self.orderfir);
+            square1 = ones(self.orderfir,self.orderfir);
+            eye1    = eye(self.orderfir);
+            vec0    =  zeros(1,self.orderfir);
+            vec1    =  ones(1,self.orderfir);
             
             %% hrf contrast vecs - CAVE: only valid if onsets are on RampDown, not on Face (thus offset_Face is negative)
             defaultparam = [6 16 1 1 6 0 32];%seconds!
@@ -852,12 +900,70 @@ classdef Group < Project
                     matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'CSP>rest';
                     matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
                 end
-        
+            elseif strcmp(namestring,'VMdVM_BT')
+               
+                %% F TESTS
+                %eoi
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(4*self.orderfir);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(4*allbins)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                     
+                %%both pmods test
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [zeros(2*self.orderfir,2*self.orderfir),eye(2*self.orderfir)];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_T_(2*allbins)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                      
+                %%both pmods test vs base
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [-eye(2*self.orderfir),eye(2*self.orderfir)];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_T_vs_B';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                %%both pmods test vs base
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [-eye1 -eye1 eye1 eye1];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'VM_dVM_T_vs_B';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                % only VM T vs B
+                 n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [-eye1,square0,eye1,square0];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'VM_T_vs_B';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                % only dVM T vs B
+                 n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [square0,-eye1,square0,eye1];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'dVM_T_vs_B';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                %% T Tests
+                %only VM in test
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [vec0 vec0 vec1 vec0];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'VM_T';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                     
+                %only dVM in test
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [vec0 vec0 vec0 vec1];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'dVM_T';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
             end
-         
             
+            nn = n; %final counter
             if nT > 0
                 for tc = 1:nT
+                    nn = nn + 1;
                     matlabbatch{1}.spm.stats.con.consess{n+tc}.tcon.name =      [matlabbatch{1}.spm.stats.con.consess{nF+tc}.tcon.name '_neg'];
                     matlabbatch{1}.spm.stats.con.consess{n+tc}.tcon.weights =   -matlabbatch{1}.spm.stats.con.consess{nF+tc}.tcon.weights;
                     matlabbatch{1}.spm.stats.con.consess{n+tc}.tcon.sessrep =   'none';
@@ -865,6 +971,22 @@ classdef Group < Project
                 end
             end
             
+           figure(100);
+           for nFc = 1:nF
+               subplot(ceil(sqrt(nF)),ceil(sqrt(nF)),nFc);
+               imagesc(matlabbatch{1}.spm.stats.con.consess{nFc}.fcon.weights,[-1 1]);
+               title(matlabbatch{1}.spm.stats.con.consess{nFc}.fcon.name)
+           end
+           figure(101);
+           cc = 0;
+            for nTc = (nF+1):nn
+                cc = cc + 1;
+               subplot(ceil(sqrt(nT)),ceil(sqrt(nT)),cc);
+               imagesc(matlabbatch{1}.spm.stats.con.consess{nTc}.tcon.weights,[-1 1]);
+                 title(matlabbatch{1}.spm.stats.con.consess{nTc}.tcon.name)
+           end
+           
+           
            matlabbatch{1}.spm.stats.con.delete = deletecons;
                         
             spm_jobman('run',matlabbatch);
