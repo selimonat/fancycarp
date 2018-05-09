@@ -85,7 +85,7 @@ classdef Project < handle
         condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
         kickcooldown          = 1;
         wmcsfregressors       = 0;
-        orderfir              = 14;
+        orderfir              = 13;
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm_version); %path to the TPM images, needed by segment.
@@ -579,6 +579,28 @@ classdef Project < handle
     end
     methods (Static) %other methods that might be needed (LK made)
         
+        function conds = condsinphase(nrun,varargin)
+            switch nrun
+                case 1
+                    conds = [-135:45:180 3000];
+                case 2
+                        conds = [180 500 3000];
+                case 3
+                        conds = [-135:45:180 500 3000];
+                case 4
+                    conds = [-135:45:180 500 3000];
+            end
+            if nargin ==3
+                ucs  = varargin{1};
+                null = varargin{2};
+                if ucs == 0
+                   conds = setdiff(conds,500);
+                end
+                if null ==0
+                    conds = setdiff(conds,3000);
+                end
+            end
+        end
 
         function ind = findcon_FIR(order,cond,bin)
             maxcond = 20;
@@ -593,6 +615,7 @@ classdef Project < handle
         function ind = compute_deltacsp2ind(deltacsp)
             ind = mod(deltacsp./45+4-1,8)+1;
         end
+        
         function [color]=GetFearGenColors(varargin)
             %[color]=GetFearGenColors
             %
@@ -607,6 +630,7 @@ classdef Project < handle
                 color = color(varargin{1},:);
             end
         end
+        
         function CheckReg(files)
             matlabbatch = [];
             if isa(files,'char')
@@ -615,6 +639,7 @@ classdef Project < handle
             matlabbatch{1}.spm.util.checkreg.data = files;
             spm_jobman('run', matlabbatch);
         end
+        
         function plot_bar(X,Y,SEM)
             % input vector of 8 faces in Y, angles in X, and SEM. All
             % vectors of 1x8;
