@@ -109,9 +109,10 @@ classdef Subject < Project
                 fprintf('Will now dump series (%s)\n',self.current_time);            
             end
             %% save the desired runs to disk            
+			n = 0;
 			for source = self.dicom_folders(:)'
 				%
-                n 				 = n+1
+                n 				 = n+1;
                 dest             = self.dir_epi(n);                                
                 if exist(dest)
 					self.DicomDownload(source{1},dest);                
