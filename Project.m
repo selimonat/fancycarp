@@ -49,9 +49,9 @@ classdef Project < handle
         %All these properties MUST BE CORRECT and adapted to one owns
         %project
 
-        path_project          = '/mnt/data/project_helen/data/';
+        path_project          = '/tmp/mynextsciencepaper/data/';
         path_spm              = '/home/onat/Documents/Code/Matlab/spm12-6685/';        
-        trio_sessions         = { 'PRISMA_19873' };
+        trio_sessions         = { 'PRISMA_19873' 'PRISMA_19875' 'PRISMA_19874'};
         dicom_serie_selector  = {  [8 19 20 21 6 7 17 18 ] };
         %this is necessary to tell matlab which series corresponds to which
         %run (i.e. it doesn't always corresponds to different runs as in FearAmy)
@@ -274,8 +274,7 @@ classdef Project < handle
         end
 
     end
-    methods(Static) %SPM analysis related methods.
-       
+    methods(Static) %SPM analysis related methods.       
         function RunSPMJob(matlabbatch)
             %will run the spm matlabbatch using the parallel toolbox.
             fprintf('Will call spm_jobman...\n');
@@ -284,8 +283,7 @@ classdef Project < handle
                 fprintf('Running SPM jobman %i...\n',n);
                 spm_jobman('run', matlabbatch(n));
             end            
-        end
-        
+        end        
         function plot_orthview(filename)
             %will plot the volume using spm_image;
             global st                        
@@ -295,8 +293,7 @@ classdef Project < handle
 %             spm_image('display',filename)
             spm_orthviews('AddColourBar',h(1),1);
             spm_orthviews('AddContext',h(1));
-        end        
-        
+        end                
     end
     methods %methods that does something on all subjects one by one
         function VolumeGroupAverage(self,run,selector)

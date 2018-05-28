@@ -257,7 +257,7 @@ classdef Subject < Project
 			for nsession = 1:length(self.runs_fieldmap)
 
 				for nrun = self.apply_vdm{nession}(2)
-					epis{nrun} = spm_select('expand',self.path_epi(nr);
+					epis{nrun} = spm_select('expand',self.path_epi(nr));
 				end
             	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.data.scans = cellstr(allfiles);%%%%!!!!!!! must be checked
             	matlabbatch{nsession}.spm.tools.fieldmap.applyvdm.data.vdmfile = self.get_vdm(nession);%%%!!!!any idea on filename of this file?
