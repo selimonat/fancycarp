@@ -34,6 +34,9 @@ onat@neocortex:/tmp/fancycarp$ git checkout mrt/main
 Branch mrt/main set up to track remote branch mrt/main from origin.
 Switched to a new branch 'mrt/main'
 ```
+
+If you would like to version-track your repository (which you should) create a new branch following /mrt/XXXX, where XXXX is the name of your project.
+
 ### 2/ Add paths
 Fire up Matlab, add Fancycarp to Matlab's path. Don't forget to add SPM to your repository.
 ```
@@ -82,12 +85,6 @@ properties (Hidden, Constant)%adapt these properties for your project
         smoothing_factor      = 4;%how many mm images should be smoothened when calling the SmoothVolume method        
     end
 ```
-Check whether your changes took action:
-```matlab
->> Project.path_project
-ans =
-/tmp/mynextsciencepaper/data/
-```
 
 ### 4/ Data Folders 
 Standardization of data folders in a project is the first step to facilitate code sharing and reproduction.
@@ -97,7 +94,7 @@ To create a folder hiararchy, run
 >> Project().CreateFolderHierarchy()
 ```
 
-This will use Properties of the ProjectObject and loop over all  participants and runs to create a folder structure to download the anatomical and functional data. Check it out with the shell command tree.
+This will use Properties of the ProjectObject and loop over all  participants and runs to create a folder structure to download anatomical and functional data. Check it out with the shell command tree.
 ```matlab
 >> !tree                      
 .
@@ -163,9 +160,9 @@ This will use Properties of the ProjectObject and loop over all  participants an
 ### 5/ Downloading Anatomical Data
 
 Now we have the folder hierarcy, we can proceed with downloading the anatomical and functional data from the internal server. 
-To download data of a given participant, we need to create a Subject instanced. 
-Thanks to OOP inheritence, SubjectObject receives all the methods defined in the ProjectObject in addition to methods defined in the SubjectObject as such.
-Running the Subject().get_hr method will download the subject's anatomical scans, convert that to nifti and store them at the 
+To download data of a given participant, we need to create a Subject instance. 
+Thanks to OOP inheritence, SubjectObject receives all the methods defined in the ProjectObject in addition to methods defined in the SubjectObject.
+Running the Subject().get_hr method will download the subject's anatomical scans, convert that to NifTi and store them at the 
 ```subXXX/run000/mrt``` folder.
 
 ```matlab
@@ -214,10 +211,9 @@ The latest recorded HR data:
 Series:  11 {mprage, HR64                              } [  |    |   240] 
 DicomDownload:
 Calling system's COPY function to dump the data...16:05:04
-source:/common/mrt32/prisma/images/1.3.12.2.1107.5.2.43.167015.30000017110806004710100000013/1.3.12.2.1107.5.2.43.167015.2017110811461014939278506.0.0.0
+source:/common/mrt32/prisma/images/XXXX
 destination:mrt/
 COPY finished successully 16:05:04
-Warning: MATLAB has disabled some advanced graphics rendering features by switching to software OpenGL. For more information, click <a href="matlab:opengl('problems')">here</a>. 
 ConvertDicom:
 Found 240 files...
 Dicom conversion s#1... (16:05:10)
@@ -254,12 +250,12 @@ destination:/tmp/mynextsciencepaper/data//sub001/run001/mrt/
 ### 7/ Preprocessing
 
 ```s.preprocess_pipeline``` takes care of the preprocessing steps.
-It tries to make a fieldmap correction if these files are present. And continues with 
+It tries to make a fieldmap correction if required files are present. And continues with 
 a/ Surface Segmentation of the anatomical data,
 b/ Normalization to MNI space,
 c/ Realignment and Co-registration,
 d/ Gray to White matter segmentation with newSegment,
-e/ Strips skull voxels
+e/ Strips away skull voxels
 
 ```
  function preprocess_pipeline(self,runs)
@@ -290,8 +286,8 @@ e/ Strips skull voxels
 8/ Analysis of functional data.
 So far, Fancycarp covered all the basic preprocessing steps, which should be fairly common to anybody, independent of their projects.
 However, first-level analyses in fMRI has certainly project specific flavors, that cannot be fully automated with additional data.
-To this end, the CreateFolderHierarchy method has created the ```design``` folder, which contains parameters necessary to the building of a design matrix.
-You simply create as many design models as you like:
+To this end, the CreateFolderHierarchy method has created the ```design``` folder, which is supposed to contain parameters necessary for the building of a design matrix.
+One may create as many design models, and use their number as argument to the Subject instance's first-level analysis method. 
 
 ```shell
 >> pwd
