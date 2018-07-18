@@ -89,11 +89,12 @@ classdef Project < handle
         selected_betas        = 1:4
         selected_ngroup       = 1;
         %
-        selected_fitfun       = 8;%fixed gaussian (3), vonmises (8);                
+        selected_fitfun       = 55;%3fixed gaussian (3), vonmises (8); vonMises template (55)
         pval                  = .05;%tuning presence
+        borders               = 1000;
         eye_data_type         = 'countw';
         select_scr_trials     = 5;
-        tuning_criterium      = 1;        
+        tuning_criterium      = 1;%2
     end  
 	properties (Hidden)
         normalization_method  = 'CAT';%which normalization method to use. possibilities are EPI or CAT
@@ -339,11 +340,10 @@ classdef Project < handle
                  kernel   = kernel./sum(kernel(:));
                  bla      = Project.circconv2(bla,kernel);
                 
-                [rw] = Project.RW_Fit(bla,Project.ucs_vector);
-                %[rw]      = Project.Linear_Fit(bla);                
+                [rw]      = Project.RW_Fit(bla,Project.ucs_vector);
+                %[rw]     = Project.Linear_Fit(bla);
                 output(n) = rw;
                 %         
-%                keyboard
                 figure(1)
                 subplot(sy,sx,n);
                 R = rw.r;
@@ -386,7 +386,7 @@ classdef Project < handle
             out = join(out,self.getgroup_facecircle_param);
             out = join(out,self.getgroup_detected_oddballs);
             out = join(out,self.getgroup_detected_face);                        
-%             out = join(out,self.getgroup_scr_param);
+            out = join(out,self.getgroup_scr_param);
             %%
             if nargin > 1%if given take only the selected subjects
                 if varargin{1} ~= 0;
@@ -399,8 +399,7 @@ classdef Project < handle
         function out             = getgroup_pmf_param(self)
             %collects the pmf parameters for all subjects in a table.
             target_name = sprintf('%smidlevel/%s.mat',self.path_project,'getgroup_pmf_param');
-            if exist(target_name) == 0
-                
+            if exist(target_name) == 0                
                 out = [];
                 for ns = self.subject_indices
                     s       = Subject(ns);
@@ -418,26 +417,44 @@ classdef Project < handle
         end
         function out             = getgroup_rating_param(self)            
             %collects the rating parameters for all subjects in a table.
-            out = [];
-            for ns = self.subject_indices%run across all the subjects
-                s   = Subject(ns);
-                out = [out;s.rating_param];
+            target_name = sprintf('%smidlevel/%s_fun_%i_borders_%d_pval_%d.mat',self.path_project,'getgroup_rating_param',Project.selected_fitfun,Project.borders,Project.pval*1000);
+            if exist(target_name) == 0
+                out = [];
+                for ns = self.subject_indices%run across all the subjects
+                    s   = Subject(ns);
+                    out = [out;s.rating_param];
+                end
+                save(target_name,'out');
+            else
+                load(target_name);
             end
         end               
         function out             = getgroup_scr_param(self)
             %collects the scr parameters for all subjects in a table.
-            out = [];
-            for ns = self.subject_indices%run across all the subjects
-                s   = Subject(ns,'scr');
-                out = [out;s.scr_param];
+            target_name = sprintf('%smidlevel/%s_fun_%i_borders_%d_pval_%d.mat',self.path_project,'getgroup_scr_param',Project.selected_fitfun,Project.borders,Project.pval*1000);            
+            if exist(target_name) == 0
+                out = [];
+                for ns = self.subject_indices%run across all the subjects
+                    s   = Subject(ns,'scr');
+                    out = [out;s.scr_param];
+                end
+                save(target_name,'out');
+            else
+                load(target_name);
             end
         end               
         function out             = getgroup_facecircle_param(self)
-            %collects the facecircle parameters for all subjects in a table.            
-            out = [];
-            for ns = self.subject_indices
-                s   = Subject(ns);
-                out = [out;s.facecircle_param];
+            %collects the facecircle parameters for all subjects in a table.                        
+            target_name = sprintf('%smidlevel/%s_fun_%i_borders_%d_pval_%d.mat',self.path_project,'getgroup_facecircle_param',Project.selected_fitfun,Project.borders,Project.pval*1000);            
+            if exist(target_name) == 0
+                out = [];
+                for ns = self.subject_indices
+                    s   = Subject(ns);
+                    out = [out;s.facecircle_param];
+                end
+                save(target_name,'out');
+            else
+                load(target_name);
             end
         end       
         function out             = getgroup_detected_oddballs(self)            
@@ -1251,15 +1268,14 @@ classdef Project < handle
         end
         function getgroup_firstlevel_RW(self,subjects)
             
-            learning_rates = self.GetRWIntervals;
-            s =Subject(6);
-            sublist = s.get_selected_subjects(0).list(subjects);;
-            parfor ns = sublist
+            learning_rates = [0 self.GetRWIntervals];            
+            sublist        = self.get_selected_subjects(0).list(subjects);
+            for ns = sublist
                 s=Subject(ns);
-                for rw = learning_rates;
-                    modelnum = round(10000+10000*rw);
+                parfor rw = 1:length(learning_rates);
+                    modelnum = round(10000+10000*learning_rates(rw));
                     s.analysis_spm_firstlevel(1,modelnum);
-                end;
+                end
             end
         end
         function                   getgroup_meanepi(self,criteria)
@@ -1364,7 +1380,7 @@ classdef Project < handle
                 spm_jobman('run', matlabbatch);
             end
         end         
-        function [SPM]                     = SecondLevel_ANOVA(self,ngroup,run,models,beta_image_index,sk,covariate_id)
+        function [SPM]                      = SecondLevel_ANOVA(self,ngroup,run,models,beta_image_index,sk,covariate_id)
             %%
             %[SPM]     = SecondLevel_ANOVA(self,ngroup,run,models,beta_image_index,sk,covariate_id)
             %
@@ -1479,6 +1495,8 @@ classdef Project < handle
                             SPM.xCon(2) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
                             M(1,2)      = 0;
                             SPM.xCon(1) = spm_FcUtil('set','eoi','F','c',[M]',SPM.xX.xKXs);
+                            M           = M(3,:);
+                            SPM.xCon(3) = spm_FcUtil('set','interaction','T','c',M(:),SPM.xX.xKXs);
                             
                         elseif models == 4 | models == 44 | models == 43 | models == 42
                             M           = [[0 0 0 0 0]' eye(5)];
@@ -1652,13 +1670,13 @@ classdef Project < handle
                 % overall saliency profile            
                 figure(3);set(gcf,'position',[67   350   327   752]);
                 h=bar(accumarray(raw(9,:)',W(raw(6,:)')),.9);
-                SetFearGenBarColors(h);
+%                 SetFearGenBarColors(h);
                 set(gca,'color','none','xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'},'ytick',1,'ygrid','on');xlabel('positions');box off;ylabel('# wfixations');xlim([.5 8.5]);ylim([0 1.5]);
                 set(get(h,'Children'),'FaceAlpha',1)
                 % overall saliency without correction
                 figure(4);set(gcf,'position',[67   350   327   752]);
                 h=bar(accumarray(raw(9,:)',1),.9);
-                SetFearGenBarColors(h)                
+%                SetFearGenBarColors(h)                
                 set(gca,'color','none','xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'},'ygrid','on');xlabel('positions');box off;ylabel('# wfixations');xlim([.5 8.5]);
                 set(get(h,'Children'),'FaceAlpha',1)
             end
@@ -1674,7 +1692,7 @@ classdef Project < handle
             if viz
                 figure(4);set(gcf,'position',[680         681        1001         417]);
                 subplot(1,4,1);
-                imagesc(1:8,1:60,count_facew);thincolorbar;axis xy;ylabel('fixation order');xlabel('condition');
+                imagesc(1:8,1:60,count_facew);axis xy;ylabel('fixation order');xlabel('condition');
                 set(gca,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'},'xtick',1:8);                
                 subplot(1,4,2);
                 count_facewc = conv2([count_facew count_facew count_facew],ones(2,2),'same');
@@ -2036,7 +2054,7 @@ classdef Project < handle
             global st;
             try               
                 coor   = (st.centre);                                
-                betas  = self.path_beta(1,6,'s_w_',1:488);                
+                betas  = self.path_beta(1,6,'s04_wCAT_',1:488);                
                 tbeta  = size(betas,1);
                 XYZvox = self.get_mm2vox([coor ;1],spm_vol(betas(1,:)));
                 d = spm_get_data(betas,XYZvox);
@@ -2262,9 +2280,9 @@ classdef Project < handle
             global t                        
             p = pwd;
             figure(1000);clf;
-            set(gcf,'position',[1114 1 800 1093])
+            set(gcf,'position',[1114 1 1034        1093])
             fs = 8;
-            common = {'fontsize',fs,'fontweight','bold'};            
+            common = {'fontweight','bold'};            
             try                                
                 %%
                 coor      = st.centre;
@@ -2280,30 +2298,36 @@ classdef Project < handle
                     t.brain_dsigma      = data(:,5);
                     t.brain_time_dsigma = data(:,6);
                 end
+                font_size_axis = 14;
+                font_size_labels = 16;
                 %%         plot the mean beta values & SEM, and make a ttest.
-                subplot(8,6,[1 2 7 8 13 14]);
-                predictors = {'time','Gau' 'timexGau' 'dG/dS' 'time x dG/dS'};
+                subplot(8,8,[1 2 9 10 17 18 ]);
+                predictors = {'Time (t)',' Strength (\alpha)' ' t \times \alpha' 'dG/d\sigma' 'time \times dG/d\sigma'};
                     %'$\frac{dG}{d\sigma}$' '$\frac{dG}{d\sigma}$' };
                 total_beta = size(data,2);
                 bar(2:total_beta,mean(data(:,2:end)),'k');
                 hold on;
                 errorbar(2:total_beta,mean(data(:,2:end)),std(data(:,2:end))./sqrt(tsubject),'ro','linewidth',2);
                 hold off;
-                set(gca,'xticklabel',predictors,'XTickLabelRotation',45,common{:});                                
-                ylabel(sprintf('Mean Predictor Weight (SEM) \n(n = %d)',size(data,1)),common{:});
+                set(gca,'xticklabel',predictors,'XTickLabelRotation',45,'fontweight','normal','fontsize',font_size_axis);
+                ylabel(sprintf('Weight'),common{:},'fontsize',font_size_labels);
                 box off;
-                xlim([1 total_beta+1])                
+                xlim([1.5 total_beta+.5])                
+                axis tight;
+                Publication_Ylim(gca,1,2);
+                Publication_NiceTicks(gca,1);
+                %                
                 [h p] = ttest(data);                
                 [sh sp] = signrank_mat(data);                
                 [p ;sp]
                 for n = 2:total_beta
                     if p(n) <= .05                        
-                        text(n,max(ylim),pval2asterix(p(n)),'HorizontalAlignment','center',common{:},'fontsize',20);
+                        text(n,max(ylim),pval2asterix(p(n)),'HorizontalAlignment','center',common{:},'fontsize',25);
                     end
                 end
                 grid on;
                 %% Plot the fitted temporal dynamics
-                subplot(8,6,[3 4 9 10 15 16]);
+                subplot(8,8,[4 5 12 13 20 21]);
                 [pmod]      = self.get_pmodmat(model);%most complex model                                                
 %                 pmod(:,2) = 0;
                 contourf(reshape(pmod(:,1:size(data,2))*mean(data)',8,520/8)',9,'color','none');
@@ -2314,97 +2338,115 @@ classdef Project < handle
 %                 h.Ticks   = cbarticks;
                 axis xy;
                 box off;
-                set(gca,'ytick',[],'xtick',[2 4 6 8],'xticklabel',{sprintf('-90%c',char(176))  'CS+' sprintf('90%c',char(176)) 'CS-'},common{:}); 
+                set(gca,'ytick',[],'xtick',[2 4 6 8],'xticklabel',{sprintf('-90%c',char(176))  'CS+' sprintf('90%c',char(176)) 'CS-'},'fontsize',font_size_axis); 
                 grid on;
-                ylabel('time',common{:});
+                ylabel('Time','fontsize',font_size_labels,'fontweight','bold');        
+                xlabel('Faces','fontsize',font_size_labels,'fontweight','bold')
+                a=gca;
+                a.XRuler.Axle.LineStyle = 'none';
+                a.YRuler.Axle.LineStyle = 'none';
                 %% plot the RW model
-                try
-                    subplot(8,6,[5 6 11 12 17 18]);                    
-                    b          = load('~/Desktop/learning_rates.mat');
-                    learning_rates = round(10000+b.learning_rates*10000);
-                    total_step = length(learning_rates);
-                    for groups = {'group_00_all' 'group_Rating_vM_1' 'group_Saliency_vM_1'}
-                        files      = [];betas=[];
-                        for i = 1:total_step
-                            files = [files;sprintf('/mnt/data/project_fearamy/data/second_level/run001/spm/model_%d_chrf_0_0/cov_id_/06mm/fitfun_08/%s/normalization_CAT/spmF_0002.nii',learning_rates(i),groups{1})];
-                            betas = [betas;sprintf('/mnt/data/project_fearamy/data/second_level/run001/spm/model_%d_chrf_0_0/cov_id_/06mm/fitfun_08/%s/normalization_CAT/beta_0004.nii',learning_rates(i),groups{1})];
-                        end
-                        datarw.(groups{1}) = spm_get_data(spm_vol(files),XYZvox(:));
-                        databetas.(groups{1}) = spm_get_data(spm_vol(betas),XYZvox(:));
-                        if strcmp((groups{1}),'group_00_all')
-                            yyaxis right
-                            k = plot(datarw.(groups{1}),'r','linewidth',4);
-%                             k.EdgeColor = [.5 .5 .5];
-                            box off;
-                            xlim([0 total_step]);
-                            models = (learning_rates-10001)/10000;
-                            i = 1:4:total_step;
-                            set(gca,'xtick',i,'xticklabels',models(i),'xticklabelrotation',-45,common{:});
-                            ylabel('F-value')
-                            hold on
-                            yyaxis left;
-                            plot(databetas.(groups{1}) ,'b','linewidth',4)
-                            hold on;
-                            ylabel('TimeXGau Interaction')
-                            ylim([-.1 .35])
-                        elseif strcmp((groups{1}),'group_Rating_vM_1')
-                            yyaxis right;
-                            plot(datarw.(groups{1}),'--r','linewidth',1);
-                            yyaxis left;
-                            plot(databetas.(groups{1}) ,'b','linewidth',1)                            
-%                         elseif strcmp((groups{1}),'group_Saliency_vM_1');
-%                             yyaxis right;
-%                             plot(datarw.(groups{1}),'--r','linewidth',1);
-%                             yyaxis left;
-%                             plot(databetas.(groups{1}) ,'b','linewidth',1);
-%                             ylabel('timeXGau')
-                        end
-                        grid on
-                    end
-                end
-                %%
-                figure(10001);clf
-                b              = load('~/Desktop/learning_rates.mat');
-                learning_rates = round(10000+b.learning_rates*10000);
-                total_step     = length(learning_rates);
                 
-                betas=[];
-                for ns = t.subject_id(:)';
+                subplot(8,8,[7 8 15 16 23 24]);
+                b              = load('~/Desktop/learning_rates.mat');
+                learning_rates = round(10000+[0 b.learning_rates]*10000);
+                total_step     = length(learning_rates);
+                models         = (learning_rates-10000)/10000;
+                xticks         = 1:4:total_step;
+                labels         = RemoveLeadingZeroForTickLabels(    models(xticks));
+                labels{1}      = sprintf('linear');
+                
+                count          = 0;
+                markerset      = {'-' '--' '+'};
+                for groups = {'group_00_all'}%{'group_00_all' 'group_Rating_vM_1' 'group_Saliency_vM_1'};
+                    count      = count + 1;
+                    files      = [];betas=[];
                     for i = 1:total_step
-                        betas = [betas;sprintf('/mnt/data/project_fearamy/data/sub%03d/run001/spm/model_%d_chrf_0_0/s06_wCAT_beta_0004.nii',ns,learning_rates(i))];
+                        files  = [files;sprintf('/mnt/data/project_fearamy/data/second_level/run001/spm/model_%d_chrf_0_0/cov_id_/06mm/fitfun_08/%s/normalization_CAT/spmF_0002.nii',learning_rates(i),groups{1})];
+                        betas  = [betas;sprintf('/mnt/data/project_fearamy/data/second_level/run001/spm/model_%d_chrf_0_0/cov_id_/06mm/fitfun_08/%s/normalization_CAT/spmT_0003.nii',learning_rates(i),groups{1})];
                     end
+                    datarw.(groups{1})    = spm_get_data(spm_vol(files),XYZvox(:));
+                    databetas.(groups{1}) = spm_get_data(spm_vol(betas),XYZvox(:));
+                    yyaxis right;
+                    plot(datarw.(groups{1}),markerset{count},'linewidth',2,'color',get(gca,'ycolor'));
+                    hold on;
+                    axis tight;
+                    %
+                    yyaxis left;
+                    plot(databetas.(groups{1}),markerset{count},'linewidth',2,'color',get(gca,'ycolor'));
+                    hold on;
+                    axis tight;
                 end
+                hold off;yyaxis right;hold off;
+                %                
+                xlabel(sprintf('Learning\nRate'),'fontsize',font_size_labels,'fontweight','bold');
+                xlim([0 total_step+1]);box off;                
+                set(gca,'xtick',xticks,'xticklabels',labels,'xticklabelrotation',45,'fontweight','normal','fontsize',font_size_axis);
                 %
-                betas = reshape(spm_get_data(spm_vol(betas),XYZvox(:)),total_step,length(t.subject_id(:)));
-                pos = get(gca,'position');
-                B   = zscore(betas);
-                imagesc(B) 
-                colorbar
-                set(gca,'position',pos);
-                r=[];
-                for i = 1:total_step;r(i)=corr(t.rating_nonparam,B(i,:)');end
-                hold on;
-%                 plot(r*10+20,1:total_step,'r','linewidth',4)                
-                %
-                models = (learning_rates-10001)/10000;
-                i      = 1:4:total_step;
-                set(gca,'ytick',i,'yticklabels',models(i),common{:});
-                xlabel('subjects');
-                grid on
-                title('timexGau')
-                drawnow;
+                yyaxis right
+                ylabel('F-value','fontsize',font_size_labels,'fontweight','bold');
+                Publication_Ylim(gca,0,2);
+                Publication_NiceTicks(gca,2);
+                a = gca;
+                a.XRuler.Axle.LineStyle = 'none';
+                a.XRuler.TickLength = [0 0];                
+                                                
+                yyaxis left;
+                Publication_Ylim(gca,0,2);
+                Publication_NiceTicks(gca,2);
+                a = gca;
+                a.YRuler.Axle.LineWidth = 2;
+                a.YRuler.TickLength = [.01 .02];
+                set(gca,'fontsize',font_size_axis);
+                ylabel('Time \times Strength','fontsize',font_size_labels,'fontweight','bold');
+                for n = 1:2
+                    a.YAxis(n).LineWidth = 2;
+                    a.YAxis(n).TickLength = [.025 0];
+                end
+                grid on;
                 %%
-                figure(101212);
-                subplot(1,2,1);
-                plot(mean(betas,2));
-                subplot(1,2,2);
-                [a b c stats] = ttest(betas',0);
-                plot(stats.tstat);     
-                set(gca,'xtick',i,'xticklabels',models(i),common{:});
-                drawnow;
+%                 figure(10001);clf
+%                 
+%                 b              = load('~/Desktop/learning_rates.mat');
+%                 learning_rates = round(10000+b.learning_rates*10000);
+%                 total_step     = length(learning_rates);
+%                 
+%                 betas=[];
+%                 for ns = t.subject_id(:)';
+%                     for i = 1:total_step
+%                         betas = [betas;sprintf('/mnt/data/project_fearamy/data/sub%03d/run001/spm/model_%d_chrf_0_0/s06_wCAT_beta_0004.nii',ns,learning_rates(i))];
+%                     end
+%                 end
+%                 %
+%                 betas = reshape(spm_get_data(spm_vol(betas),XYZvox(:)),total_step,length(t.subject_id(:)));                
+%                 subplot(2,1,1)
+% %                 B     = zscore(betas);
+%                 imagesc(betas);
+%                 colorbar                
+%                 subplot(2,1,2);
+%                 r=[];
+%                 for i = 1:total_step;
+%                     r(i,1)=corr(t.rating_amp,betas(i,:)');
+%                     r(i,2)=corr(t.facecircle_amp,betas(i,:)');
+%                 end                
+%                 plot(1:total_step,(r(:,1)),'r--','linewidth',4)                
+%                 hold on;
+%                 plot(1:total_step,(r(:,2)),'b+','linewidth',4)                
+%                 hold off;
+%                 set(gca,'ylim',[-.5 .5])
+%                 
+%                 models = (learning_rates-10001)/10000;
+%                 i      = 1:4:total_step;
+%                 set(gca,'xtick',i,'xticklabels',models(i),common{:});
+%                 ylabel('subjects');
+%                 grid on
+%                 title('timexGau')
+%                 drawnow;
+
                 %%
                 pause(.4)
                 figure(1000)
+                
                 try
                     o    =  fitlm(t,'rating_nonparam     ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
                     o2   =  fitlm(t,'facecircle_nonparam ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
@@ -2412,45 +2454,67 @@ classdef Project < handle
                     o    =  fitlm(t,'rating_nonparam     ~ 1 + brain_time + brain_gau + brain_time_gau','RobustOpts','on')
                     o2   =  fitlm(t,'facecircle_nonparam ~ 1 + brain_time + brain_gau + brain_time_gau','RobustOpts','on')
                 end
+                
+                o3 = fitlm(t,'brain_gau ~ 1 + rating_nonparam*facecircle_nonparam')
                 model2text(o,'~/gdrive/Office/Fearamy/paperfigures/')
                 model2text(o2,'~/gdrive/Office/Fearamy/paperfigures/')
-                pos =  {[25 26 31 32] [27 28 33 34] [ 29 30 35 36] [39 40 45 46] [41 42 47 48] };
+                pos =  {[33 34 41 42 ] [36 37 44 45] [39 47 40 48 ] [52 53 60 61] [55 56 63 64] [49 50 57 58] };
                 h   =  [];
                 for n = 1:total_beta-1
-                    h(n) = subplot(8,6,pos{n});
-                    %%
-                    s=scatter(data(:,n+1),t.rating_nonparam(:),30,'filled');                    
+                    h(n) = subplot(8,8,pos{n});
+                    %
+                    s=scatter((t.rating_nonparam(:)),data(:,n+1),40,'filled');                    
                     s.MarkerFaceAlpha = .6;
                     %
                     hold on
-                    s = scatter(data(:,n+1),t.facecircle_nonparam(:),30,[.85 .33 .1],'filled');
-                    s.MarkerFaceAlpha = .5;
+                    s = scatter((t.facecircle_nonparam(:)),data(:,n+1),40,[.85 .33 .1],'filled');
+                    s.MarkerFaceAlpha = .6;
+                    
                     axis tight;
-                    ylim([-2 2.5]);
+                    xlim([-2 2]);
+                    
                     hl = lsline;
                     hl(2).LineWidth= 3;
-                    hl(2).Color = [0 .45 .74];
+                    if o.Coefficients.pValue(n+1) < .05                   
+                        hl(2).Color = [0 .45 .74];
+                        hl(2).LineWidth = 5;
+                    else
+                        hl(2).Color = [0 .45 .74 .5];
+                    end
                     hl(1).LineWidth= 3;
-                    hl(1).Color = [.85 .33 .1];
-                    hold off
-%                     if n == 1
-                        yyaxis left;
-                        ylabel('rating tuning',common{:});                    
-%                     end
-%                     if n == 3
-                        yyaxis right;
-                        ylabel('facecircle',common{:});
-%                     end
-                    %%
-                    grid on;                    
-                    title(sprintf('%s \nW_r: %4.2g pval: %4.2g\nW_f: %4.2g pval: %4.2g',predictors{n},o.Coefficients.Estimate(1+n),o.Coefficients.pValue(1+n),o2.Coefficients.Estimate(1+n),o2.Coefficients.pValue(1+n)),common{:});                    
-                    set(gca,common{:})
+                    if o2.Coefficients.pValue(n+1) < .05
+                       hl(1).Color = [.85 .33 .1];
+                       hl(1).LineWidth = 5;
+                    else
+                       hl(1).Color = [.85 .33 .1 .5];
+                    end
+                    %
+                    hold off ;                            
                     box off;
                     drawnow;
-                    axis square
-                end
+                    axis square            ;  
+                    Publication_Ylim(gca,1,2);
+                    Publication_SymmetricYlim(gca);
+%                     EqualizeSubPlotYlim(h);
+                    Publication_NiceTicks(gca,1);
+                    set(gca,'fontweight','normal','fontsize',font_size_axis);
+                    grid on;               
+                    a = gca;
+                    set(a.XRuler.Axle,'linestyle','none');set(a.XRuler,'TickLength',[0 0]);set(a.YRuler.Axle,'linestyle','none');set(a.YRuler,'TickLength',[0 0]);
+                    
+                    xlabel(sprintf('Fear Tuning\n(post-experiment)'),'fontweight','bold','fontsize',font_size_labels);                                        
+                    ylabel(sprintf('Weight\n%s',predictors{n}),'fontweight','bold','fontsize',font_size_labels);                         
+                    % add legend
+                    if n == 2
+                        P = get(gca,'position');
+                        hl = legend({'Rating Tuning (\alpha)' 'Saliency Tuning (\alpha)'},'box','off','location','NorthOutside');
+                        set(gca,'position',P) ;                       
+                    end
+                end                 
+%                 
+                axis(h(1));
                 %%
-                subplotChangeSize(h,-.06,-.06);                
+%                 subplotChangeSize(h,-.06,-.06);                
                 try
                     [fileparts(SPM.swd) filesep 'normalization_CAT' filesep SPM.xCon(xSPM.Ic).Vspm.fname]
                     [fileparts(SPM.swd) filesep 'normalization_EPI' filesep SPM.xCon(xSPM.Ic).Vspm.fname]
@@ -2463,7 +2527,100 @@ classdef Project < handle
                     mysupertext = sprintf('[%3.4g mm, %3.4g mm, %3.4g mm]\n',coor(1),coor(2),coor(3));
                     supertitle(mysupertext,1,common{:});
                 end
-              
+              %%
+              %plot cluster RW curves                  
+              st.centre(1:3)
+              i                  = find(sum(abs(xSPM.XYZmm - repmat(st.centre(1:3),1,size(xSPM.XYZmm,2)))) == 0);
+              clusters           = spm_clusters(xSPM.XYZ);              
+              XYZvox             = xSPM.XYZ(:,ismember(clusters,clusters(i)))
+              D                  = spm_get_data(spm_vol(files),XYZvox);
+%               D                 = spm_get_data(spm_vol(betas),XYZvox);
+              %
+              figure(121212);clf
+              set(gcf,'position',[1923         643         570/2         450])
+              %
+              H = shadedErrorBar([],mean(D,2),std(D,1,2)./sqrt(length(XYZvox)));
+              H.edge(1).LineStyle='none';
+              H.edge(2).LineStyle='none';
+              ylim([0 12]);
+%               plot(),'linewidth',.1,'color',[0 0 0 .3])
+              %% plot the interaction of behavior and ratings
+              figure(1002);
+              set(gcf,'position',[238         160        1535         734]);
+              fieldz    = {'brain_time' 'brain_gau' 'brain_time_gau'};
+              clf;
+              for n = 1:3
+                  SH =subplot(2,3,n);          
+                  pause(.2);
+                  %
+                  fieldy = {'facecircle_nonparam'};
+                  fieldx = {'rating_nonparam'};
+%                   X      = linspace(min(t.(fieldx{1})),max(t.(fieldx{1})),100);
+%                   Y      = linspace(min(t.(fieldy{1})),max(t.(fieldy{1})),100);
+                  X      = linspace(-2,2,100);
+                  Y      = linspace(-2,2,100);
+                  [x y]  = meshgrid(X,Y);
+%                   m      = fitlm(t,[fieldz{n} '~ 1 + ' fieldx{1} '+' fieldy{1} ])
+                  bla = 3
+                  if bla==1
+                    m      = fitlm(t,[fieldz{n} '~ 1 + ' fieldy{1} '^2' ])
+                    C      = m.Coefficients.Estimate;
+                    Yhat   = [ones(length(x(:)),1) x(:) x(:).^2]*[C(1);C(2);C(3)];
+                  elseif bla == 2
+                      m      = fitlm(t,[fieldz{n} '~ 1 + ' fieldx{1} '+' fieldy{1} ])
+                      C      = m.Coefficients.Estimate;
+                      Yhat   = [ones(length(x(:)),1) x(:) y(:)]*[C(:)];
+                  elseif bla == 3
+                      m      = fitlm(t,[fieldz{n} '~ 1 + ' fieldx{1} '*' fieldy{1} ])
+                      C      = m.Coefficients.Estimate;
+                      Yhat   = [ones(length(x(:)),1) x(:) y(:) x(:).*y(:)]*[C(:)];
+                  end
+                  
+%                   m      = fitlm(t,[fieldz{n} '~ 1 + ' fieldy{1}  ])
+                                                      
+                  imagesc(X,Y,reshape(Yhat,100,100));
+                  hold on;
+                  axis xy;
+                  pos=get(gca,'position');
+                  colorbar;                  
+                  set(gca,'position',pos);
+                  
+                  Z     =   Vectorize(Scale(t.(fieldz{n})));
+                  scatter(t.(fieldx{1}),t.(fieldy{1}),(1+Z*3).^4,[Z(:) zeros(length(Z),1) 1-Z(:)],'filled');                  
+                  %%
+%                   subplotChangeSize(SH,-.05,-.05);
+                  hold off;
+                  axis tight;
+                  axis square;
+                  ylabel(sprintf('Fear Tuning\nin Behavior'));
+                  xlabel(sprintf('Fear Tuning\nin Ratings'));                                    
+                  
+                  %% Plot the results
+                  try
+                      subplot(2,3,n+3);
+                      effect   = m.Coefficients.Estimate(2:end);
+                      effectSE = m.Coefficients.SE(2:end);
+                      y = 1:3;
+                      ci       = [effect effect] + effectSE*tinv([.025 .975],m.DFE);
+                      h = bar(y,effect,.9,'k');
+                      hold on;
+                      errorbar(y,effect,effectSE,'ro','linewidth',1);
+                      hold off;
+                      box off
+                      axis square;
+                      Publication_NiceTicks(gca,1);
+                      Publication_RemoveXaxis(gca);
+                      %%
+                      for n = 1:3
+                          P = m.Coefficients.pValue(n+1);
+                          if P < .05
+                              text(n,max(ylim)-range(ylim)*.1,pval2asterix(P),'HorizontalAlignment','center','fontsize',16);
+                          end
+                      end
+                      set(gca,'xticklabels',{'Ratings' 'Saliency' 'R*S'},'XTickLabelRotation',45);
+                  end
+              end
+              supertitle(mysupertext,1,common{:});
             catch ME
                 fprintf('call back doesn''t run\n')
                 rethrow(ME)                
@@ -2770,7 +2927,7 @@ classdef Project < handle
         end
         function plot_spacetime2(self,spacetime,type)
             %simple spacetime plots
-            plot_ucs = false;%true;
+            plot_ucs = false;
             if nargin < 3
                 type = 1;
             end
@@ -2792,27 +2949,27 @@ classdef Project < handle
                     plot(xlim,[4 4],'r')
                     plot([4 4],ylim,'--k')                    
                     hold off;
-                elseif type == 2
-                    
-                    
+                elseif type == 2                               
+                    %%
                     posori = get(h,'position');
-                    posori(3) = .1;
+                    posori(3) = .2;
                     posori(2) = posori(2) - .05;
+                    posori(4) = 0.7;
                     set(h,'position',posori);
                     %
-                    kernel   = make_gaussian2D(11,7,6,2.5,6,4);
-                    III      = 1:size(spacetime.d,1)-5;
-%                     kernel      = make_gaussian2D(5,3,10,10,3,1.5);
-%                     kernel      = kernel./sum(kernel(:));
+%                     kernel   = make_gaussian2D(11,7,6,2.5,6,4);
+                    III      = 1:size(spacetime.d,1);
+                    kernel      = make_gaussian2D(3,3,10,10,3,1.5);
+                    kernel      = kernel./sum(kernel(:));
                     % smooth single subjects.
-%                     for ns = 1:size(spacetime.d,3)
-%                         spacetime.d(:,:,ns,narea) = Project.circconv2(spacetime.d(:,:,ns,narea),kernel);
-%                     end                                        
+                    for ns = 1:size(spacetime.d,3)
+                        spacetime.d(:,:,ns,narea) = Project.circconv2(spacetime.d(:,:,ns,narea),kernel);
+                    end                                        
                     % average across subjects
                     D           = mean(spacetime.d(III,:,:,narea),3);%data with 2 dimensions                    
                     
                     % plot the average st plot.
-                    contourf(D,9,'color','none');
+                    contourf(D,5,'color','none');
                     box off;
                     %                     contourf(mean(spacetime.d(:,:,:,narea),3),3,'color','none');
                     %                     imagesc(mean(spacetime.d(:,:,:,narea),3));
@@ -2822,25 +2979,41 @@ classdef Project < handle
                     plot([4 4],ylim,'--k','linewidth',1,'color',[0 0 0 .25]);%plot a safe zone line
                     plot([2 2],ylim,'--k','linewidth',1,'color',[0 0 0 .25]);%plot a safe zone line
                     plot([6 6],ylim,'--k','linewidth',1,'color',[0 0 0 .25]);%plot a safe zone line
-                    set(gca,'ytick',[10 20 30 40],'yticklabels',{'10' '20' '30' '40'},'xtick',[2 4 6 8],'xticklabels',{sprintf('-90%c',char(176)) 'CS+' sprintf('+90%c',char(176)) sprintf('180%c',char(176))},'XAxisLocation','bottom','YAxisLocation','right','fontsize',20);
+                    set(gca,'ytick',[10 20 30 40],'yticklabels',{'10' '20' '30' '40'},'xtick',[2 4 6 8],'xticklabels',{sprintf('-90%c',char(176)) 'CS+' sprintf('+90%c',char(176)) sprintf('180%c',char(176))},'XAxisLocation','bottom','YAxisLocation','left','fontsize',16);
                     ylabel('microblocks');
-                    %%                    
-                    h     = colorbar('location','westoutside');
+                    %                    
+                    h     = colorbar;
                     h.Label.String = ['\muSiemens'];
-                    h.FontSize = 16
-                    h.Label.FontSize = 16;
-                    wcbar = .005;
+                    h.FontSize = 14
+                    h.Label.FontSize = 14;
+                    wcbar = .01;
                     set(gca,'position',posori);
-                    h.Position = [posori(1)-wcbar*2 posori(2) wcbar posori(4)/2];
+                    h.Position = [posori(1)+posori(3)+wcbar*2 posori(2) wcbar posori(4)/3];
                     h.Box = 'off';
+                    
+                    %%
+                    plot_ucs = 1;
+                    if plot_ucs
+                        hold on
+                        bla                          = self.ucs_vector;
+                        bla(find(self.ucs_vector)+1) = 1;
+                        bla(self.ucs_vector==1)      = [];
+                        bla                          = find(bla);
+                        for n = 1:length(bla)
+                            h2 = plot(max(xlim),bla(n),'p','markersize',12);
+                            h2.Color = [ 1 0.1 0];
+                            h2.MarkerFaceColor = [ 1 0.1 0];
+                        end
+                        hold off;
+                    end
+                    
                     %% plot the feargen bar plot
-                    pos     = posori+[0 posori(4)+posori(4)/24 0 0];
+                    pos     = posori+[0 posori(4)+posori(4)*0 0 0];
+                    pos(4)  = .15;
                     Dbar    = squeeze(mean(spacetime.d(III,:,:,narea)))';%data with 2 dimensions
                     %average across participants and compute the SEM
                     DbarM   = mean(Dbar);
-                    DbarSEM = std(Dbar)./sqrt(length(Dbar));
-                    
-                    pos(4)  = .075;
+                    DbarSEM = std(Dbar)./sqrt(length(Dbar));                                        
                     
                     axes('position',pos);
                     cmap  = GetFearGenColors;
@@ -2850,11 +3023,14 @@ classdef Project < handle
                         hold on;
                         errorbar(nbar,DbarM(nbar),DbarSEM(nbar),'ko');
                     end
-                    axis tight;            
+                    axis tight
                     xlim([.5 8.5])
-%                     ylim([min(DbarM) max(DbarM)]);
+                    ylim([min(DbarM)*0.9 max(DbarM)*1.1]);
+                    set(gca,'ylim',[.04 .07])
+                    Publication_NiceTicks(gca,2);
+                    set(gca,'fontsize',16)
                     box off;
-                    set(gca,'ytick',[],'xcolor','w','xtick',[]);
+                    set(gca,'xcolor','w','xtick',[]);                    
                     % fit a Gaussian
                     data = [];
                     data.y   = Dbar';
@@ -2862,11 +3038,10 @@ classdef Project < handle
                     data.ids = 1:size(data.y,2);
                     t        = Tuning(data);
                     t.GroupFit(8);
-                    plot(linspace(1,8,100),t.groupfit.fit_HD,'k','linewidth',2)                    
-                    set(gca,'ylim',[.037 max(ylim)])
-                    keyboard
+                    plot(linspace(1,8,100),t.groupfit.fit_HD,'k','linewidth',2)                                        
+                    
                     %% plot the difference time-course
-                    pos = posori+[posori(3)+posori(3)/6 0 0 0];                    
+                    pos = posori+[posori(3)+posori(3)/2 0 0 0];                    
                     axes('position',pos);
                     
                     Dtimecourse = mean(D(III,[3 4 5]),2)-mean(D(:,[7 8 1]),2);
@@ -3188,8 +3363,8 @@ classdef Project < handle
             set(gcf,'position',[2412         595        1261         472])
             clf;
             datatype = {'rating' 'scr' 'get_facecircle'};
-            titles = {'Ratings' 'SCR' 'Saliency'};
-            ylabels= {'VAS' sprintf(['Phasic\nSCR (' char(181) 'Siemens)']) sprintf('Fixation Count')};
+            titles = {'Rating' 'SCR' 'Saliency'};
+            ylabels= {'VAS' sprintf(['Phasic\nSCR (' char(181) 'Siemens)']) sprintf('Fixation\nProbability')};
             for n = 1:3
                 subplot(2,6,[n*2-1 n*2]);
                 out = self.getgroup_behavioral(datatype{n});
@@ -3201,7 +3376,7 @@ classdef Project < handle
                 PlotTransparentLine(out.groupfit.x_HD,out.groupfit.fit_HD(:),.35,'k','linewidth',2.5);
             end
             %%
-            t = self.getgroup_all_param;                       
+            t   = self.getgroup_all_param;                       
             %%
             titels = {'SCR\nTuning' 'Detection\nError'};
             transparency = .8;
@@ -3235,6 +3410,44 @@ classdef Project < handle
                 drawnow;            
                 hold off;
             end            
+            %%
+            figure(40);
+            tits = {'ratings' 'saliency'}
+            c = 0;h=[];
+            
+            for N = {'rating_nonparam' 'facecircle_nonparam'}
+                c = c+1;
+                [y x] = hist(t.(N{1}));
+                h = [h subplot(1,2,c)]
+                bar(x,y,.9,'k')
+                axis square;
+                box off
+                ylim([0 10])
+                xlim([-2 2])
+                xlabel('Generalization Index')
+                title(tits{c})
+                set(gca,'fontsize',20)
+            end            
+            Publication_NiceTicks(h,2)                
+            %%
+            figure(41);clf;
+            [y i]  = sort(t.facecircle_nonparam)
+            sub_id = t.subject_id(i)
+            c = 0;
+            h = [];
+            for I = 1:8:length(sub_id)
+                ns = sub_id(I);
+                c  = c+1;
+                h  = [h subplot(1,5,c)];
+                s  = Subject(ns);
+%                 Project.plot_bar(-135:45:180,zscore(s.rating.y_mean))
+                Project.plot_bar(-135:45:180,zscore(s.get_facecircle.y_mean));
+                axis square;
+                box off;
+                h(end).XTick = [];
+                title(sprintf('GI: %1.1g',y(I)))
+            end
+            EqualizeSubPlotYlim(h)
         end
         function plot_model_04_predictors(self,base_kappas)
             %%

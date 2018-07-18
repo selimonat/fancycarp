@@ -50,140 +50,145 @@ classdef SCR < handle
                 s                 = varargin{1};
                 path_scr          = s.path_scr;
                 path_scrmat       = regexprep(path_scr,'.smr','.mat');
+                path_scrmat2      = regexprep(path_scrmat,'data.mat','data_.mat');
                 %
                 if ~exist(path_scrmat)
                     a    = SONImport(fopen(path_scr),'milliseconds','scale');%will cache it.
                     if a == 0
                         cprintf([0 1 0],'SON Import OK.\n');
                     else
-                        cprintf([1 0 0],'SON Import failed!\n')
+                        cprintf([1 0 0],'SON Import failed!\n');
                         keyboard
                     end
                 end
                 %%
-                a                      = load(path_scrmat);
-                data                   = a.chan1;
-                time                   = [a.head1.start:1:a.head1.stop]';
-                %discard all time before the first and after the last pulses.
-                pulse_times            = a.chan6;
-                stim_times             = a.chan3;    
-                mbi_times              = a.chan2;                
-                % make a robust fit for pulse times to find the intercept.
-                b                      = robustfit([ [1:length(pulse_times)]'],pulse_times);%b(1) is an estimation of the time experiment starts.                
-%                 plot(stim_times,'o-'),hold on;plot(pulse_times,'ro-');plot(mbi_times,'ko-');hold off;grid on
-                b                      = b(1);%start of the presentation
-                %
-                stim_times( stim_times < b)  = [];%delete all past samples
-                pulse_times( pulse_times< b) = [];%delete all past samples
-                mbi_times(mbi_times < b)     = [];%delete all past samples
-                %remove the last 16 stimuli 
-                stim_times(end-15:end)       = [];%delete all past samples
-                %if the first stimulus onset is missing, replace it with
-                %the mbi onset (which is the same)
-                if abs(stim_times(1)-mbi_times(1)) > 500;
-                    stim_times = [mbi_times(1) ; stim_times];
-                end
-                %check for ghosts in the stim timings
-                i = [diff(stim_times)] < 2000;
-                i = [0;i];
-                if any(i);
-                    cprintf([1 0 0],'Removed %d ghost pulses from stim onsets...\n',sum(i));
-                    stim_times(i==1) = [];
-                end
-                %check for ghosts in the stim timings
-                i = [diff(mbi_times)] < 20000;
-                i = [0;i];
-                if any(i)
-                    cprintf([1 0 0],'Removed %d ghost pulses from mbi...\n',sum(i));
-                    mbi_times(i==1) = [];
-                end                
-%                 figure;
-%                 plot(stim_times,'o-'),hold on;plot(pulse_times,'ro-');plot(mbi_times,'ko-');hold off;grid on
-                %sanity checks
-                if length(mbi_times) == 65
-                    cprintf([0 1 0],'MBI count, correct.\n');
-                else
-                    cprintf([1 0 0],'MBI count, incorrect.\n');
-                end
-                if length(stim_times) == 585
-                    cprintf([0 1 0],'STIM count, correct.\n');
-                else
-                    cprintf([1 0 0],'STIM count, incorrect.\n');
-                end                
-                %% now set the zero for the scr recordings
-                % first cut the unwanted parts based on first and last mbi
-                last_point  = max(stim_times);
-                first_point = min(mbi_times);
-                i           = (time >= (first_point - 15000)) & (time <= (last_point + 20000));
-                time(~i)    = [];
-                data(~i)    = [];
-                % now shift everything so that first sample is zero.
-                first_sample                            = time(1);
-                time                                    = time        - first_sample;
-                pulse_times                             = pulse_times - first_sample;
-                mbi_times                               = mbi_times   - first_sample;
-                stim_times                              = stim_times  - first_sample;
-                
-                %% store the stuff
-                scr.hdr                = a.FileInfo;
-                scr.time               = time;
-                scr.y                  = data;
-                scr.y                  = [scr.y    ; repmat(scr.y(end),25000,1)];
-                scr.time               = [scr.time ; repmat(scr.time(end),25000,1) + [1:25000]'];                
-                scr.tsample            = length(time);
-                scr.sampling_period    = (a.head1.sampleinterval/1000);%in ms
-                scr.sampling_rate      = 1000/scr.sampling_period;%in hertz.
-                scr.BlockBorders_time  = time([1 end])';
-                scr.BlockBorders_index = [1 length(scr.y)];
-                scr.block2phase        = 1;
-                scr.BlockNames         = {'all'};
-                scr.path_scr           = path_scr;
-                %
-                c = 0;
-                scr.event = [];
-                s.paradigm{1}.presentation.dist(ismember(s.paradigm{1}.presentation.dist, [1001 1002])) = 0;
-                for distance = unique(s.paradigm{1}.presentation.dist)                    
-                    c                  = c + 1;
-                    scr.event(:,c)     = zeros(length(scr.y),1); 
-                    ii                 = find(s.paradigm{1}.presentation.dist == distance);
-                    
-                    %transform distance to cond id
-                    if distance == -135
-                        cond_id = 1;
-                    elseif distance == -90
-                        cond_id = 2;
-                    elseif distance == -45
-                        cond_id = 3;
-                    elseif distance == 0
-                        cond_id = 4;
-                    elseif distance == 45
-                        cond_id = 5;
-                    elseif distance == 90
-                        cond_id = 6;
-                    elseif distance == 135
-                        cond_id = 7;
-                    elseif distance == 180
-                        cond_id = 8;
-                    elseif distance == 1000
-                        cond_id = 9;
-                    elseif distance == 1001
-                        cond_id = 10;
-                    elseif distance == 1002
-                        cond_id = 11;
+                if ~exist(path_scrmat2)
+                    a                      = load(path_scrmat);
+                    data                   = a.chan1;
+                    time                   = [a.head1.start:1:a.head1.stop]';
+                    %discard all time before the first and after the last pulses.
+                    pulse_times            = a.chan6;
+                    stim_times             = a.chan3;
+                    mbi_times              = a.chan2;
+                    % make a robust fit for pulse times to find the intercept.
+                    b                      = robustfit([ [1:length(pulse_times)]'],pulse_times);%b(1) is an estimation of the time experiment starts.
+                    %                 plot(stim_times,'o-'),hold on;plot(pulse_times,'ro-');plot(mbi_times,'ko-');hold off;grid on
+                    b                      = b(1);%start of the presentation
+                    %
+                    stim_times( stim_times < b)  = [];%delete all past samples
+                    pulse_times( pulse_times< b) = [];%delete all past samples
+                    mbi_times(mbi_times < b)     = [];%delete all past samples
+                    %remove the last 16 stimuli
+                    stim_times(end-15:end)       = [];%delete all past samples
+                    %if the first stimulus onset is missing, replace it with
+                    %the mbi onset (which is the same)
+                    if abs(stim_times(1)-mbi_times(1)) > 500;
+                        stim_times = [mbi_times(1) ; stim_times];
                     end
+                    %check for ghosts in the stim timings
+                    i = [diff(stim_times)] < 2000;
+                    i = [0;i];
+                    if any(i);
+                        cprintf([1 0 0],'Removed %d ghost pulses from stim onsets...\n',sum(i));
+                        stim_times(i==1) = [];
+                    end
+                    %check for ghosts in the stim timings
+                    i = [diff(mbi_times)] < 20000;
+                    i = [0;i];
+                    if any(i)
+                        cprintf([1 0 0],'Removed %d ghost pulses from mbi...\n',sum(i));
+                        mbi_times(i==1) = [];
+                    end
+                    %                 figure;
+                    %                 plot(stim_times,'o-'),hold on;plot(pulse_times,'ro-');plot(mbi_times,'ko-');hold off;grid on
+                    %sanity checks
+                    if length(mbi_times) == 65
+                        cprintf([0 1 0],'MBI count, correct.\n');
+                    else
+                        cprintf([1 0 0],'MBI count, incorrect.\n');
+                    end
+                    if length(stim_times) == 585
+                        cprintf([0 1 0],'STIM count, correct.\n');
+                    else
+                        cprintf([1 0 0],'STIM count, incorrect.\n');
+                    end
+                    %% now set the zero for the scr recordings
+                    % first cut the unwanted parts based on first and last mbi
+                    last_point  = max(stim_times);
+                    first_point = min(mbi_times);
+                    i           = (time >= (first_point - 15000)) & (time <= (last_point + 20000));
+                    time(~i)    = [];
+                    data(~i)    = [];
+                    % now shift everything so that first sample is zero.
+                    first_sample                            = time(1);
+                    time                                    = time        - first_sample;
+                    pulse_times                             = pulse_times - first_sample;
+                    mbi_times                               = mbi_times   - first_sample;
+                    stim_times                              = stim_times  - first_sample;
                     
-                    event_times                          = stim_times(ii);
-                    event_index                          = event_times;
-                    scr.event(round(event_index),c)      = true;
-                    scr.event_name{c}                    = sprintf('%03d',cond_id);
-                    scr.event_plotting{c}.line_width     = {{'linewidth', 2}};
-                    scr.event_plotting{c}.marker_size    = {{'markersize', 2}};
-                    scr.event_plotting{c}.symbol         = {{'symbol','+'}};
-                    scr.event_plotting{c}.line           = {{'line',{'line' '-'}}};
-                    scr.event_plotting{c}.color          = {{'color',Project.colors(:,cond_id)}};
+                    %% store the stuff
+                    scr.hdr                = a.FileInfo;
+                    scr.time               = time;
+                    scr.y                  = data;
+                    scr.y                  = [scr.y    ; repmat(scr.y(end),25000,1)];
+                    scr.time               = [scr.time ; repmat(scr.time(end),25000,1) + [1:25000]'];
+                    scr.tsample            = length(time);
+                    scr.sampling_period    = (a.head1.sampleinterval/1000);%in ms
+                    scr.sampling_rate      = 1000/scr.sampling_period;%in hertz.
+                    scr.BlockBorders_time  = time([1 end])';
+                    scr.BlockBorders_index = [1 length(scr.y)];
+                    scr.block2phase        = 1;
+                    scr.BlockNames         = {'all'};
+                    scr.path_scr           = path_scr;
+                    %
+                    c = 0;
+                    scr.event = [];
+                    s.paradigm{1}.presentation.dist(ismember(s.paradigm{1}.presentation.dist, [1001 1002])) = 0;
+                    for distance = unique(s.paradigm{1}.presentation.dist)
+                        c                  = c + 1;
+                        scr.event(:,c)     = zeros(length(scr.y),1);
+                        ii                 = find(s.paradigm{1}.presentation.dist == distance);
+                        
+                        %transform distance to cond id
+                        if distance == -135
+                            cond_id = 1;
+                        elseif distance == -90
+                            cond_id = 2;
+                        elseif distance == -45
+                            cond_id = 3;
+                        elseif distance == 0
+                            cond_id = 4;
+                        elseif distance == 45
+                            cond_id = 5;
+                        elseif distance == 90
+                            cond_id = 6;
+                        elseif distance == 135
+                            cond_id = 7;
+                        elseif distance == 180
+                            cond_id = 8;
+                        elseif distance == 1000
+                            cond_id = 9;
+                        elseif distance == 1001
+                            cond_id = 10;
+                        elseif distance == 1002
+                            cond_id = 11;
+                        end
+                        
+                        event_times                          = stim_times(ii);
+                        event_index                          = event_times;
+                        scr.event(round(event_index),c)      = true;
+                        scr.event_name{c}                    = sprintf('%03d',cond_id);
+                        scr.event_plotting{c}.line_width     = {{'linewidth', 2}};
+                        scr.event_plotting{c}.marker_size    = {{'markersize', 2}};
+                        scr.event_plotting{c}.symbol         = {{'symbol','+'}};
+                        scr.event_plotting{c}.line           = {{'line',{'line' '-'}}};
+                        scr.event_plotting{c}.color          = {{'color',Project.colors(:,cond_id)}};
+                    end
+                    scr.event = logical(scr.event);
+                    save(path_scrmat2,'scr');
+                else
+                    load(path_scrmat2)
                 end
-                scr.event = logical(scr.event);
-                
                 
                 
                 
@@ -522,7 +527,7 @@ classdef SCR < handle
             filename(end)         = [];
             filename_results      = [filename '_results.mat'];%produced by ledalab
             filename              = [filename '.mat'];
-            fprintf('filename to ledalab is %s\n',filename);
+            %fprintf('filename to ledalab is %s\n',filename);
             
             if exist(filename_results) == 0
                 %% convert to data format that ledalab understands.

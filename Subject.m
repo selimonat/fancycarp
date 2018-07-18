@@ -72,9 +72,9 @@ classdef Subject < Project
                     s.csp   = s.paradigm{s.default_run}.stim.cs_plus;
                     s.csn   = s.paradigm{s.default_run}.stim.cs_neg;
                 end
-                if any(cellfun(@(i) strcmp(i,'scr'),varargin))
+%                 if any(cellfun(@(i) strcmp(i,'scr'),varargin))
                     s.scr   = SCR(s);
-                end
+%                 end
                 if any(cellfun(@(i) strcmp(i,'pupil'),varargin))
                     s.pupil = Pupil(s.id,1);
                 end
@@ -424,7 +424,7 @@ classdef Subject < Project
             %
             D                 = zscore(self.rating.y_mean);
             NonParametricDiff = mean(D([3 4 5])-D([1 7 8]));
-            if self.selected_fitfun == 8
+            if self.selected_fitfun == 8 || self.selected_fitfun == 55
                 dummy    = [self.id out(:,1:3) abs(out(1,3)) fit.LL fit.FearTuning NonParametricDiff];
                 out      = array2table(dummy,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_absmu' 'rating_LL' 'feartuning_rating' 'rating_nonparam'});
             elseif self.selected_fitfun == 3
@@ -438,7 +438,7 @@ classdef Subject < Project
             out               = fit.params;
             D                 = zscore(self.scr.y_mean);
             NonParametricDiff = mean(D([3 4 5])-D([1 7 8]));
-            if self.selected_fitfun == 8
+            if self.selected_fitfun == 8 || self.selected_fitfun == 55
                 dummy    = [self.id out(:,1:3) abs(out(1,3)) fit.LL fit.FearTuning NonParametricDiff];
                 out      = array2table(dummy,'variablenames',{'subject_id' 'scr_amp' 'scr_fwhm' 'scr_mu' 'scr_absmu' 'scr_LL' 'feartuning_scr' 'scr_nonparam'});
             elseif self.selected_fitfun == 3
@@ -486,7 +486,7 @@ classdef Subject < Project
             out               = fit.params;
             D                 = zscore(self.get_facecircle.(self.eye_data_type));
             NonParametricDiff = mean(D([3 4 5])-D([1 7 8]));
-            if self.selected_fitfun == 8
+            if self.selected_fitfun == 8 || self.selected_fitfun == 55
                 dummy    = [self.id out(:,1:3) abs(out(1,3)) fit.LL fit.FearTuning NonParametricDiff];
                 out      = array2table(dummy,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_mu' 'facecircle_absmu' 'facecircle_LL' 'feartuning_facecircle' 'facecircle_nonparam'});
             elseif self.selected_fitfun == 3
@@ -625,7 +625,7 @@ classdef Subject < Project
                     W2 = W1;
                 end
                 out.raw(16,:) = W2(out.raw(6,:));%store the weights, this will be used for the fixmat
-                %compute two counts based on weights
+                %compute two counts based on weights                
                 tfix          = double(max(fix.fix));
                 limits        = linspace(0,tfix,partition+1)+1;
                 [a b]         = histc(out.raw(10,:),limits);
@@ -634,16 +634,17 @@ classdef Subject < Project
                     out.count(P,:)    = accumarray(out.raw(9,i)',1,[8 1] );%no weight
                     out.countw(P,:)   = accumarray(out.raw(9,i)',W2(out.raw(6,i)'),[8 1] );%posiiton weights
                     out.x(P,:)        = [-135:45:180];
-                    out.ids(P,:)      = repmat(P,1,8);
+                    out.partition_ids(P,:)      = repmat(P,1,8);
                 end
                 %output the standard structure
                 out.y         = self.circconv2(out.(self.eye_data_type),[1 1]/2);
                 out.y_mean    = mean(out.y,1);
+                out.ids       = self.id;                
                 %add these weights to the raw data matrix also.
                 cprintf([0 1 0],'facecircle for partition %03d is now cached...\n',partition);
                 save(filename,'out');
             else
-                fprintf('facecircle for partition %03d loading from cache...\n',partition);
+                %fprintf('facecircle for partition %03d loading from cache...\n',partition);
                 load(filename);
             end
         end
@@ -1071,7 +1072,7 @@ classdef Subject < Project
             C         = self.get_constant_terms;
             % get the data and highpass filter right away.
             fprintf('Loading the data and global correction...\n')
-            load(self.path_spmmat(nrun,2));%any SPM model will contain the VY and the global mean normalized values;
+            load(self.path_spmmat(nrun,3));%any SPM model will contain the VY and the global mean normalized values;
             VY        = SPM.xY.VY;%these are all realigned data, but not yet normalized
             clear SPM;
             %% now we run across all trials and get a specific design matrix for each trial.
@@ -1677,7 +1678,7 @@ classdef Subject < Project
             end
             hold off;
             %             ylim([0 10]);
-            title(sprintf('id:%02d (+:%d)',self.id,self.csp),'fontsize',12);%subject and face id
+            title(sprintf('id:%02d (+:%d)\nAmp: %2.2g GI: %2.2g%',self.id,self.csp,self.rating_param.rating_amp,self.rating_param.rating_nonparam),'fontsize',8);%subject and face id
         end
         function plot_pmf(self,chains)
             % plot the fits
@@ -2583,8 +2584,7 @@ classdef Subject < Project
             model_dir        = fileparts(model_path);
             if ~exist(model_dir);mkdir(model_dir);end
             save(model_path,'cond');
-        end
-        
+        end        
         function analysis_CreateModel32(self)
             %based on model 3, however some minor issues are corrected.
             %microblocks are added to a single regressor with pmods.
@@ -2690,8 +2690,7 @@ classdef Subject < Project
             model_dir        = fileparts(model_path);
             if ~exist(model_dir);mkdir(model_dir);end
             save(model_path,'cond');
-        end
-        
+        end        
         function analysis_CreateModel31(self)
             %based on model 3, however some minor issues are corrected.
             %microblocks are added to a single regressor with pmods.
@@ -2797,8 +2796,7 @@ classdef Subject < Project
             model_dir        = fileparts(model_path);
             if ~exist(model_dir);mkdir(model_dir);end
             save(model_path,'cond');
-        end
-        
+        end        
         function analysis_CreateModel44(self)
             %same as 03 to 33 transition. the width pmod is made more
             %useful here.
@@ -2910,8 +2908,7 @@ classdef Subject < Project
             model_dir        = fileparts(model_path);
             if ~exist(model_dir);mkdir(model_dir);end
             save(model_path,'cond');
-        end
-        
+        end        
         function analysis_CreateModel43(self)
             %same as 44 but with a different base kappa.
             %
@@ -3023,8 +3020,7 @@ classdef Subject < Project
             model_dir        = fileparts(model_path);
             if ~exist(model_dir);mkdir(model_dir);end
             save(model_path,'cond');
-        end
-        
+        end        
         function analysis_CreateModel42(self)
             %same as 44 but with a different base kappa.
             %
@@ -3137,8 +3133,6 @@ classdef Subject < Project
             if ~exist(model_dir);mkdir(model_dir);end
             save(model_path,'cond');
         end
-        
-        
         function analysis_CreateModel04(self)
             %same as 03, but with more pmod, namely damp/dkappa and its
             %time interactions.
@@ -3754,9 +3748,7 @@ classdef Subject < Project
             model_dir        = fileparts(model_path);
             if ~exist(model_dir);mkdir(model_dir);end
             save(model_path,'cond');
-        end
-        
-        
+        end   
         function analysis_CreateModel_RW(self,learning_rate)
             %same as 04, however interaction with ampxtime uses RW derived
             %temporal factors.
@@ -3812,28 +3804,30 @@ classdef Subject < Project
                 if stim_id(ntrial) < 1000
                     pmod(ntrial,1) = 1;%constant term
                     if learning_rate == 0
-                        pmod(ntrial,fi2)    = mbi_id(ntrial);%time
+                        pmod(ntrial,22)    = mbi_id(ntrial);%RW time, to interact with Gau
                     else
-                        pmod(ntrial,2)    = rw_time(mbi_id(ntrial));%time
+                        pmod(ntrial,22)    = rw_time(mbi_id(ntrial));%RW time, to interact with Gau
                     end
-                    cond_id        = mod(stim_id(ntrial)./45+4-1,8)+1;
-                    pmod(ntrial,3) = vM(cond_id);%amp
+                    pmod(ntrial,2)     = mbi_id(ntrial);%linear time
+                    cond_id            = mod(stim_id(ntrial)./45+4-1,8)+1;
+                    pmod(ntrial,3)     = vM(cond_id);%amp
                 end
             end
             %%
             i                = stim_id < 200;%all valid microblocks
             pmod(i,2:3)      = nanzscore(pmod(i,2:3));%zscore time and amplitude.
-            pmod(:,4)        = pmod(:,2).*pmod(:,3);%time x amp
+            pmod(i,22)       = nanzscore(pmod(i,22));%zscore RW time
+            pmod(:,4)        = pmod(:,22).*pmod(:,3);%time x amp
             pmod(i,4)        = nanzscore(pmod(i,4));%zscore also the interaction
             fprintf('STD of different pmods in 33   :\n');
             nanstd(pmod(i,:))
             
             %do the same for invalid blocks.
             i                = stim_id > 200 & stim_id < 800;
-            pmod(i,2:3)      = nanzscore(pmod(i,2:3));
-            pmod(:,4)        = pmod(:,2).*pmod(:,3);%time x amp
-            pmod(i,4)        = nanzscore(pmod(i,4));
-            
+            pmod(i,2:3)      = nanzscore(pmod(i,2:3));%zscore time and amplitude.
+            pmod(i,22)       = nanzscore(pmod(i,22));%zscore RW time
+            pmod(:,4)        = pmod(:,22).*pmod(:,3);%time x amp
+            pmod(i,4)        = nanzscore(pmod(i,4));%zscore also the interaction
            
             %%
             cond             = [];
@@ -3922,16 +3916,16 @@ classdef Subject < Project
             
             fun        = self.selected_fitfun;;%vM or Gau function
             force      = 0;%repeat the analysis or load from cache
-            borders    = 1000;
+            borders    = Project.borders;
             pval       = self.pval;
-            write_path = sprintf('%s/midlevel/rating_fun_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),fun,borders,pval*1000);
+            write_path = sprintf('%s/midlevel/rating_fun_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),Project.selected_fitfun,Project.borders,Project.pval*1000);
             
-            if exist(write_path) && force ==0
+            if exist(write_path) && force == 0
                 %load directly or
                 load(write_path);
-                cprintf([0 1 0 ],'Rating Fit found and loaded successfully for subject %i...\n%s\n',self.id,write_path);
+                %cprintf([0 1 0 ],'Rating Fit found and loaded successfully for subject %i...\n%s\n',self.id,write_path);
                 
-            elseif force == 1 || ~exist(write_path)
+            elseif force  || ~exist(write_path)
                 %compute and save it.
                 fprintf('Fitting Ratings...\n')
                 R                            = self.rating;
@@ -3974,17 +3968,17 @@ classdef Subject < Project
             end
             force   = 0;%repeat the analysis or load from cache
             fun     = self.selected_fitfun;
-            borders = 1000;
+            borders = Project.borders;
             pval    = self.pval;
-            write_path = sprintf('%s/midlevel/facecircle_fun_%i_partition_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),fun,partition,borders,pval*1000);
+            write_path = sprintf('%s/midlevel/facecircle_fun_%i_partition_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),Project.selected_fitfun,partition,Project.borders,Project.pval*1000);
             if exist(write_path) && force == 0
                 %load directly or
                 load(write_path);
-                cprintf([0 1 0 ],'Facecircle Fit found and loaded successfully for subject %i...\n%s\n',self.id,write_path);
+                %cprintf([0 1 0 ],'Facecircle Fit found and loaded successfully for subject %i...\n%s\n',self.id,write_path);
                 
             elseif force == 1 || ~exist(write_path)
                 %compute and save it.
-                fprintf('Fitting Ratings...\n')
+                fprintf('Fitting FaceCircle...\n')
                 R                            = self.get_facecircle(partition);
                 %adapt to what Tuning.m wants to have.
                 
@@ -4016,14 +4010,14 @@ classdef Subject < Project
             %% is there evidence for fear-tuning?
             out = self.IsTuned(out,1);
         end
-        function [out] = fit_pupil(self,fun)
+        function [out] = fit_pupil(self)
             %will load the rating fit (saved in runXXX/rating) if computed
             %otherwise will read the raw ratingdata (saved in
             %runXXX/stimulation) and compute a fit.
             
-            force      = 1;%repeat the analysis or load from cache
-            write_path = sprintf('%s/midlevel/pupil_fun_%i.mat',self.pathfinder(self.id,1),fun);
-            
+            force      = 0;%repeat the analysis or load from cache
+            fun        = Project.selected_fun;            
+            write_path = sprintf('%s/midlevel/pupil_fun_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),Project.selected_fitfun,Project.borders,Project.pval*1000)
             if exist(write_path) && force ==0
                 %load directly or
                 load(write_path);
@@ -4068,14 +4062,14 @@ classdef Subject < Project
             %wise will read the raw ratingdata (saved in runXXX/stimulation)
             %and compute a fit.
             force      = 0;%repeat the analysis or load from cache
-            borders    = 1000;
+            borders    = Project.borders;
             pval       = Project.pval;
             fun        = Project.selected_fitfun;
-            write_path = sprintf('%s/midlevel/scr_fun_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),Project.selected_fitfun,borders,pval*1000);
+            write_path = sprintf('%s/midlevel/scr_fun_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),Project.selected_fitfun,Project.borders,Project.pval*1000);
             if exist(write_path) && force ==0
                 %load directly or
                 load(write_path);
-                cprintf([0 1 0 ],'SCR Fit found and loaded successfully for subject %i...\n%s\n',self.id,write_path);
+                %cprintf([0 1 0 ],'SCR Fit found and loaded successfully for subject %i...\n%s\n',self.id,write_path);
                 
             elseif force == 1 || ~exist(write_path)
                 %compute and save it.
