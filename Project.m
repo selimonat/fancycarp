@@ -3376,20 +3376,23 @@ classdef Project < handle
                 PlotTransparentLine(out.groupfit.x_HD,out.groupfit.fit_HD(:),.35,'k','linewidth',2.5);
             end
             %%
-            t   = self.getgroup_all_param;                       
+            t   = self.getgroup_all_param;
             %%
             titels = {'SCR\nTuning' 'Detection\nError'};
             transparency = .8;
             subs = find(t.pmf_pooled_alpha < 70)';%1:size(t,1)
+            X = t.rating_amp;
+            Y = t.facecircle_amp;
+            Z = t.scr_amp;
             for n = 1:2
                 subplot(2,6,6+[n*3-2 n*3-1 n*3]);
                 hold off;
                 if n == 1
                     for np = subs
-                        h                   = scatter(t.rating_nonparam(np),(t.facecircle_nonparam(np)),1000,'filled','markerfacealpha',transparency);
+                        h                   = scatter(X(np),(Y(np)),1000,'filled','markerfacealpha',transparency);
                         hold on;
-                        h.SizeData          = ((t.scr_nonparam(np))-min(t.scr_nonparam)+1).^4;
-                        h.MarkerFaceColor   = [1-((t.scr_nonparam(np))-min(t.scr_nonparam))./max(t.scr_nonparam-min(t.scr_nonparam)) ((t.scr_nonparam(np))-min(t.scr_nonparam))./max(t.scr_nonparam-min(t.scr_nonparam)) 0];
+                        h.SizeData          = ((Z(np))-min(Z)+1).^4;
+                        h.MarkerFaceColor   = [1-((Z(np))-min(Z))./max(Z-min(Z)) ((Z(np))-min(Z))./max(Z-min(Z)) 0];
                     end
                 elseif n == 2
                     for np = subs
