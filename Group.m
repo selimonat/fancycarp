@@ -58,6 +58,45 @@ classdef Group < Project
             out = length(self.ids);
         end
         %%
+        function plot_grouprelief(self) %LK fix this
+            
+            titles = {'Base','Cond','Test1','Test2','Test1/2'};
+            f=figure;
+            f.Position = [73 410 1763 476];
+            clf;
+            for ph = 1:5
+                for ns = 1:self.total_subjects;
+                    relief(ns,:) = self.subject{ns}.get_reliefmeans(ph,self.allconds);
+                end
+                M = nanmean(relief);
+                S = nanstd(relief)./sqrt(sum(~isnan(relief(:,end)))); %this way we get correct SEM even if missing data from one subject.
+                subplot(1,5,ph)
+                self.plot_bar(self.plotconds,M,S)
+                hold on
+                axis square
+                set(gca,'XTickLabels',{'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'},'XTickLabelRotation',45,'FontSize',12);
+                xlim([min(self.plotconds)-40 max(self.plotconds+40)])
+                title(titles{ph},'FontSize',14)
+                if ph ~= 2
+                    self.fit_rating(ph); % for cond, this doesn't make sense
+                    if self.rating_fit{ph}.pval < .05
+                        plot(self.rating_fit{ph}.x_hd,self.rating_fit{ph}.y_hd,'k-','LineWidth',3)
+                    else
+                        txt= text(min(xlim)+20,M(1)+S(1).*1.2,sprintf('p = %4.3f',self.rating_fit{ph}.pval));
+                        set(txt, 'rotation', 90)
+                        l=line([-135,180],repmat(mean(self.rating_fit{ph}.data.y),1,2));
+                        set(l,'LineWidth',3,'Color','k')
+                    end
+                end
+            end
+            st = supertitle(sprintf('sub %02d, csp = %d ',self.id, self.csp));
+            set(st,'FontSize',16);
+            EqualizeSubPlotYlim(gcf);
+            
+            savefig(gcf,savefigf)
+%                 export_fig(gcf,savebmp)
+%                 export_fig(gcf,savepng,'-transparent')
+        end
         function plot_ratings(self)
             %%
             [y x]  =  GetSubplotNumber(self.total_subjects);
@@ -69,7 +108,106 @@ classdef Group < Project
             end
             EqualizeSubPlotYlim(gcf);
             supertitle(self.path_project,1);
-        end        
+        end      
+        function plot_pain_vs_relief(self,ph)
+            
+            cmap = jet(self.total_subjects);
+            %% plot interpl pain vs relief single trials, single subs as subplot
+            forcexlim = 0;
+            figure(100);clf;
+            for ns = 1:self.total_subjects;
+                [~, pain, relief] = self.subject{ns}.get_pmod_PR(ph);
+                rss(ns) = corr(pain',relief);
+                subplot(6,6,ns);
+                plot(pain,relief','o','Color',cmap(ns,:),'MarkerFaceColor',cmap(ns,:))
+                ls = lsline;set(ls,'Color','k','LineWidth',2)
+                axis square
+                box off
+                if forcexlim
+                xlim([0 100]);
+                end
+                title(sprintf('s%02d, r=%04.2f',self.ids(ns),rss(ns)))
+            end
+            st = supertitle(sprintf('pain vs relief (phase %d)',ph));set(st,'FontSize',14,'Position',[.05 .3 0]);
+            % ks density
+            figure(101);clf;
+            for ns = 1:self.total_subjects;
+                [~, pain, relief] = self.subject{ns}.get_pmod_PR(ph);
+                subplot(6,6,ns);
+                % ksdensity
+%                    if forcexlim
+%                 xlim([0 100]);
+%                 end
+%                 [f,xi] = ksdensity(relief);
+%                 plot(xi,f,'Color',cmap(ns,:))
+%                 UCS = self.subject{ns}.paradigm{ph}.presentation.ucs;
+%                 MxTemp(1) = mean(relief(UCS));
+%                 MxTemp(2) = mean(relief(~UCS));
+%                 l1 = line(repmat(MxTemp(1),1,2),ylim);set(l1,'Color','r','LineWidth',2,'LineStyle',':')
+%                 l2 = line(repmat(MxTemp(2),1,2),ylim);set(l2,'Color','c','LineWidth',2)
+                % UCS and other trials as lines, single ratings as dots
+                
+                  UCS = self.subject{ns}.paradigm{ph}.presentation.ucs;
+                MxTemp(1) = mean(relief(UCS));
+                MxTemp(2) = mean(relief(~UCS));
+                hold on;
+                l1 = line([1 length(relief)],repmat(MxTemp(1),1,2),ylim);set(l1,'Color','r','LineWidth',2,'LineStyle',':');
+                l2 = line([1 length(relief)],repmat(MxTemp(2),1,2),ylim);set(l2,'Color','k','LineWidth',2);
+                scatter(1:length(relief),relief,20,[0 0 0],'filled')
+                ylim([0 100]);
+                xlim([0 length(UCS)])%length trials
+                axis square
+                box off
+                title(sprintf('s%02d, r=%04.2f',self.ids(ns),rss(ns)))
+            end
+            st = supertitle(sprintf('Relief ratings per sub (phase %d)',ph));set(st,'FontSize',14,'Position',[.05 .3 0]);
+            %% plot group, 4 phases, one dot per sub (Mpain vs Mrelief)
+            figure(102);clf;
+            tstr = {'Base','Cond','Test1','Test2'};
+            for ph = 1:4
+                clear pain
+                clear relief
+                for ns = 1:self.total_subjects
+                    [~, pain(ns,:), relief(ns,:)] = self.subject{ns}.get_pmod_PR(ph);
+                    rho(ns,ph) = corr(squeeze(pain(ns,:))',squeeze(relief(ns,:))');
+                end
+                subplot(1,5,ph);
+                scatter(mean(pain(:,:),2),mean(relief(:,:),2),30,cmap,'filled')
+                ls=lsline;set(ls,'LineWidth',2,'Color','k')
+                axis square
+                box off
+                xlabel('Mpain')
+                ylabel('Mrelief')
+                xlim([0 100])
+                ylim([0 100])
+                title(tstr{ph});
+                avecorr(ph) = fisherz_inverse(mean(fisherz(rho(:,ph))));
+                text(50,90,sprintf('mean corr\n r = %04.3f',avecorr(ph)))
+                [rr(ph),pp(ph)] = corr(mean(pain,2),mean(relief,2));
+                text(10,10,sprintf('r_{mean} = %04.3f',rr(ph)))
+            end
+            subplot(1,5,5);
+            for ns = 1:self.total_subjects
+                for ph = 1:4
+                    plot(ph,rho(ns,ph),'o','Color',cmap(ns,:),'MarkerFaceColor',cmap(ns,:))
+                    hold on
+                end
+            end
+            xlim([0 5])
+            hold on;
+            for n = 1:4
+                l=line([n-.3 n+.3],repmat(avecorr(n),1,2));set(l,'LineWidth',2','Color','k')
+            end
+            axis square
+            box off
+            set(gca,'XTick',1:4,'XTicklabel',tstr,'XTickLabelRotation',45)
+            xlabel('phase')
+            ylabel('correlation r')
+            title('subjects'' corr per phase')
+            
+            rhoz=fisherz(rho);
+            for n=1:4;[rrz(n) ppz(n)] = ttest(rhoz(:,n),0);end
+        end
         %%
         function model_ratings(self,run,funtype)
             %will fit to ratings from RUN the FUNTYPE and cache the result
@@ -136,7 +274,7 @@ classdef Group < Project
         function [out labels] = parameterMat(self)
             labels = {'csp_before_alpha' 'csp_after_alpha' 'csn_before_alpha' 'csn_after_alpha' ...
                       'csp_before_beta' 'csp_after_beta' 'csn_before_beta' 'csn_after_beta' ...                     
-                      'csp_improvmt' 'csn_improvmnt' ...
+                      'csp_improvmt' 'csn_improvmnt' ...2
                       'csp_imprvmtn_cted' ...
                       'rating_cond' ... 
                       'rating_test' ... 
@@ -316,9 +454,8 @@ classdef Group < Project
         end
         function Fit2ndlevel(self,nrun,modelnum,namestring,varargin)
             %% 2ndlevel ANOVA
-            
-            dependencies = 0;
-            unequalvar   = 0;
+            dependencies = 1;
+            unequalvar   = 1;
             
             clear2ndlevel = 1;
             versiontag = 0;
@@ -331,6 +468,12 @@ classdef Group < Project
             elseif nargin == 6
                 foldersuffix = varargin{1};
                 versiontag = varargin{2};
+            end
+            %covariate business
+            if modelnum == 12 && ~isempty(strfind(foldersuffix,'_painCOVAR'))
+                [cov,covstrct] = self.get_2ndlevel_covariate(nrun,modelnum);
+            else
+                [cov,covstrct] = self.get_2ndlevel_covariate(nrun,0);
             end
             
             if strcmp(namestring,'CSdiff')
@@ -357,6 +500,18 @@ classdef Group < Project
             elseif strcmp(namestring,'VMdVM_BT')
                  cons2collect = 1:2;
                  nrun = [1 3];
+            elseif strcmp(namestring,'PMOD')
+                cons2collect = 1; %on 1stlevel, only pmod was computed as con. so we just take this.
+            elseif strcmp(namestring,'SBS_down_PMOD')
+                cons2collect = 2;
+            elseif strcmp(namestring,'SBS_up_PMOD')
+                cons2collect = 5;
+            elseif strcmp(namestring,'SBS_down_ME')
+                cons2collect = 1;
+            elseif strcmp(namestring,'SBS_up_ME')
+                cons2collect = 4;
+            elseif strcmp(namestring,'SBS_Plateau')
+                cons2collect = 3;
             end
             
             start = tic;
@@ -397,10 +552,21 @@ classdef Group < Project
             matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca = 0;
             matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova = 0;
             matlabbatch{1}.spm.stats.factorial_design.cov = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
+            if cov == 1
+                matlabbatch{1}.spm.stats.factorial_design.cov = covstrct;
+            else
+                matlabbatch{1}.spm.stats.factorial_design.cov = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
+            end
             matlabbatch{1}.spm.stats.factorial_design.multi_cov = struct('files', {}, 'iCFI', {}, 'iCC', {});
             matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none = 1;
             matlabbatch{1}.spm.stats.factorial_design.masking.im = -Inf;
-            matlabbatch{1}.spm.stats.factorial_design.masking.em = {[self.path_groupmeans '/ave_wCAT_s3_ss_data.nii']};
+            
+            groupmask = [self.path_groupmeans sprintf('/thr20_ave_wCAT_s3_ss_data_N%02d.nii',self.total_subjects)];
+            if exist(groupmask)
+                matlabbatch{1}.spm.stats.factorial_design.masking.em = {groupmask};
+            else
+                matlabbatch{1}.spm.stats.factorial_design.masking.em = {[self.path_groupmeans '/ave_wCAT_s3_ss_data.nii']};
+            end
             matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit = 1;
             matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
             matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm = 1;
@@ -540,7 +706,39 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'test>base';
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = vec;
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
-                
+            elseif strcmp(namestring,'PMOD') && isempty(strfind(foldersuffix,'COVAR'))
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_any';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'pmod';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+            elseif strcmp(namestring,'PMOD') && ~isempty(strfind(foldersuffix,'COVAR'))
+                 n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_pmod';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [0 1];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'pmod';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [0 1];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+            elseif any(strfind(namestring,'SBS'))
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 't';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
             end
             
             
@@ -613,6 +811,7 @@ classdef Group < Project
             %
             % For VMdVM, con images on 1stlevel were skipped for main
             % effect. So just go for contrast 1:Npmod
+            % For PMOD from ratings, same. so just 1:Npmod(which is =1)
             %
             % Here: defining chunks of contrasts to go for (+ N bins is done by loop later).
             if strcmp(namestring,'8conds')
@@ -647,6 +846,14 @@ classdef Group < Project
             elseif strcmp(namestring,'VMdVM_BT')
                 conds2collect = [1 2];
                 nrun = [1 3];
+            elseif strcmp(namestring,'PMOD_rate')
+                 conds2collect = 1;
+            elseif strcmp(namestring,'PMOD_PRind_both')
+                conds2collect = 1:2;
+            elseif strcmp(namestring,'PMOD_PRind_ME')
+                conds2collect = 1;
+            elseif strcmp(namestring,'PMOD_PRind_pmod')
+                conds2collect = 2;
             end
             clear matlabbatch
               
@@ -683,7 +890,7 @@ classdef Group < Project
             matlabbatch{1}.spm.stats.factorial_design.multi_cov = struct('files', {}, 'iCFI', {}, 'iCC', {});
             matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none = 1;
             matlabbatch{1}.spm.stats.factorial_design.masking.im = -Inf;
-            groupmask = [self.path_groupmeans sprintf('/thr20_ave_wCAT_s3_ss_data_%02d.nii',self.total_subjects)];
+            groupmask = [self.path_groupmeans sprintf('/thr20_ave_wCAT_s3_ss_data_N%02d.nii',self.total_subjects)];
             if exist(groupmask)
                 matlabbatch{1}.spm.stats.factorial_design.masking.em = {groupmask};
             else
@@ -958,6 +1165,101 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'dVM_T';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
                 
+             elseif strcmp(namestring,'PMOD_rate')
+               
+                %% F TESTS
+                %eoi
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(self.orderfir);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(allbins)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                     
+                %% T Tests
+                % all bins positive
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = vec1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_allbins';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                       
+                % HRF ramp
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = hrf_Ramp;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_HRF_RampOn';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                  n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = hrf_Face;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_HRF_FaceOn';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                     n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = hrf_Rating;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_HRF_RateOn';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+            elseif strcmp(namestring,'PMOD_PRind_both')
+      
+                %% F TESTS
+                %eoi
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(self.orderfir*2);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(allbins)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+          
+                %eoi ME
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [eye(self.orderfir) square0]; 
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(ME)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                %eoi PMOD
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [square0 eye(self.orderfir)];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(PMOD)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                
+                %% T Tests
+                % all bins positive
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [vec1 vec1];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_allbins';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                % only main effect pos
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [vec1 vec0];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_ME';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+             
+                % only PMOD pos
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [vec0 vec1];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_PRind';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+            elseif strcmp(namestring,'PMOD_PRind_ME')|| strcmp(namestring,'PMOD_PRind_pmod')
+                %% F TESTS
+                %eoi
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(self.orderfir);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(allbins)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                %% T Tests
+                % all bins positive
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = vec1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_allbins';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
             end
             
             nn = n; %final counter
@@ -1104,6 +1406,19 @@ classdef Group < Project
             for nnT = 1:nT
                 disp(['(T) ' matlabbatch{1}.spm.stats.con.consess{nF+nnT}.tcon.name])
             end
-        end
+         end
+         function [covyesno, cov] = get_2ndlevel_covariate(self,run,model_num)
+             covyesno = 0;
+             cov = struct('c', {}, 'cname',{}, 'iCFI', {}, 'iCC', {});
+             switch model_num
+                 case 12
+                     covyesno = 1;
+                     Mpain = nan(1,self.total_subjects);
+                     for sc = 1:self.total_subjects;
+                         Mpain(sc) = nanmean(self.subject{sc}.get_pain(run));
+                     end
+                      cov = struct('c', {Mpain}, 'cname','Mpain', 'iCFI', {1}, 'iCC', {1});
+             end
+         end
     end
 end
