@@ -87,7 +87,7 @@ classdef Tuning < handle
                 L           = [-range(y)*2    0       mean(y)-range(y)*2          .01    ];
                 U           = [range(y)*2     180      mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];%                
                 result.dof    = 3;
-                result.funname= 'gaussian';
+                result.funname= 'gaussian';            
             elseif funtype == 3
                 result.fitfun = @(x,p) self.make_gaussian_fmri_zeromean(x,p(1),p(2));%2 amp fwhm
 
@@ -111,6 +111,17 @@ classdef Tuning < handle
                 U           = [  range(y)*2  15       mean(y)+range(y)*2   std(y)];
                 result.dof    = 3;
                 result.funname= 'vonmises';
+            elseif funtype == 55
+                result.fitfun = @(x,p) self.VonMises_centered(x, p(1), p(2), p(3));
+                L           = [ -range(y)*2   0.1      mean(y)-range(y)*2   0];%amp kappa offset
+                U           = [  range(y)*2   0.1      mean(y)+range(y)*2   std(y)];
+                result.dof    = 3;
+                result.funname= 'vonmises_template';
+                
+                %detect the mean, store it and subtract it
+                CONSTANT    = mean(y);
+                y           = y-CONSTANT;%we are not interested in the baseline, just remove it so we don't need to estimated it.
+                
             elseif funtype == 6
                 result.fitfun = @(x,p) make_gabor1d_ZeroMean(x,p(1),p(2),p(3),p(4));%amp std freq baseline
                 L           = [ -range(y)*2  0    1  -range(y)*2    .01    ];
