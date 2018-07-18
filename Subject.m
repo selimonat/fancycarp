@@ -23,7 +23,7 @@ classdef Subject < Project
     %   Plotter methods plot things as their name suggests.
     %
     %
-    
+=cf    
     properties (Hidden)
         paradigm
         default_run       = 1;
@@ -45,7 +45,7 @@ classdef Subject < Project
     end
     %%
     methods
-        function s = Subject(id)%constructor
+        function s = Subject(id,varargin)%constructor
             fprintf('Subject Constructor for id:%i is called:\n',id);
             s.id               = id;
             s.path             = s.pathfinder(s.id,[]);
@@ -60,7 +60,10 @@ classdef Subject < Project
                     s.paradigm{nrun} = s.get_paradigm(nrun);
                 end
                 s.csp = s.paradigm{s.default_run}.stim.cs_plus;
-                %                 s.scr = SCR(s);
+                if any(cellfun(@(i) strcmp(i,'scr'),varargin))
+                    s.scr   = SCR(s);
+                end
+%                 s.scr = SCR(s);
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path);
                 fprintf('Your path might also be wrong...\n');
@@ -269,6 +272,9 @@ classdef Subject < Project
         function selected = get.selectedface(self)
             selected = self.get_paradigm(5).out.selectedface;
         end
+%         function selected = get.M_rating(self)
+%             selected = nanmean(self.get_pain(
+%         end
     end
     methods %(behavioral analysis)
         function [out, raw, triallist] = get_rating(self,varargin)
@@ -335,7 +341,9 @@ classdef Subject < Project
             end
         end
         
-        function out = get_pain(self,varargin)
+        function [out, trialind] = get_pain(self,varargin)
+            out = [];
+            trialind = [];
             if isempty(varargin)
                 fprintf('No run selected, collecting all runs.\n')
                 for run = 1:4
@@ -348,6 +356,8 @@ classdef Subject < Project
                         else
                             out(:,run) = dummy(1:4);
                         end
+                        findtrial = find(a.presentation.ratepain(:));
+                        trialind{run} = [findtrial' a.presentation.tTrial];
                     catch
                         warning('Problem while loading paradigm at run %d.',run)
                         out(:,run) = nan(4,1);
@@ -368,6 +378,8 @@ classdef Subject < Project
                         else
                             out = dummy(1:4);
                         end
+                        findtrial = find(a.presentation.ratepain(:));
+                        trialind = [findtrial' a.presentation.tTrial];
                     catch
                         warning('Problem while loading paradigm at run %d.',run)
                         out = NaN;
@@ -375,6 +387,14 @@ classdef Subject < Project
                 end
             end
             
+        end
+        function [PRindex,paininterp,relief] = get_pmod_PR(self,run)
+            [pain,paintrials] = self.get_pain(run);
+            [~,relief] = self.get_rating(run);
+            
+            paininterp = interp1(paintrials,pain,1:length(relief),'linear');
+            PRindex = paininterp./100.*relief';
+           %zscoring and nulltrial-kick will be done in PrepareCond method
         end
         function [M, S] = get_reliefmeans(self,run,varargin)
             conds = self.allconds;
@@ -447,7 +467,7 @@ classdef Subject < Project
             
         end
         function plot_ratings(self)
-            force = 1;
+            force = 0;
             savepath = [self.path 'run005/figures/'];
             if ~exist(savepath)
                 mkdir(savepath)
@@ -494,6 +514,16 @@ classdef Subject < Project
 %                 export_fig(gcf,savebmp)
 %                 export_fig(gcf,savepng,'-transparent')
             end
+        end
+        function [delta,temp] = get_ramptemp(self,run)
+            tTrial = self.paradigm{run}.presentation.tTrial;
+            delta = nan(1,tTrial);
+            temp  = nan(1,tTrial);
+            delta(self.paradigm{run}.presentation.ucs)  = self.paradigm{run}.presentation.pain.tonic(1) - self.paradigm{run}.presentation.pain.low(1);
+            delta(~self.paradigm{run}.presentation.ucs) = self.paradigm{run}.presentation.pain.tonic(1) - self.paradigm{run}.presentation.pain.middle(1);
+            temp(self.paradigm{run}.presentation.ucs)   = self.paradigm{run}.presentation.pain.low(1);
+            temp(~self.paradigm{run}.presentation.ucs)  = self.paradigm{run}.presentation.pain.middle(1);
+            
         end
     end
     %%
@@ -1347,7 +1377,12 @@ classdef Subject < Project
                 save(self.path_data(2,'pmf'),'out')
             end
         end
+        function out        = path_scr(self)
+            %the directory where SCR is located
+            out = sprintf('%sscr%sdata.smr',self.pathfinder(self.id,self.default_run),filesep);
+        end
     end
+    
     methods %(plotters)
         function plot_log(self,nrun)
             %will plot the events that are logged during the experiment.
@@ -1465,7 +1500,7 @@ classdef Subject < Project
         function PrepareCondFile(self,run,modelnum)
             
             force = 1;
-            verbalize = 1;
+            verbalize = 0;
             modelpath = self.path_model(run,modelnum);
             
             switch modelnum
@@ -2473,21 +2508,23 @@ classdef Subject < Project
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
                         load(modelpath);
                     end
-                case 10
-                    modelname = 'RampOnsetStick_wmcsf'; %based on 6, onsets are RampOnsets, but we model RampOnsets as stick (but everything else as box)
+                case 9
+                    modelname = 'RampOnsetStick_pmod_rate'; %based on 6, onsets are RampOnsets, but we model RampOnsets as stick (but everything else as box)
                     if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
                     if verbalize == 1
                         fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
                     end
                     if ~exist(modelpath) || force == 1
-                        load(self.path_model(run,7)) %model 7 gives onsets as one regressor
+                        load(self.path_model(run,7)) %model 7 gives onsets as one regressor, On RampDown
                         cond0 = cond;
                         clear cond;
-                        %% merge all onsets in one regressor, don't differentiate UCS and Null.
-                        nreg = 1+sum(ismember(self.condsinphase(run),[500 3000]));
-                        [~,ratings,triallist] = self.get_rating(run);
+                        %% merge all onsets in one regressor, but keep Null as different (bc no face activity)
+                        nreg = {1,[1 3],[1 3],[1 3]}; % only first phase has no UCS at position 3, otherwise we want to merge normal faces and UCS onsets, but keep null as cond(2)
+                        [~,ratings] = self.get_rating(run);
+                        ratings(1) = []; % take nulltrial out before zscoring
+                        ratings = zscore(ratings);
                         onsets = [];
-                        for nr = 1:nreg
+                        for nr = nreg{run}
                             onsets = [onsets(:)' cond0(nr).onset(:)'];
                         end
                         onsets = sort(onsets);
@@ -2497,11 +2534,71 @@ classdef Subject < Project
                         cond(1).tmod = 0;
                         cond(1).pmod = struct('name',{'Relief'},'param',{ratings},'poly',{1});
                         
+                        cond(2) = cond0(2); %Nulltrial seperately
+                        cond(3) = cond0(end-1); %RatePain                        
+                        cond(4) = cond0(end); %RateRelief
                         save(modelpath,'cond')
                     else
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
                         load(modelpath);
                     end
+                case 10
+                    modelname = 'RampOnsetStick_pmod_PR'; %based on 6, onsets are RampOnsets, but we model RampOnsets as stick (but everything else as box) THIS IS FOR FIR, so NO RATINGS
+                    if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                    if verbalize == 1
+                        fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                    end
+                    if ~exist(modelpath) || force == 1
+                        load(self.path_model(run,7)) %model 7 gives Face onsets as one regressor (called RampDown) and Null, UCS, RateRelief, RatePain as others
+                        cond0 = cond;
+                        clear cond;
+                          %% merge all onsets in one regressor, but keep Null as different (bc no face activity)
+                        nreg = {1,[1 3],[1 3],[1 3]}; % only first phase has no UCS at position 3, otherwise we want to merge normal faces and UCS onsets, but keep null as cond(2)
+                    
+                        PRindex = self.get_pmod_PR(run);
+                        PRindex(1) = []; %exclude nulltrial.
+                        PRindex = zscore(PRindex);
+                        onsets = [];
+                        for nr = nreg{run}
+                            onsets = [onsets(:)' cond0(nr).onset(:)'];
+                        end
+                        onsets = sort(onsets);
+                        cond(1).name = 'RampDown';
+                        cond(1).onset = onsets;
+                        cond(1).duration = zeros(1,length(onsets));
+                        cond(1).tmod = 0;
+                        cond(1).pmod = struct('name',{'PR_ind'},'param',{PRindex},'poly',{1});
+                        
+                        cond(2) = cond0(2); %Nulltrial seperately
+                        cond(3) = cond0(end-1); %RatePain                        
+                        cond(4) = cond0(end); %RateRelief
+                        save(modelpath,'cond')
+%                         %% version for FIR without RatePain or RateRelief
+%                         %need to merge RampOnset and UCS for that.
+%                         nreg = 1+sum(ismember(self.condsinphase(run),[500 3000])); %we need to know this to find RateRelief and RatePain behind Onsets, Null, UCS.
+%                         if run > 1
+%                             nreg2take = [1 3];
+%                             onsets = [cond0(1).onset(:)' cond0(3).onset(:)'];
+%                         else
+%                             onsets = cond0(1).onset;
+%                         end
+%                         
+%                         PRindex = self.get_pmod_PR(run);
+%                         PRindex(1) = []; %exclude nulltrial.
+%                         onsets = sort(onsets);
+%                         cond(1).name = 'RampDown';
+%                         cond(1).onset = onsets;
+%                         cond(1).duration = zeros(1,length(onsets));
+%                         cond(1).tmod = 0;
+%                         cond(1).pmod = struct('name',{'PR_ind'},'param',{PRindex},'poly',{1});
+%                         
+%                         cond(2) = cond0(2);
+%                         save(modelpath,'cond')
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                    
                 case 11
                      modelname = 'FaceOnset_NoCool'; %based on model_01, onsets are FaceOnsets, we model them as Stick, and kick the Cooldownphase
                     if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
@@ -2533,20 +2630,328 @@ classdef Subject < Project
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
                         load(modelpath);
                     end
-            end
-        end
-        function out = get_pmod_rating(self,nrun,cond)
-            if cond == 999 %turning thermode off in the end -  no relief rating but pain before and after turning off.
-                if self.id == 4
-                    finalrelief = 0;
-                elseif self.id == 15 && nrun == 4;
-                    finalrelief = NaN;
-                else
-                    finalrelief = -diff(self.get_paradigm(nrun).log.ratings.pain(end-1:end,3)); %diff of painratings when thermode is on vs off in the end
-                end
-                out = struct('name',{'999'},'param',{finalrelief},'poly',1);
-            else
-                out = struct('name',{num2str(cond)},'param',{self.get_rating(nrun,cond).y},'poly',1);
+                case 12
+                    modelname = 'FaceOnsetStick_pmod_rate'; %based on 6, onsets are RampOnsets, but we model RampOnsets as stick (but everything else as box)
+                    if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                    if verbalize == 1
+                        fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                    end
+                    if ~exist(modelpath) || force == 1
+                        load(self.path_model(run,11)) %model 11 has face onsets without Cooldown phase
+                        cond0 = cond;
+                        clear cond;
+                         %% merge all onsets in one regressor, but keep Null as different (bc no face activity)
+                        nreg = find(self.condsinphase(run)~=3000); %
+                        [~,ratings] = self.get_rating(run);
+                        ratings(1) = []; % take nulltrial out before zscoring
+                        ratings = zscore(ratings);
+                        onsets = [];
+                        for nr = nreg(:)'
+                            onsets = [onsets(:)' cond0(nr).onset(:)'];
+                        end
+                        onsets = sort(onsets);
+                        cond(1).name = 'RampDown';
+                        cond(1).onset = onsets;
+                        cond(1).duration = zeros(1,length(onsets));
+                        cond(1).tmod = 0;
+                        cond(1).pmod = struct('name',{'Relief'},'param',{ratings},'poly',{1});
+                        
+                        cond(2) = cond0(self.condsinphase(run)==3000); %Nulltrial seperately
+                        cond(3) = cond0(end-1); %RatePain                        
+                        cond(4) = cond0(end); %RateRelief
+                        save(modelpath,'cond')
+                       
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 13
+                    modelname = 'FaceOnsetStick_pmod_PR'; %based on 6, onsets are RampOnsets, but we model RampOnsets as stick (but everything else as box)
+                    if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                    if verbalize == 1
+                        fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                    end
+                    if ~exist(modelpath) || force == 1
+                        load(self.path_model(run,11)) %model 7 gives onsets as one regressor
+                        cond0 = cond;
+                        clear cond;
+                        %% merge normal facetrials and UCS trials in one regressor, but keep Nulltrial seperate
+                        nreg = find(self.condsinphase(run)~=3000); %only first phase has no UCS at position 3, otherwise we want to merge normal faces and UCS onsets, but keep null as cond(2)
+                    
+                        PRindex = self.get_pmod_PR(run);
+                        PRindex(1) = []; %exclude nulltrial.
+                        PRindex = zscore(PRindex);
+                        onsets = [];
+                        for nr = nreg(:)'
+                            onsets = [onsets(:)' cond0(nr).onset(:)'];
+                        end
+                        onsets = sort(onsets);
+                        cond(1).name = 'RampDown';
+                        cond(1).onset = onsets;
+                        cond(1).duration = zeros(1,length(onsets));
+                        cond(1).tmod = 0;
+                        cond(1).pmod = struct('name',{'PR_ind'},'param',{PRindex},'poly',{1});
+                          
+                        cond(2) = cond0(self.condsinphase(run)==3000); %Nulltrial seperately
+                        cond(3) = cond0(end-1); %RatePain                        
+                        cond(4) = cond0(end); %RateRelief
+                        save(modelpath,'cond')
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 15
+                    modelname = 'RampDown_6sec_plateau_Rate5'; %based on 6, onsets are RampOnsets
+                    if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                    if verbalize == 1
+                        fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                    end
+                    if ~exist(modelpath) || force == 1
+                        load(self.path_model(run,6)) %model 7 gives onsets as one regressor
+                        cond0 = cond;
+                        clear cond;
+                        %% merge normal facetrials and UCS trials in one regressor, but keep Nulltrial seperate
+                        nreg = find(self.condsinphase(run)~=3000); %only first phase has no UCS at position 3, otherwise we want to merge normal faces and UCS onsets, but keep null as cond(2)
+                        pmod = double(self.paradigm{run}.presentation.ucs(2:end));
+                        
+                        onsets = [];
+                        for nr = nreg(:)'
+                            onsets = [onsets(:)' cond0(nr).onset(:)'];
+                        end
+                        onsets = sort(onsets);
+                        cond(1).name = 'RampDown';
+                        cond(1).onset = onsets;
+                        cond(1).duration = 6*ones(1,length(onsets))./self.TR;
+                        cond(1).tmod = 0;
+                        cond(1).pmod = struct('name',{'PR_ind'},'param',{pmod},'poly',{1});
+                        
+                        cond(2) = cond0(self.condsinphase(run)==3000); %Nulltrial seperately
+                        cond(2).duration = 6./self.TR;
+                        cond(3) = cond0(end-1); %RatePain
+                        cond(4) = cond0(end); %RateRelief
+                        save(modelpath,'cond')
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 16
+                    modelname = 'RampDown_11sec_plateau'; %based on 6, onsets are RampOnsets
+                    if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                    if verbalize == 1
+                        fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                    end
+                    if ~exist(modelpath) || force == 1
+                        load(self.path_model(run,6)) %model 6 gives onsets as one regressor
+                        cond0 = cond;
+                        clear cond;
+                        %% merge normal facetrials and UCS trials in one regressor, but keep Nulltrial seperate
+                        nreg = find(self.condsinphase(run)~=3000); %only first phase has no UCS at position 3, otherwise we want to merge normal faces and UCS onsets, but keep null as cond(2)
+                        
+                        pmod = double(self.paradigm{run}.presentation.ucs(2:end));
+                        
+                        onsets = [];
+                        for nr = nreg(:)'
+                            onsets = [onsets(:)' cond0(nr).onset(:)'];
+                        end
+                        onsets = sort(onsets);
+                        cond(1).name = 'RampDown';
+                        cond(1).onset = onsets;
+                        cond(1).duration = 11*ones(1,length(onsets))./self.TR;
+                        cond(1).tmod = 0;
+                        cond(1).pmod = struct('name',{'highlow'},'param',{pmod},'poly',{1});
+                        
+                        cond(2) = cond0(self.condsinphase(run)==3000); %Nulltrial seperately
+                        cond(2).duration = 11./self.TR;
+                        cond(3) = cond0(end-1); %RatePain
+                        save(modelpath,'cond')
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 17
+                      modelname = 'RampDown_11sec_plateau_pmodexp'; %based on 6, onsets are RampOnsets
+                    if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                    if verbalize == 1
+                        fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                    end
+                    if ~exist(modelpath) || force == 1
+                        load(self.path_model(run,6)) %model 7 gives onsets as one regressor
+                        cond0 = cond;
+                        clear cond;
+                        %% merge normal facetrials and UCS trials in one regressor, but keep Nulltrial seperate
+                        nreg = find(self.condsinphase(run)~=3000); %only first phase has no UCS at position 3, otherwise we want to merge normal faces and UCS onsets, but keep null as cond(2)
+                      
+                        pmod = self.get_ramptemp(run);
+                        pmod(1) = [];
+                        
+                        onsets = [];
+                        for nr = nreg(:)'
+                            onsets = [onsets(:)' cond0(nr).onset(:)'];
+                        end
+                        onsets = sort(onsets);
+                        cond(1).name = 'RampDown';
+                        cond(1).onset = onsets;
+                        cond(1).duration = 6*ones(1,length(onsets))./self.TR;
+                        cond(1).tmod = 0;
+                        cond(1).pmod = struct('name',{'delta'},'param',{pmod},'poly',{1});
+                        
+                        cond(2) = cond0(self.condsinphase(run)==3000); %Nulltrial seperately
+                        cond(3) = cond0(end-1); %RatePain
+                        cond(4) = cond0(end); %RateRelief
+                        save(modelpath,'cond')
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 18                    
+                    
+                    modelname = 'SBS_Schlern'; %RampDown, Boxvcar Plateau, RampUp again..
+                    
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        if verbalize == 1
+                            fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                        end
+                        L               = self.get_log(run);
+                        %sort things according to time rather than order of being logged
+                        [~,i]           = sort(L(:,1),'ascend');
+                        L               = L(i,:);
+                        % delete all the events that are after the last scanning..
+                        scan_times      = L(find(L(:,2) == 0),1);
+                        first_scan_time = min(scan_times);
+                        last_scan_time  = max(scan_times);
+                        L(L(:,1) < first_scan_time,:) = [];
+                        L(L(:,1) > last_scan_time,:)  = [];
+                        L(:,1)                        = L(:,1) - first_scan_time; % correct time logging so that it's referring to the first scan as 0. (later first col will be from > dummy trials)
+                        
+                        % correct timings for dummy scans
+                        L(1:6,:) = []; %let dummies go
+                        first_real_scan = L(1,1);
+                        L(:,end+1) = L(:,1); %store it so we still know the original timing
+                        L(:,1) = L(:,1)-first_real_scan;
+                        
+                        %event types are as follows:
+                        %         %Pulse Detection      :     0    info: NaN;
+                        %         %Ramp down Onset      :     4    info: ror
+                        %         %Treatment Plateau    :     5    info: temp
+                        %         %Ramp back onset      :     6    info: ror;
+                        %         %Rate pain Onset		:     9    info: nTrial;
+                        %         %Rate treat Onset     :     11   info: nTrial;
+                        %         %Rate treat Offset    :     12   info: nTrial;
+                        %         %Tonic Pain reached   :     16   info: nTrial
+                        %         %Fixcross Jump        :     17   info:
+                        %         %Cooldown end         :     18   info:
+                        %         %dummy fixflip        :     22   info: NaN;
+                        %         planned trialstart    :     30   info: NaN
+                        %         planned trialend      :     31   info: NaN
+                        
+                        
+                        names = {'VAS','Text','Pulse','Tracker+','CrossTonic','CrossTreat','RampDown','Plateau','RampBack','Keys','TrackerOff','RatePainOn','RatePainOff','RateReliefOn','RateReliefOff','FaceOn','FaceOff','FaceStimFX','PlateauReached','FixJump','CoolDown','TrialStart','TrialEnd'};
+                        condnum = [-2 -1 0 1:18 30 31];
+                        
+                        TR = Project.TR;
+                        scan_times          = L(L(:,2) == 0,1);%find all scan events and get their times
+                        scan_id             = 1:length(scan_times);%label pulses with increasing numbers, assumes no pulses is missing.
+                        
+                        %% get onsets
+                        
+                        conds = [4 5 6 9];% (13 = face is gone) 4 = RampDown, 11 = RateTreat, 9=RatePain 18 = CoolDown at very end.
+                        if verbalize ==1
+                            fprintf('Considering the following conditions:\n')
+                            for c = conds
+                                fprintf('%s\n',names{condnum==c})
+                            end
+                        end
+                        
+                        
+                        all_events          = find(ismember(L(:,2),conds));
+                        LL = L(all_events,:);
+                        
+                        if verbalize ==1
+                            fprintf('Overall we have %d events.\n',length(all_events))
+                        end
+                        
+                        %Conds
+                        
+                        %1 -135
+                        %2 -90
+                        %3 -45
+                        %4  CSP
+                        %5 45
+                        %6 90
+                        %7 135
+                        %8 180
+                        %9 UCS
+                        %10 Null
+                        %11 RatePain
+                        %12 RateRelief
+                        %13 BaselineEnd
+                        
+                        RampdownOnsets   = LL(LL(:,2)==4,1);RampdownOnsets(end) = []; %kick Cooldown already here
+                        PlateauReached     = LL(LL(:,2)== 5,1);
+                        RampupOnsets     = LL(LL(:,2)== 6,1);
+                        RateReliefOnsets = LL(LL(:,2)==11,1);
+                        RatePainOnsets   = LL(LL(:,2)==9,1);RatePainOnsets(end) = [];
+                        
+                        FaceTrials = setdiff(unique(L(L(:,2)==13,3)),3000);
+                        %FaceTrials RampDown
+                        cond(1) =  struct('name',{'RampDown'},'onset',{RampdownOnsets(2:end)},'duration',{zeros(1,length(RampdownOnsets(2:end)))});
+                        %FaceTrials Plateau
+                        cond(2) =  struct('name',{'Plateau'},'onset',{RampdownOnsets(2:end)},'duration',{11*ones(1,length(RampdownOnsets(2:end)))});
+                        %FaceTrials RampUp
+                        cond(3) =  struct('name',{'RampUp'},'onset',{RampupOnsets(2:end)},'duration',{zeros(1,length(RampdownOnsets(2:end)))});
+                        
+                        %NullTrial RampDown
+                        cond(4) =  struct('name',{'RampDown0'},'onset',{RampdownOnsets(1)},'duration',{0});
+                        %NullTrial Plateau
+                        cond(5) =  struct('name',{'Plateau0'},'onset',{RampdownOnsets(1)},'duration',{11});
+                        %NullTrial RampUp
+                        cond(6) =  struct('name',{'RampUp0'},'onset',{RampupOnsets(1)},'duration',{0});
+                        
+                        % Rate Pain
+                        RPOffset =  L(L(:,2)==10,1); RPOffset(end) =[];%Cooldown rating, we don't need that
+                        RPdur =  RPOffset-RatePainOnsets; 
+                        cond(7) = struct('name',{'RatePain'},'onset',{RatePainOnsets},'duration',RPdur);
+                        
+                        if self.id == 6
+                            corrdur = [1.5 2 2 1]; %scanner stopped too early, during last rating.
+                            cond(end).duration(end) = corrdur(run);
+                        elseif self.id == 32 && run == 1
+                            cond(end).onset(end-1:end) = [];
+                            cond(end).duration(end-1:end) = [];
+                        end
+                        
+%                         % Rate Relief
+%                         cc = cc+1;
+%                         cond(cc).name     = 'RateRelief';
+%                         cond(cc).onset    = RateReliefOnsets;
+%                         cond(cc).duration = ones(1,length(cond(cc).onset)).*5;
+%                         if self.id == 32 && run ==1
+%                             cond(cc).duration(end) = 4; % scanner stopped here
+%                         end
+%                         if verbalize ==1
+%                             fprintf('Number of onsets for RateRelief: %d.\n',length(cond(cc).onset))
+%                         end
+                     
+                        
+                        %% housekeeping
+                        for counter = 1:length(cond)
+                            cond(counter).onset    = cond(counter).onset./TR;
+                            cond(counter).duration = cond(counter).duration./TR;
+                            cond(counter).tmod      = 0;
+                            cond(counter).pmod      = struct('name',{},'param',{},'poly',{});
+                        end
+                        
+                        % add pmod of ucs or not to RampUp and RampDown.
+                        pmodinfo = double(self.paradigm{run}.presentation.ucs(2:end));
+                        cond(1).pmod      = struct('name',{'TempDiff'},'param',{pmodinfo},'poly',{1});
+                        cond(3).pmod      = struct('name',{'TempDiff'},'param',{pmodinfo},'poly',{1});
+                        
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
             end
         end
         function [wmcsf, wm, csf] = get_wmcsf_epi(self,nrun)
@@ -2689,6 +3094,11 @@ classdef Subject < Project
                 pmod_VM = 1;
                 onset_modelnum = 7;
                 All1Regr  = 1;
+            end
+            if model_num == 6
+                pmod_Rate = 1;
+                onset_modelnum = 9;
+                All1Regr = 1;
             end
             
             spm_dir  = strrep(self.dir_spmmat(nrun(1),model_num),'chrf_00',sprintf('FIR_%02d_10conds_00',FIRparam));
@@ -2878,15 +3288,15 @@ classdef Subject < Project
             spm_jobman('run', matlabbatch);
             %
             %normalize the beta images right away
-            beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
-            self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
-            beta_images = self.path_beta(nrun(1),model_num,'wCAT_');%smooth the normalized images.
-            self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
-            %delete wCAT files, keep s6_wCAT
-            fprintf('Deleting unsmoothed normalized files..\n');
-            for n = 1:size(beta_images,1)
-                system(sprintf('rm %s',beta_images(n,:)));
-            end
+%             beta_images = self.path_beta(nrun(1),model_num,'');%'' => with no prefix
+%             self.VolumeNormalize(beta_images);%normalize them ('w_' will be added)
+%             beta_images = self.path_beta(nrun(1),model_num,'wCAT_');%smooth the normalized images.
+%             self.VolumeSmooth(beta_images);%('s_' will be added, resulting in 's_ww_')
+%             %delete wCAT files, keep s6_wCAT
+%             fprintf('Deleting unsmoothed normalized files..\n');
+%             for n = 1:size(beta_images,1)
+%                 system(sprintf('rm %s',beta_images(n,:)));
+%             end
         end
         function [total_cons] = CreateContrasts(self,nrun,model_num)
             
@@ -2901,8 +3311,8 @@ classdef Subject < Project
             
             if model_num  == 2 %needs special treatment because both face and relief onset are modelled..
                 %
-            elseif ismember(model_num,[7 8])
-                load([self.dir_spmmat(1,model_num) 'SPM.mat'])
+            elseif ismember(model_num,[7 8 9 10 12 13 15 16 17]) %% models with pmods, so we will skip the main effect / 1st regressor.
+                load([self.dir_spmmat(nrun(1),model_num) 'SPM.mat'])
                 for pmod = 1:size(SPM.Sess.U(1).P,2) %loop through the pmods we defined
                     
                     vec = zeros(1,self.get_Nbetas(nrun,model_num)-1); %-1 so that phase constant is left out for now.
@@ -2912,6 +3322,22 @@ classdef Subject < Project
                     n = n+ 1;
                     name{n} = SPM.Sess.U(1).P(pmod).name;
                     vec(1+pmod) = 1; %skip the main effect
+                    if nrun == 3  && self.id ~= 15
+                        vec = repmat(vec,1,2);
+                    end
+                    convec{n} = vec;
+                end
+            elseif ismember(model_num,18)
+                regr2take = 1:5;
+                regrnames = {'MEdown','PMODdown','Plateau','MEup','PMODup'};
+                for regr = regr2take(:)' %loop through the regressors we might want to look at @ 2ndlevel
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num)-1); %-1 so that phase constant is left out for now.
+                    if nrun == 3 && self.id ~= 15
+                        vec = zeros(1,self.get_Nbetas(nrun,model_num)./2-1);
+                    end
+                    n = n+ 1;
+                    name{n} = regrnames{n};
+                    vec(regr) = 1; %put 1 to nth regressor
                     if nrun == 3  && self.id ~= 15
                         vec = repmat(vec,1,2);
                     end
@@ -3051,12 +3477,15 @@ classdef Subject < Project
             vec0 = zeros(1,(Nbetas./nsessions)-1); %-1 so that phase constant is left out for now.
    
               
-            if ismember(model_num,[5]) %models with PMOD
+            if ismember(model_num,[5]) %models with PMOD VonMisesonsetsofint(onsetsofint(:,2)==lookup(1,n),1)
                 condnames = {'FaceMain','VM','dVM'};
                 conds2take = {2:3,[],2:3};  
             elseif model_num == 3
-                condnames = {'FaceMain','Rating'};
+                condnames = {'FaceMain','Rating'};%Ratings as pmod included
                 conds2take = {2 2 2};  
+            elseif model_num == 6 %pmod PRind, want to look at both ME and PMOD, so taking 1:2
+                condnames = {'FaceMain','PRind'};%Ratings as pmod included
+                conds2take = {1:2,1:2,1:2}; %
             else
                 if nrun == 2
                     condnames = {'180','500'};
