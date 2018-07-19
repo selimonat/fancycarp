@@ -84,12 +84,13 @@ classdef Project < handle
     properties (Hidden,Constant)
         atlas2mask_threshold  = 30;%where ROI masks are computed, this threshold is used.        
         %voxel selection
-        selected_smoothing    = 6;%smoothing for selection of voxels;
+        selected_smoothing    = 10;%smoothing for selection of voxels;
         selected_model        = 3;%fmri model (see CreateModel)
         selected_betas        = 1:4
         selected_ngroup       = 1;
         %
-        selected_fitfun       = 55;%3fixed gaussian (3), vonmises (8); vonMises template (55)
+        scale_feartunings     = 0;
+        selected_fitfun       = 8;%3fixed gaussian (3), vonmises (8); vonMises template (55)
         pval                  = .05;%tuning presence
         borders               = 1000;
         eye_data_type         = 'countw';
@@ -556,9 +557,7 @@ classdef Project < handle
             spacetime.name   = [spacetime1.name spacetime2.name];                                                                                    
         end
         function [spacetime_rsa] = getgroup_bold_spacetime_rsa(self,ngroup,rois);
-                   
-            smoothme= 1;
-            sk      = self.selected_smoothing;                            
+                               
             list    = self.get_selected_subjects(ngroup,1).list;            
             %%
             betas                                                 = reshape(1:715,65,11)';
@@ -569,24 +568,15 @@ classdef Project < handle
             roic = 0;
             for roi = rois
                 roic    = roic + 1;
-                R       = ROI('roi_based',roi,'chrf_0_0_mumfordian',0,betas(:)',list,sk);
-                %% rearrange
+                R       = ROI('roi_based',roi,'chrf_0_0_mumfordian',0,betas(:)',list,self.selected_smoothing);
+                % rearrange
                 data_ori = R.evoked_pattern;
                 data_ori = reshape(data_ori,[size(data_ori,1) 59 8]);%[voxel mbi condition];
-                %% slight smoothing
-                if smoothme
-                    kernel = [.5 1 .5 ];
-                    kernel = kernel./sum(kernel);
-                    for vox = 1:size(data_ori,1)
-                        dummy             = squeeze(data_ori(vox,:,:));
-                        dummy             = Project.circconv2(dummy,kernel);
-                        data_ori(vox,:,:) = dummy;
-                    end
-                end
+                
                 %% get the similarity matrix for each mbi, same representation as the spacetime matrices
                 for N = 1:size(data_ori,2)
                     data                        = squeeze(data_ori(:,N,:));
-                    spacetime_rsa.d(N,:,roic)   = squareform_force(corr(data));
+                    spacetime_rsa.d(N,:,roic)   = pdist(data','correlation');
                 end
                 spacetime_rsa.name{roic} = R.name;
             end
@@ -1281,7 +1271,7 @@ classdef Project < handle
         function                   getgroup_meanepi(self,criteria)
             %computes a mean EPI image based on subject pool defined by
             %CRITERIA
-            filename = sprintf('%smidlevel/%s/%02d.nii',self.path_project,'getgroup_meanEPI',criteria)            
+            filename = sprintf('%smidlevel/%s/%02d.nii',self.path_project,'getgroup_meanEPI',criteria)
             if exist(filename) == 0 | 0
                 if exist(fileparts(filename)) == 0
                     mkdir(fileparts(filename))
@@ -1289,7 +1279,7 @@ classdef Project < handle
                 p = [];
                 for ns = self.get_selected_subjects(criteria).list
                     s = Subject(ns);
-%                     s.VolumeNormalize(s.path_meanepi);
+                    %                     s.VolumeNormalize(s.path_meanepi);
                     F = regexprep(s.path_meanepi,'meandata.nii','wCAT_meandata.nii');
                     p = [ p ; F];
                 end
@@ -1301,9 +1291,43 @@ classdef Project < handle
                 
             else
                 load(filename)
-            end            
-        end        
-    end
+            end
+        end
+        function T = extract_coordinates(self,SPM,xSPM,varargin)
+            %given an SPM and xSPM, we exctract coordinates and gaussian
+            %amplitude parameter for either all the coordinates listed on
+            %the table or a selected set of them as specified in VARARGIN.            
+                        
+            filename = sprintf('%smidlevel/SPM_table_Coordinates_%s.mat',self.path_project,DataHash([getByteStreamFromArray(xSPM) getByteStreamFromArray(SPM) getByteStreamFromArray(varargin) ]));            
+            if ~exist(filename)
+                t           = spm_list('table',xSPM);
+                if nargin == 3
+                    coors       = [t.dat{:,end}];
+                else
+                    coors       = [t.dat{varargin{1},end}];
+                end
+                %%
+                name = {};
+                D    = [];
+                c=0;
+                for coor = coors
+                    c = c+1;
+                    dummy               = self.get_atlaslabel(coor(:));
+                    %                 name                = [name sprintf('%03d',c)]%regexprep(regexprep([dummy.name{1}(6:end) '_' randsample('abcdefghi',1)],'\.',''),'_','')]
+                    tsubject            = max(SPM.xX.I(:,1));
+                    treg                = max(SPM.xX.I(:,2));
+                    XYZvox              = self.get_mm2vox([coor(:) ;1],SPM.xCon(xSPM.Ic).Vspm);
+                    data                = reshape(spm_get_data([SPM.xY.VY],XYZvox(:)),tsubject,treg);
+                    D                   = [D data(:,3)];
+                end
+                %
+                T = array2table(D);
+                save(filename,'T')
+            else
+                load(filename);
+            end
+        end
+        end
     methods         
         function out                        = SecondLevel_Mask(self,subject_group);
             %constructs a second-level mask based on normalized mask images
@@ -1894,13 +1918,19 @@ classdef Project < handle
             view(-90,0)
             SaveFigure(sprintf('~/Desktop/fearamy_figure2_group_%02d_side_%02d_inflated_%02d.png',group,2,inflated),'-r300');pause(.5);
         end
-        function plot_ss_ratings(self)
+        function plot_ss_ratings(self,varargin)
             figure;set(gcf,'position',[5           1        1352        1104]);
             %will plot all single subject ratings in a big subplot
             tsubject = length(self.subject_indices);
             [y x]    = GetSubplotNumber(tsubject);
-            c =0;
-            for ns = self.subject_indices                
+            c =0;            
+            if ~isempty(varargin)
+                T     = self.getgroup_all_param;
+                [~,i] = sort(T.(varargin{1}));
+            else
+                i = 1:tsubject;
+            end
+            for ns = self.subject_indices(i)
                 c        = c+1;
                 s        = Subject(ns);
                 subplot(y,x,c)                
@@ -1922,7 +1952,7 @@ classdef Project < handle
             end
             supertitle(self.path_project,1)
         end
-        function plot_ss_facecircle(self,partition)
+        function plot_ss_facecircle(self,partition,varargin)
             if nargin < 2
                 partition = 1
             end
@@ -1930,8 +1960,17 @@ classdef Project < handle
             %will plot all single subject ratings in a big subplot
             tsubject = length(self.subject_indices);
             [y x]    = GetSubplotNumber(tsubject);
+            
+            
+            if ~isempty(varargin)
+                T     = self.getgroup_all_param;
+                [~,i] = sort(T.(varargin{1}));
+            else
+                i = 1:tsubject;
+            end
+            
             c =0;
-            for ns = self.subject_indices                
+            for ns = self.subject_indices(i)
                 c        = c+1;
                 s        = Subject(ns);
                 subplot(y,x,c)                
@@ -2532,7 +2571,7 @@ classdef Project < handle
               st.centre(1:3)
               i                  = find(sum(abs(xSPM.XYZmm - repmat(st.centre(1:3),1,size(xSPM.XYZmm,2)))) == 0);
               clusters           = spm_clusters(xSPM.XYZ);              
-              XYZvox             = xSPM.XYZ(:,ismember(clusters,clusters(i)))
+              XYZvox             = xSPM.XYZ(:,ismember(clusters,clusters(i)));
               D                  = spm_get_data(spm_vol(files),XYZvox);
 %               D                 = spm_get_data(spm_vol(betas),XYZvox);
               %
@@ -2555,38 +2594,16 @@ classdef Project < handle
                   %
                   fieldy = {'facecircle_nonparam'};
                   fieldx = {'rating_nonparam'};
-%                   X      = linspace(min(t.(fieldx{1})),max(t.(fieldx{1})),100);
-%                   Y      = linspace(min(t.(fieldy{1})),max(t.(fieldy{1})),100);
-                  X      = linspace(-2,2,100);
-                  Y      = linspace(-2,2,100);
-                  [x y]  = meshgrid(X,Y);
-%                   m      = fitlm(t,[fieldz{n} '~ 1 + ' fieldx{1} '+' fieldy{1} ])
-                  bla = 3
-                  if bla==1
-                    m      = fitlm(t,[fieldz{n} '~ 1 + ' fieldy{1} '^2' ])
-                    C      = m.Coefficients.Estimate;
-                    Yhat   = [ones(length(x(:)),1) x(:) x(:).^2]*[C(1);C(2);C(3)];
-                  elseif bla == 2
-                      m      = fitlm(t,[fieldz{n} '~ 1 + ' fieldx{1} '+' fieldy{1} ])
-                      C      = m.Coefficients.Estimate;
-                      Yhat   = [ones(length(x(:)),1) x(:) y(:)]*[C(:)];
-                  elseif bla == 3
-                      m      = fitlm(t,[fieldz{n} '~ 1 + ' fieldx{1} '*' fieldy{1} ])
-                      C      = m.Coefficients.Estimate;
-                      Yhat   = [ones(length(x(:)),1) x(:) y(:) x(:).*y(:)]*[C(:)];
-                  end
-                  
-%                   m      = fitlm(t,[fieldz{n} '~ 1 + ' fieldy{1}  ])
-                                                      
-                  imagesc(X,Y,reshape(Yhat,100,100));
-                  hold on;
-                  axis xy;
+
+
+                  [m]=scatter_stat(t,{fieldz{n},fieldx{1},fieldy{1}})
+                  hold on
                   pos=get(gca,'position');
                   colorbar;                  
                   set(gca,'position',pos);
                   
-                  Z     =   Vectorize(Scale(t.(fieldz{n})));
-                  scatter(t.(fieldx{1}),t.(fieldy{1}),(1+Z*3).^4,[Z(:) zeros(length(Z),1) 1-Z(:)],'filled');                  
+%                   Z     =   Vectorize(Scale(t.(fieldz{n})));
+%                   scatter(t.(fieldx{1}),t.(fieldy{1}),(1+Z*3).^4,[Z(:) zeros(length(Z),1) 1-Z(:)],'filled');                  
                   %%
 %                   subplotChangeSize(SH,-.05,-.05);
                   hold off;
@@ -2602,9 +2619,9 @@ classdef Project < handle
                       effectSE = m.Coefficients.SE(2:end);
                       y = 1:3;
                       ci       = [effect effect] + effectSE*tinv([.025 .975],m.DFE);
-                      h = bar(y,effect,.9,'k');
+                      h = bar(1:length(effect),effect,.9,'k');
                       hold on;
-                      errorbar(y,effect,effectSE,'ro','linewidth',1);
+                      errorbar(1:length(effect),effect,effectSE,'ro','linewidth',1);
                       hold off;
                       box off
                       axis square;
@@ -3091,8 +3108,22 @@ classdef Project < handle
             rsa                           = self.getgroup_bold_spacetime_rsa(ngroup,area);
             rsa.d(self.ucs_vector == 1,:) = [];%clean the thing from R presence
             %%
-            ndimen   = 1;%dimensionality of the MDS analysis            
-            timebins = reshape(5:46,14,3);%time bins for averaging the RSA
+            smoothme= 1;
+            sk      = self.selected_smoothing;                            
+            %% slight smoothing
+                if smoothme
+                    kernel = [.5 1 .5 ];
+                    kernel = kernel./sum(kernel);
+                    for vox = 1:size(data_ori,1)
+                        dummy             = squeeze(data_ori(vox,:,:));
+                        dummy             = Project.circconv2(dummy,kernel);
+                        data_ori(vox,:,:) = dummy;
+                    end
+                end
+            %%
+            ndimen   = 2;%dimensionality of the MDS analysis            
+            timebins = BinningMatrix(47,2,10)
+%             timebins = reshape(5:46,14,3);%time bins for averaging the RSA
             figure;
             set(gcf,'position',[1992         454        1448         614]);
             colors = GetFearGenColors;
@@ -3100,27 +3131,30 @@ classdef Project < handle
             c        = 0;
             for N = timebins;
                 c    = c+1;
-                data = squeeze(mean(rsa.d(N,:,:),1));
+                %%
+                data = squeeze(mean(rsa.d(N == 1,:,:),1));
                 subplot(3,size(timebins,2),c);
                 imagesc( CancelDiagonals(squareform_force(data),NaN));;colorbar
                 title(sprintf('time bin %02d',c));
                 axis square;
                 axis off;                
+                %%
                 subplot(3,size(timebins,2),c+size(timebins,2));
-                y = cmdscale(1-data,1);
+                y = cmdscale(data,1);
                 Project.plot_bar(-135:45:180,y);
-                subplot(3,size(timebins,2),c+size(timebins,2)*2);
-                y = cmdscale(1-data,2);                
+                %%
+                subplot(3,size(timebins,2),c+size(timebins,2)*2);                
+                y = cmdscale(data,2);                
                 for nface = 1:8;
                     plot(y(nface,1),y(nface,2),'.','color',colors(nface,:),'markersize',50);
                     hold on;
                     xlim([-1 1]);
                     ylim([-1 1]);
                 end
-                box off;                
-                
+                box off;                                
                 hold off;
                 axis square;
+                %%
                 drawnow;
             end
             supertitle(rsa.name,1,'interpreter','none');                        
@@ -3380,7 +3414,7 @@ classdef Project < handle
             %%
             titels = {'SCR\nTuning' 'Detection\nError'};
             transparency = .8;
-            subs = find(t.pmf_pooled_alpha < 70)';%1:size(t,1)
+            subs = 1:size(t,1);%find(t.pmf_pooled_alpha < 70)';%
             X = t.rating_amp;
             Y = t.facecircle_amp;
             Z = t.scr_amp;
@@ -3406,8 +3440,9 @@ classdef Project < handle
                 xlabel(sprintf('Fear-Tuning\nRating'))
                 ylabel(sprintf('Fear-Tuning\nSaliency'))                
                 axis tight;box off;axis square;
-                xlim([-2 2]);
-                ylim([-2 2]);
+%                 xlim([-2 2]);
+%                 ylim([-2 2]);
+                axis tight
                 set(gca,'color','none','xtick',[-2:1:2],'ytick',[-2:1:2]);                                                                
                 grid on
                 drawnow;            
@@ -3694,20 +3729,27 @@ classdef Project < handle
             out.fit            = fit;
         end        
         function out         = IsTuned(out,tuning_criterium);
-            borders    = 1000;
+            borders    = Project.borders;
             pval       = Project.pval;
             fun        = Project.selected_fitfun;
             %applies the tuning criterium and returns logical YES or NO
             if tuning_criterium ==1
                 if fun == 8;
-                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(3) > -borders)&(out.params(3) < borders)&(out.params(1) > 0));
+                    out.params.FearTuning = logical((out.params.LL > -log10(out.params.pval))&(out.params.mu > -borders)&(out.params.mu < borders)&(out.params.amp > 0));
                     %                     out.FearTuning = logical((out.LL > -log10(pval)));
                 else
-                    out.FearTuning = logical((out.LL > -log10(pval))&(out.params(1) > 0));
+                    out.params.FearTuning = logical((out.params.LL > -log10(out.params.pval))&(out.params.amp > 0));
                 end                
             elseif tuning_criterium == 2
-                out.FearTuning = logical((out.LL > -log10(pval)));                
+                out.params.FearTuning = logical((out.params.LL > -log10(out.params.pval)));                
             end
         end        
+        function [out]=extendout(out)
+            out.params.metric_box         = mean(out.y([3 4 5])-out.y([1 7 8]));
+            out.params.metric_ratio       = out.params.amp/out.params.sigma;
+            out.params.metric_dispersion  = out.x.^2*out.y(:)./sum(out.x.^2);
+            Gs                            = out.y./sum(out.y);
+            out.params.metric_entropy     = sum(-Gs.*log(Gs+eps));
+        end
     end
 end

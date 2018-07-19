@@ -59,6 +59,7 @@ classdef Tuning < handle
                     self.fit_results{fun_type}.x_HD(unit,:)        = self.singlesubject_data{unit}.x_HD;
                     self.fit_results{fun_type}.y_fitted_HD(unit,:) = self.singlesubject_data{unit}.fit_HD;
                     self.fit_results{fun_type}.fitfun              = self.singlesubject_data{1}.fitfun;
+                    self.fit_results{fun_type}.table               = self.singlesubject_data{1}.table;
                 end
             end            
         end
@@ -99,19 +100,24 @@ classdef Tuning < handle
                 %detect the mean, store it and subtract it
                 CONSTANT    = mean(y);
                 y           = y-CONSTANT;%we are not interested in the baseline, just remove it so we don't need to estimated it.
+                param_names = {'amp' 'sigma' 'noise_sd'};
+                
             elseif funtype == 4
                 result.fitfun = @(x,p) make_gaussian_fmri_tau(x,p(1),p(2),p(3));%amp, tau, offset
                 L           = [-range(y)*2    0    mean(y)-range(y)*2          .01    ];
                 U           = [range(y)*2     180  mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
                 result.funname= 'gaussian_tau';
+                
             elseif funtype == 5
                 result.fitfun = @(x,p) self.VonMises_centered(x, p(1), p(2), p(3));
                 L           = [ -range(y)*2  0.1      mean(y)-range(y)*2   0];%amp kappa offset
                 U           = [  range(y)*2  15       mean(y)+range(y)*2   std(y)];
                 result.dof    = 3;
                 result.funname= 'vonmises';
+                
             elseif funtype == 55
+                
                 result.fitfun = @(x,p) self.VonMises_centered(x, p(1), p(2), p(3));
                 L           = [ -range(y)*2   0.1      mean(y)-range(y)*2   0];%amp kappa offset
                 U           = [  range(y)*2   0.1      mean(y)+range(y)*2   std(y)];
@@ -121,6 +127,7 @@ classdef Tuning < handle
                 %detect the mean, store it and subtract it
                 CONSTANT    = mean(y);
                 y           = y-CONSTANT;%we are not interested in the baseline, just remove it so we don't need to estimated it.
+                param_names = {'amp' 'sigma' 'offset' 'noise_sd'};
                 
             elseif funtype == 6
                 result.fitfun = @(x,p) make_gabor1d_ZeroMean(x,p(1),p(2),p(3),p(4));%amp std freq baseline
@@ -142,6 +149,7 @@ classdef Tuning < handle
                 %                 U      = [ min(10,range(y)*1.1)  20   2*pi   pi   10];
                 result.dof    = 4;
                 result.funname= 'vonmisses_mobile';
+                param_names = {'amp' 'sigma' 'mu' 'offset' 'noise_sd'};
             end
             %% add some small noise in case of super-flat ratings
             if sum(diff(y)) == 0;y = y + rand(length(y),1)*.001;end
@@ -188,10 +196,11 @@ classdef Tuning < handle
                 result.dof   = result.dof - 1;%the DOF of the null hypothesis is 0.
                 result.pval  = -log10(1-chi2cdf(-2*(result.Likelihood - result.null_Likelihood),result.dof) + eps);
             end
-            result.x       = unique(x);            
-            result.fit     = result.fitfun(result.x,result.Est)+CONSTANT;
-            result.x_HD    = linspace(min(result.x),max(result.x),100);
-            result.fit_HD  = result.fitfun(result.x_HD,result.Est)+CONSTANT;
+            result.x           = unique(x);            
+            result.fit         = result.fitfun(result.x,result.Est)+CONSTANT;
+            result.x_HD        = linspace(min(result.x),max(result.x),100);
+            result.fit_HD      = result.fitfun(result.x_HD,result.Est)+CONSTANT;
+            result.table       = array2table([result.Est result.Likelihood result.pval funtype],'VariableNames',[param_names 'LL' 'pval' 'funtype']); 
             
             if result.ExitFlag < 0
                 cprintf([1 0 0],'Fmincon not converge, this usually happends with flat fear-tuning, setting pval manually to a large value....\n');

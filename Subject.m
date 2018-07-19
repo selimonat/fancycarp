@@ -421,31 +421,11 @@ classdef Subject < Project
             %returns the parameters of the pmf fit (1 x parameter);
             fit               = self.fit_rating;
             out               = fit.params;
-            %
-            D                 = zscore(self.rating.y_mean);
-            NonParametricDiff = mean(D([3 4 5])-D([1 7 8]));
-            if self.selected_fitfun == 8 || self.selected_fitfun == 55
-                dummy    = [self.id out(:,1:3) abs(out(1,3)) fit.LL fit.FearTuning NonParametricDiff];
-                out      = array2table(dummy,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm' 'rating_mu' 'rating_absmu' 'rating_LL' 'feartuning_rating' 'rating_nonparam'});
-            elseif self.selected_fitfun == 3
-                dummy    = [self.id out(:,1:2)  fit.LL fit.FearTuning NonParametricDiff];
-                out      = array2table(dummy,'variablenames',{'subject_id' 'rating_amp' 'rating_fwhm'                            'rating_LL' 'feartuning_rating' 'rating_nonparam'});
-            end
         end
         function [out]      = get.scr_param(self)
             %
             fit               = self.fit_scr;
-            out               = fit.params;
-            D                 = zscore(self.scr.y_mean);
-            NonParametricDiff = mean(D([3 4 5])-D([1 7 8]));
-            if self.selected_fitfun == 8 || self.selected_fitfun == 55
-                dummy    = [self.id out(:,1:3) abs(out(1,3)) fit.LL fit.FearTuning NonParametricDiff];
-                out      = array2table(dummy,'variablenames',{'subject_id' 'scr_amp' 'scr_fwhm' 'scr_mu' 'scr_absmu' 'scr_LL' 'feartuning_scr' 'scr_nonparam'});
-            elseif self.selected_fitfun == 3
-                dummy    = [self.id out(:,1:2)  fit.LL fit.FearTuning NonParametricDiff];
-                out      = array2table(dummy,'variablenames',{'subject_id' 'scr_amp' 'scr_fwhm'                      'scr_LL' 'feartuning_scr' 'scr_nonparam'});
-            end
-            
+            out               = fit.params;                        
         end
         function out        = get.scr(self)
             %returns scr after cleaning bad microblocks
@@ -484,15 +464,6 @@ classdef Subject < Project
         function [out]      = get.facecircle_param(self)
             fit               = self.fit_facecircle;
             out               = fit.params;
-            D                 = zscore(self.get_facecircle.(self.eye_data_type));
-            NonParametricDiff = mean(D([3 4 5])-D([1 7 8]));
-            if self.selected_fitfun == 8 || self.selected_fitfun == 55
-                dummy    = [self.id out(:,1:3) abs(out(1,3)) fit.LL fit.FearTuning NonParametricDiff];
-                out      = array2table(dummy,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm' 'facecircle_mu' 'facecircle_absmu' 'facecircle_LL' 'feartuning_facecircle' 'facecircle_nonparam'});
-            elseif self.selected_fitfun == 3
-                dummy    = [self.id out(:,1:2)  fit.LL fit.FearTuning NonParametricDiff];
-                out      = array2table(dummy,'variablenames',{'subject_id' 'facecircle_amp' 'facecircle_fwhm'                                    'facecircle_LL' 'feartuning_facecircle' 'facecircle_nonparam'});
-            end
         end
         function f          = get_facecircle_fixmat(self)
             %out        = get_facemaps(self)
@@ -3915,10 +3886,10 @@ classdef Subject < Project
             %and compute a fit.
             
             fun        = self.selected_fitfun;;%vM or Gau function
-            force      = 0;%repeat the analysis or load from cache
+            force      = 1;%repeat the analysis or load from cache
             borders    = Project.borders;
             pval       = self.pval;
-            write_path = sprintf('%s/midlevel/rating_fun_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),Project.selected_fitfun,Project.borders,Project.pval*1000);
+            write_path = sprintf('%s/midlevel/rating_fun_%i_borders_%d_pval_%d_zscore_%d.mat',self.pathfinder(self.id,1),Project.selected_fitfun,Project.borders,Project.pval*1000,self.scale_feartunings);
             
             if exist(write_path) && force == 0
                 %load directly or
@@ -3934,26 +3905,23 @@ classdef Subject < Project
                 R.x                          = R.x(:)';
                 R.ids                        = R.ids(1);
                 %create a tuning object and make a single subject fit
+                if self.scale_feartunings
+                    R.y                      = zscore(R.y);
+                end                
                 T                            = Tuning(R);
                 T.SingleSubjectFit(fun);
                 %prepare data for outputting.
-                out.params                   = T.fit_results{fun}.params(1,:);
+                out.params                   = T.fit_results{fun}.table;
                 out.LL                       = T.fit_results{fun}.pval(1,:);
                 out.exitflag                 = T.fit_results{fun}.ExitFlag(1,:);
                 out.y_hd                     = T.fit_results{fun}.y_fitted_HD(1,:);
                 out.x_hd                     = T.fit_results{fun}.x_HD(1,:);
                 out.y                        = T.fit_results{fun}.y_fitted(1,:);
                 out.x                        = T.fit_results{fun}.x(1,:);
-                out.fitfun                   = T.fit_results{fun}.fitfun;
+                out.fitfun                   = T.fit_results{fun}.fitfun;                
+                
                 %%
-                if fun == 8%if vM, then transform kappa to FWHM.
-                    fprintf('Kappa to FWHM transformation.\n');
-                    out.params(:,2)            = vM2FWHM(out.params(:,2));
-                    %also put the amplitude to negative if CS- > CS+
-                    if out.y(4) < out.y(end)
-                        out.params(1) = -out.params(1);
-                    end
-                end
+                out = self.extendout(out);
                 %%
                 save(write_path,'out')
             end
@@ -3970,7 +3938,7 @@ classdef Subject < Project
             fun     = self.selected_fitfun;
             borders = Project.borders;
             pval    = self.pval;
-            write_path = sprintf('%s/midlevel/facecircle_fun_%i_partition_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),Project.selected_fitfun,partition,Project.borders,Project.pval*1000);
+            write_path = sprintf('%s/midlevel/facecircle_fun_%i_partition_%i_borders_%d_pval_%d_zscore_%d.mat',self.pathfinder(self.id,1),Project.selected_fitfun,partition,Project.borders,Project.pval*1000,self.scale_feartunings);
             if exist(write_path) && force == 0
                 %load directly or
                 load(write_path);
@@ -3981,12 +3949,14 @@ classdef Subject < Project
                 fprintf('Fitting FaceCircle...\n')
                 R                            = self.get_facecircle(partition);
                 %adapt to what Tuning.m wants to have.
-                
+                if self.scale_feartunings
+                    R.y = zscore(R.y);
+                end
                 %create a tuning object and make a single subject fit
                 T                            = Tuning(R);
                 T.SingleSubjectFit(fun);
                 %prepare data for outputting.
-                out.params                   = T.fit_results{fun}.params;
+                out.params                   = T.fit_results{fun}.table;
                 out.LL                       = T.fit_results{fun}.pval;
                 out.exitflag                 = T.fit_results{fun}.ExitFlag;
                 out.y_hd                     = T.fit_results{fun}.y_fitted_HD;
@@ -3995,15 +3965,17 @@ classdef Subject < Project
                 out.x                        = T.fit_results{fun}.x(1,:);
                 out.fitfun                   = T.fit_results{fun}.fitfun;
                 %%re-arrange parameters if vM selected.
+                %%
                 if fun == 8%if vM, then transform kappa to FWHM.
-                    fprintf('Kappa to FWHM transformation + absolute(peakshift).\n');
-                    out.params(:,2)            = vM2FWHM(out.params(:,2));
-                    %out.params(:,3)            = abs(out.params(:,3));
+                    fprintf('Kappa to FWHM transformation.\n');
+                    out.params.sigma         = vM2FWHM(out.params.sigma);
                     %also put the amplitude to negative if CS- > CS+
                     if out.y(4) < out.y(end)
-                        out.params(1) = -out.params(1);
+                        out.params.amp = -out.params.amp;
                     end
                 end
+                %%
+                out = self.extendout(out);
                 %%
                 save(write_path,'out');
             end
@@ -4017,7 +3989,7 @@ classdef Subject < Project
             
             force      = 0;%repeat the analysis or load from cache
             fun        = Project.selected_fun;            
-            write_path = sprintf('%s/midlevel/pupil_fun_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),Project.selected_fitfun,Project.borders,Project.pval*1000)
+            write_path = sprintf('%s/midlevel/pupil_fun_%i_borders_%d_pval_%d_zscore_%d.mat',self.pathfinder(self.id,1),Project.selected_fitfun,Project.borders,Project.pval*1000,self.scale_feartunings)
             if exist(write_path) && force ==0
                 %load directly or
                 load(write_path);
@@ -4065,7 +4037,7 @@ classdef Subject < Project
             borders    = Project.borders;
             pval       = Project.pval;
             fun        = Project.selected_fitfun;
-            write_path = sprintf('%s/midlevel/scr_fun_%i_borders_%d_pval_%d.mat',self.pathfinder(self.id,1),Project.selected_fitfun,Project.borders,Project.pval*1000);
+            write_path = sprintf('%s/midlevel/scr_fun_%i_borders_%d_pval_%d_zscore_%d.mat.mat',self.pathfinder(self.id,1),Project.selected_fitfun,Project.borders,Project.pval*1000,self.scale_feartunings);
             if exist(write_path) && force ==0
                 %load directly or
                 load(write_path);
@@ -4080,10 +4052,13 @@ classdef Subject < Project
                 R.x                          = self.rating.x(1,:);
                 R.ids                        = R.ids(1);
                 %create a tuning object and make a single subject fit
-                T                            = Tuning(R);
+                if self.scale_feartunings
+                    R.y                          = zscore(R.y);
+                end
+                T                            = Tuning(R);                
                 T.SingleSubjectFit(fun);
                 %prepare data for outputting.
-                out.params                   = T.fit_results{fun}.params(1,:);
+                out.params                   = T.fit_results{fun}.table;
                 out.LL                       = T.fit_results{fun}.pval(1,:);
                 out.exitflag                 = T.fit_results{fun}.ExitFlag(1,:);
                 out.y_hd                     = T.fit_results{fun}.y_fitted_HD(1,:);
@@ -4093,13 +4068,15 @@ classdef Subject < Project
                 out.fitfun                   = T.fit_results{fun}.fitfun;
                 %%
                 if fun == 8%if vM, then transform kappa to FWHM.
-                    fprintf('Kappa to FWHM transformation + absolute(peakshift).\n');
-                    out.params(:,2)            = vM2FWHM(out.params(:,2));
-                    %out.params(:,3)            = abs(out.params(:,3));
+                    fprintf('Kappa to FWHM transformation.\n');
+                    out.params.sigma         = vM2FWHM(out.params.sigma);
+                    %also put the amplitude to negative if CS- > CS+
                     if out.y(4) < out.y(end)
-                        out.params(1) = -out.params(1);
+                        out.params.amp = -out.params.amp;
                     end
                 end
+                %%
+                out = self.extendout(out);
                 %%
                 save(write_path,'out')
             end
@@ -4143,6 +4120,6 @@ classdef Subject < Project
             %
             writename = sprintf('%sbrainbehavior.nii',self.path_midlevel(1));
             volume    = spm_read_vol(spm_vol(writename));
-        end
+        end        
     end
 end
