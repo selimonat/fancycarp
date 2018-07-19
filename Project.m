@@ -90,7 +90,7 @@ classdef Project < handle
         selected_ngroup       = 1;
         %
         scale_feartunings     = 0;
-        selected_fitfun       = 8;%3fixed gaussian (3), vonmises (8); vonMises template (55)
+        selected_fitfun       = 3;%3fixed gaussian (3), vonmises (8); vonMises template (55); vM centered
         pval                  = .05;%tuning presence
         borders               = 1000;
         eye_data_type         = 'countw';
@@ -418,7 +418,7 @@ classdef Project < handle
         end
         function out             = getgroup_rating_param(self)            
             %collects the rating parameters for all subjects in a table.
-            target_name = sprintf('%smidlevel/%s_fun_%i_borders_%d_pval_%d.mat',self.path_project,'getgroup_rating_param',Project.selected_fitfun,Project.borders,Project.pval*1000);
+            target_name = sprintf('%smidlevel/%s_fun_%i_borders_%d_pval_%d_zscore_%d.mat',self.path_project,'getgroup_rating_param',Project.selected_fitfun,Project.borders,Project.pval*1000,Project.scale_feartunings );
             if exist(target_name) == 0
                 out = [];
                 for ns = self.subject_indices%run across all the subjects
@@ -432,7 +432,7 @@ classdef Project < handle
         end               
         function out             = getgroup_scr_param(self)
             %collects the scr parameters for all subjects in a table.
-            target_name = sprintf('%smidlevel/%s_fun_%i_borders_%d_pval_%d.mat',self.path_project,'getgroup_scr_param',Project.selected_fitfun,Project.borders,Project.pval*1000);            
+            target_name = sprintf('%smidlevel/%s_fun_%i_borders_%d_pval_%d_zscore_%d.mat',self.path_project,'getgroup_scr_param',Project.selected_fitfun,Project.borders,Project.pval*1000,Project.scale_feartunings );            
             if exist(target_name) == 0
                 out = [];
                 for ns = self.subject_indices%run across all the subjects
@@ -446,7 +446,7 @@ classdef Project < handle
         end               
         function out             = getgroup_facecircle_param(self)
             %collects the facecircle parameters for all subjects in a table.                        
-            target_name = sprintf('%smidlevel/%s_fun_%i_borders_%d_pval_%d.mat',self.path_project,'getgroup_facecircle_param',Project.selected_fitfun,Project.borders,Project.pval*1000);            
+            target_name = sprintf('%smidlevel/%s_fun_%i_borders_%d_pval_%d_zscore_%d.mat',self.path_project,'getgroup_facecircle_param',Project.selected_fitfun,Project.borders,Project.pval*1000,Project.scale_feartunings );            
             if exist(target_name) == 0
                 out = [];
                 for ns = self.subject_indices
@@ -556,32 +556,102 @@ classdef Project < handle
             spacetime.d      = cat(4,spacetime1.d,spacetime2.d);
             spacetime.name   = [spacetime1.name spacetime2.name];                                                                                    
         end
-        function [spacetime_rsa] = getgroup_bold_spacetime_rsa(self,ngroup,rois);
-                               
+        
+        
+        function [spacetime]          = getgroup_bold_spacetime_roi(self,ngroup,rois);
+            %wrapper around the ROI object            
+            clean   = 1;
             list    = self.get_selected_subjects(ngroup,1).list;            
             %%
             betas                                                 = reshape(1:715,65,11)';
             betas(:,[Project.mbi_oddball Project.mbi_transition]) = [];
             betas(4,self.ucs_vector == 1)                         = betas(9,self.ucs_vector == 1);
+            %            
             betas(9:11,:)                                         = [];
+                        
             %% 
             roic = 0;
             for roi = rois
                 roic    = roic + 1;
                 R       = ROI('roi_based',roi,'chrf_0_0_mumfordian',0,betas(:)',list,self.selected_smoothing);
                 % rearrange
-                data_ori = R.evoked_pattern;
-                data_ori = reshape(data_ori,[size(data_ori,1) 59 8]);%[voxel mbi condition];
-                
-                %% get the similarity matrix for each mbi, same representation as the spacetime matrices
-                for N = 1:size(data_ori,2)
-                    data                        = squeeze(data_ori(:,N,:));
-                    spacetime_rsa.d(N,:,roic)   = pdist(data','correlation');
-                end
-                spacetime_rsa.name{roic} = R.name;
+                spacetime = R.evoked_pattern;
+                spacetime = reshape(spacetime ,[size(spacetime ,1) 59 8]);%[voxel mbi condition];                                
+            end
+            
+            if clean
+                spacetime(:,self.ucs_vector == 1,:)                   = [];
             end
         end        
-        function [spacetime]     = getgroup_bold_spacetime(self,ngroup,clean,zsc,bc)
+        function spacetime_rsa_binned = BinRSA(self,spacetime_rsa,window,tbin)
+            %bins rsa matrix overtime
+            %SPACETIME_RSA_BINNED is [MICROBLOCK BINS, PAIRWISECORR]
+            timebins = BinningMatrix(47,tbin,window);
+            c        = 0;
+            for N = timebins;
+                c    = c+1;
+                % average over bins
+                spacetime_rsa_binned(c,:) = squeeze(mean(spacetime_rsa(N == 1,:,:),1));
+            end
+        end
+        function spacetime_rsa        = spacetime2RSA(self,spacetime,smooth)
+        %given a space time matrix computes the RSA for each microblocks                
+        %spacetime     is [VOXELS, MICROBLOCKS, CONDITIONS];
+        %spacetime_RSA is [MICROBLOCKS, PAIRWISE CORRELATIONs];
+            % slight smoothing over conditions
+            if smooth ~= 0
+                kernel = [.5  1 .5];
+                kernel = kernel./sum(kernel);
+                for vox = 1:size(spacetime,1)
+                    dummy              = squeeze(spacetime(vox,:,:));
+                    dummy              = Project.circconv2(dummy,kernel);
+                    spacetime(vox,:,:) = dummy;
+                end
+            end
+            %% get the similarity matrix for each mbi, same representation as the spacetime matrices
+            for N = 1:size(spacetime,2)
+                data                 = squeeze(spacetime(:,N,:));
+                spacetime_rsa(N,:)   = pdist(data','correlation');
+            end            
+        end        
+        
+        function plot_spacetime_rsa(self,spacetime_rsa)
+            %plots for a given area the spacetime profile next to its area
+            % st     = s.getgroup_bold_spacetime_roi(1,33);
+            % st_rsa = s.spacetime2RSA(st,1);
+                        
+            %%           
+            colors = GetFearGenColors;
+            coeff = self.RSA_Model(spacetime_rsa);
+            tbins = size(spacetime_rsa,1);
+            c        = 0;
+            for N = 1:size(spacetime_rsa,1);
+                c    = c+1;
+                % average over bins
+                data = spacetime_rsa(N,:,:);
+                
+                subplot(3,tbins,c);
+                imagesc( CancelDiagonals(squareform_force(data),NaN));
+                colorbar
+                title(sprintf('time bin %02d',c));
+                axis square;
+                axis off;                
+                %                
+                drawnow;
+            end
+            subplot(3,tbins,c+1);
+            bar(diff(coeff,1,2));            
+        end
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        function [spacetime]          = getgroup_bold_spacetime(self,ngroup,clean,zsc,bc)
             %spacetime  = getgroup_bold_spacetime(self,ngroup,clean)
             % GROUP is fed to get_selected_subjects.
             % CLEAN == 1 to discard UCS microblocks.
@@ -795,7 +865,7 @@ classdef Project < handle
                 sub.name   = ['Rating_' funname{self.selected_fitfun} '_1'];
                 %
                 t          = self.getgroup_rating_param;
-                select     = t.feartuning_rating == 1;%load the ratings of all subjects                                
+                select     = t.rating_FearTuning == 1;%load the ratings of all subjects                                
                 sub.list   = t.subject_id(select);%subject indices.
                 %
             elseif     criteria == 11
@@ -807,7 +877,7 @@ classdef Project < handle
                 sub.name = ['Rating_' funname{self.selected_fitfun} '_0'];
                 %
                 t          = self.getgroup_rating_param;
-                select     = t.feartuning_rating == 0;%load the ratings of all subjects                                
+                select     = t.rating_FearTuning == 0;%load the ratings of all subjects                                
                 sub.list   = t.subject_id(select);%subject indices.
                 %
             elseif criteria == 2
@@ -823,7 +893,7 @@ classdef Project < handle
                 sub.name = ['Saliency_' funname{self.selected_fitfun} '_1'];                
                 %
                 t          = self.getgroup_facecircle_param;
-                select     = t.feartuning_facecircle == 1;%load the ratings of all subjects                                
+                select     = t.facecircle_FearTuning == 1;%load the ratings of all subjects                                
                 sub.list   = t.subject_id(select);%subject indices.
                 %
             elseif criteria == 33
@@ -831,7 +901,7 @@ classdef Project < handle
                 sub.name = ['Saliency_' funname{self.selected_fitfun} '_0'];
                 %
                 t          = self.getgroup_facecircle_param;
-                select     = t.feartuning_facecircle == 0;%load the ratings of all subjects                                
+                select     = t.facecircle_FearTuning == 0;%load the ratings of all subjects                                
                 sub.list   = t.subject_id(select);%subject indices.
                 %
                 
@@ -2490,11 +2560,11 @@ classdef Project < handle
                     o    =  fitlm(t,'rating_nonparam     ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
                     o2   =  fitlm(t,'facecircle_nonparam ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
                 catch
-                    o    =  fitlm(t,'rating_nonparam     ~ 1 + brain_time + brain_gau + brain_time_gau','RobustOpts','on')
-                    o2   =  fitlm(t,'facecircle_nonparam ~ 1 + brain_time + brain_gau + brain_time_gau','RobustOpts','on')
+                    o    =  fitlm(t,'rating_metric_box     ~ 1 + brain_time + brain_gau + brain_time_gau','RobustOpts','on')
+                    o2   =  fitlm(t,'facecircle_metric_box ~ 1 + brain_time + brain_gau + brain_time_gau','RobustOpts','on')
                 end
                 
-                o3 = fitlm(t,'brain_gau ~ 1 + rating_nonparam*facecircle_nonparam')
+                o3 = fitlm(t,'brain_gau ~ 1 + rating_metric_box*facecircle_metric_box')
                 model2text(o,'~/gdrive/Office/Fearamy/paperfigures/')
                 model2text(o2,'~/gdrive/Office/Fearamy/paperfigures/')
                 pos =  {[33 34 41 42 ] [36 37 44 45] [39 47 40 48 ] [52 53 60 61] [55 56 63 64] [49 50 57 58] };
@@ -2502,11 +2572,11 @@ classdef Project < handle
                 for n = 1:total_beta-1
                     h(n) = subplot(8,8,pos{n});
                     %
-                    s=scatter((t.rating_nonparam(:)),data(:,n+1),40,'filled');                    
+                    s=scatter((t.rating_metric_box(:)),data(:,n+1),40,'filled');                    
                     s.MarkerFaceAlpha = .6;
                     %
                     hold on
-                    s = scatter((t.facecircle_nonparam(:)),data(:,n+1),40,[.85 .33 .1],'filled');
+                    s = scatter((t.facecircle_metric_box(:)),data(:,n+1),40,[.85 .33 .1],'filled');
                     s.MarkerFaceAlpha = .6;
                     
                     axis tight;
@@ -2592,8 +2662,8 @@ classdef Project < handle
                   SH =subplot(2,3,n);          
                   pause(.2);
                   %
-                  fieldy = {'facecircle_nonparam'};
-                  fieldx = {'rating_nonparam'};
+                  fieldy = {'facecircle_amp'};
+                  fieldx = {'rating_amp'};
 
 
                   [m]=scatter_stat(t,{fieldz{n},fieldx{1},fieldy{1}})
@@ -3103,62 +3173,29 @@ classdef Project < handle
                 title(spacetime.name{narea},'interpreter','none');
             end
         end
-        function plot_spacetime_rsa(self,ngroup,area)
-            %plots for a given area the spacetime profile next to its area
-            rsa                           = self.getgroup_bold_spacetime_rsa(ngroup,area);
-            rsa.d(self.ucs_vector == 1,:) = [];%clean the thing from R presence
-            %%
-            smoothme= 1;
-            sk      = self.selected_smoothing;                            
-            %% slight smoothing
-                if smoothme
-                    kernel = [.5 1 .5 ];
-                    kernel = kernel./sum(kernel);
-                    for vox = 1:size(data_ori,1)
-                        dummy             = squeeze(data_ori(vox,:,:));
-                        dummy             = Project.circconv2(dummy,kernel);
-                        data_ori(vox,:,:) = dummy;
-                    end
-                end
-            %%
-            ndimen   = 2;%dimensionality of the MDS analysis            
-            timebins = BinningMatrix(47,2,10)
-%             timebins = reshape(5:46,14,3);%time bins for averaging the RSA
-            figure;
-            set(gcf,'position',[1992         454        1448         614]);
-            colors = GetFearGenColors;
-            %%
-            c        = 0;
-            for N = timebins;
-                c    = c+1;
-                %%
-                data = squeeze(mean(rsa.d(N == 1,:,:),1));
-                subplot(3,size(timebins,2),c);
-                imagesc( CancelDiagonals(squareform_force(data),NaN));;colorbar
-                title(sprintf('time bin %02d',c));
-                axis square;
-                axis off;                
-                %%
-                subplot(3,size(timebins,2),c+size(timebins,2));
-                y = cmdscale(data,1);
-                Project.plot_bar(-135:45:180,y);
-                %%
-                subplot(3,size(timebins,2),c+size(timebins,2)*2);                
-                y = cmdscale(data,2);                
-                for nface = 1:8;
-                    plot(y(nface,1),y(nface,2),'.','color',colors(nface,:),'markersize',50);
-                    hold on;
-                    xlim([-1 1]);
-                    ylim([-1 1]);
-                end
-                box off;                                
-                hold off;
-                axis square;
-                %%
-                drawnow;
+        function [coeffs]=RSA_Model(self,spacetime_rsa)
+            
+            %% get the predictors
+            x            = [pi/4:pi/4:2*pi];
+            w            = [cos(x);sin(x)];
+            model1       = squareform_force(w'*w);%we use squareform_force as the w'*w is not perfectly positive definite matrix due to rounding errors.
+            %
+            model2_c     = squareform_force(cos(x)'*cos(x));%
+            model2_s     = squareform_force(sin(x)'*sin(x));%
+            %
+            %getcorrmat(amp_circ, amp_gau, amp_const, amp_diag, varargin)
+            [cmat]       = getcorrmat(0,3,1,1);%see model_rsa_testgaussian_optimizer
+            model3_g     = squareform_force(cmat);%
+            % add all this to a TABLE object.
+            t            = table(model1(:),model2_c(:),model2_s(:),model3_g(:),'variablenames',{'circle' 'specific' 'unspecific' 'Gaussian' });
+            %
+            for nbin = 1:size(spacetime_rsa,1)
+                t.y            = 1-spacetime_rsa(nbin,:)';
+                dummy          = fitlm(t,'y ~ 1 + unspecific +specific');
+                coeffs(nbin,:) = dummy.Coefficients.Estimate(2:end);
             end
-            supertitle(rsa.name,1,'interpreter','none');                        
         end
+        
         function [leafOrder]=plot_spacetime_dendrogram(self,spacetime)
             
             figure;
@@ -3430,7 +3467,7 @@ classdef Project < handle
                     end
                 elseif n == 2
                     for np = subs
-                        h = scatter(t.rating_nonparam(np),t.facecircle_nonparam(np),1000,'filled','markerfacealpha',transparency);
+                        h = scatter(t.rating_metric_box(np),t.facecircle_metric_box(np),1000,'filled','markerfacealpha',transparency);
                         hold on;
                         h.SizeData  = (((t.detection_absface(np)./180)+1)*5).^3;
                         h.MarkerFaceColor     = [t.detection_absface(np)/180 1-t.detection_absface(np)/180  0];
@@ -3453,7 +3490,7 @@ classdef Project < handle
             tits = {'ratings' 'saliency'}
             c = 0;h=[];
             
-            for N = {'rating_nonparam' 'facecircle_nonparam'}
+            for N = {'rating_metric_box' 'facecircle_metric_box'}
                 c = c+1;
                 [y x] = hist(t.(N{1}));
                 h = [h subplot(1,2,c)]
@@ -3469,7 +3506,7 @@ classdef Project < handle
             Publication_NiceTicks(h,2)                
             %%
             figure(41);clf;
-            [y i]  = sort(t.facecircle_nonparam)
+            [y i]  = sort(t.facecircle_metric_box)
             sub_id = t.subject_id(i)
             c = 0;
             h = [];
@@ -3735,20 +3772,20 @@ classdef Project < handle
             %applies the tuning criterium and returns logical YES or NO
             if tuning_criterium ==1
                 if fun == 8;
-                    out.params.FearTuning = logical((out.params.LL > -log10(out.params.pval))&(out.params.mu > -borders)&(out.params.mu < borders)&(out.params.amp > 0));
+                    out.params.FearTuning = logical((out.params.LL > -log10(pval))&(out.params.mu > -borders)&(out.params.mu < borders)&(out.params.amp > 0));
                     %                     out.FearTuning = logical((out.LL > -log10(pval)));
                 else
-                    out.params.FearTuning = logical((out.params.LL > -log10(out.params.pval))&(out.params.amp > 0));
+                    out.params.FearTuning = logical((out.params.LL > -log10(pval))&(out.params.amp > 0));
                 end                
             elseif tuning_criterium == 2
-                out.params.FearTuning = logical((out.params.LL > -log10(out.params.pval)));                
+                out.params.FearTuning = logical((out.params.LL > -log10(pval)));                
             end
         end        
         function [out]=extendout(out)
             out.params.metric_box         = mean(out.y([3 4 5])-out.y([1 7 8]));
             out.params.metric_ratio       = out.params.amp/out.params.sigma;
-            out.params.metric_dispersion  = out.x.^2*out.y(:)./sum(out.x.^2);
-            Gs                            = out.y./sum(out.y);
+            out.params.metric_dispersion  = out.x.^2*out.y(:).^2;
+            Gs                            = abs(out.y)./sum(abs(out.y));
             out.params.metric_entropy     = sum(-Gs.*log(Gs+eps));
         end
     end

@@ -421,11 +421,21 @@ classdef Subject < Project
             %returns the parameters of the pmf fit (1 x parameter);
             fit               = self.fit_rating;
             out               = fit.params;
+            for i = 1:length(out.Properties.VariableNames)
+                if ~strcmp(out.Properties.VariableNames{i},'subject_id')
+                    out.Properties.VariableNames{i} = ['rating_' out.Properties.VariableNames{i}];
+                end
+            end
         end
         function [out]      = get.scr_param(self)
             %
             fit               = self.fit_scr;
             out               = fit.params;                        
+            for i = 1:length(out.Properties.VariableNames)
+                if ~strcmp(out.Properties.VariableNames{i},'subject_id')
+                    out.Properties.VariableNames{i} = ['scr_' out.Properties.VariableNames{i}];
+                end
+            end
         end
         function out        = get.scr(self)
             %returns scr after cleaning bad microblocks
@@ -464,6 +474,11 @@ classdef Subject < Project
         function [out]      = get.facecircle_param(self)
             fit               = self.fit_facecircle;
             out               = fit.params;
+            for i = 1:length(out.Properties.VariableNames)
+                if ~strcmp(out.Properties.VariableNames{i},'subject_id')
+                    out.Properties.VariableNames{i} = ['facecircle_' out.Properties.VariableNames{i}];
+                end
+            end
         end
         function f          = get_facecircle_fixmat(self)
             %out        = get_facemaps(self)
@@ -1641,7 +1656,7 @@ classdef Subject < Project
             
             %if the fit is better than flat line, paint accordingly.
             fit = self.fit_rating;
-            if fit.FearTuning == 0%plot simply a blue line if the fit is not significant.
+            if fit.params.FearTuning == 0%plot simply a blue line if the fit is not significant.
                 PlotTransparentLine(fit.x_hd , repmat(mean(self.rating.y_mean),100,1),.35,'k','linewidth',2.5);
                 PlotTransparentLine(fit.x_hd , fit.y_hd(:),.35,'k','linewidth',2.5);%this is the fit.
             else
@@ -1649,7 +1664,7 @@ classdef Subject < Project
             end
             hold off;
             %             ylim([0 10]);
-            title(sprintf('id:%02d (+:%d)\nAmp: %2.2g GI: %2.2g%',self.id,self.csp,self.rating_param.rating_amp,self.rating_param.rating_nonparam),'fontsize',8);%subject and face id
+            title(sprintf('id:%02d (+:%d)\nAmp: %2.2g GI: %2.2g%',self.id,self.csp,self.rating_param.rating_amp,self.rating_param.rating_metric_box),'fontsize',8);%subject and face id
         end
         function plot_pmf(self,chains)
             % plot the fits
@@ -1674,7 +1689,7 @@ classdef Subject < Project
                 self.plot_bar(out.x(1,:),out.y_mean,out.y_sem);
                 fit = self.fit_scr;
                 %if the fit is better than flat line, paint accordingly.
-                if  fit.FearTuning == 0%plot simply a blue line if the fit is not significant.
+                if  fit.params.FearTuning == 0%plot simply a blue line if the fit is not significant.
                     PlotTransparentLine(fit.x_hd,repmat(mean(self.scr.y(:)),100,1),.5,'k','linewidth',2.5);
                     PlotTransparentLine(fit.x_hd(:),fit.y_hd(:),.5,'k','linewidth',2.5);%this is the fit.
                 else
@@ -1701,7 +1716,7 @@ classdef Subject < Project
             %if the fit is better than flat line, paint accordingly.
             fit = self.fit_facecircle(partition);
             for P = 1:partition
-                if fit.FearTuning == 0%plot simply a blue line if the fit is not significant.
+                if fit.params.FearTuning == 0%plot simply a blue line if the fit is not significant.
                     PlotTransparentLine(fit.x_hd , repmat(mean(out.(self.eye_data_type)(P,:)),100,1),.35,'k','linewidth',2.5);
                     PlotTransparentLine(fit.x_hd , fit.y_hd(P,:)',.35,'k','linewidth',2.5);%this is the fit.
                 else
@@ -3886,7 +3901,7 @@ classdef Subject < Project
             %and compute a fit.
             
             fun        = self.selected_fitfun;;%vM or Gau function
-            force      = 1;%repeat the analysis or load from cache
+            force      = 0;%repeat the analysis or load from cache
             borders    = Project.borders;
             pval       = self.pval;
             write_path = sprintf('%s/midlevel/rating_fun_%i_borders_%d_pval_%d_zscore_%d.mat',self.pathfinder(self.id,1),Project.selected_fitfun,Project.borders,Project.pval*1000,self.scale_feartunings);
@@ -3919,14 +3934,22 @@ classdef Subject < Project
                 out.y                        = T.fit_results{fun}.y_fitted(1,:);
                 out.x                        = T.fit_results{fun}.x(1,:);
                 out.fitfun                   = T.fit_results{fun}.fitfun;                
-                
+                %%
+                if fun == 8%if vM, then transform kappa to FWHM.
+                    fprintf('Kappa to FWHM transformation.\n');
+                    out.params.sigma         = vM2FWHM(out.params.sigma);
+                    %also put the amplitude to negative if CS- > CS+
+                    if out.y(4) < out.y(end)
+                        out.params.amp = -out.params.amp;
+                    end
+                end
                 %%
                 out = self.extendout(out);
+                %% is there evidence for fear-tuning?
+                out = self.IsTuned(out,1);
                 %%
                 save(write_path,'out')
-            end
-            %% is there evidence for fear-tuning?
-            out = self.IsTuned(out,1);
+            end            
         end
         function [out] = fit_facecircle(self,partition)
             %will fit function FUN to facecircle data with PARTITION

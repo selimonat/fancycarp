@@ -55,8 +55,9 @@ classdef ROI < Project
                     cprintf([0 1 0],'File name:\n%s\n',filename);
                     if exist(filename) == 0 | force;
                         cprintf([1 0 0],'Not yet cached, will compute...\n');
-                        betas                = s.path_beta(1,roi.model,'w_',roi.beta)%(run, model)
+                        betas                = s.path_beta(1,roi.model,'wCAT_',roi.beta)%(run, model)
                         vol                  = spm_vol(betas);
+                        fprintf('Smoothing on the fly...\n')
                         vol                  = spm_smoothto16bit(vol,roi.sk);%smooth on the fly, slow but disk efficient.                        
                         %get the BOLD at these coordinates.
                         for NNN = 1:size(XYZmm,2)
@@ -154,6 +155,7 @@ classdef ROI < Project
             %             out.seuclidian  = squareform(pdist(Patterns','seuclidean'));
             %             out.maha        = squareform(pdist(Patterns','mahalanobis',cov));
             %             out.cosine      = squareform(pdist(Patterns','cosine'));
+            out.corr  = squareform(pdist(Patterns','correlation'));
         end
     end
 end

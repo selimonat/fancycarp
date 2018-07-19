@@ -40,7 +40,8 @@ classdef Tuning < handle
             ts = size(self.x,1);
             for ns = 1:ts
                 fprintf('Fitting subject %03d of %03d, id: %03d\n',ns,ts,self.ids(ns));
-                self.singlesubject_data{ns} = self.Fit(self.x(ns,:),self.y(ns,:),funtype);
+                self.singlesubject_data{ns}                  = self.Fit(self.x(ns,:),self.y(ns,:),funtype);
+                self.singlesubject_data{ns}.table.subject_id = self.ids(ns);
             end
             self.FitGetParam(funtype);
         end
@@ -200,7 +201,7 @@ classdef Tuning < handle
             result.fit         = result.fitfun(result.x,result.Est)+CONSTANT;
             result.x_HD        = linspace(min(result.x),max(result.x),100);
             result.fit_HD      = result.fitfun(result.x_HD,result.Est)+CONSTANT;
-            result.table       = array2table([result.Est result.Likelihood result.pval funtype],'VariableNames',[param_names 'LL' 'pval' 'funtype']); 
+            result.table       = array2table([result.Est result.pval funtype],'VariableNames',[param_names 'LL' 'funtype']); 
             
             if result.ExitFlag < 0
                 cprintf([1 0 0],'Fmincon not converge, this usually happends with flat fear-tuning, setting pval manually to a large value....\n');
@@ -232,8 +233,8 @@ classdef Tuning < handle
                 xlim([min(x(:)) max(x(:))]);
                 drawnow;
                 grid on;                      
+                pause
             end
-%            pause
         end
         
         function [params]=RoughEstimator(self,x,y,fun,L,U)
