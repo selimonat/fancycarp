@@ -35,7 +35,7 @@ classdef Tuning < handle
             tuning.y_SEM      = tuning.y_std./sqrt(tsubject);
         end
         
-        function SingleSubjectFit(self,funtype)
+        function self = SingleSubjectFit(self,funtype)
             %fit FUNTYPE to each individual subject
             ts = size(self.x,1);
             for ns = 1:ts
@@ -65,7 +65,7 @@ classdef Tuning < handle
             end            
         end
         
-        function GroupFit(self,funtype)
+        function self = GroupFit(self,funtype)
             %pools different subjects and fit FUNTYPE
             self.groupfit = self.Fit(self.x(:),self.y(:),funtype);
             %
