@@ -90,7 +90,7 @@ classdef Project < handle
         selected_ngroup       = 1;
         %
         scale_feartunings     = 0;
-        selected_fitfun       = 3;%3fixed gaussian (3), vonmises (8); vonMises template (55); vM centered
+        selected_fitfun       = 8;%3fixed gaussian (3), vonmises (8); vonMises template (55); vM centered
         pval                  = .05;%tuning presence
         borders               = 1000;
         eye_data_type         = 'countw';
@@ -558,42 +558,51 @@ classdef Project < handle
         end
         
         
-        function [spacetime]          = getgroup_bold_spacetime_roi(self,ngroup,rois);
+        function [spacetime]          = getgroup_bold_spacetime_roi(self,ngroup,rois,tbin);
             %wrapper around the ROI object            
-            clean   = 1;
+            %clean   = 1;
             list    = self.get_selected_subjects(ngroup,1).list;            
             %%
-            betas                                                 = reshape(1:715,65,11)';
-            betas(:,[Project.mbi_oddball Project.mbi_transition]) = [];
-            betas(4,self.ucs_vector == 1)                         = betas(9,self.ucs_vector == 1);
-            %            
-            betas(9:11,:)                                         = [];
-                        
-            %% 
-            roic = 0;
-            for roi = rois
-                roic    = roic + 1;
-                R       = ROI('roi_based',roi,'chrf_0_0_mumfordian',0,betas(:)',list,self.selected_smoothing);
-                % rearrange
-                spacetime = R.evoked_pattern;
-                spacetime = reshape(spacetime ,[size(spacetime ,1) 59 8]);%[voxel mbi condition];                                
-            end
+%             betas                                                 = reshape(1:715,65,11)';
+%             betas(:,[Project.mbi_oddball Project.mbi_transition]) = [];
+%             betas(4,self.ucs_vector == 1)                         = betas(9,self.ucs_vector == 1);
+%             %            
+%             betas(9:11,:)                                         = [];
             
-            if clean
-                spacetime(:,self.ucs_vector == 1,:)                   = [];
+            betas   = reshape(1:715,65,11);
+            betas([Project.mbi_oddball Project.mbi_transition],:)   = [];                        
+            betas(Project.ucs_vector == 1,:)                  = [];
+            betas(:,9:end)                              = [];
+            
+            %% 
+            sk = 10
+            r = ROI('roi_based',rois,'chrf_0_0_mumfordian',0,betas(:)',self.get_selected_subjects(ngroup).list,sk);
+            %
+            data_ori = r.evoked_pattern;
+            data_ori = reshape(data_ori,[size(data_ori,1) 47 8]);
+            for vox = 1:size(data_ori,1)
+                dummy             = squeeze(data_ori(vox,:,:));
+                dummy             = Project.circconv2(dummy,[.5 1 .5]./2);
+                data_ori(vox,:,:) = dummy;
             end
+            %% binning         
+%             timebins = reshape(5:46,7,6);            
+%             c = 0;
+%             for N = timebins;
+%                 c = c+1;
+%                 data(:,c,:) = squeeze(mean(data_ori(:,N,:),2));
+%             end
+            %%
+            timebins = [zeros(4,tbin);BinningMatrix(43,tbin)];
+            for nc = 1:size(data_ori,3)
+                data(:,:,nc) = data_ori(:,:,nc)*timebins;
+            end            
+            
+            %%
+            spacetime.d      = data;
+            spacetime.name   = r.name;
         end        
-        function spacetime_rsa_binned = BinRSA(self,spacetime_rsa,window,tbin)
-            %bins rsa matrix overtime
-            %SPACETIME_RSA_BINNED is [MICROBLOCK BINS, PAIRWISECORR]
-            timebins = BinningMatrix(47,tbin,window);
-            c        = 0;
-            for N = timebins;
-                c    = c+1;
-                % average over bins
-                spacetime_rsa_binned(c,:) = squeeze(mean(spacetime_rsa(N == 1,:,:),1));
-            end
-        end
+     
         function spacetime_rsa        = spacetime2RSA(self,spacetime,smooth)
         %given a space time matrix computes the RSA for each microblocks                
         %spacetime     is [VOXELS, MICROBLOCKS, CONDITIONS];
@@ -602,17 +611,18 @@ classdef Project < handle
             if smooth ~= 0
                 kernel = [.5  1 .5];
                 kernel = kernel./sum(kernel);
-                for vox = 1:size(spacetime,1)
-                    dummy              = squeeze(spacetime(vox,:,:));
-                    dummy              = Project.circconv2(dummy,kernel);
-                    spacetime(vox,:,:) = dummy;
+                for vox = 1:size(spacetime.d,1)
+                    dummy                = squeeze(spacetime.d(vox,:,:));
+                    dummy                = Project.circconv2(dummy,kernel);
+                    spacetime.d(vox,:,:) = dummy;
                 end
             end
             %% get the similarity matrix for each mbi, same representation as the spacetime matrices
-            for N = 1:size(spacetime,2)
-                data                 = squeeze(spacetime(:,N,:));
-                spacetime_rsa(N,:)   = pdist(data','correlation');
+            for N = 1:size(spacetime.d,2)
+                data                   = squeeze(spacetime.d(:,N,:));
+                spacetime_rsa.d(N,:)   = pdist(data','correlation');
             end            
+            spacetime_rsa.name = spacetime.name;
         end        
         
         function plot_spacetime_rsa(self,spacetime_rsa)
@@ -621,16 +631,18 @@ classdef Project < handle
             % st_rsa = s.spacetime2RSA(st,1);
                         
             %%           
-            colors = GetFearGenColors;
-            coeff = self.RSA_Model(spacetime_rsa);
-            tbins = size(spacetime_rsa,1);
-            c        = 0;
-            for N = 1:size(spacetime_rsa,1);
+            colors       = GetFearGenColors;
+            coeff        = self.RSA_Model(spacetime_rsa.d);
+            tbins        = size(spacetime_rsa.d,1);
+            [trow, tcol] = GetSubplotNumber(10+1);
+            figure;
+            c            = 0;
+            for N = 1:size(spacetime_rsa.d,1);
                 c    = c+1;
                 % average over bins
-                data = spacetime_rsa(N,:,:);
+                data = spacetime_rsa.d(N,:,:);
                 
-                subplot(3,tbins,c);
+                subplot(trow, tcol,c);
                 imagesc( CancelDiagonals(squareform_force(data),NaN));
                 colorbar
                 title(sprintf('time bin %02d',c));
@@ -639,8 +651,38 @@ classdef Project < handle
                 %                
                 drawnow;
             end
-            subplot(3,tbins,c+1);
-            bar(diff(coeff,1,2));            
+            
+            subplot(trow,tcol,c+1);            
+            bar(coeff.circ);
+            
+            subplot(trow,tcol,c+2);            
+            C = coeff.ellips./repmat(sum(coeff.ellips,2),1,2);
+            bar(C(:,1));           
+            
+            %%
+            ndimen = 2;            
+            c      = c+2;
+            for N = 1:size(spacetime_rsa.d,1)
+                c = c +1;
+                subplot(trow,tcol,c);
+                y=mdscale(spacetime_rsa.d(N,:),ndimen);
+                for nface = 1:8;
+                    plot(y(nface,1),y(nface,2),'.','color',colors(nface,:),'markersize',50);
+                    hold on;
+                    xlim([-1 1]);
+                    ylim([-1 1]);
+                end
+                axis tight;                
+                axis equal;
+%                 axis square;                
+            end
+            %%
+            
+
+            
+            
+            supertitle(spacetime_rsa.name,1)
+            drawnow;
         end
         
         
@@ -1502,10 +1544,15 @@ classdef Project < handle
             if length(ngroup) == 1
                 ngroup(2) = 1;
             end
+            
+            covariate_id_name=[];
+            for C = covariate_id            
+                covariate_id_name                                            = [covariate_id_name C{1}];
+            end
             %% depending on subject group and smoothening, generate a directory name for this spm analysis.
             subjects   = self.get_selected_subjects(ngroup(1),ngroup(2));
             spm_dir    = regexprep(self.dir_spmmat(run,models(1)),'sub...','second_level');%convert to second-level path, replace the sub... to second-level.
-            spm_dir    = sprintf('%scov_id_%s/%02dmm/fitfun_%02d/group_%s/normalization_%s/',spm_dir,covariate_id,sk,self.selected_fitfun,subjects.name,self.normalization_method);
+            spm_dir    = sprintf('%scov_id_%s/%02dmm/fitfun_%02d/group_%s/normalization_%s/',spm_dir,covariate_id_name,sk,self.selected_fitfun,subjects.name,self.normalization_method);
             spm_path   = sprintf('%sSPM.mat',spm_dir);
             %% if multiple models are needed to be analized in one single second-level anaylsis change the spmdir to reflect this
             if length(models)>1
@@ -1514,7 +1561,7 @@ classdef Project < handle
                 spm_dir     = regexprep(spm_dir,mat2str(models(1)),folder);%I shortened the folder name not to exceed the path length limit
             end            
             %%
-            if exist(spm_path) == 0;
+            if 1%exist(spm_path) == 0;
                 %% create path to beta images;                                
                 beta_files2= [];
                 for ns = subjects.list(:)'                
@@ -1548,21 +1595,26 @@ classdef Project < handle
                 matlabbatch{1}.spm.stats.factorial_design.multi_cov              = struct('files', {}, 'iCFI', {}, 'iCC', {});
                 %%
                 %overwrite with the covariates if entered                
-                if ~isempty(covariate_id)                          
+                if ~isempty(covariate_id)
                     out                                                          = self.getgroup_pmf_param;
                     out                                                          = join(out,self.getgroup_rating_param);
                     out                                                          = join(out,self.getgroup_facecircle_param);
                     out                                                          = out(ismember(out.subject_id,subjects.list),:);
                     param                                                        = out;
+                    param.rating_amp_facecircle_amp                              = demean(out.rating_amp).*demean(out.facecircle_amp);
                     
                     %extract the parameters for the currently selected subjects
-                    c                                                            = param.(covariate_id);                    
+                    c=[];
+                    for C = covariate_id
+                        c                                                            = [c param.(C{1})];
+                    end
+                    c  = zscore(c);
                     %register beta images and covariate values.                    
-                    tcell                                                        = length(matlabbatch{1}.spm.stats.factorial_design.des.anova.icell);
+                    tcell                                                        = length(matlabbatch{1}.spm.stats.factorial_design.des.anova.icell)
                     ccc                                                          = 0;
-                    mat                                                          = kron(eye(tcell),demean(c));
-                    for ncell = 1:tcell 
-                        matlabbatch{1}.spm.stats.factorial_design.cov(ncell)     = struct('c', mat(:,ncell), 'cname', sprintf('cov:%s-cell:%02d',covariate_id,ncell), 'iCFI', 1, 'iCC', 1);                        
+                    mat                                                          = kron(eye(tcell),c);
+                    for ncell = 1:size(mat,2)
+                        matlabbatch{1}.spm.stats.factorial_design.cov(ncell)     = struct('c', mat(:,ncell), 'cname', sprintf('cov:%s-cell:%02d',covariate_id_name,ncell), 'iCFI', 1, 'iCC', 1);                        
                     end                    
                 end
                 matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none     = 1;
@@ -3079,20 +3131,7 @@ classdef Project < handle
                     h.Box = 'off';
                     
                     %%
-                    plot_ucs = 1;
-                    if plot_ucs
-                        hold on
-                        bla                          = self.ucs_vector;
-                        bla(find(self.ucs_vector)+1) = 1;
-                        bla(self.ucs_vector==1)      = [];
-                        bla                          = find(bla);
-                        for n = 1:length(bla)
-                            h2 = plot(max(xlim),bla(n),'p','markersize',12);
-                            h2.Color = [ 1 0.1 0];
-                            h2.MarkerFaceColor = [ 1 0.1 0];
-                        end
-                        hold off;
-                    end
+                    self.decorate_ucs;
                     
                     %% plot the feargen bar plot
                     pos     = posori+[0 posori(4)+posori(4)*0 0 0];
@@ -3178,21 +3217,24 @@ classdef Project < handle
             %% get the predictors
             x            = [pi/4:pi/4:2*pi];
             w            = [cos(x);sin(x)];
-            model1       = squareform_force(w'*w);%we use squareform_force as the w'*w is not perfectly positive definite matrix due to rounding errors.
+            model1       = 1-squareform_force(w'*w);%we use squareform_force as the w'*w is not perfectly positive definite matrix due to rounding errors.
             %
-            model2_c     = squareform_force(cos(x)'*cos(x));%
-            model2_s     = squareform_force(sin(x)'*sin(x));%
+            model2_c     = 1-squareform_force(cos(x)'*cos(x));%
+            model2_s     = 1-squareform_force(sin(x)'*sin(x));%
             %
             %getcorrmat(amp_circ, amp_gau, amp_const, amp_diag, varargin)
             [cmat]       = getcorrmat(0,3,1,1);%see model_rsa_testgaussian_optimizer
-            model3_g     = squareform_force(cmat);%
+            model3_g     = 1-squareform_force(cmat);%
             % add all this to a TABLE object.
             t            = table(model1(:),model2_c(:),model2_s(:),model3_g(:),'variablenames',{'circle' 'specific' 'unspecific' 'Gaussian' });
-            %
+            %%
             for nbin = 1:size(spacetime_rsa,1)
-                t.y            = 1-spacetime_rsa(nbin,:)';
+                t.y            = spacetime_rsa(nbin,:)';
                 dummy          = fitlm(t,'y ~ 1 + unspecific +specific');
-                coeffs(nbin,:) = dummy.Coefficients.Estimate(2:end);
+                coeffs.ellips(nbin,:) = dummy.Coefficients.Estimate(2:end);
+                
+                dummy               = fitlm(t,'y ~ 1 + circle');
+                coeffs.circ(nbin,:) = dummy.Coefficients.Estimate(2:end);
             end
         end
         
@@ -3429,7 +3471,200 @@ classdef Project < handle
                 drawnow;
             end
         end
+        function T = spacetime_fit(self,st,fun)
+            %fits a function to every microblock and subject in the
+            %spacetime matrix
+            force = 0;
+            X = linspace(-135,180,8);
+            T = [];
+            filename = sprintf('%smidlevel/spacetime_type_%s_fun_%03d.mat',self.path_project,st.name{1},fun);
+            if exist(filename) == 0 | force
+            %%
+            for mbi = 1:size(st.d,1)
+                for ns = 1:size(st.d,3)
+                    [mbi ns]
+                    data.y    = st.d(mbi,:,ns);
+                    data.x    = X;
+                    data.ids  = ns;
+                    t         = Tuning(data);
+                    t.SingleSubjectFit(3);
+                    dummy     = t.fit_results{3}.table;
+                    dummy.mbi = mbi;
+                    T = [T;dummy]
+                end
+            end            
+            save(filename,'T')
+            else
+                load(filename)
+            end
+            
+        end
+        function figure_02_scr(self)
+            %%
+            spacetime    = self.getgroup_scr_spacetime(0,1,0,0);%no baseline no zscore correction, all subjects
+            for n = 1:size(spacetime.d,3)
+                spacetime.d(:,:,n) = Project.circconv2(spacetime.d(:,:,n),ones(1,3));
+            end
+            
+            mat                     = mean(spacetime.d,3);                         % average across subjects
+            x                       = linspace(-135,180,8);                        % x-axis
+            mbi                     = 1:length(mat);
+            
+            spacetime_facecircle    = self.getgroup_behavioral('facecircle');
+            spacetime_rating        = self.getgroup_behavioral('rating');
+            spacetime_scr           = self.getgroup_behavioral('scr');
+            
+            tuning_facecircle = Tuning(spacetime_facecircle);tuning_facecircle.GroupFit(self.selected_fitfun);
+            tuning_rating     = Tuning(spacetime_rating);tuning_rating.GroupFit(self.selected_fitfun);
+            tuning_scr        = Tuning(spacetime_scr);tuning_scr.GroupFit(self.selected_fitfun);                                    
+            
+            
+            T            = self.spacetime_fit(spacetime,self.selected_fitfun);
+            A = [];
+            for n = 1:47;               
+                A(:,n) = T(T.mbi == n,:).amp
+            end
+            
+            t                       = self.getgroup_all_param;
+            
+            %%
+            figure
+            set(gcf,'position',[0 0 1000 1000])
+            v       = {'PlotBoxAspectRatio',[1 1 1],'DataAspectRatioMode','auto'};
+            s       = .04;
+            w_small = .12;
+            h_small = .12;
+            B       = 1-0.15;
+            L       = 0.1;
+            H(1) = axes('position',[L                   B                                               w_small      h_small]);
+            
+            H(2) = axes('position',[L                   B-(h_small+s)*3                                 w_small      (h_small)*3+s*2]);            
+            H(3) = axes('position',[L+w_small+s         B-(h_small+s)*3                                 w_small      h_small*3+s*2]);
+            
+            H(4) = axes('position',[L+w_small*2+s*2     B-(h_small+s)*3                                 w_small      h_small]);
+            H(5) = axes('position',[L+w_small*2+s*2     B-(h_small+s)*3+(h_small+s)                     w_small      h_small]);
+            H(6) = axes('position',[L+w_small*2+s*2     B-(h_small+s)*3+(h_small+s)*2                   w_small      h_small]);
+            
+            H(7) = axes('position',[L                   B-(h_small+s)*3-(h_small*1.5)-s                 w_small*1.5  h_small*1.5]);
+            H(8) = axes('position',[L+w_small*1.5+s*2   B-(h_small+s)*3-(h_small*1.5)-s                 w_small*1.5  h_small*1.5]);
+
+            %%
+            axes(H(2))
+            imagesc(mat);      
+            set(gca,'xtick',[1:8]+.5,'xticklabel',{'' '' '' 'CS+' '' '' '' sprintf('\\pm180%c',char(176))},'XAxisLocation','top','fontsize',12);                                    
+%             axis image;
+            axis xy;
+            pos = plotboxpos(gca)
+            ylabel('Micro-block index');            
+            self.decorate_ucs;            
+            Publication_Ylim(gca,6)
+            h             = Publication_addcolorbar(gca);
+            h.Location    = 'westoutside'
+            h.Position(4) = .1;
+            h.Position(3) = h.Position(3)/2;
+            h.Position(1) = H(2).Position(1)-.04;
+            Publication_Ylim(h,1)
+            %             Publication_NiceTicks(gca,2);
+            %%
+            axes(H(1))                     
+            h = Project.plot_bar(x,spacetime_scr.y_mean,spacetime_scr.y_SEM);
+            hold on;
+            plot(tuning_scr.groupfit.x_HD,tuning_scr.groupfit.fit_HD,'k','linewidth',3);
+            hold off
+            Publication_RemoveXaxis(gca)
+            title('SCR')
+            Publication_NiceTicks(gca,1)
+            grid on
+            set(gca,'xticklabel',[]);
+            %%
+            axes(H(3))
+            %
+            P     = squeeze(spacetime.d(:,4,:))';
+            N     = squeeze(spacetime.d(:,8,:))';
+            M     = P - N;
+            S     = std(M)/sqrt(39);
+            
+            
+            M     = A;
+            
+            X     = 1:size(P,2);            
+            h=[];p=[];
+            for n = X  
+                %[p(n) h(n)] = signtest(M(:,n));
+                [h(n) p(n) ] = ttest(M(:,n),[],'tail','right');
+                if h(n) == 1
+                    barh(n,mean(M(:,n)),1,'facecolor',[.6 .1 .1],'linestyle','none');
+                else
+                    barh(n,mean(M(:,n)),1,'facecolor',[.5 .5 .5],'linestyle','none');
+                end
+                hold on
+            end
+            title('Amplitude')
+            set(gca,'yticklabel',[],'ytick',[])
+            hold off
+            box off
+            axis tight;
+            Publication_RemoveYaxis(gca)
+            Publication_RemoveXaxis(gca)                                    
+            %%
+            %Publication_NiceTicks(H(5),1)
+            axes(H(6))
+            h = Project.plot_bar(x,spacetime_facecircle.y_mean,spacetime_facecircle.y_SEM)            
+            hold on;
+            plot(tuning_facecircle.groupfit.x_HD,tuning_facecircle.groupfit.fit_HD,'k','linewidth',3);
+            hold off;
+            Publication_RemoveXaxis(H(6))
+            Publication_Ylim(gca)
+            Publication_NiceTicks(H(6),1)
+            title(sprintf('Fixation Count'))
+            set(gca,'xticklabel',[]);
+            grid on
+            %%
+            axes(H(5))
+            h = Project.plot_bar(x,spacetime_rating.y_mean,spacetime_rating.y_SEM)            
+            hold on;
+            plot(tuning_rating.groupfit.x_HD,tuning_rating.groupfit.fit_HD,'k','linewidth',3);
+            hold off
+            Publication_RemoveXaxis(H(5))
+            Publication_Ylim(gca)
+            Publication_NiceTicks(H(5),1)
+            title(sprintf('Ratings'))
+            set(gca,'xticklabel',[]);
+            grid on
+            %%
+            axes(H(4))
+            c = hist(t.detection_absface,[0 45 90 135 180]);
+            bar([0 45 90 135 180],c,'linestyle','none','facecolor',[.5 .5 .5])
+            title(sprintf('Detection error'))
+            set(gca,'color','none')
+            Publication_Ylim(gca)
+            Publication_NiceTicks(H(4),2)
+            axis tight
+            box off
+            %%
+            axes(H(7))
+            x = 'rating_amp';
+            y = 'facecircle_amp';
+            scatter_stat(t,{'detection_absface' x y})
+            xlabel(x);
+            ylabel(y);
+            title('Detection Error')
+            %
+            axes(H(8))            
+            scatter_stat(t,{'scr_amp',x,y})
+            xlabel(x)
+            ylabel(y)
+            title('SCR amplitude')
+            %%
+            filename=sprintf('~/gdrive/Office/Fearamy/paperfigures/%s.png','figure_02_scr');
+            SaveFigure(filename,'-r400')
+            
+            
+            
+        end
         function figure_01(self);
+            %%
+            
             %%            
             set(gcf,'position',[2412         595        1261         472])
             clf;
@@ -3570,6 +3805,22 @@ classdef Project < handle
                 SaveFigure(filename,'-r120');
             end
         end
+        function decorate_ucs(self)
+            plot_ucs = 1;
+            if plot_ucs
+                hold on
+                bla                          = self.ucs_vector;
+                bla(find(self.ucs_vector)+1) = 1;
+                bla(self.ucs_vector==1)      = [];
+                bla                          = find(bla);
+                for n = 1:length(bla)
+                    h2 = plot(max(xlim),bla(n),'p','markersize',12);
+                    h2.Color = [ 1 0.1 0];
+                    h2.MarkerFaceColor = [ 1 0.1 0];
+                end
+                hold off;
+            end
+        end
     end    
     methods (Static)
         function h           = plot_bar(X,Y,SEM)
@@ -3579,7 +3830,7 @@ classdef Project < handle
             cmap  = GetFearGenColors;
             tbar  = 8;            
             for i = 1:tbar                
-                h(i)    = bar(X(i),Y(i),40,'facecolor',cmap(i,:),'edgecolor','none','facealpha',.8);
+                h(i)    = bar(X(i),Y(i),45,'facecolor',cmap(i,:),'edgecolor','none','facealpha',.8);
                 hold on;
             end            
             %%
@@ -3588,7 +3839,8 @@ classdef Project < handle
                errorbar(X,Y,SEM,'ko');%add error bars
             end            
             %%
-            h = gca;            set(h,'xtick',X,'xticklabel',{'' sprintf('-90%c',char(176)) '' 'CS+' '' sprintf('+90%c',char(176)) '' sprintf('\\pm180%c',char(176))});
+            %h = gca;            set(h,'xtick',X,'xticklabel',{'' sprintf('-90%c',char(176)) '' 'CS+' '' sprintf('+90%c',char(176)) '' sprintf('\\pm180%c',char(176))});
+            h = gca;            set(h,'xtick',X,'xticklabel',{'' '' '' 'CS+' '' '' '' sprintf('\\pm180%c',char(176))});
             box off;
             set(h,'color','none');
             xlim([0 tbar+1])
@@ -3610,7 +3862,7 @@ classdef Project < handle
             elseif nargin == 2
                 kernel = varargin{1};
                 kernel = kernel./sum(kernel(:));
-            end            
+            end        
             [Yc]= conv2([Y Y Y],kernel,'same');
             Yc  = Yc(:,(size(Yc,2)/3+1):(size(Yc,2)/3+1)+8-1);          
 
@@ -3787,6 +4039,6 @@ classdef Project < handle
             out.params.metric_dispersion  = out.x.^2*out.y(:).^2;
             Gs                            = abs(out.y)./sum(abs(out.y));
             out.params.metric_entropy     = sum(-Gs.*log(Gs+eps));
-        end
+        end        
     end
 end
