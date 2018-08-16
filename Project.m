@@ -85,7 +85,7 @@ classdef Project < handle
         condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
         kickcooldown          = 1;
         wmcsfregressors       = 0;
-        orderfir              = 13;
+        orderfir              = 14;
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm_version); %path to the TPM images, needed by segment.
@@ -640,9 +640,11 @@ classdef Project < handle
             spm_jobman('run', matlabbatch);
         end
         
-        function plot_bar(X,Y,SEM)
+        function plot_bar(X,Y,SEM,varargin)
             % input vector of 8 faces in Y, angles in X, and SEM. All
             % vectors of 1x8;
+            %% 
+         
             %%
             
             condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
@@ -658,7 +660,7 @@ classdef Project < handle
             end
             %%
             hold on;
-            if nargin == 3
+            if nargin > 2
                 errorbar(X,Y,SEM,'k.','LineWidth',2);%add error bars
             end
             
@@ -669,7 +671,92 @@ classdef Project < handle
             drawnow;
             axis tight;box off;axis square;drawnow;alpha(.5);
             xlim([min(X)-mean(diff(X)) max(X)+mean(diff(X))])
+           
+        end
+         function plot_ROI_basetest(contrast,fitmethod,hReg,varargin)
+            % input vector of 8 faces in Y, angles in X, and SEM. All
+            % vectors of 1x8;
+            X = -135:45:180;
+            Y = contrast.contrast;
+            yticki = [min(contrast.contrast) max(contrast.contrast)];
+            %%
+            graycol = [.3 .3 .3];
+            figure(1000);clf
+            condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
+            subplot(1,2,1);
+            bar(X,Y(1:8),'facecolor',graycol,'edgecolor','none','facealpha',.8);
+            hold on
+            errorbar(X,Y(1:8),contrast.standarderror(1:8),'k.')
+            set(gca,'xtick',[0 180],'xticklabel',{'CS+','CS-'});
+            box off;
+            set(gca,'color','none');
+            drawnow;
+            axis tight;box off;axis square;drawnow;alpha(.5);
+            xlim([min(X)-mean(diff(X)) max(X)+mean(diff(X))])
+            ylabel('Contrast Estimate [a.u.]')
+            title('Baseline')
             
+            base.x = X;
+            base.y = contrast.contrast(1:8)';
+            base.ids = 1;
+            tb = Tuning(base);
+            tb.SingleSubjectFit(fitmethod);
+            if (10^-tb.fit_results.pval)<.05
+                plot(tb.fit_results.x_HD,tb.fit_results.fit_HD,'Color',graycol,'LineWidth',2)
+            else
+                plot(tb.fit_results.x_HD,ones(1,numel(tb.fit_results.fit_HD))*mean(tb.y_mean),'Color',graycol,'LineWidth',2)
+            end
+            
+            
+            subplot(1,2,2);
+            cmap  = GetFearGenColors;
+            cc= 0;
+            for i = 9:16
+                cc = cc+1;
+                try
+                    h(cc)    = bar(X(cc),Y(i),40,'facecolor',cmap(cc,:),'edgecolor','none','facealpha',.8);
+                catch
+                    h(cc)    = bar(X(cc),Y(i),40,'facecolor',cmap(cc,:),'edgecolor','none');
+                end
+                hold on;
+            end
+            hold on
+            errorbar(X,contrast.contrast(9:16),contrast.standarderror(1:8),'k.')
+            
+            test.x = X;
+            test.y = Y(9:16)';
+            test.ids = 1;
+            tt = Tuning(test);
+            tt.SingleSubjectFit(fitmethod);
+            if (10^-tt.fit_results.pval)<.05
+                plot(tt.fit_results.x_HD,tt.fit_results.fit_HD,'Color',[0 0 0 ],'LineWidth',2)
+            else
+                plot(tt.fit_results.x_HD,ones(1,numel(tt.fit_results.fit_HD))*mean(tt.y_mean),'Color',graycol,'LineWidth',2)
+            end
+            %
+            box off;
+            set(gca,'color','none','xtick',[0 180],'xticklabel',{'CS+','CS-'});
+            drawnow;
+            axis tight;box off;axis square;drawnow;alpha(.5);
+            xlim([min(X)-mean(diff(X)) max(X)+mean(diff(X))])
+            title('Test')
+            EqualizeSubPlotYlim(gcf);
+            if nargin > 2
+                namestr = varargin{1};
+            else
+                namestr = '';
+            end
+            if nargin > 3
+                yticki = varargin{2};
+            end
+            for ns = 1:2
+                subplot(1,2,ns)
+                set(gca,'YTick',yticki,'FontSize',12)
+            end
+            xyz_mm = spm_XYZreg('GetCoords',hReg);
+            st = supertitle(sprintf('[%3.1f %3.1f %3.1f] %s',xyz_mm(1),xyz_mm(2),xyz_mm(3),namestr));
+            set(st,'FontSize',14)
+            set(gcf,'color','white')
         end
     end
 end
