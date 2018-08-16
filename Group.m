@@ -427,11 +427,14 @@ classdef Group < Project
         
     end
     methods %(mri))
-        function Run1stlevel(self,modelnum)
+        function Run1stlevel(self,modelnum,varargin)
+            if nargin > 2
+                phases = varargin{1};
+            end
           %% wrapper Creating the Onsets, Fitting HRF model to model, and computing contrasts
           fprintf('Preparing CondFiles\n')
             for ns = 1:self.total_subjects
-                for ph = 1:4
+                for ph = phases(:)'
                     if self.ids(ns)==15 && ph == 4
                         continue
                     else
@@ -439,15 +442,14 @@ classdef Group < Project
                     end
                 end
             end
-            fprintf('Fitting Subject %02, run %d.\n',self.ids(ns),ph)
             for ns = 1:self.total_subjects
-                for ph = 1:3
+                for ph = phases(:)'
                     if self.ids(ns)~=15 && ph ==3
                         ph = [3 4];
                     end
-                    fprintf('Fitting Subject %02, run %d.\n',self.ids(ns),ph)
+                    fprintf('Fitting Subject %02d, run %d.\n',self.ids(ns),ph)
                     self.subject{ns}.FitHRF(ph,modelnum);
-                    fprintf('ConImages for Subject %02, run %d.\n',self.ids(ns),ph)
+                    fprintf('ConImages for Subject %02d, run %d.\n',self.ids(ns),ph)
                     self.subject{ns}.Con1stLevel(ph(1),modelnum);
                 end
             end
@@ -814,6 +816,7 @@ classdef Group < Project
             % For PMOD from ratings, same. so just 1:Npmod(which is =1)
             %
             % Here: defining chunks of contrasts to go for (+ N bins is done by loop later).
+            
             if strcmp(namestring,'8conds')
                 switch nrun
                     case 1
@@ -854,28 +857,158 @@ classdef Group < Project
                 conds2collect = 1;
             elseif strcmp(namestring,'PMOD_PRind_pmod')
                 conds2collect = 2;
+            elseif any(strfind(namestring,'win')) && any(strfind(namestring,'CSdiff'))
+                load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
+                if any(strfind(namestring,'bin4'))
+                    if nrun == 2
+                        cons2collect = 45;
+                    elseif nrun == 3
+                        cons2collect = 150;%bin4win4
+                    end
+                elseif any(strfind(namestring,'bin5'))
+                    if nrun == 2
+                        cons2collect = 48;
+                    elseif nrun == 3
+                        cons2collect = 160;%bin5win4
+                    end
+                end
+                fprintf('You chose contrasts named:\n')
+                SPM.xCon(cons2collect).name
+                fprintf('.................................................\n')
+            elseif any(strfind(namestring,'win')) && any(strfind(namestring,'UCSCSN'))
+                load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat')) 
+                if any(strfind(namestring,'bin4'))
+                    if nrun == 2
+                        cons2collect = 43:44;
+                    elseif nrun == 3
+                        cons2collect = [149 148];%bin4win4
+                    end
+                elseif any(strfind(namestring,'bin5'))
+                    if nrun == 2
+                        cons2collect = 46:47;
+                    elseif nrun == 3
+                        cons2collect = [159 158];%bin5win4
+                    end
+                end
+                fprintf('You chose contrasts named:\n')
+                SPM.xCon(cons2collect).name
+                fprintf('.................................................\n')
+            elseif any(strfind(namestring,'win')) && any(strfind(namestring,'CSPCSN'))
+                load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
+                if any(strfind(namestring,'bin4'))
+                    if nrun == 2
+                        cons2collect = 43:44;
+                    elseif nrun == 3
+                        cons2collect = [144 148];%bin4win4
+                    end
+                elseif any(strfind(namestring,'bin5'))
+                    if nrun == 2
+                        cons2collect = 43:44;
+                    elseif nrun == 3
+                        cons2collect = 154:158;%bin5win4
+                    end
+                end
+                fprintf('You chose contrasts named:\n')
+                SPM.xCon(cons2collect).name
+                fprintf('.................................................\n')
+            elseif any(strfind(namestring,'win')) && any(strfind(namestring,'allconds'))
+                load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
+                if any(strfind(namestring,'bin4'))
+                    if nrun == 2
+                        cons2collect = 43:44;
+                    elseif nrun == 3
+                        cons2collect = 141:149;%bin4win4
+                    elseif nrun == 1
+                         cons2collect = 127:134;%bin4win4
+                    end
+                elseif any(strfind(namestring,'bin5'))
+                    if nrun == 2
+                        cons2collect = 46:47;
+                    elseif nrun == 3
+                        cons2collect = 151:159;%bin4win4
+                    end
+                end
+                fprintf('You chose contrasts named:\n')
+                SPM.xCon(cons2collect).name
+                fprintf('.................................................\n')
+            elseif any(strfind(namestring,'win')) && any(strfind(namestring,'8conds_BT'))
+                load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
+                if any(strfind(namestring,'bin4'))
+                    nrun = [1 3];
+                    cons2collectstruct = {127:134, [],141:148};%bin4win4
+                elseif any(strfind(namestring,'bin5'))
+                    %...
+                end
+                fprintf('You chose contrasts named:\n')
+                SPM.xCon(cons2collectstruct{1}).name
+                fprintf('.................................................\n')
+            elseif any(strfind(namestring,'win2')) && any(strfind(namestring,'_BT'))
+                load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
+                if any(strfind(namestring,'bin4'))
+                    nrun = [1 3];
+                    cons2collectstruct = {137:144, [],161:168};%bin4win2
+                elseif any(strfind(namestring,'bin5'))
+                    nrun = [1 3];
+                    cons2collectstruct = {146:153, [],171:178};%bin5win2
+                elseif any(strfind(namestring,'bin6'))
+                    nrun = [1 3];
+                    cons2collectstruct = {155:162, [],181:188};%bin6win2
+                end
+                fprintf('You chose contrasts named:\n')
+                SPM.xCon(cons2collectstruct{1}).name
+                fprintf('.................................................\n')
+            elseif any(strfind(namestring,'win4bin4')) && any(strfind(namestring,'Gauss_BT'))
+                load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
+                
+                nrun = [1 3];
+                cons2collectstruct = {136, [],191};%bin4win2
+                
+                fprintf('You chose contrasts named:\n')
+                SPM.xCon(cons2collectstruct{1}).name
+                fprintf('.................................................\n')
             end
             clear matlabbatch
-              
+            
             %load(self.subject{1}.path_spmmat(nrun,modelnum)); %allows lookup of things
             % collect all subjects' con images for every cond
-            
-            bc = 0;
-            for runloop = nrun(:)'
-                for cond = conds2collect(:)'
-                    fprintf('\nCollecting con images for cond %04d:\n',cond)
-                    for bin = bins2take(:)' %loop through bins, then subjects. sub01_bin1 sub02_bin1 ... sub01_bin2 sub02_bin etc..
-                        ind = self.findcon_FIR(order,cond,bin);
-                        fprintf('\nbin %02d, i.e. con %03d...',bin,ind)
-                        bc = bc + 1;
+            if any(strfind(namestring,'win')) %here we don\t take single bins to 2ndlevel, so we loop through the CONS, not conds identified above
+                bc = 0;
+                for runloop = nrun(:)'
+                    if numel(nrun) > 1
+                        cons2collect = cons2collectstruct{runloop};
+                    end
+                    for con = cons2collect(:)'
+                        bc = bc+1;
+                        fprintf('\nCollecting con images of con %04d:\n',con)
                         clear files
-                        fprintf('Looping through subs: ');
+                        fprintf('Factor %02d - Looping through subs: ',bc);
                         for ns = 1:self.total_subjects
                             fprintf('%02d - ',ns)
-                            files(ns,:) = cellstr([self.subject{ns}.path_FIR(runloop,modelnum,order,namestring1stlevel), sprintf('%scon_%04d.nii',prefix,ind)]);
+                            files(ns,:) = cellstr([self.subject{ns}.path_FIR(runloop,modelnum,order,namestring1stlevel), sprintf('%scon_%04d.nii',prefix,con)]);
                         end
                         fprintf('completo.')
                         matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(bc).scans = cellstr(files); %one bin at a time, but all subs
+                        
+                    end
+                end
+            else
+                bc = 0;
+                for runloop = nrun(:)'
+                    for cond = conds2collect(:)'
+                        fprintf('\nCollecting con images for cond %04d:\n',cond)
+                        for bin = bins2take(:)' %loop through bins, then subjects. sub01_bin1 sub02_bin1 ... sub01_bin2 sub02_bin etc..
+                            ind = self.findcon_FIR(order,cond,bin);
+                            fprintf('\nbin %02d, i.e. con %03d...',bin,ind)
+                            bc = bc + 1;
+                            clear files
+                            fprintf('Looping through subs: ');
+                            for ns = 1:self.total_subjects
+                                fprintf('%02d - ',ns)
+                                files(ns,:) = cellstr([self.subject{ns}.path_FIR(runloop,modelnum,order,namestring1stlevel), sprintf('%scon_%04d.nii',prefix,ind)]);
+                            end
+                            fprintf('completo.')
+                            matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(bc).scans = cellstr(files); %one bin at a time, but all subs
+                        end
                     end
                 end
             end
@@ -1260,6 +1393,209 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = vec1;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_allbins';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+            elseif any(strfind(namestring,'win')) && any(strfind(namestring,'CSdiff'))
+                %% F TESTS
+                %eoi
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                %% T Tests
+                % all bins positive
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+            elseif (any(strfind(namestring,'win')) && any(strfind(namestring,'UCSCSN'))) || (any(strfind(namestring,'win')) && any(strfind(namestring,'CSPCSN')))
+                 %% F TESTS
+                %eoi
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(2);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(2)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [1 -1];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_UCSvsCSN';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                %% T Tests
+                % all bins positive
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [1 1];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_both';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+             
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [1 0];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_UCS';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [0 1];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_CSN';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [1 -1];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_CSdiff';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+            elseif any(strfind(namestring,'win')) && any(strfind(namestring,'allconds'))
+                if nrun == 3
+                    %% F TESTS
+                    %eoi
+                    n = n + 1;
+                    nF = nF+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(9);
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(allconds)';
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                    n = n + 1;
+                    nF = nF+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [0 0 0 1 0 0 0 -1];
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_CSPvsCSN';
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                    
+                    %% T Tests
+                    % all bins positive
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = ones(1,9);
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_all';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [0 0 0 1];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_CSP';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [0 0 0 0 0 0 0 1];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_CSN';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [-1/7 -1/7 -1/7 1 -1/7 -1/7 -1/7 -1/7 0];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_CSP>rest';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [repmat(-1/8,1,8) 1];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_UCS>rest';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                end
+            elseif any(strfind(namestring,'win')) && any(strfind(namestring,'8conds_BT'))
+                %% F TESTS
+                    %eoi
+                    n = n + 1;
+                    nF = nF+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(16);
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(allconds)';
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';                
+                    %testphase
+                    n = n + 1;
+                    nF = nF+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [eye(8) zeros(8)];
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Base)';
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';                
+                   
+                    %baseline
+                    n = n + 1;
+                    nF = nF+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [zeros(8) eye(8)];
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Test)';
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                    
+                    %baseline vs test
+                    n = n + 1;
+                    nF = nF+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [eye(8) -eye(8)];
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Test)';
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                
+                    %% T Tests
+                    % all bins positive
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = ones(1,16);
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_all';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [ones(1,8) zeros(1,8)];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_Base';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights =[zeros(1,8) ones(1,8)];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_Test';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    %% VonMises
+                    [VM, dVM] = self.compute_VM(-135:45:180,1,1,.001);
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [VM VM];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_both';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [VM zeros(1,8)];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_base';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [zeros(1,8) VM];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_test';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [-VM VM];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_test>base';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    
+                    %% Gauss
+                    gauss = spm_Npdf(1:8,4)-mean(spm_Npdf(1:8,4));
+                    n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [gauss gauss];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_gauss_both';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                        n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [gauss zeros(1,8)];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_gauss_base';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                        n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [zeros(1,8) gauss];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_gauss_test';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    
+                     n = n + 1;
+                    nT = nT+1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [-gauss gauss];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_Gauss_test>base';
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                    
+            else
+                fprintf('No 2ndlevel contrasts defined here, please check code.\n')
+                keyboard
+                
             end
             
             nn = n; %final counter
