@@ -23,7 +23,6 @@ classdef Subject < Project
     %   Plotter methods plot things as their name suggests.
     %
     %
-=cf    
     properties (Hidden)
         paradigm
         default_run       = 1;
@@ -2769,7 +2768,7 @@ classdef Subject < Project
                         load(modelpath);
                     end
                 case 17
-                      modelname = 'RampDown_11sec_plateau_pmodexp'; %based on 6, onsets are RampOnsets
+                      modelname = 'RampDown_Stick_plus_11sec_plateau'; %based on 6, onsets are RampOnsets
                     if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
                     if verbalize == 1
                         fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
@@ -2781,32 +2780,36 @@ classdef Subject < Project
                         %% merge normal facetrials and UCS trials in one regressor, but keep Nulltrial seperate
                         nreg = find(self.condsinphase(run)~=3000); %only first phase has no UCS at position 3, otherwise we want to merge normal faces and UCS onsets, but keep null as cond(2)
                       
-                        pmod = self.get_ramptemp(run);
-                        pmod(1) = [];
+                        pmod =  double(self.paradigm{run}.presentation.ucs(2:end));
+                        %self.get_ramptemp(run);
+                        %pmod(1) = [];
                         
                         onsets = [];
                         for nr = nreg(:)'
                             onsets = [onsets(:)' cond0(nr).onset(:)'];
                         end
                         onsets = sort(onsets);
-                        cond(1).name = 'RampDown';
+                        cond(1).name = 'RampDownStick';
                         cond(1).onset = onsets;
-                        cond(1).duration = 6*ones(1,length(onsets))./self.TR;
+                        cond(1).duration = zeros(1,length(onsets));
                         cond(1).tmod = 0;
-                        cond(1).pmod = struct('name',{'delta'},'param',{pmod},'poly',{1});
+                        cond(1).pmod = struct('name',{'highlow'},'param',{pmod},'poly',{1});
                         
-                        cond(2) = cond0(self.condsinphase(run)==3000); %Nulltrial seperately
-                        cond(3) = cond0(end-1); %RatePain
-                        cond(4) = cond0(end); %RateRelief
+                        cond(2).name = 'RampDownPlateau';
+                        cond(2).onset = onsets;
+                        cond(2).duration = 11*ones(1,length(onsets))./self.TR;
+                        cond(2).tmod = 0;
+                        cond(2).pmod = struct('name',{},'param',{},'poly',{1});
+                        
+                        cond(3) = cond0(self.condsinphase(run)==3000); %Nulltrial seperately
+                        cond(4) = cond0(end-1); %RatePain
                         save(modelpath,'cond')
                     else
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
                         load(modelpath);
                     end
-                case 18                    
-                    
-                    modelname = 'SBS_Schlern'; %RampDown, Boxvcar Plateau, RampUp again..
-                    
+                case 18               
+                    modelname = 'SBS_Schlern'; %RampDown, Boxvcar Plateau, RampUp again..                    
                     if ~exist(modelpath) || force == 1
                         if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
                         if verbalize == 1
@@ -2944,8 +2947,8 @@ classdef Subject < Project
                         
                         % add pmod of ucs or not to RampUp and RampDown.
                         pmodinfo = double(self.paradigm{run}.presentation.ucs(2:end));
-                        cond(1).pmod      = struct('name',{'TempDiff'},'param',{pmodinfo},'poly',{1});
-                        cond(3).pmod      = struct('name',{'TempDiff'},'param',{pmodinfo},'poly',{1});
+                        cond(1).pmod      = struct('name',{'highlow'},'param',{pmodinfo},'poly',{1});
+                        cond(3).pmod      = struct('name',{'highlow'},'param',{pmodinfo},'poly',{1});
                         
                         save(modelpath,'cond');
                     else
@@ -3311,7 +3314,7 @@ classdef Subject < Project
             
             if model_num  == 2 %needs special treatment because both face and relief onset are modelled..
                 %
-            elseif ismember(model_num,[7 8 9 10 12 13 15 16 17]) %% models with pmods, so we will skip the main effect / 1st regressor.
+            elseif ismember(model_num,[7 8 9 10 12 13 15 16]) %% models with pmods, so we will skip the main effect / 1st regressor.
                 load([self.dir_spmmat(nrun(1),model_num) 'SPM.mat'])
                 for pmod = 1:size(SPM.Sess.U(1).P,2) %loop through the pmods we defined
                     
@@ -3322,6 +3325,22 @@ classdef Subject < Project
                     n = n+ 1;
                     name{n} = SPM.Sess.U(1).P(pmod).name;
                     vec(1+pmod) = 1; %skip the main effect
+                    if nrun == 3  && self.id ~= 15
+                        vec = repmat(vec,1,2);
+                    end
+                    convec{n} = vec;
+                end
+            elseif ismember(model_num,17)
+                regr2take = 1:3;
+                regrnames = {'MEdown','PMODdown','Plateau'};
+                for regr = regr2take(:)' %loop through the regressors we might want to look at @ 2ndlevel
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num)-1); %-1 so that phase constant is left out for now.
+                    if nrun == 3 && self.id ~= 15
+                        vec = zeros(1,self.get_Nbetas(nrun,model_num)./2-1);
+                    end
+                    n = n+ 1;
+                    name{n} = regrnames{n};
+                    vec(regr) = 1; %put 1 to nth regressor
                     if nrun == 3  && self.id ~= 15
                         vec = repmat(vec,1,2);
                     end
@@ -3457,8 +3476,14 @@ classdef Subject < Project
             %             A
             spm_jobman('run',matlabbatch);
         end
-        function [total_cons] = CreateContrasts_FIR(self,nrun,model_num)
-      
+        function [total_cons] = CreateContrasts_FIR(self,nrun,model_num,varargin)
+            if nargin > 3
+                startbin = varargin{1};
+                binwin = varargin{2};
+            else
+                startbin = 4;
+                binwin = 4;
+            end
             order = self.orderfir;
             nsessions = self.nsessions(nrun); %used to repmat convec later
             if self.id == 15
@@ -3476,7 +3501,7 @@ classdef Subject < Project
             Nbetas  = size(SPM.xX.X,2);
             vec0 = zeros(1,(Nbetas./nsessions)-1); %-1 so that phase constant is left out for now.
    
-              
+%               
             if ismember(model_num,[5]) %models with PMOD VonMisesonsetsofint(onsetsofint(:,2)==lookup(1,n),1)
                 condnames = {'FaceMain','VM','dVM'};
                 conds2take = {2:3,[],2:3};  
@@ -3490,63 +3515,149 @@ classdef Subject < Project
                 if nrun == 2
                     condnames = {'180','500'};
                 else
-                    condnames = {'-135','-90','-45','0','45','90','135','180'};
+                    condnames = {'-135','-90','-45','0','45','90','135','180','500'};
                 end
                 conds2take = {1:8,[2 1],1:8};
             end
-            
-   
-            % loop through cons and get betas together.
-            c = 0;
-            for cond_ind = conds2take{nrun}
-                c = c+1;
-                for bin = 1:order
+%             
+%    
+%             % loop through cons and get betas together.
+%             c = 0;
+%             for cond_ind = conds2take{nrun}
+%                 c = c+1;
+%                 for bin = 1:order
+%                     n = n + 1;
+%                     getcond = (cond_ind-1)*order + bin; %all cons+bins before this con's bin need to be skipped
+%                     vec = vec0;
+%                     vec(getcond) = 1;
+%                     vec = repmat(vec,1,nsessions);
+%                     vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se
+%                     convec{n} = vec;
+%                     name{n} = sprintf('bin%02d.%s',bin,condnames{cond_ind});
+%                 end
+%             end
+%             % make convecs sum to 1 for positive t-contrasts
+%             for co = 1:n
+%                 convec{co} = convec{co}./sum(convec{co});
+%             end
+%             n1 = n; %first contrast
+%             
+%             %% add CSdiff if applicable
+%             if ismember(model_num,[1 4])
+%                 % CSP vs CSN
+%                 cs_ind = [4 8; 2 1; 4 8];
+%                 for bin = 1:order
+%                     n = n + 1;
+%                     csp_bin = (cs_ind(nrun,1)-1)*order + bin; %Nth bin beta of CSP
+%                     csn_bin = (cs_ind(nrun,2)-1)*order + bin; %Nth bin beta of CSN
+%                     vec = vec0;
+%                     vec(csp_bin) = 1;
+%                     vec(csn_bin) = -1;
+%                     if nrun ==3
+%                         if self.id ~= 15
+%                             vec = repmat(vec,1,2);
+%                         end
+%                     end
+%                     if self.id == 15
+%                         nsessions = 1;
+%                     end
+%                     vec = padarray(vec,[0 nsessions],0,'post');
+%                     convec{n} = vec;
+%                     name{n} = sprintf('bin%02d.CSdiff',bin);
+%                 end
+%                 % make convecs sum to 1 and -1 for t-contrasts
+%                 for co = (n1+1):n
+%                     convec{co} = convec{co}./nsessions;
+%                 end
+%             end
+%             % get UCS cons
+%             if nrun == 3
+%                 cond_ind = 9;
+%                 for bin = 1:order
+%                     n = n + 1;
+%                     getcond = (cond_ind-1)*order + bin; %all cons+bins before this con's bin need to be skipped
+%                     vec = vec0;
+%                     vec(getcond) = 1;
+%                     vec = repmat(vec,1,nsessions);
+%                     vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se
+%                     convec{n} = vec./nsessions;
+%                     name{n} = sprintf('bin%02d.%s',bin,condnames{cond_ind});
+%                 end
+%             end
+            %% bin win thing
+            conds2take ={1:8,[2 1],1:9};
+            n2 = n;
+            if model_num == 4
+                %loop through cons and get betas together.
+                %SINGLE CONS ge-bin-ed
+                for cond_ind = conds2take{nrun}
                     n = n + 1;
-                    getcond = (cond_ind-1)*order + bin; %all cons+bins before this con's bin need to be skipped
+                    binfo1 =  self.findcon_FIR(order,cond_ind,startbin);%all cons+bins before this con's bin need to be skipped
+                    binfo2 = self.findcon_FIR(order,cond_ind,startbin+binwin-1);
                     vec = vec0;
-                    vec(getcond) = 1;
+                    vec(binfo1:binfo2) = 1;
                     vec = repmat(vec,1,nsessions);
                     vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se
                     convec{n} = vec;
-                    name{n} = sprintf('bin%02d.%s',bin,condnames{cond_ind});
+                    name{n} = sprintf('bin%02d.win%02d.%s',startbin,binwin,condnames{cond_ind});
                 end
-            end
-            % make convecs sum to 1 for positive t-contrasts
-            for co = 1:n
-                convec{co} = convec{co}./sum(convec{co});
-            end
-            n1 = n; %first contrast
-            
-            %% add CSdiff if applicable
-            if ismember(model_num,[1 4])
-                % CSP vs CSN
+                if nrun ==3
+                    if self.id ~= 15
+                        vec = repmat(vec,1,2);
+                    end
+                end
+                if self.id == 15
+                    nsessions = 1;
+                end
+                %
                 cs_ind = [4 8; 2 1; 4 8];
-                for bin = 1:order
-                    n = n + 1;
-                    csp_bin = (cs_ind(nrun,1)-1)*order + bin; %Nth bin beta of CSP
-                    csn_bin = (cs_ind(nrun,2)-1)*order + bin; %Nth bin beta of CSN
-                    vec = vec0;
-                    vec(csp_bin) = 1;
-                    vec(csn_bin) = -1;
-                    if nrun ==3
-                        if self.id ~= 15
-                            vec = repmat(vec,1,2);
-                        end
+                n = n+1;
+                vec = vec0;
+                csp_bins =  self.findcon_FIR(order,cs_ind(nrun,1),startbin):self.findcon_FIR(order,cs_ind(nrun,1),startbin+binwin-1); %Nth bin beta of CSP
+                csn_bins =  self.findcon_FIR(order,cs_ind(nrun,2),startbin):self.findcon_FIR(order,cs_ind(nrun,2),startbin+binwin-1); %Nth bin beta of CSN
+                vec(csp_bins) =  1;
+                vec(csn_bins) = -1;
+                if nrun ==3
+                    if self.id ~= 15
+                        vec = repmat(vec,1,2);
                     end
-                    if self.id == 15
-                        nsessions = 1;
-                    end
-                    vec = padarray(vec,[0 nsessions],0,'post');
-                    convec{n} = vec;
-                    name{n} = sprintf('bin%02d.CSdiff',bin);
                 end
-                % make convecs sum to 1 and -1 for t-contrasts
-                for co = (n1+1):n
-                    convec{co} = convec{co}./nsessions;
+                if self.id == 15
+                    nsessions = 1;
+                end
+                vec = padarray(vec,[0 nsessions],0,'post');
+                convec{n} = vec;
+                name{n} = sprintf('bin%02d.win%02d.CSdiff',startbin,binwin);
+                
+                %make convecs sum to 1 and -1 for t-contrasts
+                for co = (n2+1):n
+                    convec{co} = convec{co}./binwin/nsessions;
                 end
             end
-            
-            
+            %%
+%             % giant Guassian with certain bins included
+%             if nrun ~= 2
+%                 n = n+1;
+%                 gauss_lookup = spm_Npdf(1:8,4)-mean(spm_Npdf(1:8,4));
+%                 vec = vec0;
+%                 for condcount = 1:8
+%                     take_bins =  self.findcon_FIR(order,condcount,startbin):self.findcon_FIR(order,condcount,startbin+binwin-1); %Nth bin beta of 1st, just as template.
+%                     vec(take_bins) = ones(1,numel(take_bins))*gauss_lookup(condcount);
+%                 end
+%                 if nrun ==3
+%                     if self.id ~= 15
+%                         vec = repmat(vec,1,2);
+%                     end
+%                 end
+%                 if self.id == 15
+%                     nsessions = 1;
+%                 end
+%                 vec = padarray(vec,[0 nsessions],0,'post');
+%                 convec{n} = vec;
+%                 name{n} = sprintf('bin%02d.win%02d.Gauss',startbin,binwin);
+%                 convec{n} = convec{n}./sum(convec{n}(convec{n}>0));
+%             end
+            %%
             %visualization and sanity check
             figure(100);
             if nrun == 1
@@ -3565,7 +3676,7 @@ classdef Subject < Project
             
             set(gca,'XTick',1:order:order*max(conds2take{nrun}),'XTickLabel',condnames,'YTick',1:order:numel(convec)-1,'YTickLabel',name(1:order:numel(convec)-1))
             title(sprintf('Run %d',nrun));
-            
+            %%
             % build the batch
             matlabbatch{1}.spm.stats.con.spmmat = cellstr(path_spm);
             for co = 1:numel(name)
@@ -3580,7 +3691,7 @@ classdef Subject < Project
             end
             total_cons = numel(name);
             
-            matlabbatch{1}.spm.stats.con.delete = 1;
+            matlabbatch{1}.spm.stats.con.delete = 0;
             
             spm_jobman('run',matlabbatch);
             %             for nrun = runs(:)'
@@ -3601,11 +3712,33 @@ classdef Subject < Project
             self.remove_files(path2wCAT);
         end
         
-        function Con1stLevel_FIR(self,nrun,model_num)
-            n_con = self.CreateContrasts_FIR(nrun,model_num);
+        function Con1stLevel_FIR(self,nrun,model_num,varargin)
+           deletedcons = 0;
+           % we need to know which cons are new, so that we can normalize and smooth only them, bc this takes time.
+           if deletedcons == 1
+                firstcon = 1; %start at the first, go till end.
+           else
+               load(fullfile(self.path_FIR(nrun,model_num,self.orderfir,'10conds'),'SPM.mat'))
+               firstcon = numel(SPM.xCon)+1;
+           end
+            
+            if nargin > 3
+                startbin = varargin{1};
+                binwin   = varargin{2};
+                n_con = self.CreateContrasts_FIR(nrun,model_num,startbin,binwin);
+            else
+                n_con = self.CreateContrasts_FIR(nrun,model_num);
+            end
+            if deletedcons == 1
+                lastcon = n_con; %start at the first, go till end.
+            else
+                
+                lastcon = firstcon+n_con;
+            end
+            
             fprintf('%d contrasts computed for phase %d, Model %d. \n',n_con,nrun,model_num)
             %prepare paths for Normalization and Smoothing
-            for co = 1:n_con
+            for co = firstcon:lastcon
                 pathcon  = self.path_FIR(nrun,model_num,self.orderfir,'10conds',sprintf('^con_%04d.nii',co));
                 %normalize con image
                 self.VolumeNormalize(pathcon);
