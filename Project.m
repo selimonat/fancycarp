@@ -81,11 +81,13 @@ classdef Project < handle
         nsessions             = [1 1 2];
         plotconds             = [-135:45:180 235 280];
         plottitles            = {'Base' 'Cond' 'Test1' 'Test2' 'Test1/2'};
+        plottitles_BCT        = {'Base','Cond','Test'};
         nrun2phase            = {'B','C','T'};
         condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
         kickcooldown          = 1;
         wmcsfregressors       = 0;
         orderfir              = 14;
+        relief_mc_ph          = 1; % meancorrection per phase
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm_version); %path to the TPM images, needed by segment.
@@ -674,6 +676,8 @@ classdef Project < handle
            
         end
          function plot_ROI_basetest(contrast,fitmethod,hReg,varargin)
+%              xA = spm_atlas('load','neuromorphometrics');
+%             namestr = spm_atlas('query',xA,XYZmm);
             % input vector of 8 faces in Y, angles in X, and SEM. All
             % vectors of 1x8;
             X = -135:45:180;
@@ -681,7 +685,7 @@ classdef Project < handle
             yticki = [min(contrast.contrast) max(contrast.contrast)];
             %%
             graycol = [.3 .3 .3];
-            figure(1000);clf
+            figure(1000);clf;set(gcf, 'Position', [1111 503 560 420]);clf
             condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
             subplot(1,2,1);
             bar(X,Y(1:8),'facecolor',graycol,'edgecolor','none','facealpha',.8);
