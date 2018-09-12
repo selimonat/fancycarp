@@ -401,6 +401,11 @@ classdef Subject < Project
                 conds = varargin{1};
             end
             out = self.get_rating(run,conds);
+            
+            if self.relief_mc_ph == 1
+              out.y = out.y - nanmean(out.y);
+            end
+            
             M = [];
             S = [];
             cc = 0;
@@ -410,6 +415,7 @@ classdef Subject < Project
                 M(cc) = nanmean(out.y(ind));
                 S(cc) = nanstd(out.y(ind));
             end
+            
         end
         function [out, R] = fit_rating(self,run)
             %will load the rating fit (saved in runXXX/rating) if computed other
