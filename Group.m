@@ -24,11 +24,11 @@ classdef Group < Project
                 c                = c+1;
                 dummy            = Subject(s);
                 group.subject{c} = dummy;
-                group.ids        = subjects;                
+                group.ids        = subjects;
             end
         end
         %%
-        function out = get.ratings(self)                        
+        function out = get.ratings(self)
             %will collect group ratings as a matrix in out(run).y,
             %out(run).x etc.
             for s = 1:self.total_subjects
@@ -37,65 +37,84 @@ classdef Group < Project
                 end
             end
         end
-        %%        
-        function out = get.table_pmf(self)            
+        %%
+        function out = get.table_pmf(self)
             %returns pmf parameters as a table
             out = [];
-            for s = self.subject                
+            for s = self.subject
                 out = [out ;s{1}.pmf_parameters];
-            end            
+            end
         end
-        %%        
-        function csps = get.csps(self)   
+        %%
+        function csps = get.csps(self)
             %returns the csp face for all the group... In the future one
             %could make a get_subject_field function
             for s = 1:length(self.subject)
                 csps(s) = self.subject{s}.csp;
             end
-        end   
-        %% 
+        end
+        %%
         function out = get.total_subjects(self)
             out = length(self.ids);
         end
         %%
-        function plot_grouprelief(self) %LK fix this
-            
+        function plot_grouprelief(self)
+            phases2plot = [1 2 5];
+            dofit = 1;
+            fitmethod = self.selected_fitfun;
             titles = {'Base','Cond','Test1','Test2','Test1/2'};
             f=figure;
             f.Position = [73 410 1763 476];
             clf;
-            for ph = 1:5
+            spc = 0;
+            for ph = phases2plot(:)'
+                spc = spc + 1;
+                
                 for ns = 1:self.total_subjects;
                     relief(ns,:) = self.subject{ns}.get_reliefmeans(ph,self.allconds);
                 end
                 M = nanmean(relief);
                 S = nanstd(relief)./sqrt(sum(~isnan(relief(:,end)))); %this way we get correct SEM even if missing data from one subject.
-                subplot(1,5,ph)
+                subplot(1,length(phases2plot),spc)
                 self.plot_bar(self.plotconds,M,S)
                 hold on
                 axis square
                 set(gca,'XTickLabels',{'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'},'XTickLabelRotation',45,'FontSize',12);
                 xlim([min(self.plotconds)-40 max(self.plotconds+40)])
                 title(titles{ph},'FontSize',14)
-                if ph ~= 2
-                    self.fit_rating(ph); % for cond, this doesn't make sense
-                    if self.rating_fit{ph}.pval < .05
-                        plot(self.rating_fit{ph}.x_hd,self.rating_fit{ph}.y_hd,'k-','LineWidth',3)
-                    else
-                        txt= text(min(xlim)+20,M(1)+S(1).*1.2,sprintf('p = %4.3f',self.rating_fit{ph}.pval));
-                        set(txt, 'rotation', 90)
-                        l=line([-135,180],repmat(mean(self.rating_fit{ph}.data.y),1,2));
-                        set(l,'LineWidth',3,'Color','k')
+                if dofit == 1
+                    if ph ~= 2
+                        data.x = -135:45:180;
+                        data.y = M(1:8);
+                        data.ids = self.ids;
+                        t = Tuning(data);
+                        t.SingleSubjectFit(fitmethod);
+                        self.fit_results{ph} = t.fit_results;
+                        self.tunings{ph} = t;
+                        
+                        
+                        if 10^-self.fit_results{ph}.pval < .05
+                            plot(self.fit_results{ph}.x_HD,self.fit_results{ph}.fit_HD,'k-','LineWidth',3)
+                        else
+                            txt= text(min(xlim)+20,M(1)+S(1).*1.2,sprintf('p = %4.3f',self.fit_results{ph}.pval));
+                            set(txt, 'rotation', 90)
+                            l=line([-135,180],repmat(mean(self.fit_results{ph}.data.y),1,2));
+                            set(l,'LineWidth',3,'Color','k')
+                        end
                     end
                 end
+                if spc == 1
+                    ylabel('Relief rating M +/- SEM')
+                    
+                end
             end
-            st = supertitle(sprintf('sub %02d, csp = %d ',self.id, self.csp));
+            st = supertitle(sprintf('N = %02d subs',self.total_subjects));
             set(st,'FontSize',16);
             EqualizeSubPlotYlim(gcf);
             
-            savefig(gcf,savefigf)
-%                 export_fig(gcf,savebmp)
-%                 export_fig(gcf,savepng,'-transparent')
+%             savefig(gcf,savefigf)
+            %                 export_fig(gcf,savebmp)
+            %                 export_fig(gcf,savepng,'-transparent')
         end
         function plot_ratings(self)
             %%
@@ -104,11 +123,11 @@ classdef Group < Project
                 subplot(y,x,ns);
                 self.feargen_plot(self.ratings.y_mean(1,:,ns));
                 box off;
-                title(sprintf('s: %d, cs+: %d',self.ids(ns),self.subject{ns}.csp),self.font_style{:}); 
+                title(sprintf('s: %d, cs+: %d',self.ids(ns),self.subject{ns}.csp),self.font_style{:});
             end
             EqualizeSubPlotYlim(gcf);
             supertitle(self.path_project,1);
-        end      
+        end
         function plot_pain_vs_relief(self,ph)
             
             cmap = jet(self.total_subjects);
@@ -124,7 +143,7 @@ classdef Group < Project
                 axis square
                 box off
                 if forcexlim
-                xlim([0 100]);
+                    xlim([0 100]);
                 end
                 title(sprintf('s%02d, r=%04.2f',self.ids(ns),rss(ns)))
             end
@@ -135,19 +154,19 @@ classdef Group < Project
                 [~, pain, relief] = self.subject{ns}.get_pmod_PR(ph);
                 subplot(6,6,ns);
                 % ksdensity
-%                    if forcexlim
-%                 xlim([0 100]);
-%                 end
-%                 [f,xi] = ksdensity(relief);
-%                 plot(xi,f,'Color',cmap(ns,:))
-%                 UCS = self.subject{ns}.paradigm{ph}.presentation.ucs;
-%                 MxTemp(1) = mean(relief(UCS));
-%                 MxTemp(2) = mean(relief(~UCS));
-%                 l1 = line(repmat(MxTemp(1),1,2),ylim);set(l1,'Color','r','LineWidth',2,'LineStyle',':')
-%                 l2 = line(repmat(MxTemp(2),1,2),ylim);set(l2,'Color','c','LineWidth',2)
+                %                    if forcexlim
+                %                 xlim([0 100]);
+                %                 end
+                %                 [f,xi] = ksdensity(relief);
+                %                 plot(xi,f,'Color',cmap(ns,:))
+                %                 UCS = self.subject{ns}.paradigm{ph}.presentation.ucs;
+                %                 MxTemp(1) = mean(relief(UCS));
+                %                 MxTemp(2) = mean(relief(~UCS));
+                %                 l1 = line(repmat(MxTemp(1),1,2),ylim);set(l1,'Color','r','LineWidth',2,'LineStyle',':')
+                %                 l2 = line(repmat(MxTemp(2),1,2),ylim);set(l2,'Color','c','LineWidth',2)
                 % UCS and other trials as lines, single ratings as dots
                 
-                  UCS = self.subject{ns}.paradigm{ph}.presentation.ucs;
+                UCS = self.subject{ns}.paradigm{ph}.presentation.ucs;
                 MxTemp(1) = mean(relief(UCS));
                 MxTemp(2) = mean(relief(~UCS));
                 hold on;
@@ -211,34 +230,34 @@ classdef Group < Project
         %%
         function model_ratings(self,run,funtype)
             %will fit to ratings from RUN the FUNTYPE and cache the result
-            %in the midlevel folder.            
+            %in the midlevel folder.
             T = [];%future tuning object
             filename               = sprintf('%smidlevel/Tunings_Run_%03d_FunType_%03d_N%s.mat',self.path_project,run,funtype,sprintf('%s\b\b',sprintf('%ito',self.ids([1 end]))));
             if exist(filename) == 0
                 %create a tuning object and fits FUNTYPE to it.
-                T  = Tuning(self.ratings(run));%create a tuning object for the RUN for ratings.                
-                T.SingleSubjectFit(funtype);%call fit method from the tuning object                
+                T  = Tuning(self.ratings(run));%create a tuning object for the RUN for ratings.
+                T.SingleSubjectFit(funtype);%call fit method from the tuning object
                 save(filename,'T');
             else
                 fprintf('Will load the tuning parameters from the cache:\n%s\n',filename);
                 load(filename);
             end
-            %get the relevant data from the tuning object            
+            %get the relevant data from the tuning object
             self.fit_results = T.fit_results;
-        end               
+        end
         %%
         function feargen_plot(self,data)
             %elementary function to make feargen plots
-            h = bar(data,1);            
+            h = bar(data,1);
             self.set_feargen_colors(h,2:9);
             set(gca,'xtick',[4 8],'xticklabel',{'cs+' 'cs-'},'xgrid','on',self.font_style{:});
             axis tight;
-        end         
+        end
         %%
         function ModelSCR(self,run,funtype)
             %create a tuning object and fits FUNTYPE to it.
             self.tunings.scr = Tuning(self.getSCRs(run));%create a tuning object for the RUN for SCRS.
-%             self.tunings.scr.SingleSubjectFit(funtype);%call fit method from the tuning object
+            %             self.tunings.scr.SingleSubjectFit(funtype);%call fit method from the tuning object
         end
         function getSCRtunings(self,run,funtype)
             self.ModelSCR(run,funtype);
@@ -246,16 +265,16 @@ classdef Group < Project
         
         function [out] = getSCRmeans(self,phase)
             for n = 1:length(self.ids)
-                    ind = self.subject{n}.scr.findphase(phase);
-                    self.subject{n}.scr.cut(ind);
-                    self.subject{n}.scr.run_ledalab;
-                    out(n,:) = mean(self.subject{n}.scr.ledalab.mean(1:800,:));
+                ind = self.subject{n}.scr.findphase(phase);
+                self.subject{n}.scr.cut(ind);
+                self.subject{n}.scr.run_ledalab;
+                out(n,:) = mean(self.subject{n}.scr.ledalab.mean(1:800,:));
             end
         end
-      
-       
-
-       
+        
+        
+        
+        
         function plotPMFbars(self)
             means     = reshape(mean(self.pmf.params1(:,1,:),3),2,2);%compute the mean
             stds      = reshape(std(self.pmf.params1(:,1,:),0,3),2,2);
@@ -273,54 +292,54 @@ classdef Group < Project
         end
         function [out labels] = parameterMat(self)
             labels = {'csp_before_alpha' 'csp_after_alpha' 'csn_before_alpha' 'csn_after_alpha' ...
-                      'csp_before_beta' 'csp_after_beta' 'csn_before_beta' 'csn_after_beta' ...                     
-                      'csp_improvmt' 'csn_improvmnt' ...2
-                      'csp_imprvmtn_cted' ...
-                      'rating_cond' ... 
-                      'rating_test' ... 
-                      'SI'...
-                      'SCR ampl'};
+                'csp_before_beta' 'csp_after_beta' 'csn_before_beta' 'csn_after_beta' ...
+                'csp_improvmt' 'csn_improvmnt' ...2
+                'csp_imprvmtn_cted' ...
+                'rating_cond' ...
+                'rating_test' ...
+                'SI'...
+                'SCR ampl'};
             out = [self.pmf.csp_before_alpha,...
-                   self.pmf.csp_after_alpha,...              
-                   self.pmf.csn_before_alpha,...
-                   self.pmf.csn_after_alpha,...   
-                   self.pmf.csp_before_beta,...
-                   self.pmf.csp_after_beta,...              
-                   self.pmf.csn_before_beta,...
-                   self.pmf.csn_after_beta,... 
-                   self.pmf.csp_before_alpha - self.pmf.csp_after_alpha,...
-                   self.pmf.csn_before_alpha - self.pmf.csn_after_alpha,...                   
-                   (self.pmf.csp_before_alpha-self.pmf.csp_after_alpha)-(self.pmf.csn_before_alpha-self.pmf.csn_after_alpha),...
-                   self.sigma_cond,...
-                   self.sigma_test,...
-                   self.SI,...
-                   self.SCR_ampl];
+                self.pmf.csp_after_alpha,...
+                self.pmf.csn_before_alpha,...
+                self.pmf.csn_after_alpha,...
+                self.pmf.csp_before_beta,...
+                self.pmf.csp_after_beta,...
+                self.pmf.csn_before_beta,...
+                self.pmf.csn_after_beta,...
+                self.pmf.csp_before_alpha - self.pmf.csp_after_alpha,...
+                self.pmf.csn_before_alpha - self.pmf.csn_after_alpha,...
+                (self.pmf.csp_before_alpha-self.pmf.csp_after_alpha)-(self.pmf.csn_before_alpha-self.pmf.csn_after_alpha),...
+                self.sigma_cond,...
+                self.sigma_test,...
+                self.SI,...
+                self.SCR_ampl];
             
-               try
-               if strcmp(self.tunings.rate{3}.singlesubject{1}.funname,'vonmisses_mobile')
-                   
-                   for s = 1:size(out,1)
-                       out(s,15) = self.tunings.rate{3}.singlesubject{s}.Est(3);
-                       out(s,16) = self.tunings.rate{4}.singlesubject{s}.Est(3);
-                   end
-                   out(:,14) = out(:,13) - out(:,12);
-                   labels = [labels(1:14) { 'mu_cond' 'mu_test'}];
-               end
-               end
-        end        
+            try
+                if strcmp(self.tunings.rate{3}.singlesubject{1}.funname,'vonmisses_mobile')
+                    
+                    for s = 1:size(out,1)
+                        out(s,15) = self.tunings.rate{3}.singlesubject{s}.Est(3);
+                        out(s,16) = self.tunings.rate{4}.singlesubject{s}.Est(3);
+                    end
+                    out(:,14) = out(:,13) - out(:,12);
+                    labels = [labels(1:14) { 'mu_cond' 'mu_test'}];
+                end
+            end
+        end
         function PlotRatingFit(self,subject)
             
             
             if ~isempty(self.tunings.rate)
-               
+                
                 i    =  find(self.ids == subject);
-                ave  = mean(reshape(self.tunings.rate{3}.y(i,:),2,8));                                             
+                ave  = mean(reshape(self.tunings.rate{3}.y(i,:),2,8));
                 x    = mean(reshape(self.tunings.rate{3}.x(i,:),2,8));
                 x_HD = linspace(min(x),max(x),1000);
                 h    = figure(100);clf
                 subplot(1,2,1)
                 title(sprintf('Sub: %i, Likelihood: %03g (p = %5.5g)',subject,self.tunings.rate{3}.singlesubject{i}.Likelihood,self.tunings.rate{3}.singlesubject{i}.pval));
-                hold on;               
+                hold on;
                 plot(x_HD,self.tunings.rate{3}.singlesubject{i}.fitfun(x_HD,self.tunings.rate{3}.singlesubject{i}.Est),'ro','linewidth',3);
                 plot(x,ave, 'b','linewidth', 3);
                 ylabel('Cond')
@@ -328,31 +347,31 @@ classdef Group < Project
                 grid on;
                 
                 subplot(1,2,2)
-                ave  = mean(reshape(self.tunings.rate{4}.y(i,:),2,8));  
+                ave  = mean(reshape(self.tunings.rate{4}.y(i,:),2,8));
                 title(sprintf('CSP: %i, Likelihood: %03g (p = %5.5g)',self.subject{i}.csp,self.tunings.rate{4}.singlesubject{i}.Likelihood,self.tunings.rate{4}.singlesubject{i}.pval));
                 hold on;
                 plot(x_HD,self.tunings.rate{4}.singlesubject{i}.fitfun(x_HD,self.tunings.rate{4}.singlesubject{i}.Est),'ro','linewidth',3);
-               
-                 plot(x,ave, 'b','linewidth', 3);
+                
+                plot(x,ave, 'b','linewidth', 3);
                 ylabel('Test')
-                EqualizeSubPlotYlim(h);               
+                EqualizeSubPlotYlim(h);
                 drawnow;
                 grid on;
                 pause
             else
                 fprintf('No tuning object found here yet...\n');
             end
-        end                                
-        %%       
-        function [rating] = PlotRatings(self,runs)            
+        end
+        %%
+        function [rating] = PlotRatings(self,runs)
             hvfigure;
             trun = length(runs);
             crun = 0;
             for run = runs(:)'%for each run make a subplot column
                 crun    = crun + 1;
                 %
-                subplot(2,trun,crun);                
-                rating  = self.Ratings(run);%collect group ratings                
+                subplot(2,trun,crun);
+                rating  = self.Ratings(run);%collect group ratings
                 imagesc(rating.y,[0 10]);thincolorbar('vert');%single subject data
                 set(gca,'xticklabel',{'CS+' 'CS-'},'xtick',[4 8],'fontsize',20,'yticklabel',{''});
                 colormap hot
@@ -362,10 +381,10 @@ classdef Group < Project
                 y     = y./repmat(sum(y),size(y,1),1)*100;%make it a percentage
                 imagesc(rating.x(1,:),x,y,[0 75]);axis xy;
                 thincolorbar('vert');
-                hold on                
+                hold on
                 h     = errorbar(mean(rating.x),mean(rating.y),std(rating.y),'g-');
                 axis xy;
-                set(gca,'xticklabel',{'CS+' 'CS-'},'xtick',[0 180]);                
+                set(gca,'xticklabel',{'CS+' 'CS-'},'xtick',[0 180]);
                 hold off;
             end
         end
@@ -381,9 +400,9 @@ classdef Group < Project
             set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
             x = linspace(self.tunings.rate{3}.x(1,1),self.tunings.rate{3}.x(1,end),100);
             plot(x ,  self.tunings.rate{3}.groupfit.fitfun( x,self.tunings.rate{3}.groupfit.Est(:,1:end-1)) ,'k--','linewidth',2);
-%             plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
+            %             plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
             hold off
-%             set(gca,'fontsize',14);
+            %             set(gca,'fontsize',14);
             axis square
             t=title('Conditioning');set(t,'FontSize',14);
             %
@@ -395,12 +414,12 @@ classdef Group < Project
             xlim([-160 200]);
             set(gca,'xtick',[0 180],'xticklabel',{'CS+' 'CS-'});
             x = linspace(self.tunings.rate{4}.x(1,1),self.tunings.rate{4}.x(1,end),100);
-%             plot(x ,  self.tunings.rate{4}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{4}.params(:,1:end-1))) ,'k','linewidth',1);
+            %             plot(x ,  self.tunings.rate{4}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{4}.params(:,1:end-1))) ,'k','linewidth',1);
             plot(x ,  self.tunings.rate{4}.groupfit.fitfun( x,self.tunings.rate{4}.groupfit.Est(:,1:end-1)) ,'k','linewidth',2);
             x = linspace(self.tunings.rate{3}.x(1,1),self.tunings.rate{3}.x(1,end),100);
-% % %            plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
-%             plot(x , self.tunings.rate{3}.groupfit.fitfun( x,self.tunings.rate{3}.groupfit.Est(:,1:end-1)) ,'k--','linewidth',2);
-%             set(gca,'fontsize',14);
+            % % %            plot(x ,  self.tunings.rate{3}.singlesubject{1}.fitfun( x,mean(self.tunings.rate{3}.params(:,1:end-1))) ,'k--','linewidth',1);
+            %             plot(x , self.tunings.rate{3}.groupfit.fitfun( x,self.tunings.rate{3}.groupfit.Est(:,1:end-1)) ,'k--','linewidth',2);
+            %             set(gca,'fontsize',14);
             axis square
             t=title('Test');set(t,'FontSize',14);
             annotation(f,'textbox',[0.78 0.65 0.1 0.1],'String',['SI = ' num2str(nanmean(self.SI))],'FitBoxToText','off','LineStyle','none');
@@ -431,8 +450,8 @@ classdef Group < Project
             if nargin > 2
                 phases = varargin{1};
             end
-          %% wrapper Creating the Onsets, Fitting HRF model to model, and computing contrasts
-          fprintf('Preparing CondFiles\n')
+            %% wrapper Creating the Onsets, Fitting HRF model to model, and computing contrasts
+            fprintf('Preparing CondFiles\n')
             for ns = 1:self.total_subjects
                 for ph = phases(:)'
                     if self.ids(ns)==15 && ph == 4
@@ -500,8 +519,8 @@ classdef Group < Project
             elseif strcmp(namestring,'VMdVM')
                 cons2collect = 1:2; %main effect was not included in 1stlevel contrasts. So 1=VM, 2=dVM
             elseif strcmp(namestring,'VMdVM_BT')
-                 cons2collect = 1:2;
-                 nrun = [1 3];
+                cons2collect = 1:2;
+                nrun = [1 3];
             elseif strcmp(namestring,'PMOD')
                 cons2collect = 1; %on 1stlevel, only pmod was computed as con. so we just take this.
             elseif strcmp(namestring,'SBS_down_PMOD')
@@ -520,7 +539,7 @@ classdef Group < Project
             fprintf('Starting 2nd Level for model %02d, run %02d, named %s, versiontag %d with foldersuffix ''%s''...\n',modelnum,nrun(1),namestring,versiontag,foldersuffix);
             
             path2ndlevel = fullfile(self.path_second_level,sprintf('model_%02d_chrf_%01d_%s_%s%s',modelnum,versiontag,namestring,self.nrun2phase{nrun(1)},foldersuffix));
-       
+            
             
             if exist(path2ndlevel) && (clear2ndlevel==1);
                 system(sprintf('rm -fr %s*',strrep(path2ndlevel,'//','/')));
@@ -529,7 +548,7 @@ classdef Group < Project
                 mkdir(path2ndlevel);
             end
             clear matlabbatch
-              
+            
             load(self.subject{1}.path_spmmat(nrun,modelnum));
             % collect all subjects' con images for every cond
             c = 0;
@@ -572,22 +591,22 @@ classdef Group < Project
             matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit = 1;
             matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
             matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm = 1;
-          
+            
             
             matlabbatch{2}.spm.stats.fmri_est.spmmat = {[path2ndlevel filesep 'SPM.mat']};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical = 1;
-
+            
             spm_jobman('run',matlabbatch);
             done = toc(start);
             fprintf('\n\nDone estimating 2nd Level for HRF model %d, called %s %s, version %d, N = %02d subs in %05.2f mins. (Simple one-way anova)\n',modelnum,namestring,foldersuffix,versiontag,length(self.ids),done./60)
             fprintf('Output folder is: %s\n',path2ndlevel)
-
+            
         end
         function Con2ndlevel(self,nrun,modelnum,namestring,varargin)
             
             foldersuffix = sprintf('_N%02d',self.total_subjects);
             versiontag = 0;
-             
+            
             if nargin == 5 %one varargin is given
                 foldersuffix = varargin{1};
             elseif nargin == 6
@@ -600,7 +619,7 @@ classdef Group < Project
             n  = 0;
             
             path_spmmat = fullfile(self.path_second_level,sprintf('model_%02d_chrf_%01d_%s_%s%s',modelnum,versiontag,namestring,self.nrun2phase{nrun},foldersuffix),'SPM.mat');
-         
+            
             matlabbatch{1}.spm.stats.con.spmmat = cellstr(path_spmmat);
             
             if strcmp(namestring,'CSdiff')
@@ -608,9 +627,9 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'CSP>CSN';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = 1;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                 
+                
                 matlabbatch{1}.spm.stats.con.delete = 0;
-                 
+                
             elseif strcmp(namestring,'8conds')
                 if ismember(nrun,[1 3])
                     nconds = 8;
@@ -639,7 +658,7 @@ classdef Group < Project
                 end
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'CSP>CSN';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                            
+                
                 if ismember(nrun,[1 3])
                     [VM, dVM] = self.compute_VM(-135:45:180,1,1,.001);
                     n = n + 1;
@@ -702,7 +721,7 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'main_dVMvsVM';
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = vec;
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
-                    n  = n + 1;
+                n  = n + 1;
                 nF = nF + 1;
                 vec = eye(4); vec(logical(eye(4))) = [-1 -1 1 1];
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'test>base';
@@ -720,7 +739,7 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = 1;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
             elseif strcmp(namestring,'PMOD') && ~isempty(strfind(foldersuffix,'COVAR'))
-                 n  = n + 1;
+                n  = n + 1;
                 nF = nF + 1;
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_pmod';
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [0 1];
@@ -752,12 +771,12 @@ classdef Group < Project
                     nT = nT + 1;
                 end
             end
-                
-           matlabbatch{1}.spm.stats.con.delete = 1;
-                        
+            
+            matlabbatch{1}.spm.stats.con.delete = 1;
+            
             spm_jobman('run',matlabbatch);
-
-            ntotal = nT + nF;            
+            
+            ntotal = nT + nF;
             fprintf('Done creating %d 2ndlevel contrasts (%d F, %d T) for model %d, run %s, modelname %s %s.\n',ntotal,nF,nT,modelnum,self.nrun2phase{nrun},namestring,foldersuffix)
             if nF > 0
                 for nnF = 1:nF
@@ -786,24 +805,24 @@ classdef Group < Project
             if nargin == 6 %one varargin is given
                 foldersuffix = varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so
             elseif nargin == 7
-                foldersuffix =  varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so 
+                foldersuffix =  varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so
                 versiontag = varargin{2};   %probably never needed, better name then with foldersuffix, easier to remember and document
             elseif nargin > 7
                 fprintf('Too many inputs. Please debug.')
                 keyboard;
             end
-                        
+            
             fprintf('Starting 2nd Level for FIR model %02d, run %02d, named %s, version %d with foldersuffix ''%s''...\n',modelnum,nrun,namestring,versiontag,foldersuffix);
             
             path2ndlevel = fullfile(self.path_second_level,'FIR',sprintf('model_%02d_FIR_%02d_%s_b%02dto%02d_%s%s',modelnum,versiontag,namestring,bins2take(1),bins2take(end),self.nrun2phase{nrun},foldersuffix));
-          
+            
             if exist(path2ndlevel) && (clear2ndlevel==1)
                 system(sprintf('rm -fr %s*',strrep(path2ndlevel,'//','/')));
             end%this is AG style.
             if ~exist(path2ndlevel)
                 mkdir(path2ndlevel);
             end
-
+            
             
             % information, which contrasts to collect.
             %
@@ -826,6 +845,15 @@ classdef Group < Project
                     case 3
                         conds2collect = 1:8;
                 end
+            elseif strcmp(namestring,'9conds')
+                switch nrun
+                    case 1
+                        conds2collect = 1:8;
+                    case 2
+                        conds2collect = 1:2;
+                    case 3
+                        conds2collect = [1:8 10];
+                end
             elseif strcmp(namestring,'CSPCSN')
                 switch nrun
                     case 1
@@ -836,21 +864,21 @@ classdef Group < Project
                         conds2collect = [4 8];
                 end
             elseif strcmp(namestring,'CSdiff')
-                 switch nrun
+                switch nrun
                     case 1
                         conds2collect = 9;
                     case 2
                         conds2collect = 3;
                     case 3
                         conds2collect = 9;
-                 end
+                end
             elseif strcmp(namestring,'VMdVM')
                 conds2collect = [1 2];
             elseif strcmp(namestring,'VMdVM_BT')
                 conds2collect = [1 2];
                 nrun = [1 3];
             elseif strcmp(namestring,'PMOD_rate')
-                 conds2collect = 1;
+                conds2collect = 1;
             elseif strcmp(namestring,'PMOD_PRind_both')
                 conds2collect = 1:2;
             elseif strcmp(namestring,'PMOD_PRind_ME')
@@ -876,7 +904,7 @@ classdef Group < Project
                 SPM.xCon(cons2collect).name
                 fprintf('.................................................\n')
             elseif any(strfind(namestring,'win')) && any(strfind(namestring,'UCSCSN'))
-                load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat')) 
+                load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
                 if any(strfind(namestring,'bin4'))
                     if nrun == 2
                         cons2collect = 43:44;
@@ -919,7 +947,7 @@ classdef Group < Project
                     elseif nrun == 3
                         cons2collect = 141:149;%bin4win4
                     elseif nrun == 1
-                         cons2collect = 127:134;%bin4win4
+                        cons2collect = 127:134;%bin4win4
                     end
                 elseif any(strfind(namestring,'bin5'))
                     if nrun == 2
@@ -933,11 +961,19 @@ classdef Group < Project
                 fprintf('.................................................\n')
             elseif any(strfind(namestring,'win')) && any(strfind(namestring,'8conds_BT'))
                 load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
-                if any(strfind(namestring,'bin4'))
+                if any(strfind(namestring,'bin4win4'))
                     nrun = [1 3];
                     cons2collectstruct = {127:134, [],141:148};%bin4win4
-                elseif any(strfind(namestring,'bin5'))
+                elseif any(strfind(namestring,'bin2win4'))
+                    nrun = [1 3];
+                    cons2collectstruct = {164:171, [],202:209};%bin2win4
                     %...
+                elseif any(strfind(namestring,'bin4win6'))
+                    nrun = [1 3];
+                    cons2collectstruct = {173:180, [],212:219};%bin2win4
+                elseif any(strfind(namestring,'bin5win6'))
+                    nrun = [1 3];
+                    cons2collectstruct = {182:189, [],222:229};%bin2win4
                 end
                 fprintf('You chose contrasts named:\n')
                 SPM.xCon(cons2collectstruct{1}).name
@@ -957,7 +993,18 @@ classdef Group < Project
                 fprintf('You chose contrasts named:\n')
                 SPM.xCon(cons2collectstruct{1}).name
                 fprintf('.................................................\n')
-            elseif any(strfind(namestring,'win4bin4')) && any(strfind(namestring,'Gauss_BT'))
+            elseif strfind(namestring,'bin4win4_9conds_BCT')
+                load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
+                if any(strfind(namestring,'bin4'))
+                    nrun = [1 2 3];
+                    cons2collectstruct = {127:134, 43;44,141:149};%bin4win4
+                elseif any(strfind(namestring,'bin5'))
+                    %...
+                end
+                fprintf('You chose contrasts named:\n')
+                SPM.xCon(cons2collectstruct{1}).name
+                fprintf('.................................................\n')
+            elseif any(strfind(namestring,'bin4win4')) && any(strfind(namestring,'Gauss_BT'))
                 load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
                 
                 nrun = [1 3];
@@ -995,7 +1042,7 @@ classdef Group < Project
                 bc = 0;
                 for runloop = nrun(:)'
                     for cond = conds2collect(:)'
-                        fprintf('\nCollecting con images for cond %04d:\n',cond)
+                        fprintf('\nCollecting con images for run %01d, cond %04d:\n',runloop,cond)
                         for bin = bins2take(:)' %loop through bins, then subjects. sub01_bin1 sub02_bin1 ... sub01_bin2 sub02_bin etc..
                             ind = self.findcon_FIR(order,cond,bin);
                             fprintf('\nbin %02d, i.e. con %03d...',bin,ind)
@@ -1032,10 +1079,10 @@ classdef Group < Project
             matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit = 1;
             matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
             matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm = 1;
-          
+            
             
             matlabbatch{2}.spm.stats.fmri_est.spmmat = {[path2ndlevel filesep 'SPM.mat']};
-%             matlabbatch{2}.spm.stats.fmri_est.write_residuals = 0;
+            %             matlabbatch{2}.spm.stats.fmri_est.write_residuals = 0;
             matlabbatch{2}.spm.stats.fmri_est.method.Classical = 1;
             
             spm_jobman('run',matlabbatch);
@@ -1045,7 +1092,7 @@ classdef Group < Project
         end
         
         
-         function Con2ndlevel_FIR(self,nrun,modelnum,namestring,varargin)
+        function Con2ndlevel_FIR(self,nrun,modelnum,namestring,varargin)
             deletecons = 1;
             
             versiontag = 0;
@@ -1056,27 +1103,27 @@ classdef Group < Project
             if nargin == 5 %one varargin is given
                 foldersuffix = varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so
             elseif nargin == 6
-                foldersuffix =  varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so 
+                foldersuffix =  varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so
                 versiontag   = varargin{2};   %probably never needed, better name then with foldersuffix, easier to remember and document
             elseif nargin > 6
                 fprintf('Too many inputs. Please debug.')
                 keyboard;
             end
-                        
+            
             fprintf('Starting 2nd Level Contrasts for FIR model %02d, run %02d, named %s, with foldersuffix ''%s''...\n',modelnum,nrun,namestring,foldersuffix);
             
             path2ndlevel = fullfile(self.path_second_level,'FIR',sprintf('model_%02d_FIR_%02d_%s_b%02dto%02d_%s%s',modelnum,versiontag,namestring,bins2take(1),bins2take(end),self.nrun2phase{nrun},foldersuffix));
-          
+            
             if ~exist(path2ndlevel)
                 fprintf('Folder not found, please debug, or run 2ndlevel estimation first.\n')
             end
-      
+            
             nF = 0;
             nT = 0;
             n  = 0;
-    
+            
             path_spmmat = fullfile(path2ndlevel,'SPM.mat');
-         
+            
             matlabbatch{1}.spm.stats.con.spmmat = cellstr(path_spmmat);
             
             if ismember(nrun,[1 3])
@@ -1090,6 +1137,18 @@ classdef Group < Project
             eye1    = eye(self.orderfir);
             vec0    =  zeros(1,self.orderfir);
             vec1    =  ones(1,self.orderfir);
+            
+            %% Tunings
+            gauss = spm_Npdf(1:8,4)-mean(spm_Npdf(1:8,4));
+            
+            
+            conds = -135:45:180;
+            
+            amp   = 1;
+            kappa = 1;
+            delta = .01;
+            VMlookup = zscore(Tuning.VonMises(conds,amp,kappa,0,0));
+            dVMlookup = -zscore((Tuning.VonMises(conds,amp,kappa+delta,0,0)-Tuning.VonMises(conds,amp,kappa-delta,0,0))./(2*delta)); %central difference formula
             
             %% hrf contrast vecs - CAVE: only valid if onsets are on RampDown, not on Face (thus offset_Face is negative)
             defaultparam = [6 16 1 1 6 0 32];%seconds!
@@ -1123,7 +1182,7 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = ones(1,max(bins2take))./max(bins2take);
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
                 
-                                
+                
             elseif strcmp(namestring,'CSPCSN')
                 nconds = 2;
                 n  = n + 1;
@@ -1179,28 +1238,28 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'HRF_CSP>CSN_Ramp';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [hrf_Ramp -hrf_Ramp];
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                   
+                
                 n  = n + 1;
                 nT = nT + 1;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'HRF_CSP>CSN_Face';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [hrf_Face -hrf_Face];
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                   
+                
                 n  = n + 1;
                 nT = nT + 1;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'HRF_CSP>CSN_Rating';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [hrf_Rating -hrf_Rating];
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
                 
-                          
+                
             elseif strcmp(namestring,'8conds')
-              
+                
                 n  = n + 1;
                 nF = nF + 1;
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = sprintf('F_eye(%02dx%02d)',nconds,max(bins2take));
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(nconds*max(bins2take));
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
-                  n  = n + 1;
+                n  = n + 1;
                 nF = nF + 1;
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = sprintf('F_%01dxeye(%02d)',nconds,max(bins2take));
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = repmat(eye(max(bins2take)),1,nconds);
@@ -1221,7 +1280,7 @@ classdef Group < Project
                 end
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'CSP>CSN';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                            
+                
                 if ismember(nrun,[1 3])
                     [VM, dVM] = self.compute_VM(-135:45:180,1,1,.001);
                     n = n + 1;
@@ -1241,7 +1300,7 @@ classdef Group < Project
                     matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
                 end
             elseif strcmp(namestring,'VMdVM_BT')
-               
+                
                 %% F TESTS
                 %eoi
                 n = n + 1;
@@ -1249,14 +1308,14 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(4*self.orderfir);
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(4*allbins)';
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
-                     
+                
                 %%both pmods test
                 n = n + 1;
                 nF = nF+1;
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [zeros(2*self.orderfir,2*self.orderfir),eye(2*self.orderfir)];
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_T_(2*allbins)';
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
-                      
+                
                 %%both pmods test vs base
                 n = n + 1;
                 nF = nF+1;
@@ -1271,14 +1330,14 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
                 
                 % only VM T vs B
-                 n = n + 1;
+                n = n + 1;
                 nF = nF+1;
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [-eye1,square0,eye1,square0];
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'VM_T_vs_B';
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
                 
                 % only dVM T vs B
-                 n = n + 1;
+                n = n + 1;
                 nF = nF+1;
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [square0,-eye1,square0,eye1];
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'dVM_T_vs_B';
@@ -1290,7 +1349,7 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [vec0 vec0 vec1 vec0];
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'VM_T';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                     
+                
                 %only dVM in test
                 n = n + 1;
                 nT = nT+1;
@@ -1298,8 +1357,8 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'dVM_T';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
                 
-             elseif strcmp(namestring,'PMOD_rate')
-               
+            elseif strcmp(namestring,'PMOD_rate')
+                
                 %% F TESTS
                 %eoi
                 n = n + 1;
@@ -1307,7 +1366,7 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(self.orderfir);
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(allbins)';
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
-                     
+                
                 %% T Tests
                 % all bins positive
                 n = n + 1;
@@ -1315,25 +1374,25 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = vec1;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_allbins';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                       
+                
                 % HRF ramp
                 n = n + 1;
                 nT = nT+1;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = hrf_Ramp;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_HRF_RampOn';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                  n = n + 1;
+                n = n + 1;
                 nT = nT+1;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = hrf_Face;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_HRF_FaceOn';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                     n = n + 1;
+                n = n + 1;
                 nT = nT+1;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = hrf_Rating;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_HRF_RateOn';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
             elseif strcmp(namestring,'PMOD_PRind_both')
-      
+                
                 %% F TESTS
                 %eoi
                 n = n + 1;
@@ -1341,11 +1400,11 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(self.orderfir*2);
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(allbins)';
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
-          
+                
                 %eoi ME
                 n = n + 1;
                 nF = nF+1;
-                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [eye(self.orderfir) square0]; 
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [eye(self.orderfir) square0];
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(ME)';
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
                 %eoi PMOD
@@ -1369,7 +1428,7 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [vec1 vec0];
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_ME';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-             
+                
                 % only PMOD pos
                 n = n + 1;
                 nT = nT+1;
@@ -1410,7 +1469,7 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
             elseif (any(strfind(namestring,'win')) && any(strfind(namestring,'UCSCSN'))) || (any(strfind(namestring,'win')) && any(strfind(namestring,'CSPCSN')))
-                 %% F TESTS
+                %% F TESTS
                 %eoi
                 n = n + 1;
                 nF = nF+1;
@@ -1430,7 +1489,7 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [1 1];
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_both';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-             
+                
                 n = n + 1;
                 nT = nT+1;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [1 0];
@@ -1497,101 +1556,164 @@ classdef Group < Project
                 end
             elseif any(strfind(namestring,'win')) && any(strfind(namestring,'8conds_BT'))
                 %% F TESTS
-                    %eoi
-                    n = n + 1;
-                    nF = nF+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(16);
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(allconds)';
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';                
-                    %testphase
-                    n = n + 1;
-                    nF = nF+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [eye(8) zeros(8)];
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Base)';
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';                
-                   
-                    %baseline
-                    n = n + 1;
-                    nF = nF+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [zeros(8) eye(8)];
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Test)';
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
-                    
-                    %baseline vs test
-                    n = n + 1;
-                    nF = nF+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [eye(8) -eye(8)];
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Test)';
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                %eoi
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(16);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(allconds)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                %testphase
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [eye(8) zeros(8)];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Base)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                %baseline
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [zeros(8) eye(8)];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Test)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                %baseline vs test
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [eye(8) -eye(8)];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Test)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
                 
                 
-                    %% T Tests
-                    % all bins positive
-                    n = n + 1;
-                    nT = nT+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = ones(1,16);
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_all';
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                    
-                    n = n + 1;
-                    nT = nT+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [ones(1,8) zeros(1,8)];
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_Base';
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                    
-                    n = n + 1;
-                    nT = nT+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights =[zeros(1,8) ones(1,8)];
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_Test';
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                    %% VonMises
-                    [VM, dVM] = self.compute_VM(-135:45:180,1,1,.001);
-                    n = n + 1;
-                    nT = nT+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [VM VM];
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_both';
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                    n = n + 1;
-                    nT = nT+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [VM zeros(1,8)];
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_base';
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                    n = n + 1;
-                    nT = nT+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [zeros(1,8) VM];
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_test';
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                    
-                    n = n + 1;
-                    nT = nT+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [-VM VM];
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_test>base';
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                    
-                    %% Gauss
-                    gauss = spm_Npdf(1:8,4)-mean(spm_Npdf(1:8,4));
-                    n = n + 1;
-                    nT = nT+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [gauss gauss];
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_gauss_both';
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                        n = n + 1;
-                    nT = nT+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [gauss zeros(1,8)];
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_gauss_base';
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                        n = n + 1;
-                    nT = nT+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [zeros(1,8) gauss];
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_gauss_test';
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                    
-                     n = n + 1;
-                    nT = nT+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [-gauss gauss];
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_Gauss_test>base';
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                    
+                %% T Tests
+                % all bins positive
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = ones(1,16);
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_all';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [ones(1,8) zeros(1,8)];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_Base';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights =[zeros(1,8) ones(1,8)];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_Test';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                %% VonMises
+                [VM, dVM] = self.compute_VM(-135:45:180,1,1,.001);
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [VM VM];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_both';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [VM zeros(1,8)];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_base';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [zeros(1,8) VM];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_test';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [-VM VM];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_test>base';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                %% Gauss
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [gauss gauss];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_gauss_both';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [gauss zeros(1,8)];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_gauss_base';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [zeros(1,8) gauss];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_gauss_test';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [-gauss gauss];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_Gauss_test>base';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [zeros(1,8) dVMlookup];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'dVM_test';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+            elseif any(strfind(namestring,'bin4win4_Gauss_BT'))
+                %%
+                %% F TESTS
+                %eoi
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(2);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_BT';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                %testphase
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [1 0];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Base)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                %baseline
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [0 1];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Test)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                %baseline vs test
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [1 -1];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Test)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                
+                %% T Tests
+                % all conds positive
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = ones(1,2);
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_BT';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [1 0];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_Base';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [0 1];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_Test';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [-1 1];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'T_Test>Base';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
             else
                 fprintf('No 2ndlevel contrasts defined here, please check code.\n')
                 keyboard
@@ -1609,27 +1731,27 @@ classdef Group < Project
                 end
             end
             
-           figure(100);
-           for nFc = 1:nF
-               subplot(ceil(sqrt(nF)),ceil(sqrt(nF)),nFc);
-               imagesc(matlabbatch{1}.spm.stats.con.consess{nFc}.fcon.weights,[-1 1]);
-               title(matlabbatch{1}.spm.stats.con.consess{nFc}.fcon.name)
-           end
-           figure(101);
-           cc = 0;
+            figure(100);
+            for nFc = 1:nF
+                subplot(ceil(sqrt(nF)),ceil(sqrt(nF)),nFc);
+                imagesc(matlabbatch{1}.spm.stats.con.consess{nFc}.fcon.weights,[-1 1]);
+                title(matlabbatch{1}.spm.stats.con.consess{nFc}.fcon.name)
+            end
+            figure(101);
+            cc = 0;
             for nTc = (nF+1):nn
                 cc = cc + 1;
-               subplot(ceil(sqrt(nT)),ceil(sqrt(nT)),cc);
-               imagesc(matlabbatch{1}.spm.stats.con.consess{nTc}.tcon.weights,[-1 1]);
-                 title(matlabbatch{1}.spm.stats.con.consess{nTc}.tcon.name)
-           end
-           
-           
-           matlabbatch{1}.spm.stats.con.delete = deletecons;
-                        
+                subplot(ceil(sqrt(nT)),ceil(sqrt(nT)),cc);
+                imagesc(matlabbatch{1}.spm.stats.con.consess{nTc}.tcon.weights,[-1 1]);
+                title(matlabbatch{1}.spm.stats.con.consess{nTc}.tcon.name)
+            end
+            
+            
+            matlabbatch{1}.spm.stats.con.delete = deletecons;
+            
             spm_jobman('run',matlabbatch);
-
-            ntotal = nT + nF;            
+            
+            ntotal = nT + nF;
             fprintf('Done creating %d 2ndlevel contrasts (%d F, %d T) for model %d, run %s, modelname %s %s.\n',ntotal,nF,nT,modelnum,self.nrun2phase{nrun},namestring,foldersuffix)
             if nF > 0
                 for nnF = 1:nF
@@ -1639,10 +1761,10 @@ classdef Group < Project
             for nnT = 1:nT
                 disp(['(T) ' matlabbatch{1}.spm.stats.con.consess{nF+nnT}.tcon.name])
             end
-         end
-         
-         
-         function Con2ndlevel_FIR_rollwin(self,nrun,modelnum,namestring,binwin,varargin)
+        end
+        
+        
+        function Con2ndlevel_FIR_rollwin(self,nrun,modelnum,namestring,binwin,varargin)
             deletecons = 0;
             t_con = 0;
             F_con = 1;
@@ -1655,7 +1777,7 @@ classdef Group < Project
             if nargin == 6 %one varargin is given
                 foldersuffix = varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so
             elseif nargin == 7
-                foldersuffix =  varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so 
+                foldersuffix =  varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so
                 versiontag   = varargin{2};   %probably never needed, better name then with foldersuffix, easier to remember and document
             elseif nargin > 7
                 fprintf('Too many inputs. Please debug.')
@@ -1673,13 +1795,13 @@ classdef Group < Project
             if ~exist(path2ndlevel)
                 fprintf('Folder not found, please debug, or run 2ndlevel estimation first.\n')
             end
-      
+            
             nF = 0;
             nT = 0;
             n  = 0;
-    
+            
             path_spmmat = fullfile(path2ndlevel,'SPM.mat');
-         
+            
             matlabbatch{1}.spm.stats.con.spmmat = cellstr(path_spmmat);
             
             
@@ -1702,23 +1824,23 @@ classdef Group < Project
                     vec = zeros(1,max(bins2take)); vec(ind) = 1./binwin;
                     vec = repmat(vec,1,ncond);
                     vec = vec./ncond;
-                  
+                    
                     if t_con == 1
-                    n = n + 1; nT = nT + 1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    =  sprintf('bin%02d_binwin%d',bin,binwin);
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights =  vec;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                        n = n + 1; nT = nT + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    =  sprintf('bin%02d_binwin%d',bin,binwin);
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights =  vec;
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
                     end
                     if F_con == 1
-                    n = n + 1; nF = nF + 1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.name    =  sprintf('bin%02d_win%d',bin,binwin);
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights =  vec;
-                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                        n = n + 1; nF = nF + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.name    =  sprintf('bin%02d_win%d',bin,binwin);
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights =  vec;
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
                     end
                 end
             end
             
-                        
+            
             if nT > 0
                 for tc = 1:nT
                     matlabbatch{1}.spm.stats.con.consess{n+tc}.tcon.name =      [matlabbatch{1}.spm.stats.con.consess{nF+tc}.tcon.name '_neg'];
@@ -1728,11 +1850,11 @@ classdef Group < Project
                 end
             end
             
-           matlabbatch{1}.spm.stats.con.delete = deletecons;
-                        
+            matlabbatch{1}.spm.stats.con.delete = deletecons;
+            
             spm_jobman('run',matlabbatch);
-
-            ntotal = nT + nF;            
+            
+            ntotal = nT + nF;
             fprintf('Done creating %d 2ndlevel contrasts (%d F, %d T) for model %d, run %s, modelname %s %s.\n',ntotal,nF,nT,modelnum,self.nrun2phase{nrun},namestring,foldersuffix)
             if nF > 0
                 for nnF = 1:nF
@@ -1742,19 +1864,19 @@ classdef Group < Project
             for nnT = 1:nT
                 disp(['(T) ' matlabbatch{1}.spm.stats.con.consess{nF+nnT}.tcon.name])
             end
-         end
-         function [covyesno, cov] = get_2ndlevel_covariate(self,run,model_num)
-             covyesno = 0;
-             cov = struct('c', {}, 'cname',{}, 'iCFI', {}, 'iCC', {});
-             switch model_num
-                 case 12
-                     covyesno = 1;
-                     Mpain = nan(1,self.total_subjects);
-                     for sc = 1:self.total_subjects;
-                         Mpain(sc) = nanmean(self.subject{sc}.get_pain(run));
-                     end
-                      cov = struct('c', {Mpain}, 'cname','Mpain', 'iCFI', {1}, 'iCC', {1});
-             end
-         end
+        end
+        function [covyesno, cov] = get_2ndlevel_covariate(self,run,model_num)
+            covyesno = 0;
+            cov = struct('c', {}, 'cname',{}, 'iCFI', {}, 'iCC', {});
+            switch model_num
+                case 12
+                    covyesno = 1;
+                    Mpain = nan(1,self.total_subjects);
+                    for sc = 1:self.total_subjects;
+                        Mpain(sc) = nanmean(self.subject{sc}.get_pain(run));
+                    end
+                    cov = struct('c', {Mpain}, 'cname','Mpain', 'iCFI', {1}, 'iCC', {1});
+            end
+        end
     end
 end
