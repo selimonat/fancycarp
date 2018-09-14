@@ -58,7 +58,35 @@ classdef Group < Project
             out = length(self.ids);
         end
         %%
-        function plot_grouprelief(self)
+        function relief = get_relief(self,varargin)
+            
+            force = 1;
+            phases2collect = [1 2 5];
+            filename = fullfile(Project.path_project,'midlevel','ratings',sprintf('relief_N%02d_phases_%s.mat',self.total_subjects,sprintf('%d',phases2collect)));
+            fprintf('Filename for called relief ratings is: \n %s\n',filename)
+            
+            
+            if ~exist(filename) || force == 1
+                fprintf('Ratings not found for this group, collecting them!\n');
+                relief = nan(self.total_subjects,10,length(phases2collect));
+                phc = 0;
+                for ph = phases2collect
+                    phc = phc + 1;
+                    for ns = 1:self.total_subjects;
+                        relief(ns,:,phc) = self.subject{ns}.get_reliefmeans(ph,self.allconds,varargin{1});
+                    end
+                end
+                fprintf('Saving...');
+                save(filename,'relief');
+                fprintf('done\n');
+            else
+                fprintf('Ratings for this group found in midlevel, loading them.\n');
+                load(filename);
+            end
+        end
+        function plot_grouprelief_bar(self)
+            plottype = 'bar';
+            
             phases2plot = [1 2 5];
             dofit = 1;
             fitmethod = self.selected_fitfun;
@@ -71,12 +99,17 @@ classdef Group < Project
                 spc = spc + 1;
                 
                 for ns = 1:self.total_subjects;
-                    relief(ns,:) = self.subject{ns}.get_reliefmeans(ph,self.allconds);
+                    relief(ns,:) = self.subject{ns}.get_reliefmeans(ph,self.allconds,'zscore');
                 end
                 M = nanmean(relief);
                 S = nanstd(relief)./sqrt(sum(~isnan(relief(:,end)))); %this way we get correct SEM even if missing data from one subject.
                 subplot(1,length(phases2plot),spc)
-                self.plot_bar(self.plotconds,M,S)
+                if strcmp(plottype,'bar')
+                    self.plot_bar(self.plotconds,M,S)
+                else
+                    violin(relief);
+                end
+                
                 hold on
                 axis square
                 set(gca,'XTickLabels',{'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'},'XTickLabelRotation',45,'FontSize',12);
@@ -112,9 +145,27 @@ classdef Group < Project
             set(st,'FontSize',16);
             EqualizeSubPlotYlim(gcf);
             
-%             savefig(gcf,savefigf)
+            %             savefig(gcf,savefigf)
             %                 export_fig(gcf,savebmp)
             %                 export_fig(gcf,savepng,'-transparent')
+        end
+        function relief = plot_grouprelief_pirate(self)
+            relief = self.get_relief('mc');
+            fs = 12;
+            
+            figure;
+            clf;
+            cols10 = self.GetFearGenColors;
+            xcenters = [1:8 10 16:18 24:33] ;
+            D = [relief(:,[1:8 10],1)                      relief(:,[9 8 10],2)                    relief(:,1:10,3)];
+            COL = [cols10([1:8 10],:);  cols10([9 8 10],:); cols10];
+            pirateplot(xcenters,D,COL);
+            
+           set(gca,'XTick',xcenters([4 8 9 10:12 16 20:22]),'XTickLabel',{'CS+','CS-','t0','UCS','CS-','t0','CS+','CS-','UCS','t0'},'XTickLabelRotation',45,'FontSize',fs);      
+           a= gca; yl = a.YLim;
+           %% lines between runs
+           ll=line(repmat(mean(xcenters([9 10])),1,2),[yl(1)+.03*range(yl) yl(2)-.03*range(yl)]);set(ll,'Color','k')
+           ll=line(repmat(mean(xcenters([12 13])),1,2),[yl(1)+.03*range(yl) yl(2)-.03*range(yl)]);set(ll,'Color','k')
         end
         function plot_ratings(self)
             %%
