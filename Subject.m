@@ -41,6 +41,7 @@ classdef Subject < Project
         hr_session    = [];
         total_run     = [];
         rating_fit    = [];
+        is_tuned      = [];
     end
     %%
     methods
@@ -344,7 +345,7 @@ classdef Subject < Project
             out = [];
             trialind = [];
             if isempty(varargin)
-                fprintf('No run selected, collecting all runs.\n')
+%                 fprintf('No run selected, collecting all runs.\n')
                 for run = 1:4
                     try
                         a = self.get_paradigm(run);
@@ -402,8 +403,12 @@ classdef Subject < Project
             end
             out = self.get_rating(run,conds);
             
-            if self.relief_mc_ph == 1
+            if strcmp(varargin{2},'mc')
               out.y = out.y - nanmean(out.y);
+            elseif strcmp(varargin{2},'zscore')
+                 out.y = zscore(out.y);
+            elseif strcmp(varargin{2},'raw')
+                out.y = out.y;
             end
             
             M = [];
@@ -470,6 +475,7 @@ classdef Subject < Project
             self.rating_fit{run} = out;
             self.rating_fit{run}.data = R;
             
+            self.is_tuned{run} = out.pval < .05;
         end
         function plot_ratings(self)
             force = 0;
