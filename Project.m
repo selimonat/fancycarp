@@ -80,14 +80,15 @@ classdef Project < handle
         nreliefconds          = [9 3 10 10]; %faceconds plus t0 and UCS, if there
         nsessions             = [1 1 2];
         plotconds             = [-135:45:180 235 280];
-        plottitles            = {'Base' 'Cond' 'Test1' 'Test2' 'Test1/2'};
+        plottitles            = {'Base' 'Cond' 'Test1' 'Test2' 'Test'};
         plottitles_BCT        = {'Base','Cond','Test'};
         nrun2phase            = {'B','C','T'};
         condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
         kickcooldown          = 1;
         wmcsfregressors       = 0;
         orderfir              = 14;
-        relief_mc_ph          = 1; % meancorrection per phase
+        relief_mc_ph          = 0; % meancorrection per phase
+        relief_zscore         = 1;
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm_version); %path to the TPM images, needed by segment.
@@ -123,6 +124,22 @@ classdef Project < handle
                         % CS+ vs CS- criterion
                         subs = setdiff(self.subject_indices, [badmotion maybemotion notlearned missingsession]);
                         fprintf('These are all subjects with movement params OK (strict), all sessions and CSP>CSN in conditioning.\n')
+                    case 4
+                        %tuning in combined testphases
+                        path_infofile = sprintf('%smidlevel/tunedsubs_method_%d.mat',self.path_project,self.selected_fitfun);
+                        if exist(path_infofile)
+                            fprintf('info is stored, successfully loaded it.\n')
+                            load(path_infofile)
+                        else
+                            fprintf('info not yet stored, computing it.\n')                     
+                            is_tuned = [];
+                            for sub = self.subject_indices(:)'
+                                s = Subject(sub);s.fit_rating(5);
+                                is_tuned = [is_tuned s.is_tuned{5}];
+                            end
+                            subs = self.subject_indices(logical(is_tuned));
+                            save(path_infofile,'subs')
+                        end
                 end
             else
                 subs = self.subject_indices;
@@ -624,7 +641,7 @@ classdef Project < handle
             %   Returns the circular HSV color space in COLOR.
             
             color = circshift( hsv(8), [3 0] );
-            color = [color ; [0 0 0] ; [0.5 0.5 0.5]];
+            color = [color ; [.6 0 0] ; [0.5 0.5 0.5]];
             color    = color + 20/255;
             color    = min(color,ones(size(color)));
             
