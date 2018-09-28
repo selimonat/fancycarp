@@ -84,13 +84,34 @@ classdef Group < Project
                 load(filename);
             end
         end
+        function pain = get_pain(self,varargin)
+            for ns = 1:self.total_subjects
+                pain(ns,:,:) = self.subject{ns}.get_pain;
+            end
+            if nargin > 1
+                runs = varargin{1};
+                %mean of both test runs
+                if ismember(5,runs)
+                    pain  = cat(3,pain,nanmean(pain(:,:,3:4),3));
+                end
+                % we can kick the nan bc only short runs selected
+                if all(runs<3) % 3 ratings
+                    pain = pain(:,1:3,runs);
+                else
+                    pain = pain(:,:,runs);
+                end
+            end
+            
+        end
+        
+        
         function plot_grouprelief_bar(self)
             plottype = 'bar';
             
             phases2plot = [1 2 5];
             dofit = 1;
             fitmethod = self.selected_fitfun;
-            titles = {'Base','Cond','Test1','Test2','Test1/2'};
+            titles = {'Base','Cond','Test1','Test2','Test'};
             f=figure;
             f.Position = [73 410 1763 476];
             clf;
@@ -99,17 +120,12 @@ classdef Group < Project
                 spc = spc + 1;
                 
                 for ns = 1:self.total_subjects;
-                    relief(ns,:) = self.subject{ns}.get_reliefmeans(ph,self.allconds,'zscore');
+                    relief(ns,:) = self.subject{ns}.get_reliefmeans(ph,self.allconds,'raw');
                 end
                 M = nanmean(relief);
                 S = nanstd(relief)./sqrt(sum(~isnan(relief(:,end)))); %this way we get correct SEM even if missing data from one subject.
                 subplot(1,length(phases2plot),spc)
-                if strcmp(plottype,'bar')
                     self.plot_bar(self.plotconds,M,S)
-                else
-                    violin(relief);
-                end
-                
                 hold on
                 axis square
                 set(gca,'XTickLabels',{'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'},'XTickLabelRotation',45,'FontSize',12);
@@ -131,7 +147,7 @@ classdef Group < Project
                         else
                             txt= text(min(xlim)+20,M(1)+S(1).*1.2,sprintf('p = %4.3f',self.fit_results{ph}.pval));
                             set(txt, 'rotation', 90)
-                            l=line([-135,180],repmat(mean(self.fit_results{ph}.data.y),1,2));
+                            l=line([-135,180],repmat(mean(self.tunings{ph}.y),1,2));
                             set(l,'LineWidth',3,'Color','k')
                         end
                     end
@@ -149,24 +165,163 @@ classdef Group < Project
             %                 export_fig(gcf,savebmp)
             %                 export_fig(gcf,savepng,'-transparent')
         end
-        function relief = plot_grouprelief_pirate(self)
-            relief = self.get_relief('mc');
-            fs = 12;
+        function [relief tb tt] = plot_grouprelief_pirate(self)
+            relief = self.get_relief('zscore');
+            
+%             a=reshape(relief,size(relief,1),30);
+%             reliefZ = nanzscore(a')';
+%             relief = reshape(reliefZ,size(relief,1),10,3);
+            
+            fs = 14;
+            vio = 0;
             
             figure;
             clf;
             cols10 = self.GetFearGenColors;
-            xcenters = [1:8 10 16:18 24:33] ;
-            D = [relief(:,[1:8 10],1)                      relief(:,[9 8 10],2)                    relief(:,1:10,3)];
-            COL = [cols10([1:8 10],:);  cols10([9 8 10],:); cols10];
-            pirateplot(xcenters,D,COL);
             
-           set(gca,'XTick',xcenters([4 8 9 10:12 16 20:22]),'XTickLabel',{'CS+','CS-','t0','UCS','CS-','t0','CS+','CS-','UCS','t0'},'XTickLabelRotation',45,'FontSize',fs);      
-           a= gca; yl = a.YLim;
-           %% lines between runs
-           ll=line(repmat(mean(xcenters([9 10])),1,2),[yl(1)+.03*range(yl) yl(2)-.03*range(yl)]);set(ll,'Color','k')
-           ll=line(repmat(mean(xcenters([12 13])),1,2),[yl(1)+.03*range(yl) yl(2)-.03*range(yl)]);set(ll,'Color','k')
+            xcenters = -135:45:270;
+            
+            subplot(1,3,1)
+            D = relief(:,:,1);
+            COL = cols10;
+            pirateplot(xcenters,D,'color',COL,'violin',vio);
+            hold on;
+            title('Baseline','FontSize',fs)
+            set(gca,'XTick',xcenters([4 8 10]),'XTickLabel',{'CS+','CS-','Null'},'XTickLabelRotation',45,'FontSize',fs);
+            ylabel('Relief ratings (mean corr.)')
+            
+%             Publication_NiceTicks(gca,5);
+            
+            subplot(1,3,2)
+            %             D = relief(:,:,2);
+            %             COL = cols10;
+            D = relief(:,end-2:end,2);
+            COL = cols10(end-2:end,:);
+            
+            pirateplot(xcenters(end-2:end),D,'color',COL,'violin',vio);
+            hold on;
+            title('Conditioning','FontSize',fs)
+            xlim([70 380])
+            set(gca,'XTick',xcenters([8 9 10]),'XTickLabel',{'CS-','UCS','Null'},'XTickLabelRotation',45,'FontSize',fs);
+            
+            subplot(1,3,3);
+            D = relief(:,:,3);
+            COL = cols10;
+            pirateplot(xcenters,D,'color',COL,'violin',vio);
+             hold on;
+             title('Test','FontSize',fs)
+            set(gca,'XTick',xcenters([4 8 9 10]),'XTickLabel',{'CS+','CS-','UCS','Null'},'XTickLabelRotation',45,'FontSize',fs);
+            
+            base.x = repmat(-135:45:180,self.total_subjects,1);
+            base.y = relief(:,1:8,1);
+            base.ids = self.ids;
+            test.x = repmat(-135:45:180,self.total_subjects,1);
+            test.y = relief(:,1:8,3);
+            test.ids = self.ids;
+            
+            tb = Tuning(base);
+            tt = Tuning(test);
+            tb.GroupFit(8);
+            tt.GroupFit(8);
+            linecol = [.3 .3 .3];
+            
+            subplot(1,3,1);
+            hold on;
+            if 10.^-tb.groupfit.pval < .001
+                plot(tb.groupfit.x_HD,tb.groupfit.fit_HD,'k','LineWidth',2,'Color',linecol,'LineStyle',':');
+            else
+                plot([-135 180],repmat(mean(tb.y_mean),1,2),'k','LineWidth',2,'Color',linecol);
+                
+            end
+            
+            subplot(1,3,3);
+             hold on;
+            if 10.^-tt.groupfit.pval < .001
+                plot(tt.groupfit.x_HD,tt.groupfit.fit_HD,'k','LineWidth',2,'Color',linecol,'LineStyle','-');
+            else
+                plot([-180 225],repmat(mean(tt.y_mean),1,2),'k','LineWidth',2,'Color',linecol);
+                
+            end
+            for n=1:3;subplot(1,3,n);hold on;ylim([-2.5 2.5]);set(gca,'YTick',-2:2);end
+            
+            set(gcf,'Color','w')
+            EqualizeSubPlotYlim(gcf);
         end
+        function [relief, tb, tt]= plot_grouprelief_pirate_BT(self)
+            relief = self.get_relief('zscore');
+            
+            figure;
+            set(gcf,'Color','w')
+            subplot(1,2,1);
+            pirateplot(-135:45:180,relief(:,1:8,1),'color',repmat([.3 .3 .3],8,1),'violin',1);
+            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',14);ylabel('pain relief [zscore]','FontSize',16)
+                hold on;
+            axis square
+            title('Baseline','FontSize',16)
+        
+            subplot(1,2,2);
+            pirateplot(-135:45:180,relief(:,1:8,3),'violin',1);
+            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',14);
+             hold on;
+            axis square
+                    title('Test','FontSize',16)
+            
+            %%
+            base.x = repmat(-135:45:180,self.total_subjects,1);
+            base.y = relief(:,1:8,1);
+            base.ids = self.ids;
+            test.x = repmat(-135:45:180,self.total_subjects,1);
+            test.y = relief(:,1:8,3);
+            test.ids = self.ids;
+            
+            tb = Tuning(base);
+            tt = Tuning(test);
+            tb.GroupFit(8);
+            tt.GroupFit(8);
+            linecol = [.3 .3 .3];
+            
+            subplot(1,2,1);
+            hold on;
+            if 10.^-tb.groupfit.pval < .001
+                plot(tb.groupfit.x_HD,tb.groupfit.fit_HD,'k','LineWidth',2,'Color',linecol,'LineStyle',':');
+            else
+                plot([-135 180],repmat(mean(tb.y_mean),1,2),'k','LineWidth',2,'Color',linecol);
+                
+            end
+            
+            subplot(1,2,2);
+             hold on;
+            if 10.^-tt.groupfit.pval < .001
+                plot(tt.groupfit.x_HD,tt.groupfit.fit_HD,'k','LineWidth',2,'Color',linecol,'LineStyle','-');
+            else
+                plot([-180 225],repmat(mean(tt.y_mean),1,2),'k','LineWidth',2,'Color',linecol);
+                
+            end
+        end
+        
+        function relief = plot_painNrelief_pirate(self)
+            relief = self.get_relief('raw');
+            pain   = self.get_pain([1 2 5]);
+            pain   = squeeze(nanmean(pain,2));
+            
+            fs = 12;
+            colorpain = zeros(3,3);
+            colorrelief = repmat([0 0 1],3,1);
+            
+            figure;
+            subplot(2,1,1);
+            pirateplot(1:3,pain,'color',colorpain,'violin',1)
+            set(gca,'XTickLabel',{'Base','Cond','Test'},'FontSize',fs)
+            ylabel('Pain ratings [VAS]')
+            
+            subplot(2,1,2);
+            R = squeeze(nanmean(relief,2));
+            pirateplot(1:3,R,'color',colorrelief,'violin',1)
+            set(gca,'XTickLabel',{'Base','Cond','Test'},'FontSize',fs)
+            ylabel('Relief ratings [VAS]')
+     set(gcf,'Color','w')
+        end
+        
         function plot_ratings(self)
             %%
             [y x]  =  GetSubplotNumber(self.total_subjects);
@@ -179,6 +334,7 @@ classdef Group < Project
             EqualizeSubPlotYlim(gcf);
             supertitle(self.path_project,1);
         end
+        
         function plot_pain_vs_relief(self,ph)
             
             cmap = jet(self.total_subjects);
@@ -277,6 +433,19 @@ classdef Group < Project
             
             rhoz=fisherz(rho);
             for n=1:4;[rrz(n) ppz(n)] = ttest(rhoz(:,n),0);end
+        end
+        %%
+        function selectedface = get_selectedface(self)
+            selectedface = nan(self.total_subjects,1);
+            for ns = 1:self.total_subjects
+                selectedface(ns) = self.subject{ns}.selectedface;
+            end
+            figure;
+            pirateplot(1:8,histc(selectedface,-135:45:180)','color',self.GetFearGenColors,'violin',0,'errorbar',0,'CI',0,'dots',0)
+            set(gca,'XTick',[4 8],'XTickLabel',{'CS+' 'CS-'},'YTick',0:2:10,'FontSize',14)
+            set(gcf,'Color','w')
+            ylabel('N','FontSize',14);
+            title('face selected as most effective','FontSize',14)
         end
         %%
         function model_ratings(self,run,funtype)
