@@ -64,64 +64,60 @@ classdef SCR < handle
                 a                      = load(path_scrmat);
                 data                   = a.chan3; %chan1 is HR, chan2 is breathing, chan3 is scr
                 time                   = [a.head3.start:1:a.head3.stop]';
+                tsamples               = numel(data);
                 %discard all time before the first and after the last pulses.
                 pulse_times            = a.chan7;
-                stim_times             = a.chan9;    %Face Onsets
-                mbi_times              = a.chan2;                
-                % make a robust fit for pulse times to find the intercept.
-                b                      = robustfit([ [1:length(pulse_times)]'],pulse_times);%b(1) is an estimation of the time experiment starts.                
-%                 plot(stim_times,'o-'),hold on;plot(pulse_times,'ro-');plot(mbi_times,'ko-');hold off;grid on
-                b                      = b(1);%start of the presentation
+                stim_times             = a.chan9;    %Face Onsets  
+%                 % make a robust fit for pulse times to find the intercept.
+%                 b                      = robustfit([ [1:length(pulse_times)]'],pulse_times);%b(1) is an estimation of the time experiment starts.                
+% %                 plot(stim_times,'o-'),hold on;plot(pulse_times,'ro-');plot(mbi_times,'ko-');hold off;grid on
+%                 b                      = b(1);%start of the presentation
                 %
-                stim_times( stim_times < b)  = [];%delete all past samples
-                pulse_times( pulse_times< b) = [];%delete all past samples
-                mbi_times(mbi_times < b)     = [];%delete all past samples
-                %remove the last 16 stimuli 
-                stim_times(end-15:end)       = [];%delete all past samples
-                %if the first stimulus onset is missing, replace it with
-                %the mbi onset (which is the same)
-                if abs(stim_times(1)-mbi_times(1)) > 500;
-                    stim_times = [mbi_times(1) ; stim_times];
+                % remove phase 5, we don't need that
+                stim_times(end)              = [];%delete all past samples
+            
+                %% add also the start of sub-phases.
+                %find where phase starts are stored
+                c                     = a.chan5(ismember(a.chan5,a.chan6)); %startphase was coded with RateP,RateR,RampU,RampD at the same time. RampU and RampD was never the same time elsewhere
+                c(end) = []; %kick phase 5, just rating
+                %and detect the time index (in time/data samples)
+                for cc = 1:numel(c)
+                    i(cc)                  = find(time>c(cc),1,'first'); %startphase was coded with RateP,RateR,RampU,RampD at the same time. RampU and RampD was never the same time elsewhere
                 end
+                %most probably 2 startphase triggers faster than 30s is a
+                %falschbeginn (pressed startphase again)
+                c(diff(c)/1000 < 40)           = [];
+                BlockBorders_index = [i [i(2:end); scr.tsample]];
+                BlockBorders_time  = time(BlockBorders_index);
+                tblock                 = length(i);
+                % give names to blocks (end to start)
+                block_names            = s.scr_blocknames;%inherited from the Project
                 %check for ghosts in the stim timings
                 i = [diff(stim_times)] < 2000;
-                i = [0;i];
+%                 i = [0;i];
                 if any(i);
-                    cprintf([1 0 0],'Removed %d ghost pulses from stim onsets...\n',sum(i));
+                    fprintf('Removed %d unnecessary pulses from stim onsets...\n',sum(i));
                     stim_times(i==1) = [];
                 end
-                %check for ghosts in the stim timings
-                i = [diff(mbi_times)] < 20000;
-                i = [0;i];
-                if any(i)
-                    cprintf([1 0 0],'Removed %d ghost pulses from mbi...\n',sum(i));
-                    mbi_times(i==1) = [];
-                end                
-%                 figure;
-%                 plot(stim_times,'o-'),hold on;plot(pulse_times,'ro-');plot(mbi_times,'ko-');hold off;grid on
+            
+                figure;
+                plot(stim_times,'o-'),hold on;plot(pulse_times,'ro-');hold off;grid on
                 %sanity checks
-                if length(mbi_times) == 65
-                    cprintf([0 1 0],'MBI count, correct.\n');
+                if length(stim_times) == 154 % (25 + 21 + 52 + 52 + 4 phase onsets)
+                    fprintf('STIM count correct.\n');
                 else
-                    cprintf([1 0 0],'MBI count, incorrect.\n');
-                end
-                if length(stim_times) == 585
-                    cprintf([0 1 0],'STIM count, correct.\n');
-                else
-                    cprintf([1 0 0],'STIM count, incorrect.\n');
+                    fprintf('STIM count incorrect.\n');
                 end                
                 %% now set the zero for the scr recordings
                 % first cut the unwanted parts based on first and last mbi
                 last_point  = max(stim_times);
-                first_point = min(mbi_times);
+                first_point = min(stim_times);
                 i           = (time >= (first_point - 15000)) & (time <= (last_point + 20000));
                 time(~i)    = [];
                 data(~i)    = [];
                 % now shift everything so that first sample is zero.
                 first_sample                            = time(1);
                 time                                    = time        - first_sample;
-                pulse_times                             = pulse_times - first_sample;
-                mbi_times                               = mbi_times   - first_sample;
                 stim_times                              = stim_times  - first_sample;
                 
                 %% store the stuff
@@ -141,11 +137,11 @@ classdef SCR < handle
                 %
                 c = 0;
                 scr.event = [];
-                s.paradigm{1}.presentation.dist(ismember(s.paradigm{1}.presentation.dist, [1001 1002])) = 0;
-                for distance = unique(s.paradigm{1}.presentation.dist)                    
+%                 s.paradigm{1}.presentation.dist(ismember(s.paradigm{1}.presentation.dist, [1001 1002])) = 0;
+                for distance = unique(s.paradigm{3}.presentation.dist)                    
                     c                  = c + 1;
-                    scr.event(:,c)     = zeros(length(scr.y),1); 
-                    ii                 = find(s.paradigm{1}.presentation.dist == distance);
+                    scr.event(:,c)     = zeros(length(scr.y),1);
+                    ii                 = find(s.paradigm{3}.presentation.dist == distance);
                     
                     %transform distance to cond id
                     if distance == -135
@@ -164,12 +160,10 @@ classdef SCR < handle
                         cond_id = 7;
                     elseif distance == 180
                         cond_id = 8;
-                    elseif distance == 1000
+                    elseif distance == 500
                         cond_id = 9;
-                    elseif distance == 1001
+                    elseif distance == 3000
                         cond_id = 10;
-                    elseif distance == 1002
-                        cond_id = 11;
                     end
                     
                     event_times                          = stim_times(ii);
@@ -180,7 +174,7 @@ classdef SCR < handle
                     scr.event_plotting{c}.marker_size    = {{'markersize', 2}};
                     scr.event_plotting{c}.symbol         = {{'symbol','+'}};
                     scr.event_plotting{c}.line           = {{'line',{'line' '-'}}};
-                    scr.event_plotting{c}.color          = {{'color',Project.colors(:,cond_id)}};
+                    scr.event_plotting{c}.color          = {{'color',Project.GetFearGenColors(cond_id)}};
                 end
                 scr.event = logical(scr.event);
                 
