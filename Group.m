@@ -174,6 +174,10 @@ classdef Group < Project
             
             fs = 14;
             vio = 0;
+            baryn = 1;
+            erb = 1;
+            ml = 0;
+            dotyn = 0;
             
             figure;
             clf;
@@ -184,11 +188,11 @@ classdef Group < Project
             subplot(1,3,1)
             D = relief(:,:,1);
             COL = cols10;
-            pirateplot(xcenters,D,'color',COL,'violin',vio);
+            pirateplot(xcenters,D,'color',COL,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
             hold on;
             title('Baseline','FontSize',fs)
-            set(gca,'XTick',xcenters([4 8 10]),'XTickLabel',{'CS+','CS-','Null'},'XTickLabelRotation',45,'FontSize',fs);
-            ylabel('Relief ratings (mean corr.)')
+            set(gca,'XTick',xcenters([4 8 10]),'XTickLabel',{'CS+','CS-','Null'},'XTickLabelRotation',45,'FontSize',fs,'Ydir','reverse');
+            ylabel('Relief ratings [zscore]')
             
 %             Publication_NiceTicks(gca,5);
             
@@ -198,19 +202,19 @@ classdef Group < Project
             D = relief(:,end-2:end,2);
             COL = cols10(end-2:end,:);
             
-            pirateplot(xcenters(end-2:end),D,'color',COL,'violin',vio);
+            pirateplot(xcenters(end-2:end),D,'color',COL,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
             hold on;
             title('Conditioning','FontSize',fs)
             xlim([70 380])
-            set(gca,'XTick',xcenters([8 9 10]),'XTickLabel',{'CS-','UCS','Null'},'XTickLabelRotation',45,'FontSize',fs);
+            set(gca,'XTick',xcenters([8 9 10]),'XTickLabel',{'CS-','UCS','Null'},'XTickLabelRotation',45,'FontSize',fs,'Ydir','reverse');
             
             subplot(1,3,3);
             D = relief(:,:,3);
             COL = cols10;
-            pirateplot(xcenters,D,'color',COL,'violin',vio);
+            pirateplot(xcenters,D,'color',COL,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
              hold on;
              title('Test','FontSize',fs)
-            set(gca,'XTick',xcenters([4 8 9 10]),'XTickLabel',{'CS+','CS-','UCS','Null'},'XTickLabelRotation',45,'FontSize',fs);
+            set(gca,'XTick',xcenters([4 8 9 10]),'XTickLabel',{'CS+','CS-','UCS','Null'},'XTickLabelRotation',45,'FontSize',fs,'Ydir','reverse');
             
             base.x = repmat(-135:45:180,self.total_subjects,1);
             base.y = relief(:,1:8,1);
@@ -249,19 +253,23 @@ classdef Group < Project
         end
         function [relief, tb, tt]= plot_grouprelief_pirate_BT(self)
             relief = self.get_relief('zscore');
+            yticki = [-1.5 0 1.5];
             
             figure;
             set(gcf,'Color','w')
             subplot(1,2,1);
             pirateplot(-135:45:180,relief(:,1:8,1),'color',repmat([.3 .3 .3],8,1),'violin',1);
-            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',14);ylabel('pain relief [zscore]','FontSize',16)
-                hold on;
+            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',14,'YTick',yticki,'Ydir','reverse');
+            ylabel('pain relief [zscore]','FontSize',16)
+            ylim([-2 2])
+            hold on;
             axis square
             title('Baseline','FontSize',16)
         
             subplot(1,2,2);
+            yticki = [-1 0 1];
             pirateplot(-135:45:180,relief(:,1:8,3),'violin',1);
-            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',14);
+            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',14,'YTick',yticki,'Ydir','reverse');
              hold on;
             axis square
                     title('Test','FontSize',16)
