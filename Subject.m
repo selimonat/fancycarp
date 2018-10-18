@@ -30,6 +30,7 @@ classdef Subject < Project
         dicom_folders     = [];
         dicom_target_run  = [];
         derivatives       = [0 0];%specifies expansion degree of the cHRF when running models.
+        scr_ok            = [];
     end
     properties (SetAccess = private)
         id
@@ -63,6 +64,7 @@ classdef Subject < Project
                 if any(cellfun(@(i) strcmp(i,'scr'),varargin))
                     s.scr   = SCR(s);
                 end
+%                 scr_ok = load(s.path
 %                 s.scr = SCR(s);
             else
                 fprintf('Subject %02d doesn''t exist somehow :(\n %s\n',id,s.path);
@@ -272,9 +274,17 @@ classdef Subject < Project
         function selected = get.selectedface(self)
             selected = self.get_paradigm(5).out.selectedface;
         end
-%         function selected = get.M_rating(self)
-%             selected = nanmean(self.get_pain(
-%         end
+        
+        function scr_ok = get_scr_ok(self)
+            path =fullfile(self.pathfinder(4,0),'midlevel','scr_ok.mat');
+            if ~exist(path)
+                path2xls = fullfile(self.path_project,'midlevel','scr_ok_info.mat');
+                xlsread(path2xls);
+                scr_ok = [];
+            else
+                load(path);
+            end
+        end
     end
     methods %(behavioral analysis)
         function [out, raw, triallist] = get_rating(self,varargin)
@@ -401,13 +411,18 @@ classdef Subject < Project
             if nargin > 2
                 conds = varargin{1};
             end
+            if nargin > 3
+                corrtype = varargin{2};
+            else
+                corrtype = 'raw';
+            end
             out = self.get_rating(run,conds);
             
-            if strcmp(varargin{2},'mc')
+            if strcmp(corrtype,'mc')
               out.y = out.y - nanmean(out.y);
-            elseif strcmp(varargin{2},'zscore')
+            elseif strcmp(corrtype,'zscore')
                  out.y = zscore(out.y);
-            elseif strcmp(varargin{2},'raw')
+            elseif strcmp(corrtype,'raw')
                 out.y = out.y;
             end
             
@@ -479,13 +494,15 @@ classdef Subject < Project
         end
         function plot_ratings(self)
             force = 0;
+            corrtype = 'raw';
+            
             savepath = [self.path 'run005/figures/'];
             if ~exist(savepath)
                 mkdir(savepath)
             end
-            savefigf = [savepath sprintf('ratingplot_sub%02d.fig',self.id)];
-            savebmp = [savepath sprintf('ratingplot_sub%02d.bmp',self.id)];
-            savepng = [savepath sprintf('ratingplot_sub%02d.png',self.id)];
+            savefigf = [savepath sprintf('ratingplot_sub%02d_%s.fig',self.id,corrtype)];
+            savebmp = [savepath sprintf('ratingplot_sub%02d_%s.bmp',self.id,corrtype)];
+            savepng = [savepath sprintf('ratingplot_sub%02d_%s.png',self.id,corrtype)];
             if exist(savefigf,'file') && force == 0
                 fprintf('Found saved .fig file, opening it as figure %02d\n',self.id)
                 openfig(savefigf);
@@ -497,7 +514,7 @@ classdef Subject < Project
                 clf;
                 
                 for run = 1:5
-                    [M,S] = self.get_reliefmeans(run,self.allconds);
+                    [M,S] = self.get_reliefmeans(run,self.allconds,corrtype);
                     subplot(1,5,run)
                     self.plot_bar(self.plotconds,M,S)
                     hold on
@@ -522,8 +539,8 @@ classdef Subject < Project
                 EqualizeSubPlotYlim(gcf);
                 
                 savefig(gcf,savefigf)
-%                 export_fig(gcf,savebmp)
-%                 export_fig(gcf,savepng,'-transparent')
+                export_fig(gcf,savebmp)
+                export_fig(gcf,savepng,'-transparent')
             end
         end
         function [delta,temp] = get_ramptemp(self,run)
@@ -1388,12 +1405,123 @@ classdef Subject < Project
                 save(self.path_data(2,'pmf'),'out')
             end
         end
-        function out        = path_scr(self)
+        function out        = path_scr(self,varargin)
             %the directory where SCR is located
-            out = sprintf('%sscr%sdata.smr',self.pathfinder(self.id,self.default_run),filesep);
+            if nargin == 1
+            out = sprintf('%sscr%sdata_uncut.mat',self.pathfinder(self.id,0),filesep);
+            else 
+                nrun = varargin{1};
+                 out = sprintf('%sscr%sleda_scr%sdata.mat',self.pathfinder(self.id,nrun),filesep,filesep);
+            end
         end
     end
-    
+    methods %scr
+        function [scr_trials_phasic,scr_trials_phasic_mean, scr_time] = get_scr_trials_phasic(self,nrun)
+            force =  1;
+            outputfile = strrep(strrep(self.path_scr,'run000',sprintf('run%03d',nrun)),'data_uncut.mat','scr_trials_phasic.mat');
+            
+            if ~exist(outputfile) || force == 1
+                fprintf('Requested SCR not yet stored, computing phasic scr response for singletrials in sub %02d, run %d.\n',self.id,nrun)
+                ledafile = strrep(strrep(self.path_scr,'run000/scr/',sprintf('run%03d%sscr%sleda_scr%s',nrun,filesep,filesep,filesep)),'data_uncut.mat','data_results.mat');
+                if self.id == 4 && nrun == 4
+                    scr_trials_phasic_mean = nan(161,10);
+                    scr_time = nan(161,1);
+                    scr_trials_phasic = nan(161,6,10);
+                else
+                    load(ledafile)
+                    scr_trials_phasic = nan(size(analysis.split_driver.y,1),max(analysis.split_driver.n),10);
+                    
+                    scr_time = analysis.split_driver.x(:,1);
+                    cc = 0;
+                    for c = self.condsposition{nrun}
+                        cc = cc+1;
+                        ind = find(strcmp(self.condstring{c},analysis.split_driver.condnames));
+                        singletrials = analysis.split_driver.y(:,ind); %single trials timecourse
+                        scr_trials_phasic(:,1:length(ind),c) = singletrials;
+                    end
+                    scr_trials_phasic_mean = squeeze(nanmean(scr_trials_phasic,2));
+                    
+                end
+                save(outputfile,'scr_trials_phasic','scr_time','scr_trials_phasic_mean')
+                
+            else
+                fprintf('Requested SCR mat was stored, loading from %s.\n',outputfile);
+                load(outputfile)
+                fprintf('Your mat file is of size %d (timepoints) x %d (trials) x %d (conditions).\n',size(scr_trials_phasic,1),size(scr_trials_phasic,2),size(scr_trials_phasic,3));                
+            end
+        end
+        function [scr_score_trials] = get_scr_score_trials(self,nrun,varargin)
+            force   = 1;
+            lgt     = 1; %log transform
+         
+            %varargin expects timewindow;
+            
+            if nargin == 2
+                timewindow = self.scr_timewin;
+            else
+                timewindow = varargin{1};
+            end
+            outputfile = strrep(strrep(self.path_scr,'run000',sprintf('run%03d',nrun)),'data_uncut.mat',sprintf('scr_trials_score_win%02dto%02d_log%d.mat',timewindow(1)*10,timewindow(end)*10,lgt));
+            
+            if ~exist(outputfile) || force == 1
+                
+                fprintf('Requested SCR not yet stored, computing scr responses in timewindow %g to %g in sub %02d, run %d.\n',timewindow(1), timewindow(end),self.id,nrun)
+                
+                dir_phasic_trials = strrep(strrep(self.path_scr,'run000',sprintf('run%03d',nrun)),'data_uncut.mat','scr_trials_phasic.mat');
+                
+                if ~exist(dir_phasic_trials)
+                    [scr_trials_phasic, ~, scr_time] = self.get_scr_trials_phasic(nrun);
+                else
+                    load(dir_phasic_trials);
+                end
+                timey = logical((scr_time >= timewindow(1)).*(scr_time <= timewindow(end))); %index of samples in scr_time we want to include
+                scr_score_trials = squeeze(nanmean(scr_trials_phasic(timey,:,:))); %single trials, time dimension is gone, mean over timewindow
+                if lgt == 1
+                    scr_score_trials = log10(1+abs(scr_score_trials)).*sign(scr_score_trials); %from M Benedek, C Kaernbach - Psychophysiology, 2010
+                end
+                save(outputfile,'scr_score_trials');
+            else
+                fprintf('Requested SCR mat was stored, loading from %s.\n',outputfile);
+                load(outputfile);
+            end
+        end
+        function [out_M, out_STD, out_SEM, alltrials, alltrials_z] = get_scr_score_final(self,varargin)
+            force   = 1;
+            lgt     = 1;
+            zsc     = 1; %zscore transform
+            alltrials = nan(12,30); %max 12 trials (2 runs with 6 reps, 10 conditions)
+          
+               
+            %varargin expects timewindow;
+            
+            if nargin == 1
+                timewindow = self.scr_timewin;
+            else
+                timewindow = varargin{1};
+            end
+        
+            outputfile = strrep(self.path_data(0,'midlevel'),'data.mat',sprintf('scr_score_win%02dto%02d_log%d_z%d.mat',timewindow(1)*10,timewindow(end)*10,lgt,zsc));
+
+            if ~exist(outputfile) || force == 1
+             
+                fprintf('Requested SCR not yet stored, computing scr responses in timewindow %g to %g in sub %02d.\n',timewindow(1), timewindow(end),self.id);
+                alltrials(1:3,1:10)   = self.get_scr_score_trials(1,timewindow); % single trials in one run, log but not z yet
+                alltrials(1:10,11:20) = self.get_scr_score_trials(2,timewindow); % single trials in one run, log but not z yet
+                alltrials(1:6,21:30)  = self.get_scr_score_trials(3,timewindow); % single trials in one run, log but not z yet
+                alltrials(7:12,21:30) = self.get_scr_score_trials(4,timewindow); % single trials in one run, log but not z yet
+                alltrials_vec = alltrials(:);
+                alltrials_z = reshape(nanzscore(alltrials_vec),[12 30]);
+                out_M   = reshape(nanmean(alltrials_z),10,3);
+                out_STD = reshape(nanstd(alltrials_z),10,3);
+                out_SEM = reshape(nanstd(alltrials_z)./sqrt(sum(~isnan(alltrials_z))),10,3);
+                save(strrep(outputfile,'.mat','_alltrials.mat'),'alltrials','alltrials_z','out_M','out_STD','out_SEM')
+            else
+                fprintf('Requested SCR mat was stored, loading from %s.\n',outputfile);
+                load(outputfile);
+            end
+            
+        end
+    end
     methods %(plotters)
         function plot_log(self,nrun)
             %will plot the events that are logged during the experiment.
@@ -1468,6 +1596,72 @@ classdef Subject < Project
             L = self.get_physio2log;
             plot(L(:,1),L(:,2),'r+');
             hold off;
+        end
+        function plot_scr_raw(self)
+            ff=figure(self.id);
+            set(ff,'Position', [70 120 1600 900]);
+            clf;
+            load(self.path_scr);
+            data = data-nanmean(data);
+            plot([1:numel(data)]./1000,data)
+            xlabel('time [secs]')
+            hold on;
+            title(sprintf('sub %02d',self.id));
+             box off
+            %plot scanner pulses
+            firstscan = [1; find(diff(trigger(1).times)>10)+1]';
+            lastscan = [firstscan(2:end)-1 trigger(1).length];
+            for ss = 1:length(firstscan)
+                rectangle('Position',[trigger(1).times(firstscan(ss)),min(data),trigger(1).times(lastscan(ss))-trigger(1).times(firstscan(ss)),range(data)],'EdgeColor','c');
+            end
+            %plot faces on curve
+            plot(trigger(3).times,data(round(trigger(3).times*1000)),'r.')
+            legend('SCR','FaceOnset','Scanner')
+            cols = self.GetFearGenColors;
+            for n = 1:7
+                plot(trigger(n).times,-.5*n,'ko','MarkerFaceColor',cols(n,:))
+                ytag{n} = trigger(n).name;
+            end
+            set(gca,'YTick',-4:.5:0,'YTickLabel',ytag)
+        end
+        function plot_scr_phases(self)
+            ff=figure(1000);
+            set(ff,'Position', [32 473 1302 535]);
+            clf;
+            load(self.path_scr);
+            subplot(2,4,1:4);
+            plot([1:numel(data)]./1000,data)
+            xlabel('time [secs]')
+            hold on;
+            title(sprintf('sub %02d',self.id));
+             box off
+            %plot scanner pulses
+            firstscan = [1; find(diff(trigger(1).times)>10)+1]';
+            lastscan = [firstscan(2:end)-1 trigger(1).length];
+            for ss = 1:length(firstscan)
+                rectangle('Position',[trigger(1).times(firstscan(ss)),min(data),trigger(1).times(lastscan(ss))-trigger(1).times(firstscan(ss)),range(data)],'EdgeColor','c');
+            end
+            plot(trigger(3).times,data(round(trigger(3).times*1000)),'r.')
+%              plot(trigger(1).times,max(data)+.3,'c*');
+            legend('SCR','FaceOnset','Scanner')
+            for n = 1:4
+                load(self.path_scr(n));
+                subplot(2,4,4+n);
+                plot(data.time,data.conductance);
+                hold on;
+                    col = self.GetFearGenColors;
+                for c = 1:length(data.event)
+                    plot(data.event(c).time,data.conductance(round(data.event(c).time*1000)),'o','Color',col(data.event(c).nid,:),'MarkerFaceColor',col(data.event(c).nid,:))
+%                     fprintf('Plot at %04.2f , %04.2f, col no %d\n',data.event(c).time,data.conductance(round(data.event(c).time*1000)),data.event(c).nid); %just a check
+                end
+                box off
+                clear data;
+            end
+            EqualizeSubPlotYlim(gcf);
+            savepath = strrep(self.path_scr,'data_uncut.mat','scr_plot.png');
+            if ~exist(savepath)
+                SaveFigure(savepath);
+            end
         end
     end
     methods %(fmri analysis)
