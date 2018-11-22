@@ -1,9 +1,9 @@
 classdef Tuning < handle
     properties (Hidden)
-        visualization = 1;%visualization of fit results
+        visualization = 0;%visualization of fit results
         gridsize      = 20;%resolution per parameter for initial estimation.
-        options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
-        singlesubject = [];%will contain the fit results for individual subjects
+        options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-8,'tolfun',10^-8,'MaxIter',10000,'Algorithm','interior-point');
+        singlesubject_data = [];%will contain the fit results for individual subjects
     end
     %tuning object, can contain any kind of fear-tuning SCR, rating etc.
     properties
@@ -11,8 +11,8 @@ classdef Tuning < handle
         y      = [];
         ids    = [];
         y_mean = [];
-        y_median = [];
         y_std  = [];
+        y_SEM  = [];
         groupfit        
         params;
         pval;
@@ -21,53 +21,51 @@ classdef Tuning < handle
     
     methods
         function tuning = Tuning(data,varargin)
-            %data is anything that has a x and y fields data.x(Subject,angles)
+            %data is anything that has a x and y fields.
+            %X and Y has rows for different subjects.
             tuning.x   = data.x;
             tuning.y   = data.y;
             tuning.ids = data.ids;
+            tsubject   = length(unique(tuning.ids(:)));
             for x  = unique(tuning.x(:)')
                 i             = tuning.x == x;
                 tuning.y_mean = [tuning.y_mean mean(tuning.y(i))];%Group mean
-                tuning.y_median = [tuning.y_median median(tuning.y(i))];%Group mean
-                tuning.y_std  = [tuning.y_std  std(tuning.y(i))];% Group std
+                tuning.y_std  = [tuning.y_std  std(tuning.y(i))];% Group std                
             end
+            tuning.y_SEM      = tuning.y_std./sqrt(tsubject);
         end
         
-        function SingleSubjectFit(self,funtype)
+        function self = SingleSubjectFit(self,funtype)
             %fit FUNTYPE to each individual subject
             ts = size(self.x,1);
             for ns = 1:ts
                 fprintf('Fitting subject %03d of %03d, id: %03d\n',ns,ts,self.ids(ns));
-                self.singlesubject{ns} = self.Fit(self.x(ns,:),self.y(ns,:),funtype);
+                self.singlesubject_data{ns}                  = self.Fit(self.x(ns,:),self.y(ns,:),funtype);
+                self.singlesubject_data{ns}.table.subject_id = self.ids(ns);
             end
-            self.FitGetParam;
+            self.FitGetParam(funtype);
         end
         
-        function FitGetParam(self)
+        function FitGetParam(self,fun_type)
             %this is just a lame method that collects whatever is needed
             %from the main fitting method, which has notoriously high
-            %number of fields.
-            self.fit_results = [];
-            for unit = 1:length(self.singlesubject)
-                if ~isempty(self.singlesubject{unit})
-                    self.fit_results.params(unit,:)      = self.singlesubject{unit}.Est;
-                    self.fit_results.ExitFlag(unit,1)    = self.singlesubject{unit}.ExitFlag;
-                    self.fit_results.pval(unit,1)        = self.singlesubject{unit}.pval;
-                    self.fit_results.x(unit,:)           = self.singlesubject{unit}.x;
-                    self.fit_results.y_fitted(unit,:)    = self.singlesubject{unit}.fit;
-                    self.fit_results.x_HD(unit,:)        = self.singlesubject{unit}.x_HD;
-                    self.fit_results.y_fitted_HD(unit,:) = self.singlesubject{unit}.fit_HD;
-                    self.fit_results.Likelihood(unit,:) = self.singlesubject{unit}.Likelihood;
-                    try
-                        self.fit_results.param_table         = array2table(self.singlesubject{unit}.Est,'variablenames',self.singlesubject{unit}.paramname);
-                    catch
-                        warning('array2table function missing, cannot create param_table');
-                    end
+            %number of fields.            
+            for unit = 1:length(self.singlesubject_data)
+                if ~isempty(self.singlesubject_data{unit})
+                    self.fit_results{fun_type}.params(unit,:)      = self.singlesubject_data{unit}.Est;
+                    self.fit_results{fun_type}.ExitFlag(unit,1)    = self.singlesubject_data{unit}.ExitFlag;
+                    self.fit_results{fun_type}.pval(unit,1)        = self.singlesubject_data{unit}.pval;
+                    self.fit_results{fun_type}.x(unit,:)           = self.singlesubject_data{unit}.x;
+                    self.fit_results{fun_type}.y_fitted(unit,:)    = self.singlesubject_data{unit}.fit;
+                    self.fit_results{fun_type}.x_HD(unit,:)        = self.singlesubject_data{unit}.x_HD;
+                    self.fit_results{fun_type}.y_fitted_HD(unit,:) = self.singlesubject_data{unit}.fit_HD;
+                    self.fit_results{fun_type}.fitfun              = self.singlesubject_data{1}.fitfun;
+                    self.fit_results{fun_type}.table               = self.singlesubject_data{1}.table;
                 end
             end            
         end
         
-        function GroupFit(self,funtype)
+        function self = GroupFit(self,funtype)
             %pools different subjects and fit FUNTYPE
             self.groupfit = self.Fit(self.x(:),self.y(:),funtype);
             %
@@ -76,9 +74,6 @@ classdef Tuning < handle
             %Fits FUNTYPE to a tuning defined in x and y
             
             %% set the function to be fitted
-            if ~isempty(regexp(which('normpdf'),'ledalab'))
-                rmpath('/home/onat/Documents/Code/Matlab/ledalab/main/util/');%ledalab has also a normpdf, clever!
-            end
             x        = x(:);
             y        = y(:);%make it sure to have columns
             y        = y + rand(length(y),1)*eps;
@@ -89,14 +84,12 @@ classdef Tuning < handle
                 U           = [ max(y)  2*std(y)];
                 result.dof    = 1;
                 result.funname= 'null';
-                result.paramname = {'amp'  'sigma_y'};
             elseif funtype == 2
                 result.fitfun = @(x,p) make_gaussian_fmri(x,p(1),p(2),p(3));%2 amp, std, offset
                 L           = [-range(y)*2    0       mean(y)-range(y)*2          .01    ];
                 U           = [range(y)*2     180      mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];%                
                 result.dof    = 3;
-                result.funname= 'gaussian';
-                result.paramname = {'amp' 'std' 'offset' 'sigma_y'};
+                result.funname= 'gaussian';            
             elseif funtype == 3
                 result.fitfun = @(x,p) self.make_gaussian_fmri_zeromean(x,p(1),p(2));%2 amp fwhm
 
@@ -108,65 +101,69 @@ classdef Tuning < handle
                 %detect the mean, store it and subtract it
                 CONSTANT    = mean(y);
                 y           = y-CONSTANT;%we are not interested in the baseline, just remove it so we don't need to estimated it.
-                result.paramname = {'amp' 'fwhm' 'sigma_y'};
+                param_names = {'amp' 'sigma' 'noise_sd'};
+                
             elseif funtype == 4
                 result.fitfun = @(x,p) make_gaussian_fmri_tau(x,p(1),p(2),p(3));%amp, tau, offset
                 L           = [-range(y)*2    0    mean(y)-range(y)*2          .01    ];
                 U           = [range(y)*2     180  mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
                 result.funname= 'gaussian_tau';
-                result.paramname = {'amp' 'tau' 'offset' 'sigma_y'};
+                
             elseif funtype == 5
-                result.fitfun = @(x,p) self.VonMises_immobile(x, p(1), p(2), p(3));
-                L             = [ eps             eps       min(y(:))-std(y)   eps ];
-                U             = [ range(y(:))     15        max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
+                result.fitfun = @(x,p) self.VonMises_centered(x, p(1), p(2), p(3));
+                L           = [ -range(y)*2  0.1      mean(y)-range(y)*2   0];%amp kappa offset
+                U           = [  range(y)*2  15       mean(y)+range(y)*2   std(y)];
                 result.dof    = 3;
                 result.funname= 'vonmises';
-                result.paramname = {'amp' 'kappa' 'offset' 'sigma_y'};
+                
+            elseif funtype == 55
+                
+                result.fitfun = @(x,p) self.VonMises_centered(x, p(1), p(2), p(3));
+                L           = [ -range(y)*2   0.1      mean(y)-range(y)*2   0];%amp kappa offset
+                U           = [  range(y)*2   0.1      mean(y)+range(y)*2   std(y)];
+                result.dof    = 3;
+                result.funname= 'vonmises_template';
+                
+                %detect the mean, store it and subtract it
+                CONSTANT    = mean(y);
+                y           = y-CONSTANT;%we are not interested in the baseline, just remove it so we don't need to estimated it.
+                param_names = {'amp' 'sigma' 'offset' 'noise_sd'};
+                
             elseif funtype == 6
                 result.fitfun = @(x,p) make_gabor1d_ZeroMean(x,p(1),p(2),p(3),p(4));%amp std freq baseline
                 L           = [ -range(y)*2  0    1  -range(y)*2    .01    ];
                 U           = [  range(y)*2  180   4   range(y)*2  std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 4;
                 result.funname= 'gabor';
-                result.paramname = {'amp' 'sigma' 'freq' 'offset' 'sigma_y'};
             elseif funtype == 7
-                result.fitfun = @(x,p) p(1)*cos(x*p(2)+p(3)) + p(4);%amp freq phase baseline
-                L           = [ -range(y)*2  0    0      -range(y)*2    .01    ];
-                U           = [  range(y)*2  2    2*pi    range(y)*2     std(y(:)+rand(length(y),1).*eps)*2 ];
+                result.fitfun = @(x,p) p(1)*cos(deg2rad(x)*p(2)) + p(3);%amp freq baseline std
+                L           = [ -range(y)*2  2  -mean(y)*2     .01    ];
+                U           = [  range(y)*2  2.1   mean(y)*2     std(y(:)+rand(length(y),1).*eps)*2 ];
                 result.dof    = 3;
                 result.funname= 'cosine';
-                result.paramname = {'amp' 'freq' 'phase' 'offset' 'sigma_y'};
             elseif funtype == 8
                 result.fitfun = @(x,p) self.VonMises(x,p(1),p(2),p(3),p(4));%amp,kappa,centerX,offset
-                L             = [ eps             0        min(x)   min(y(:))-std(y)   eps ];
-                U             = [ range(y(:))     30        max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
+                L             = [ eps             0.1        min(x)   min(y(:))-std(y)   eps ];
+                U             = [ range(y(:))      15        max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];                
                 %                 L      = [ eps                   0.1   eps     -pi   eps ];
                 %                 U      = [ min(10,range(y)*1.1)  20   2*pi   pi   10];
                 result.dof    = 4;
                 result.funname= 'vonmisses_mobile';
-                result.paramname = {'amp' 'kappa' 'center' 'offset' 'sigma_y'};
-            elseif funtype == 9
-                result.fitfun = @(x,p) self.expodecay(x,p(1),p(2),p(3),p(4));%amp,lambda (decay param),centerX,offset;
-                L             = [ eps             eps        min(x)   min(y(:))-std(y)   eps ];
-                U             = [ range(y(:))      1         max(x)   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];       
-                result.dof    = 4;
-                result.funname= 'exp_decay';
-                result.paramname = {'amp' 'lambda' 'center' 'offset' 'sigma_y'};
+                param_names = {'amp' 'sigma' 'mu' 'offset' 'noise_sd'};
             end
+            %% add some small noise in case of super-flat ratings
+            if sum(diff(y)) == 0;y = y + rand(length(y),1)*.001;end
             %% set the objective function
             result.likelihoodfun  = @(params) sum(-log( normpdf( y - result.fitfun( x,params(1:end-1)) , 0,params(end)) ));
-%             result.likelihoodfun  = @(params) sum(-log( tpdf( y - result.fitfun( x,params(1:end-1)) ,params(end)) ));
-%             result.likelihoodfun  = @(params) sum(-log( cauchypdf( y - result.fitfun( x,params(1:end-1)) ,0,params(end)) ));
+            
             %% Initial estimation of the parameters  
             %if gabor or gaussian, make a grid-estimatation
             if funtype > 1
                 Init = self.RoughEstimator(x,y,result.fitfun,L(1:end-1),U(1:end-1));%[7.1053 15.5556 1.0382];
             else %null model
                 Init = mean(y);
-            end
-            %% add some small noise in case of super-flat ratings
-            if sum(diff(y)) == 0;y = y + randn(length(y),1)*.001;end
+            end            
             %% estimate initial values for sigma_noise
             %based on the likelihood of sigma given the data points assuming a Gaussian normal distribution.
             tsample      = 1000;
@@ -175,11 +172,10 @@ classdef Tuning < handle
             [m i]        = max(PsigmaGiveny);
             Init         = [Init sigmas(i)];%
             %% Optimize!
-            try                
+            try
                 [result.Est, result.Likelihood, result.ExitFlag]  = fmincon(result.likelihoodfun, Init, [],[],[],[],L,U,[],self.options);
                 result.Likelihood = result.likelihoodfun(result.Est);                
             catch
-                cprintf([1 0 0],'fmincon failed, using initial values...\n')
                 result.Est        = Init;
                 result.Likelihood = result.likelihoodfun(result.Est);
                 result.ExitFlag   = 1;
@@ -201,10 +197,16 @@ classdef Tuning < handle
                 result.dof   = result.dof - 1;%the DOF of the null hypothesis is 0.
                 result.pval  = -log10(1-chi2cdf(-2*(result.Likelihood - result.null_Likelihood),result.dof) + eps);
             end
-            result.x       = unique(x);            
-            result.fit     = result.fitfun(result.x,result.Est);
-            result.x_HD    = linspace(min(result.x),max(result.x),100);
-            result.fit_HD  = result.fitfun(result.x_HD,result.Est);
+            result.x           = unique(x);            
+            result.fit         = result.fitfun(result.x,result.Est)+CONSTANT;
+            result.x_HD        = linspace(min(result.x),max(result.x),100);
+            result.fit_HD      = result.fitfun(result.x_HD,result.Est)+CONSTANT;
+            result.table       = array2table([result.Est result.pval funtype],'VariableNames',[param_names 'LL' 'funtype']); 
+            
+            if result.ExitFlag < 0
+                cprintf([1 0 0],'Fmincon not converge, this usually happends with flat fear-tuning, setting pval manually to a large value....\n');
+                result.pval = 0.5;
+            end
             %% show fit if wanted
             if self.visualization
                 
@@ -224,44 +226,17 @@ classdef Tuning < handle
                 hold on
                 plot(result.x_HD, result.fit_HD  ,'color',[.3 .3 .3] ,'linewidth',3);                                
                 errorbar(result.x, Y_ave+CONSTANT, Y_sem   , 'b'   ,'linewidth', 3);                                
-                plot(x,y,'mo','markersize',10);
                 hold off
                 if funtype > 1
                     title(sprintf('Likelihood: %03g (p = %5.5g)',result.Likelihood,result.pval));
                 end
-                if funtype == 8
-                    fprintf('Kappa: %g (FWHM: %g, Sigma: %g)\n',result.Est(2),vM2FWHM(result.Est(2)),vM2FWHM(result.Est(2))/2.35);
-                end
                 xlim([min(x(:)) max(x(:))]);
                 drawnow;
                 grid on;                      
+                pause
             end
-%            pause
         end
-        function PlotFit(self,ns) %singlesubject fit
-                xx = self.x(ns,:);
-                yy = self.y(ns,:);                
-                c       = 0;
-                xs = sort(unique(xx));
-                for nx = xs(:)'%for each unique X variable compute a the average/std/sem values.
-                    c               = c+1;
-                    Y_ave(c)        = mean(yy(xx==nx));
-                    Y_ave_trim(c)   = trimmean(yy(xx==nx),5);
-                    Y_std(c,1)      = std(yy(xx==nx));%will be used to plot errorbars
-                end
-                
-                figure(100);clf
-                plot(self.singlesubject{ns}.x_HD,self.singlesubject{ns}.fit_HD,'ro','linewidth',3);
-                hold on
-                plot(self.singlesubject{ns}.x_HD, self.singlesubject{ns}.fit_HD  ,'color',[.3 .3 .3] ,'linewidth',3);                                
-                errorbar(self.singlesubject{ns}.x, Y_ave, Y_std   , 'b'   ,'linewidth', 3);                                
-                plot(xx,yy,'mo','markersize',10);
-                hold off
-                xlim([min(xx(:)) max(xx(:))]);
-                drawnow;
-                grid on;                      
-        end
-            
+        
         function [params]=RoughEstimator(self,x,y,fun,L,U)
             %will roughly estimate free parameter values bounded between L
             %and U for FUN and x values. Error is computed according to Y.        
@@ -293,13 +268,11 @@ classdef Tuning < handle
             out    =  (exp(kappa*cos(deg2rad(X-centerX)))-exp(-kappa))./(exp(kappa)-exp(-kappa));%put it btw [0 and 1]
             out    =  amp*out + offset;%and now scale it
         end
-        function  [out] = VonMises_immobile(X,amp,kappa,offset)
-            %[out] = VonMises_immobile(X,amp,centerX,kappa,offset)
-            %
+        function [out] = VonMises_centered(X,amp,kappa,offset)
+            %[out] = VonMises_centered(X,amp,kappa,offset);
+            
             out = Tuning.VonMises(X,amp,kappa,0,offset);
         end
-        
-        
         function [out] = make_gaussian_fmri_zeromean(x,amp,sd)            
             %
             %	Generates a Gaussian with AMP, FWHM and offset parameters. The center location is
@@ -310,19 +283,14 @@ classdef Tuning < handle
             XT = length(x);
             %as well as d
             % d  = 0.02;
-            %out      = amp.*exp(-tau*(x.^2)/2) - amp*sqrt(2*pi/tau)./d./XT;
-            
-            out      = amp.*exp(-(x./sd).^2/2) - amp*sqrt(2*pi*sd.^2)./d./XT;
-        end
-        function [out] = expodecay(x,amp,lambda,offsetX,offset)
-            % describes generalization profiles with exponential decay, thus not a
-            % normal exponential decay function, but one symmetric around offsetX.
-            % amp = Amplitude, scaling factor
-            % decay = decay parameter
-            % offset = offset in y-direction
-            % offsetX = offset in x-direction, i.e. peakshift
-            
-            out = exp(-lambda*(abs(x-offsetX)))*amp+offset;
-        end
+%             out      = amp.*exp(-tau*(x.^2)/2) - amp*sqrt(2*pi/tau)./d./XT;
+%             x   = x(:)';
+%             sd  = sd(:);
+%             amp = amp(:);
+%             sd  = repmat(sd, [1 length(x)]);
+%             amp = repmat(amp,[1 length(x)]);
+%             x   = repmat(x,  [length(sd) 1]);
+            out = amp.*exp(-(x./sd).^2/2) - amp.*sqrt(2*pi*sd.^2)./d./XT;
+        end               
     end
 end
