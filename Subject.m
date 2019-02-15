@@ -47,6 +47,7 @@ classdef Subject < Project
         facecircle_param = [];
         trio_session     = [];
         rating           = [];
+        facecircle       = [];
         total_run        = [];
         pmf
         detected_oddballs;
@@ -519,7 +520,7 @@ classdef Subject < Project
             f.x = round(f.x);
             f.y = round(f.y);
         end
-        function out        = get_facecircle(self,partition)
+        function out        = get.facecircle(self)
             %
             % fixation data are partitioned into PARTITION many partitions,
             % this is done based on the start time of fixations. If you
@@ -554,9 +555,9 @@ classdef Subject < Project
             % mind that the .RAW field interacts with PARTITION, if you
             % need to have all fixations in the .RAW fields you have to
             % have PARTITION set to 1.
-            if nargin < 2%if no partition info, assumes 1
+%             if nargin < 2%if no partition info, assumes 1
                 partition = 1;
-            end
+%             end
             out                               = [];
             filename                          = sprintf('%sfacecircle_%02d.mat',self.path_midlevel(3),partition);%facecircle is recorded in run 3.
             force = 0;%!!!!!!!!!!!!!!!!!!!!!!!!!1
@@ -623,7 +624,7 @@ classdef Subject < Project
                     out.partition_ids(P,:)      = repmat(P,1,8);
                 end
                 %output the standard structure
-                out.y         = self.circconv2(out.(self.eye_data_type),[1 1]/2);
+                out.y         = self.circconv2(out.(self.eye_data_type),[1 1]);
                 out.y_mean    = mean(out.y,1);
                 out.ids       = self.id;                
                 %add these weights to the raw data matrix also.
@@ -786,10 +787,10 @@ classdef Subject < Project
             %preprocessing. RUNS specifies the functional runs, make it a
             %vector if needed.
             if nargin > 1
-                % 	    		self.SegmentSurface_HR;%cat12 segmentation
-                %             	self.SkullStrip;%removes non-neural voxels
-                %             	self.MNI2Native;%brings the atlas to native space
-                %             	self.Re_Coreg(runs);%realignment and coregistration
+                self.SegmentSurface_HR;%cat12 segmentation
+                self.SkullStrip;%removes non-neural voxels
+                self.MNI2Native;%brings the atlas to native space
+                self.Re_Coreg(runs);%realignment and coregistration
                 self.Segment_meanEPI;%segments mean EPI with new segment
                 self.SkullStrip_meanEPI;%creates a native mask
             else

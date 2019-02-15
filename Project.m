@@ -556,9 +556,10 @@ classdef Project < handle
             spacetime.d      = cat(4,spacetime1.d,spacetime2.d);
             spacetime.name   = [spacetime1.name spacetime2.name];                                                                                    
         end
+        function getgroup_
+        end
         
-        
-        function [spacetime]          = getgroup_bold_spacetime_roi(self,ngroup,rois,tbin);
+        function [spacetime]          = getgroup_bold_spacetime_roi(self,ngroup,rois,tbin,reduce);
             %wrapper around the ROI object            
             %clean   = 1;
             list    = self.get_selected_subjects(ngroup,1).list;            
@@ -571,19 +572,26 @@ classdef Project < handle
             
             betas   = reshape(1:715,65,11);
             betas([Project.mbi_oddball Project.mbi_transition],:)   = [];                        
-            betas(Project.ucs_vector == 1,:)                  = [];
-            betas(:,9:end)                              = [];
+            betas(Project.ucs_vector == 1,:)                        = [];
+            betas(:,9:end)                                          = [];
             
             %% 
-            sk = 10
-            r = ROI('roi_based',rois,'chrf_0_0_mumfordian',0,betas(:)',self.get_selected_subjects(ngroup).list,sk);
+            sk = 10;
+            r  = ROI('roi_based',rois,'chrf_0_0_mumfordian',0,betas(:)',self.get_selected_subjects(ngroup).list,sk);
+            %            
+            if reduce 
+                data_ori = r.evoked_pattern;
+            else
+                data_ori = r.pattern;
+            end            
+            data_ori = reshape(data_ori,[size(data_ori,1) 47 8 size(data_ori,3)]);
             %
-            data_ori = r.evoked_pattern;
-            data_ori = reshape(data_ori,[size(data_ori,1) 47 8]);
-            for vox = 1:size(data_ori,1)
-                dummy             = squeeze(data_ori(vox,:,:));
-                dummy             = Project.circconv2(dummy,[.5 1 .5]./2);
-                data_ori(vox,:,:) = dummy;
+            for sub = 1:size(data_ori,4)
+                for vox = 1:size(data_ori,1)
+                    dummy             = squeeze(data_ori(vox,:,:,sub));
+                    dummy             = Project.circconv2(dummy,ones(2,3));
+                    data_ori(vox,:,:,sub) = dummy;
+                end
             end
             %% binning         
 %             timebins = reshape(5:46,7,6);            
@@ -593,106 +601,157 @@ classdef Project < handle
 %                 data(:,c,:) = squeeze(mean(data_ori(:,N,:),2));
 %             end
             %%
-            timebins = [zeros(4,tbin);BinningMatrix(43,tbin)];
-            for nc = 1:size(data_ori,3)
-                data(:,:,nc) = data_ori(:,:,nc)*timebins;
-            end            
-            
+            timebins = [BinningMatrix(47,tbin)];
+            for ns = 1:size(data_ori,4)
+                for nc = 1:size(data_ori,3)
+                    data(:,:,nc,ns) = data_ori(:,:,nc,ns)*timebins;
+                end
+            end
             %%
             spacetime.d      = data;
             spacetime.name   = r.name;
         end        
      
-        function spacetime_rsa        = spacetime2RSA(self,spacetime,smooth)
+        function [spacetime_rsa] = spacetime2RSA(self,spacetime,smooth)
         %given a space time matrix computes the RSA for each microblocks                
-        %spacetime     is [VOXELS, MICROBLOCKS, CONDITIONS];
+        %spacetime     is [VOXELS, MICROBLOCKS, CONDITIONS, SUBJECTS];
         %spacetime_RSA is [MICROBLOCKS, PAIRWISE CORRELATIONs];
-            % slight smoothing over conditions
-            if smooth ~= 0
-                kernel = [.5  1 .5];
-                kernel = kernel./sum(kernel);
-                for vox = 1:size(spacetime.d,1)
-                    dummy                = squeeze(spacetime.d(vox,:,:));
-                    dummy                = Project.circconv2(dummy,kernel);
-                    spacetime.d(vox,:,:) = dummy;
-                end
+            
+            
+            %% get the similarity matrix for each mbi, same representation as the spacetime matrices            
+            for ns = 1:size(spacetime.d,4)
+                for N = 1:size(spacetime.d,2)
+                    data                      = squeeze(spacetime.d(:,N,:,ns));
+                    spacetime_rsa.d(N,ns,:)   = pdist(data','correlation');
+                end            
             end
-            %% get the similarity matrix for each mbi, same representation as the spacetime matrices
-            for N = 1:size(spacetime.d,2)
-                data                   = squeeze(spacetime.d(:,N,:));
-                spacetime_rsa.d(N,:)   = pdist(data','correlation');
-            end            
-            spacetime_rsa.name = spacetime.name;
-        end        
-        
+            spacetime_rsa.name = spacetime.name;            
+        end
+                
         function plot_spacetime_rsa(self,spacetime_rsa)
-            %plots for a given area the spacetime profile next to its area
-            % st     = s.getgroup_bold_spacetime_roi(1,33);
-            % st_rsa = s.spacetime2RSA(st,1);
-                        
-            %%           
-            colors       = GetFearGenColors;
-            coeff        = self.RSA_Model(spacetime_rsa.d);
-            tbins        = size(spacetime_rsa.d,1);
-            [trow, tcol] = GetSubplotNumber(10+1);
+            %%
             figure;
+            set(gcf,'position',[1           1         960        1093])
+            trow         = size(spacetime_rsa.d,1)
             c            = 0;
             for N = 1:size(spacetime_rsa.d,1);
                 c    = c+1;
                 % average over bins
-                data = spacetime_rsa.d(N,:,:);
-                
-                subplot(trow, tcol,c);
-                imagesc( CancelDiagonals(squareform_force(data),NaN));
-                colorbar
-                title(sprintf('time bin %02d',c));
+                data = mean(spacetime_rsa.d(N,:,:),2);                
+                him = subplot(trow, 1,c);
+                imagesc( squareform(squeeze(data)),[0 1.5]);
+                title(sprintf('Bin %d',c));
                 axis square;
-                axis off;                
-                %                
+                if N == 1
+                    Publication_NicelyPositionColorbar(him)
+                end
+                fs = 6;
+                h  = text(0,4,'CS+');set(h,'HorizontalAlignment','center','fontsize',fs,'rotation',45,'FontWeight','bold');
+                h  = text(0,8,sprintf('180%c', char(176)));set(h,'HorizontalAlignment','center','fontsize',fs,'rotation',45,'FontWeight','bold');
+                h  = text(0,2,sprintf('-90%c', char(176)));set(h,'HorizontalAlignment','center','fontsize',fs,'rotation',45,'FontWeight','bold');
+                h  = text(0,6,sprintf('-90%c', char(176)));set(h,'HorizontalAlignment','center','fontsize',fs,'rotation',45,'FontWeight','bold');
+                h  = text(4,9,'CS+');set(h,'HorizontalAlignment','center','fontsize',fs,'rotation',45,'FontWeight','bold');
+                h  = text(8,9,sprintf('180%c', char(176)));set(h,'HorizontalAlignment','center','fontsize',fs,'rotation',45,'FontWeight','bold');                
+                h  = text(2,9,sprintf('-90%c', char(176)));set(h,'HorizontalAlignment','center','fontsize',fs,'rotation',45,'FontWeight','bold');
+                h  = text(6,9,sprintf('-90%c', char(176)));set(h,'HorizontalAlignment','center','fontsize',fs,'rotation',45,'FontWeight','bold');
+                %                                
+                Publication_AddGrid2Image(gca)
                 drawnow;
             end
-            
-            subplot(trow,tcol,c+1);            
-            bar(coeff.circ);
-            
-            subplot(trow,tcol,c+2);            
-            C = coeff.ellips./repmat(sum(coeff.ellips,2),1,2);
-            bar(C(:,1));           
-            
+        end
+           
+        function plot_spacetime_rsa_mds(self,spacetime_rsa)
             %%
-            ndimen = 2;            
-            c      = c+2;
-            for N = 1:size(spacetime_rsa.d,1)
-                c = c +1;
-                subplot(trow,tcol,c);
-                y=mdscale(spacetime_rsa.d(N,:),ndimen);
+            figure;
+            set(gcf,'position',[1           1         960        1093])
+            colors       = GetFearGenColors;
+            trow         = size(spacetime_rsa.d,1)
+            ndimen = 2
+            c            = 0;
+            for N = 1:size(spacetime_rsa.d,1);
+                c    = c+1;
+                % average over bins
+                data = mean(spacetime_rsa.d(N,:,:),2);                
+                subplot(trow, 1,c);
+                y    = cmdscale(squareform(squeeze(mean(spacetime_rsa.d(N,:,:),2))),ndimen);
                 for nface = 1:8;
                     plot(y(nface,1),y(nface,2),'.','color',colors(nface,:),'markersize',50);
                     hold on;
-                    xlim([-1 1]);
-                    ylim([-1 1]);
+                    Publication_EqualizeXYlim(gca)                    
                 end
-                axis tight;                
-                axis equal;
-%                 axis square;                
+                axis tight;
+                axis square;
+                %                                                
+                axis off
+                drawnow;
             end
-            %%
-            
-
-            
-            
-            supertitle(spacetime_rsa.name,1)
-            drawnow;
+            Publication_EqualizeSubPlotXlim(gcf);
+            Publication_EqualizeSubPlotYlim(gcf);
+            supertitle(spacetime_rsa.name,0);
         end
         
-        
-        
-        
-        
-        
-        
-        
-        
+        function plot_spacetime_rsa_fits(self,spacetime_rsa)
+            %plots for a given area the spacetime profile next to its area
+            % st     = s.getgroup_bold_spacetime_roi(1,33);
+            % st_rsa = s.spacetime2RSA(st,1);
+                        
+            %%       
+            line = 1;
+            figure;
+            set(gcf,'position',[23   342   468   699])
+            coeff        = self.RSA_Model(spacetime_rsa.d);
+            [h p ]       = ttest(coeff.ellips(1,:,1),coeff.ellips(1,:,2));
+            
+            tsubject     = size(spacetime_rsa.d,2);
+            
+            tbins        = size(spacetime_rsa.d,1);                                    
+            %%
+            subplot(2,1,1);                        
+            t = array2table([coeff.circ(:) repmat([1:tbins]',tsubject,1) ones(tsubject*tbins,1) Vectorize(repmat([1:tsubject],tbins,1))],'variablenames',{'y' 'bin' 'constant' 'subject'});
+            f = fitlm(t,'y ~ 1 + bin ')
+            if line 
+                plot(1:2:max(t.bin)*2, unique(f.predict),'linewidth',2,'color',[.3 .3 .3]);
+            end
+            hold on;
+            dotplot(coeff.circ');
+            %%
+            axis square
+            Publication_Ylim(gca,1,2)
+            Publication_NiceTicks(gca,2)
+            ylabel(sprintf('Circular\nComponent'))
+            set(gca,'fontsize',16,'xticklabel',[])
+            %%
+            subplot(2,1,2);            
+            for nbin = 1:size(coeff.ellips,1)
+                for ns = 1:size(coeff.ellips,2)
+                    C(nbin,ns) = coeff.ellips(nbin,ns,1)./sum(coeff.ellips(nbin,ns,:),3);
+                end
+            end                                        
+            t = array2table([C(:) repmat([1:tbins]',tsubject,1) ones(tsubject*tbins,1) Vectorize(repmat([1:tsubject],tbins,1))],'variablenames',{'y' 'bin' 'constant' 'subject'});
+            f = fitlm(t,'y ~ 1 + bin^2')
+            if line
+                if f.coefTest < .05
+                    plot(1:2:max(t.bin)*2,unique(f.predict),'linewidth',2,'color',[.9 .3 .3]);
+                else
+                    plot(1:2:max(t.bin)*2,unique(f.predict),'linewidth',2,'color',[.3 .3 .3]);
+                end
+            end
+            hold on            
+            dotplot(C');
+            
+            set(gca,'fontsize',16)
+            axis square            
+            ylim([0 1])
+            Publication_Ylim(gca,0)
+            Publication_NiceTicks(gca,4)
+            ylabel('Anisotropy')
+            xlabel('time bin')
+            hall = GetSubplotHandles(gcf)
+            Publication_SubplotChangeSize(hall,0.05,0.05)
+            %%            
+            supertitle(spacetime_rsa.name,1)
+            drawnow;
+        end        
         function [spacetime]          = getgroup_bold_spacetime(self,ngroup,clean,zsc,bc)
             %spacetime  = getgroup_bold_spacetime(self,ngroup,clean)
             % GROUP is fed to get_selected_subjects.
@@ -2609,8 +2668,8 @@ classdef Project < handle
                 figure(1000)
                 
                 try
-                    o    =  fitlm(t,'rating_nonparam     ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
-                    o2   =  fitlm(t,'facecircle_nonparam ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
+                    o    =  fitlm(t,'rating_amp     ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
+                    o2   =  fitlm(t,'facecircle_amp ~ 1 + brain_time + brain_gau + brain_time_gau + brain_dsigma + brain_time_dsigma','RobustOpts','on')
                 catch
                     o    =  fitlm(t,'rating_metric_box     ~ 1 + brain_time + brain_gau + brain_time_gau','RobustOpts','on')
                     o2   =  fitlm(t,'facecircle_metric_box ~ 1 + brain_time + brain_gau + brain_time_gau','RobustOpts','on')
@@ -2710,8 +2769,8 @@ classdef Project < handle
               set(gcf,'position',[238         160        1535         734]);
               fieldz    = {'brain_time' 'brain_gau' 'brain_time_gau'};
               clf;
-              for n = 1:3
-                  SH =subplot(2,3,n);          
+              for n = 2%1:3
+                  SH =subplot(2,1,n-1);          
                   pause(.2);
                   %
                   fieldy = {'facecircle_amp'};
@@ -2736,7 +2795,7 @@ classdef Project < handle
                   
                   %% Plot the results
                   try
-                      subplot(2,3,n+3);
+                      subplot(2,1,n);
                       effect   = m.Coefficients.Estimate(2:end);
                       effectSE = m.Coefficients.SE(2:end);
                       y = 1:3;
@@ -2750,16 +2809,18 @@ classdef Project < handle
                       Publication_NiceTicks(gca,1);
                       Publication_RemoveXaxis(gca);
                       %%
-                      for n = 1:3
+                      for n = 1:2
                           P = m.Coefficients.pValue(n+1);
                           if P < .05
                               text(n,max(ylim)-range(ylim)*.1,pval2asterix(P),'HorizontalAlignment','center','fontsize',16);
                           end
                       end
-                      set(gca,'xticklabels',{'Ratings' 'Saliency' 'R*S'},'XTickLabelRotation',45);
+%                       set(gca,'xticklabels',{'Ratings' 'Saliency' 'R*S'},'XTickLabelRotation',45);
+                      set(gca,'xticklabels',{'Rating' 'Behavior'},'XTickLabelRotation',0,'fontsize',14);
                   end
               end
               supertitle(mysupertext,1,common{:});
+              SaveFigure(sprintf('/home/onat/gdrive/Office/Fearamy/paperfigures/relationships_strengths_%s.png',mysupertext),'-r400');
             catch ME
                 fprintf('call back doesn''t run\n')
                 rethrow(ME)                
@@ -3228,13 +3289,15 @@ classdef Project < handle
             % add all this to a TABLE object.
             t            = table(model1(:),model2_c(:),model2_s(:),model3_g(:),'variablenames',{'circle' 'specific' 'unspecific' 'Gaussian' });
             %%
-            for nbin = 1:size(spacetime_rsa,1)
-                t.y            = spacetime_rsa(nbin,:)';
-                dummy          = fitlm(t,'y ~ 1 + unspecific +specific');
-                coeffs.ellips(nbin,:) = dummy.Coefficients.Estimate(2:end);
-                
-                dummy               = fitlm(t,'y ~ 1 + circle');
-                coeffs.circ(nbin,:) = dummy.Coefficients.Estimate(2:end);
+            for ns = 1:size(spacetime_rsa,2)
+                for nbin = 1:size(spacetime_rsa,1)
+                    t.y            = squeeze(spacetime_rsa(nbin,ns,:));
+                    dummy          = fitlm(t,'y ~ 1 + unspecific +specific');
+                    coeffs.ellips(nbin,ns,:) = dummy.Coefficients.Estimate(2:end);
+                    
+                    dummy               = fitlm(t,'y ~ 1 + circle');
+                    coeffs.circ(nbin,ns,:) = dummy.Coefficients.Estimate(2:end);
+                end
             end
         end
         
@@ -3482,7 +3545,6 @@ classdef Project < handle
             %%
             for mbi = 1:size(st.d,1)
                 for ns = 1:size(st.d,3)
-                    [mbi ns]
                     data.y    = st.d(mbi,:,ns);
                     data.x    = X;
                     data.ids  = ns;
@@ -3490,10 +3552,10 @@ classdef Project < handle
                     t.SingleSubjectFit(3);
                     dummy     = t.fit_results{3}.table;
                     dummy.mbi = mbi;
-                    T = [T;dummy]
+                    T = [T;dummy];
                 end
             end            
-            save(filename,'T')
+            save(filename,'T');
             else
                 load(filename)
             end
@@ -3503,13 +3565,13 @@ classdef Project < handle
             %%
             spacetime    = self.getgroup_scr_spacetime(0,1,0,0);%no baseline no zscore correction, all subjects
             for n = 1:size(spacetime.d,3)
-                spacetime.d(:,:,n) = Project.circconv2(spacetime.d(:,:,n),ones(1,3));
+                spacetime.d(:,:,n) = Project.circconv2(spacetime.d(:,:,n),ones(1,3)/3);
             end
             
             mat                     = mean(spacetime.d,3);                         % average across subjects
             x                       = linspace(-135,180,8);                        % x-axis
             mbi                     = 1:length(mat);
-            
+            %
             spacetime_facecircle    = self.getgroup_behavioral('facecircle');
             spacetime_rating        = self.getgroup_behavioral('rating');
             spacetime_scr           = self.getgroup_behavioral('scr');
@@ -3517,16 +3579,13 @@ classdef Project < handle
             tuning_facecircle = Tuning(spacetime_facecircle);tuning_facecircle.GroupFit(self.selected_fitfun);
             tuning_rating     = Tuning(spacetime_rating);tuning_rating.GroupFit(self.selected_fitfun);
             tuning_scr        = Tuning(spacetime_scr);tuning_scr.GroupFit(self.selected_fitfun);                                    
-            
-            
+                        
             T            = self.spacetime_fit(spacetime,self.selected_fitfun);
             A = [];
             for n = 1:47;               
                 A(:,n) = T(T.mbi == n,:).amp
-            end
-            
-            t                       = self.getgroup_all_param;
-            
+            end            
+            t                       = self.getgroup_all_param;            
             %%
             figure
             set(gcf,'position',[0 0 1000 1000])
@@ -3614,7 +3673,7 @@ classdef Project < handle
             plot(tuning_facecircle.groupfit.x_HD,tuning_facecircle.groupfit.fit_HD,'k','linewidth',3);
             hold off;
             Publication_RemoveXaxis(H(6))
-            Publication_Ylim(gca)
+%             Publication_Ylim(gca)
             Publication_NiceTicks(H(6),1)
             title(sprintf('Fixation Count'))
             set(gca,'xticklabel',[]);
