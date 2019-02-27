@@ -90,7 +90,7 @@ classdef Project < handle
         selected_ngroup       = 1;
         %
         scale_feartunings     = 0;
-        selected_fitfun       = 8;%3fixed gaussian (3), vonmises (8); vonMises template (55); vM centered
+        selected_fitfun       = 3;%3fixed gaussian (3), vonmises (8); vonMises template (55); vM centered
         pval                  = .05;%tuning presence
         borders               = 1000;
         eye_data_type         = 'countw';
@@ -3613,7 +3613,7 @@ classdef Project < handle
             set(gca,'xtick',[1:8]+.5,'xticklabel',{'' '' '' 'CS+' '' '' '' sprintf('\\pm180%c',char(176))},'XAxisLocation','top','fontsize',12);                                    
 %             axis image;
             axis xy;
-            pos = plotboxpos(gca)
+            pos = plotboxpos(gca);
             ylabel('Micro-block index');            
             self.decorate_ucs;            
             Publication_Ylim(gca,6)
@@ -3652,7 +3652,7 @@ classdef Project < handle
                 %[p(n) h(n)] = signtest(M(:,n));
                 [h(n) p(n) ] = ttest(M(:,n),[],'tail','right');
                 if h(n) == 1
-                    barh(n,mean(M(:,n)),1,'facecolor',[.6 .1 .1],'linestyle','none');
+                    barh(n,mean(M(:,n)),1,'facecolor',[.5 .5 .5],'linestyle','none');
                 else
                     barh(n,mean(M(:,n)),1,'facecolor',[.5 .5 .5],'linestyle','none');
                 end
@@ -3664,7 +3664,12 @@ classdef Project < handle
             box off
             axis tight;
             Publication_RemoveYaxis(gca)
-            Publication_RemoveXaxis(gca)                                    
+            Publication_RemoveXaxis(gca)                             
+            %            
+            TT = array2table([[ones(size(M,2),1) [1:size(M,2)]'] Vectorize(mean(M))]);
+            fifit = fitlm(TT,'Var3 ~ Var2','robustopts','on');
+            hold on;
+            plot(fifit.Fitted(:),X(:),'k','linewidth',2)
             %%
             %Publication_NiceTicks(H(5),1)
             axes(H(6))
@@ -3716,7 +3721,7 @@ classdef Project < handle
             title('SCR amplitude')
             %%
             filename=sprintf('~/gdrive/Office/Fearamy/paperfigures/%s.png','figure_02_scr');
-            SaveFigure(filename,'-r400')
+%             SaveFigure(filename,'-r400')
             
             
             
