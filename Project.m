@@ -56,7 +56,7 @@ classdef Project < handle
         
         dicom_serie_selector  = {'' '' ''  [12:15] '' [12:15]  [7:10]  [12:15] [12:15]  [12:15]  [12:15] [12:15]  [12:15] [12:15] [12:14]  [13:16]  '' [12:15]  [12:15] [12:15] [12 14:16]  [12:15]  [12:15] [22:25]  [7:10]  [12:14 20] ''  [12:15] [12:15] [12:15] [12:15] [12:14 20] [12:15] '' [12:15] [18 19 21 22] [12:15] '' [12:15] '' [12:15] [12:15] [12:15] [12 13 15 16] [13:16] [6:9] '' [12:15] [13:16]};
         %sub                   = [ 1  2  3      4    5     6       7       8       9         10        11    12         13    14       15      16   17   18       19       20        21        22       23     24       25        26     27    28      29      30      31      32         33    34   35         36         37    38    39    40   41     42      43      44            45      46  47    48      49];
-        genderinfo            =  [NaN NaN NaN   1    2     2       1       1       1         1         2     2          1      2       2      2     NaN    2       2         2        2         2       2      1        1          2     NaN    1       1       2       2       1          1    NaN   1         2           1    NaN    2   NaN   1      1       1       2             1       1   NaN   2        2];
+        genderinfo            =  [NaN NaN NaN   1    2     2       1       1       1         1         2     2          1      2       2      2     NaN    2       2         2        2         2       2      1        1          2     NaN    1       1       2       2       1          1    NaN   1         2           1    NaN    2   NaN   1      1       1       2             1       1   NaN   2        2]; %1 male, 2 female
         ageinfo               =  [NaN NaN NaN   23   27   22      29      26      32        23         19    23        23      24      22     22    NaN    22      25       20       24         21      24    20        22        24     21    21      31      24      24      21         37    18   37         20         22    30    31    24   28     24      24      30            20      30  27    21      22];
         
         %
@@ -80,15 +80,21 @@ classdef Project < handle
         nreliefconds          = [9 3 10 10]; %faceconds plus t0 and UCS, if there
         nsessions             = [1 1 2];
         plotconds             = [-135:45:180 235 280];
+        condstring            = {'-135','-90','-45','0','45','90','135','180','UCS','Null'};
+        condsposition        = {[1:8 10],[8,9,10],1:10,1:10};
+
+
         plottitles            = {'Base' 'Cond' 'Test1' 'Test2' 'Test'};
         plottitles_BCT        = {'Base','Cond','Test'};
         nrun2phase            = {'B','C','T'};
         condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
+        colorscheme           = 'fall2018_bright';
         kickcooldown          = 1;
         wmcsfregressors       = 0;
         orderfir              = 14;
         relief_mc_ph          = 0; % meancorrection per phase
         relief_zscore         = 1;
+        scr_timewin           = [1 4];
     end
     properties (Constant,Hidden) %These properties drive from the above, do not directly change them.
         tpm_dir               = sprintf('%stpm/',Project.path_spm_version); %path to the TPM images, needed by segment.
@@ -633,6 +639,12 @@ classdef Project < handle
         
         function ind = compute_deltacsp2ind(deltacsp)
             ind = mod(deltacsp./45+4-1,8)+1;
+            if ismember(500,deltacsp)
+                ind(deltacsp==500)=9;
+            end
+             if ismember(3000,deltacsp)
+                ind(deltacsp==3000)=10;
+            end
         end
         
         function [color]=GetFearGenColors(varargin)
@@ -640,6 +652,7 @@ classdef Project < handle
             %
             %   Returns the circular HSV color space in COLOR.
             
+            if strcmp(Project.colorscheme,'neon')
             color = circshift( hsv(8), [3 0] );
             color = [color ; [.6 0 0] ; [0.5 0.5 0.5]];
             color    = color + 20/255;
@@ -647,6 +660,31 @@ classdef Project < handle
             
             if nargin > 0
                 color = color(varargin{1},:);
+            end
+            elseif strcmp(Project.colorscheme,'fall2018')
+                 color = [102 124 94;...
+                    202 162 50;...
+                    204 125 38;...
+                    175 60 53;...
+                    143 43 81;...
+                    66 52 85;...
+                    39 63 116;...
+                    31 87 114;...
+                    135 60 53;...%dark red
+                    125 125 125]... %grey
+                    ./255;
+            elseif strcmp(Project.colorscheme,'fall2018_bright')
+                 color = [142 166 134;...
+                    248 206 83;...
+                    251 167 69;...
+                    220 95 87;...
+                    186 75 119;...
+                    102 86 124;...
+                    70 98 157;...
+                    61 126 155;...
+                    150 60 53;...%dark red
+                    125 125 125]... %grey
+                    ./255;
             end
         end
         
@@ -680,7 +718,15 @@ classdef Project < handle
             %%
             hold on;
             if nargin > 2
-                errorbar(X,Y,SEM,'k.','LineWidth',2);%add error bars
+                for i = 1:tbar
+                    try
+                        h(i)    = errorbar(X(i),Y(i),SEM(i),'Color',cmap(i,:),'LineWidth',2);%add error bars
+                    catch
+                        h(i)    = errorbar(X(i),Y(i),SEM(i),'Color',cmap(i,:),'LineWidth',2);%add error bars
+                    end
+                    hold on;
+                end
+                %                 errorbar(X,Y,SEM,'k.','LineWidth',2);%add error bars
             end
             
             %%
@@ -692,7 +738,7 @@ classdef Project < handle
             xlim([min(X)-mean(diff(X)) max(X)+mean(diff(X))])
            
         end
-         function plot_ROI_basetest(contrast,fitmethod,hReg,varargin)
+        function plot_ROI_basetest(contrast,fitmethod,hReg,varargin)
 %              xA = spm_atlas('load','neuromorphometrics');
 %             namestr = spm_atlas('query',xA,XYZmm);
             % input vector of 8 faces in Y, angles in X, and SEM. All
@@ -778,6 +824,33 @@ classdef Project < handle
             st = supertitle(sprintf('[%3.1f %3.1f %3.1f] %s',xyz_mm(1),xyz_mm(2),xyz_mm(3),namestr));
             set(st,'FontSize',14)
             set(gcf,'color','white')
+        end
+        function make_vmPFC_mask
+            coords = [-2 46 -8;12 34 2; -6 34 8; 3 42 -18]; %(Onat 2014,Geueter Eippert et al. 2013, Bingel Lorenz et al., 2006) based on Wager & Atlas. 
+            meancoord = mean(coords);
+        end
+        function make_combined_ROIs_mask(strinp)
+            if strcmp(strinp,'HC_Amy_Nacc_vmPFC')
+            path2mask = '/home/kampermann/Public/Oxford_ROIs_nii_50/';
+            l_HC = [path2mask 'l_Hippocampus.nii'];
+            r_HC = [path2mask 'r_Hippocampus.nii'];
+            l_Amy = [path2mask 'l_Amygdala.nii'];
+            r_Amy = [path2mask 'r_Amygdala.nii'];
+            l_NAcc = [path2mask 'l_Accumbens.nii'];
+            r_NAcc = [path2mask 'l_Accumbens.nii'];
+            vmPFC = [];
+            
+             matlabbatch{1}.spm.util.imcalc.input            = cellstr(strvcat(self.path_hr,c1,c2));
+                matlabbatch{1}.spm.util.imcalc.output           = self.path_skullstrip;
+                matlabbatch{1}.spm.util.imcalc.outdir           = {self.dir_hr};
+                matlabbatch{1}.spm.util.imcalc.expression       = 'i1.*((i2+i3)>0.2)';
+                matlabbatch{1}.spm.util.imcalc.options.dmtx     = 0;
+                matlabbatch{1}.spm.util.imcalc.options.mask     = 0;
+                matlabbatch{1}.spm.util.imcalc.options.interp   = 1;
+                matlabbatch{1}.spm.util.imcalc.options.dtype    = 4;
+                self.RunSPMJob(matlabbatch);
+            else
+            end
         end
     end
 end
