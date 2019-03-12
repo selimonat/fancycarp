@@ -43,6 +43,7 @@ classdef Subject < Project
         total_run     = [];
         rating_fit    = [];
         is_tuned      = [];
+        thresh        = [];
     end
     %%
     methods
@@ -287,6 +288,19 @@ classdef Subject < Project
         end
     end
     methods %(behavioral analysis)
+        function [threshold, completelist] = get_threshold(self)
+            path2calib = fullfile(self.pathfinder(self.id,0),'calib2','stimulation','data.mat');
+            load(path2calib);
+            threshold = p.presentation.limits.threshold_ave;
+            self.thresh = threshold;
+            if nargout > 1
+                for n = 1:2
+                    path2p = fullfile(self.pathfinder(self.id,0),sprintf('calib%d',n),'stimulation','data.mat');
+                    load(path2p)
+                    completelist(n,:) = [p.presentation.limits.threshold_m p.presentation.limits.threshold_ave];
+                end
+            end
+        end
         function [out, raw, triallist] = get_rating(self,varargin)
             % this function is mostly to get ratings so that we can fit
             % it.. OUT is a structure feedable to the Tuning object, so
@@ -351,7 +365,7 @@ classdef Subject < Project
             end
         end
         
-        function [out, trialind] = get_pain(self,varargin)
+        function [out, trialind, temp] = get_pain(self,varargin)
             out = [];
             trialind = [];
             if isempty(varargin)
@@ -360,7 +374,8 @@ classdef Subject < Project
                     try
                         a = self.get_paradigm(run);
                         dummy = a.log.ratings.pain;
-                        dummy = dummy(~isnan(dummy(:,3)),3);
+                        temp(run) = dummy(1,1); %get the stored temperature
+                        dummy = dummy(~isnan(dummy(:,3)),3); %get rid of all unnecessary data, just take pain rating
                         if run < 3
                             out(:,run) = [dummy(1:3); NaN];
                         else
@@ -371,6 +386,7 @@ classdef Subject < Project
                     catch
                         warning('Problem while loading paradigm at run %d.',run)
                         out(:,run) = nan(4,1);
+                        temp(run) = nan(4,1);
                     end
                 end
             else
@@ -382,6 +398,7 @@ classdef Subject < Project
                     try
                         a = self.get_paradigm(run);
                         dummy = a.log.ratings.pain;
+                        temp(rc) = dummy(1,1); %get the stored temperature
                         dummy = dummy(~isnan(dummy(:,3)),3);
                         if run < 3
                             out = dummy(1:3);
@@ -393,6 +410,7 @@ classdef Subject < Project
                     catch
                         warning('Problem while loading paradigm at run %d.',run)
                         out = NaN;
+                        temp = NaN;
                     end
                 end
             end
@@ -1095,6 +1113,22 @@ classdef Subject < Project
             end
             XYZvox      = round(XYZvox);
             D           = spm_get_data(vh,XYZvox);
+        end
+        function check_mri_data(self)
+            if self.id == 4
+                
+                files = {strrep(self.path_epi(1),'data.nii','meandata.nii');...
+                    strrep(self.path_epi(1),'data.nii','rdata.nii');...
+                    strrep(self.path_epi(2),'data.nii','rdata.nii');...
+                    strrep(self.path_epi(3),'data.nii','rdata.nii')};
+            else
+                files = {strrep(self.path_epi(1),'data.nii','meandata.nii'),...
+                    strrep(self.path_epi(1),'data.nii','rdata.nii'),...
+                    strrep(self.path_epi(2),'data.nii','rdata.nii'),...
+                    strrep(self.path_epi(3),'data.nii','rdata.nii')
+                    strrep(self.path_epi(4),'data.nii','rdata.nii')};
+            end
+            self.CheckReg(files)
         end
     end
     methods %path_tools which are related to the subject
@@ -3212,8 +3246,8 @@ classdef Subject < Project
             filename = fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_reg_kc%d.mat',self.kickcooldown));
             if ~exist(filename) || force == 1
                 
-                c2_templ = '^c2data.nii';
-                c3_templ = '^c3data.nii';
+                c2_templ = '^resize_c2data.nii';
+                c3_templ = '^resize_c3data.nii';
                 
                 segm_dir = strrep(self.path_hr,'data.nii','segm_dartel');
                 
@@ -3233,7 +3267,7 @@ classdef Subject < Project
                 if self.kickcooldown
                       nscans = self.get_lastscan_cooldown(nrun);
                 end
-                files = spm_select('ExtFPList', rundir, '^r.*.nii',1:nscans);
+                files = spm_select('ExtFPList', rundir, '^rdata.*.nii',1:nscans);
                 
                 
                 V = spm_vol(files);
@@ -3241,23 +3275,39 @@ classdef Subject < Project
                 
                 %this is different from AT's script on segmented epis, bc. diff resolution in T1 and
                 %epis
-                for j = 1%:size(files,1)
-                    wmdummypath  = fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_wm_dummy%d.nii',j));
-                    csfdummypath =  fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_csf_dummy%d.nii',j));
-                    spm_imcalc([y1,y(:,:,:,j)],wmdummypath,'i1*i2');
-                    
-                    spm_imcalc([y2,y(:,:,:,j)],csfdummypath,'i1*i2');
+                for j = 1:size(files,1)
+%                     wmdummypath  = fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_wm_dummy%d.nii',j));
+%                     csfdummypath =  fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_csf_dummy%d.nii',j));
+%                     spm_imcalc([y1,y(:,:,:,j)],wmdummypath,'i1*i2');
+%                     
+%                     spm_imcalc([y2,y(:,:,:,j)],csfdummypath,'i1*i2');
                     wm(j) = nanmean(nanmean(nanmean(y1.*y(:,:,:,j))));
                     csf(j) = nanmean(nanmean(nanmean(y2.*y(:,:,:,j))));
                 end
                 
                 wmcsf = [wm' csf'];
-                savewhere = fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_reg_kc%d.mat',self.kickcooldown));
+                savewhere = fullfile(self.pathfinder(self.id,nrun),'midlevel',sprintf('wmcsf_reg_T1_kc%d.mat',self.kickcooldown));
                 save(filename,'wmcsf','wm','csf');
             else
                 load(filename);
             end
-        end
+         end
+         function resize_wmcsf(self)
+             matlabbatch = [];
+             matlabbatch{1}.spm.spatial.coreg.write.ref = {self.path_meanepi};%{'/projects/crunchie/treatgen/data/sub004/run001/mrt/meandata.nii,1'};
+             matlabbatch{1}.spm.spatial.coreg.write.source = {
+                  strrep(self.path_data(0,'mrt'),'data.mat','/segm_dartel/c2data.nii')
+                  strrep(self.path_data(0,'mrt'),'data.mat','/segm_dartel/c3data.nii')
+%                  '/projects/crunchie/treatgen/data/sub004/run000/mrt/segm_dartel/c2data.nii,1'
+%                  '/projects/crunchie/treatgen/data/sub004/run000/mrt/segm_dartel/c3data.nii,1'
+                 };
+             matlabbatch{1}.spm.spatial.coreg.write.roptions.interp = 4;
+             matlabbatch{1}.spm.spatial.coreg.write.roptions.wrap = [0 0 0];
+             matlabbatch{1}.spm.spatial.coreg.write.roptions.mask = 0;
+             matlabbatch{1}.spm.spatial.coreg.write.roptions.prefix = 'resize_';
+             spm_jobman('run', matlabbatch);
+         end
+         
         function [kickcooldownopts, wmcsfopts] = get_model_specs(self,modelnum)
             kickcooldownopts = self.kickcooldown;
             wmcsfopts = self.wmcsfregressors;
@@ -3292,6 +3342,7 @@ classdef Subject < Project
             pmod_VM          =   0;
             onset_modelnum   =   3;
             All1Regr         =   0;
+            wmcsfr           =   1;
     
            
             if model_num == 3
@@ -3386,6 +3437,13 @@ classdef Subject < Project
                 for nNuis = 1:size(nuis,2)
                     matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis).val   = nuis(:,nNuis);
                     matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis).name  = mat2str(nNuis);
+                end
+                if wmcsfr == 1
+                    load(fullfile(self.pathfinder(self.id,session),'midlevel',sprintf('wmcsf_reg_kc%d.mat',self.kickcooldown)),'wm','csf');
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis+1).val   = wm';
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis+1).name  = 'wm';
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis+2).val   = csf';
+                    matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis+2).name  = 'csf';
                 end
                 
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).multi               = {''};
@@ -3725,8 +3783,8 @@ classdef Subject < Project
                 end
                 conds2take = {1:8,[2 1],1:8};
             end
-%             
-%    
+            
+   
 %             % loop through cons and get betas together.
 %             c = 0;
 %             for cond_ind = conds2take{nrun}
