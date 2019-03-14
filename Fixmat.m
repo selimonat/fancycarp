@@ -787,6 +787,9 @@ colorbar
             end
             obj.bc = old_value;
         end
+        function replaceselection(obj,new_selection)
+            obj.selection         = new_selection;
+        end
          function [count]=EyeNoseMouth(obj,map,normalize)                       
            %% count number of fixations in each roi.
            roi = obj.GetFaceROIs;
