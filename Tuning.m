@@ -58,6 +58,8 @@ classdef Tuning < handle
                     self.fit_results.x_HD(unit,:)        = self.singlesubject{unit}.x_HD;
                     self.fit_results.y_fitted_HD(unit,:) = self.singlesubject{unit}.fit_HD;
                     self.fit_results.Likelihood(unit,:) = self.singlesubject{unit}.Likelihood;
+                    self.fit_results.null_Likelihood(unit,:) = self.singlesubject{unit}.null_Likelihood;
+                    self.fit_results.dof(unit,:) = self.singlesubject{unit}.dof;
                     try
                         self.fit_results.param_table         = array2table(self.singlesubject{unit}.Est,'variablenames',self.singlesubject{unit}.paramname);
                     catch
@@ -77,7 +79,8 @@ classdef Tuning < handle
             
             %% set the function to be fitted
             if ~isempty(regexp(which('normpdf'),'ledalab'))
-                rmpath('/home/onat/Documents/Code/Matlab/ledalab/main/util/');%ledalab has also a normpdf, clever!
+                rmpath(strrep(which('normpdf'),'normpdf.m',''));
+%                 rmpath('/home/onat/Documents/Code/Matlab/ledalab/main/util/');%ledalab has also a normpdf, clever!
             end
             x        = x(:);
             y        = y(:);%make it sure to have columns
@@ -153,6 +156,30 @@ classdef Tuning < handle
                 result.dof    = 4;
                 result.funname= 'exp_decay';
                 result.paramname = {'amp' 'lambda' 'center' 'offset' 'sigma_y'};
+            elseif funtype == 10
+                result.fitfun = @(x,p) self.boxcar(x,p(1),p(2));%amp,halfwidth
+
+                L           = [ 0              5          .01    ];
+                U           = [ range(y)*2    180       std(y(:)+rand(length(y),1).*eps)*2 ];
+
+                result.dof    = 2;
+                result.funname= 'boxcar_meany';
+                %detect the mean, store it and subtract it
+                
+                CONSTANT    = min(self.y_mean);
+                y           = y-CONSTANT;%we are not interested 
+            elseif funtype == 11
+                result.fitfun = @(x,p) self.boxcar(x,p(1),p(2));%amp,halfwidth
+                
+                L           = [ 0              5          .01    ];
+                U           = [ range(y)*2    180       std(y(:)+rand(length(y),1).*eps)*2 ];
+                
+                result.dof    = 2;
+                result.funname= 'boxcar_miny';
+                %detect the mean, store it and subtract it
+                
+                CONSTANT    = mean(y);
+                y           = y-CONSTANT;%we are not interested
             end
             %% set the objective function
             result.likelihoodfun  = @(params) sum(-log( normpdf( y - result.fitfun( x,params(1:end-1)) , 0,params(end)) ));
@@ -323,6 +350,11 @@ classdef Tuning < handle
             % offsetX = offset in x-direction, i.e. peakshift
             
             out = exp(-lambda*(abs(x-offsetX)))*amp+offset;
+        end
+        function [out] = boxcar(x,amp,halfwidth)
+            
+            out = .5*amp*rectangularPulse(-.5*2*sqrt(2*log(2))*halfwidth,.5*2*sqrt(2*log(2))*halfwidth,x);
+            
         end
     end
 end
