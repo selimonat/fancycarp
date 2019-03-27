@@ -29,13 +29,15 @@ classdef Project < handle
         ET_fg            = [ 1  0   1  1  1  1  1  1  1  1  1  1  1  1  0  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  0  1  1  1  1  1  1  1  1  1   1   1  1  1   1  1  1  1  1  1];
         ET_pmf           = [ 1  1   1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  0  1  1  1  1  1  1  1  1  1   1   1  1  0   1  1  1  1  1  1];
         subjects_scr     = [ 1  1   1  1  1  1  1  1  1  1  1  1  1  1  0  1  1  1  1  1  1  1  1  1  1  1  1  1  1  0  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1  1   1   1  1  1   1  1  1  1  1  1];
-%         subjects_600      = [27,37:40,42:65]; %absolute numbers if needed
-%         subjects_1500     = [6:26,28,30:36];  %absolute numbers if needed
+        subjectID_600      = [27,37:40,42:65]; %absolute numbers if needed
+        subjectID_1500     = [6:26,28,30:36];  %absolute numbers if needed
         gender            = ones(length(Project.subjects),1);%all male anyway
         
     end
     
-    methods
+  
+       methods
+        
         function stim = find_stim(self,varargin)
             %will return the path to the Nth (varargin) stimulus. If not
             %specified the average stim will be returned.                       
@@ -106,7 +108,53 @@ classdef Project < handle
             [~, d] = spm_select('FPList',s.path,'^run');
             o      = length(d);
         end
-                
+    
+    
+        function o = get.path_project
+            %
+            o = fullfile(FPSA_FearGen_MSc('get_path_project'),'data',filesep);
+            %add a filesep if necessary
+            if ~strcmp(o(end),filesep)
+                cprintf([1 0 0],'Correcting project path...\n');
+                o(end+1) = filesep;
+            end
+        end
+    end
+    methods (Static)
+        function plot_bar(X,Y,SEM)
+            % input vector of 8 faces in Y, angles in X, and SEM. All
+            % vectors of 1x8;
+            %%
+            cmap  = GetFearGenColors;
+            if length(Y)==11;
+                cmap = [cmap; [0 0 0 ]];
+            end
+            tbar  = length(Y);
+            for i = 1:tbar
+                try
+                    h(i)    = bar(X(i),Y(i),40,'facecolor',cmap(i,:),'edgecolor','none','facealpha',.8);
+                catch
+                    h(i)    = bar(X(i),Y(i),40,'facecolor',cmap(i,:),'edgecolor','none');
+                end
+                hold on;
+            end
+            %%
+            hold on;
+            if nargin == 3
+                errorbar(X,Y,SEM,'k.','LineWidth',1.5);%add error bars
+            end
+            
+            %%
+            set(gca,'xtick',X,'xticklabel',{'' '' '' 'CS+' '' '' '' 'CS-'});
+            box off;
+            set(gca,'color','none');
+            xlim([0 tbar+1])
+            drawnow;
+            axis tight;box off;axis square;drawnow;alpha(.5);
+            
+        end
+        
+        
     end
     
 end
