@@ -3,9 +3,11 @@ classdef SCR < handle
     properties (Constant = true, Hidden)
         default_run = 4;%at which run the scr data is located.
         default_timeframe = 2.5:5.5;
+        logtransform = 1;
+        zscored      = 1;
     end
     properties (Hidden)
-        ledalab_defaults      = {'open', 'mat','downsample', 5, 'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1 };%
+        ledalab_defaults      = {'open', 'mat','downsample', 5,'smooth',{'gauss' '100'}, 'analyze','CDA', 'optimize',10, 'overview',  1, 'export_era', [-1 7 0 1], 'export_scrlist', [0 1], 'export_eta', 1 };%
         hdr
         markers
         block2phase
@@ -20,6 +22,7 @@ classdef SCR < handle
         data
         fear_tuning
         ml
+        ok = 1;%tells you if the SCR object is in good health, by default it is. below if the triggers dont match this is set to 0;
     end
     % The following properties can be set only by class methods
     properties (SetAccess = private)
@@ -45,7 +48,7 @@ classdef SCR < handle
         %add a method to compute FIR analysis and plot the results based on
         %the corrected phasic responses.
         function scr = SCR(varargin)
-            %s is either the subject number of block id.
+            %s is either the subject number of block id.            
             if length(varargin) == 1%construct
                 s = varargin{1};
                 scr.path_acqfile  = s.path2data(s.id,SCR.default_run,'scr','acq');
@@ -101,7 +104,7 @@ classdef SCR < handle
                         % get stimulus indices for the above onsets
                         current_phase          = scr.block2phase(nblock);
                         cond_seq               = s.paradigm{current_phase}.presentation.dist;
-                        if length(cond_seq) ~= length(onset_sample);error('Number of triggers doesn''t match to paradigm file...');end;%if problem then stoPPP
+                        if length(cond_seq) ~= length(onset_sample);warning('Number of triggers doesn''t match to paradigm file...');scr.ok = 0;break;end;%if problem then stoPPP
                         cond_ids               = unique(cond_seq);
                         t_stim_id              = length(cond_ids);%total stim id
                         % run through different stimulus indices
@@ -117,6 +120,7 @@ classdef SCR < handle
                     end
                     %% create event channels also for the UCS during the calibration
                     %these are not in the paradigm file.
+                    if scr.ok%continue only if the above block succeeded
                     for nblock = 1:tblock-6%run through the calibration blocks
                         zero_vec               = false(scr.tsample,1);
                         %samples where this phase recorded
@@ -148,7 +152,9 @@ classdef SCR < handle
                     scr.event              = logical([scr.event              zero_vec]);
                     scr.event_name         = [scr.event_name         sprintf('1002')];
                     scr.event_plotting     = [scr.event_plotting            {s.plot_style(1002)}];
+                    end
                 else
+                    scr.ok = 0;
                     fprintf('No acq file found, :(.\n');
                 end
             elseif length(varargin) == 2 %cut
@@ -499,8 +505,8 @@ classdef SCR < handle
                 fprintf('.data is empty honey\n')
             end
         end
-        function [out_z, out_raw] = ledalab_summary(self,varargin)
-            
+        
+        function [ave_z, raw_singletrials] = ledalab_summary(self,varargin)
             self.cut(self.findphase('base$'):self.findphase('test$'));
             self.run_ledalab;%collects the ledalab struct
             
@@ -510,19 +516,28 @@ classdef SCR < handle
                 timeframe = self.default_timeframe;
             end
             %
-            out_raw = nan(3*8,1);
-            condcollector = { 'base_0045','base_0090','base_0135','base_0180','base_0225','base_0270','base_0315','base_0360',...
-                'cond_0180','cond_0360',...
-                'test_0045','test_0090','test_0135','test_0180','test_0225','test_0270','test_0315','test_0360'};
-            index  = [1:8 12 16 17:24];
+            out_raw = nan(3*9,1); %this will be the average for each condition later
+            condcollector = { 'base_0045','base_0090','base_0135','base_0180','base_0225','base_0270','base_0315','base_0360','base_1000',...
+                'cond_0180','cond_0360','cond_1000',...
+                'test_0045','test_0090','test_0135','test_0180','test_0225','test_0270','test_0315','test_0360','test_1000'};
+            %             index  = [1:8 12 16 17:24];
+            index  = [1:9 13 17 18 19:27];
+            raw_singletrials = nan(max(self.ledalab.n),length(self.ledalab.n)); %max(ledalab.n) is 78 nulltrials in testphase.. so there will be a lot of nans.
             for c = 1:length(condcollector)
                 timey                     = (self.ledalab.x(:,1) >= min(timeframe))&(self.ledalab.x(:,1) <= max(timeframe));%time window
                 condy                     = strcmp(condcollector{c},self.ledalab.condnames)';
-                dummy                     = mean(self.ledalab.y(timey,condy));%take average over time
-                out_raw(index(c),1)       = mean(dummy);%take average across trials
+                dummy                     = mean(self.ledalab.y(timey,condy));%take average over time window
+                if self.logtransform == 1
+                    dummy = log10(1+dummy);
+                    dummy(imag(dummy)>0) = nan; %get rid of imaginary data where deconvolution is too negative.
+                end
+                raw_singletrials(1:length(dummy),index(c))         = nanzscore(dummy(:));
+
+                out_raw(index(c),1)       = nanmean(dummy);%take average across trials, leaves one value per cond per subj.
                 %out_rawsd(index(c),1)     = std(dummy)./sqrt(length(dummy));
             end
-            out_z = nanzscore(out_raw);            
+            olddim = size(out_raw);
+            ave_z = reshape(nanzscore(out_raw(:)),olddim); %average across conditions
         end
         
     end
