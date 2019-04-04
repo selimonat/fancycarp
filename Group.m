@@ -278,7 +278,7 @@ classdef Group < Project
             baryn = 1;
             erb = 0;
             ml = 0;
-            dotyn = 0;
+            dotyn = 1;
             
             COL = Project.GetFearGenColors;
             xlev = -135:45:180;
@@ -381,7 +381,7 @@ classdef Group < Project
             baryn = 1;
             erb = 0;
             ml = 0;
-            dotyn = 0;
+            dotyn = 1;
             
             COL = Project.GetFearGenColors;
             xlev = [-135:45:180 225];
@@ -691,7 +691,7 @@ classdef Group < Project
                 selectedface(ns) = self.subject{ns}.selectedface;
             end
             figure;
-            pirateplot(1:8,histc(selectedface,-135:45:180)','color',self.GetFearGenColors,'violin',0,'errorbar',0,'CI',0,'dots',0)
+            pirateplot(1:8,histc(selectedface,-135:45:180)','color',self.GetFearGenColors,'bar',1,'violin',0,'errorbar',0,'CI',0,'dots',0);
             set(gca,'XTick',[4 8],'XTickLabel',{'CS+' 'CS-'},'YTick',0:2:10,'FontSize',14)
             set(gcf,'Color','w')
             ylabel('N','FontSize',14);
@@ -1440,7 +1440,7 @@ classdef Group < Project
                 load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
                 if any(strfind(namestring,'bin4win4'))
                     nrun = [1 3];
-                    cons2collectstruct = {127:134, [],141:148};%bin4win4
+                    cons2collectstruct = {127:134, [],141:148};%bin4win4 %this is correct for both model 4 and 44.
                 elseif any(strfind(namestring,'bin2win4'))
                     nrun = [1 3];
                     cons2collectstruct = {164:171, [],202:209};%bin2win4
@@ -2816,6 +2816,8 @@ classdef Group < Project
             params   = nan(n_vox,2);
             niftimat = nan(xY.spec.dim);
             niftimat_neg = nan(xY.spec.dim);
+            
+            niftimat_negP = nan(xY.spec.dim);
             niftimat_Ampl = nan(xY.spec.dim);            
             niftimat_Ampl_neg = nan(xY.spec.dim);
             niftimat_Sigma = nan(xY.spec.dim);
@@ -2851,6 +2853,7 @@ classdef Group < Project
             end
             niftimat(idx) = pvals;
             niftimat_neg(idx) = 1-pvals;
+            niftimat_negP(idx) = -pvals;
             niftimat_Ampl(idx) = params(:,1);
             
             niftimat_Ampl_neg(idx) = -params(:,1);
@@ -2867,6 +2870,13 @@ classdef Group < Project
             dummynii = rmfield(dummynii,'pinfo');
             dummynii.fname = strrep(dummynii.fname,'con_0010.nii',sprintf('nifti_neg_pvals_method%d_ROI_%s.nii',fitmethod, namestr));
             Vneg =spm_write_vol(dummynii,niftimat_neg);
+            
+             clear dummynii
+            dummynii = spm_vol(fullfile(path2ndlevel,'con_0010.nii')); %random con number
+            dummynii = rmfield(dummynii,'pinfo');
+            dummynii.fname = strrep(dummynii.fname,'con_0010.nii',sprintf('nifti_neg_minuspvals_method%d_ROI_%s.nii',fitmethod, namestr));
+            Vnegminus =spm_write_vol(dummynii,niftimat_negP);
+            
             dummynii = spm_vol(fullfile(path2ndlevel,'con_0010.nii')); %random con number
             dummynii = rmfield(dummynii,'pinfo');
             dummynii.fname = strrep(dummynii.fname,'con_0010.nii',sprintf('nifti_Ampl_method%d_ROI_%s.nii',fitmethod, namestr));
@@ -2884,7 +2894,7 @@ classdef Group < Project
             
             save(fullfile(self.path_project,'midlevel',sprintf('pvals_method%d_ROI_%s.mat',fitmethod,namestr)),'pvals','niftimat','niftimat_neg','niftimat_Ampl','niftimat_Sigma','idx','params')
           
-            
+         
         end
         function plot_ROI_peakvox(self,namestr,varargin)
             
