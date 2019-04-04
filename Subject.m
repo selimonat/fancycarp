@@ -3754,6 +3754,9 @@ classdef Subject < Project
                 nsessions = 1;
             end
             Nnuis = 6;
+            if ismember(model_num,[44])
+                Nnuis = 8;
+            end
                     
             path_spm = [self.path_FIR(nrun,model_num,order,'10conds') 'SPM.mat'];
             load(path_spm);
@@ -3784,74 +3787,74 @@ classdef Subject < Project
                 conds2take = {1:8,[2 1],1:8};
             end
             
+   %% normal single bins collection to prepare full 14bin 2nd level
+               % loop through cons and get betas together.
+               c = 0;
+               for cond_ind = conds2take{nrun}
+                   c = c+1;
+                   for bin = 1:order
+                       n = n + 1;
+                       getcond = (cond_ind-1)*order + bin; %all cons+bins before this con's bin need to be skipped
+                       vec = vec0;
+                       vec(getcond) = 1;
+                       vec = repmat(vec,1,nsessions);
+                       vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se
+                       convec{n} = vec;
+                       name{n} = sprintf('bin%02d.%s',bin,condnames{cond_ind});
+                   end
+               end
+               % make convecs sum to 1 for positive t-contrasts
+               for co = 1:n
+                   convec{co} = convec{co}./sum(convec{co});
+               end
+               n1 = n; %first contrast
    
-%             % loop through cons and get betas together.
-%             c = 0;
-%             for cond_ind = conds2take{nrun}
-%                 c = c+1;
-%                 for bin = 1:order
-%                     n = n + 1;
-%                     getcond = (cond_ind-1)*order + bin; %all cons+bins before this con's bin need to be skipped
-%                     vec = vec0;
-%                     vec(getcond) = 1;
-%                     vec = repmat(vec,1,nsessions);
-%                     vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se
-%                     convec{n} = vec;
-%                     name{n} = sprintf('bin%02d.%s',bin,condnames{cond_ind});
-%                 end
-%             end
-%             % make convecs sum to 1 for positive t-contrasts
-%             for co = 1:n
-%                 convec{co} = convec{co}./sum(convec{co});
-%             end
-%             n1 = n; %first contrast
-%             
-%             %% add CSdiff if applicable
-%             if ismember(model_num,[1 4])
-%                 % CSP vs CSN
-%                 cs_ind = [4 8; 2 1; 4 8];
-%                 for bin = 1:order
-%                     n = n + 1;
-%                     csp_bin = (cs_ind(nrun,1)-1)*order + bin; %Nth bin beta of CSP
-%                     csn_bin = (cs_ind(nrun,2)-1)*order + bin; %Nth bin beta of CSN
-%                     vec = vec0;
-%                     vec(csp_bin) = 1;
-%                     vec(csn_bin) = -1;
-%                     if nrun ==3
-%                         if self.id ~= 15
-%                             vec = repmat(vec,1,2);
-%                         end
-%                     end
-%                     if self.id == 15
-%                         nsessions = 1;
-%                     end
-%                     vec = padarray(vec,[0 nsessions],0,'post');
-%                     convec{n} = vec;
-%                     name{n} = sprintf('bin%02d.CSdiff',bin);
-%                 end
-%                 % make convecs sum to 1 and -1 for t-contrasts
-%                 for co = (n1+1):n
-%                     convec{co} = convec{co}./nsessions;
-%                 end
-%             end
-%             % get UCS cons
-%             if nrun == 3
-%                 cond_ind = 9;
-%                 for bin = 1:order
-%                     n = n + 1;
-%                     getcond = (cond_ind-1)*order + bin; %all cons+bins before this con's bin need to be skipped
-%                     vec = vec0;
-%                     vec(getcond) = 1;
-%                     vec = repmat(vec,1,nsessions);
-%                     vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se
-%                     convec{n} = vec./nsessions;
-%                     name{n} = sprintf('bin%02d.%s',bin,condnames{cond_ind});
-%                 end
-%             end
+               %% add CSdiff if applicable
+               if ismember(model_num,[1 4 44])
+                   % CSP vs CSN
+                   cs_ind = [4 8; 2 1; 4 8];
+                   for bin = 1:order
+                       n = n + 1;
+                       csp_bin = (cs_ind(nrun,1)-1)*order + bin; %Nth bin beta of CSP
+                       csn_bin = (cs_ind(nrun,2)-1)*order + bin; %Nth bin beta of CSN
+                       vec = vec0;
+                       vec(csp_bin) = 1;
+                       vec(csn_bin) = -1;
+                       if nrun ==3
+                           if self.id ~= 15
+                               vec = repmat(vec,1,2);
+                           end
+                       end
+                       if self.id == 15
+                           nsessions = 1;
+                       end
+                       vec = padarray(vec,[0 nsessions],0,'post');
+                       convec{n} = vec;
+                       name{n} = sprintf('bin%02d.CSdiff',bin);
+                   end
+                   % make convecs sum to 1 and -1 for t-contrasts
+                   for co = (n1+1):n
+                       convec{co} = convec{co}./nsessions;
+                   end
+               end
+               % get UCS cons
+               if nrun == 3
+                   cond_ind = 9;
+                   for bin = 1:order
+                       n = n + 1;
+                       getcond = (cond_ind-1)*order + bin; %all cons+bins before this con's bin need to be skipped
+                       vec = vec0;
+                       vec(getcond) = 1;
+                       vec = repmat(vec,1,nsessions);
+                       vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se
+                       convec{n} = vec./nsessions;
+                       name{n} = sprintf('bin%02d.%s',bin,condnames{cond_ind});
+                   end
+               end
             %% bin win thing
             conds2take ={1:8,[2 1],1:9};
             n2 = n;
-            if model_num == 4
+            if ismember(model_num,[4 44])
                 %loop through cons and get betas together.
                 %SINGLE CONS ge-bin-ed
                 for cond_ind = conds2take{nrun}
@@ -3955,7 +3958,7 @@ classdef Subject < Project
             end
             total_cons = numel(name);
             
-            matlabbatch{1}.spm.stats.con.delete = 0;
+            matlabbatch{1}.spm.stats.con.delete = 1;
             
             spm_jobman('run',matlabbatch);
             %             for nrun = runs(:)'
@@ -3977,7 +3980,7 @@ classdef Subject < Project
         end
         
         function Con1stLevel_FIR(self,nrun,model_num,varargin)
-           deletedcons = 0;
+           deletedcons = 1;
            % we need to know which cons are new, so that we can normalize and smooth only them, bc this takes time.
            if deletedcons == 1
                 firstcon = 1; %start at the first, go till end.
