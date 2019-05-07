@@ -1,6 +1,6 @@
 classdef Tuning < handle
     properties (Hidden)
-        visualization = 0;%visualization of fit results
+        visualization = 1;%visualization of fit results
         gridsize      = 20;%resolution per parameter for initial estimation.
         options       = optimset('Display','none','maxfunevals',10000,'tolX',10^-12,'tolfun',10^-12,'MaxIter',10000,'Algorithm','interior-point');
         singlesubject = [];%will contain the fit results for individual subjects
@@ -180,6 +180,18 @@ classdef Tuning < handle
                 
                 CONSTANT    = mean(y);
                 y           = y-CONSTANT;%we are not interested
+            elseif funtype == 12
+                result.fitfun = @(x,p) self.boxcar_freeY(x,p(1),p(2),p(3));%amp,halfwidth
+                
+                L           = [ 0              5    0      .01    ];
+                U           = [ range(y)*2    180   10    std(y(:)+rand(length(y),1).*eps)*2 ];
+                
+                result.dof    = 3;
+                result.funname= 'boxcar_free_Y';
+                %detect the mean, store it and subtract it
+                
+%                 CONSTANT    = mean(y);
+%                 y           = y-CONSTANT;%we are not interested
             end
             %% set the objective function
             result.likelihoodfun  = @(params) sum(-log( normpdf( y - result.fitfun( x,params(1:end-1)) , 0,params(end)) ));
@@ -355,6 +367,11 @@ classdef Tuning < handle
             
             out = .5*amp*rectangularPulse(-.5*2*sqrt(2*log(2))*halfwidth,.5*2*sqrt(2*log(2))*halfwidth,x);
             
+        end
+        function [out] = boxcar_freeY(x,amp,halfwidth,y_offset)
+            
+            out = .5*amp*rectangularPulse(-.5*2*sqrt(2*log(2))*halfwidth,.5*2*sqrt(2*log(2))*halfwidth,x);
+            out = out + y_offset;
         end
     end
 end
