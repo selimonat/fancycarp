@@ -127,6 +127,18 @@ classdef Tuning < handle
                 %                 U      = [ min(10,range(y)*1.1)  20   2*pi   pi   10];
                 result.dof    = 4;
                 result.funname= 'vonmisses_mobile';
+            elseif funtype == 14
+                result.fitfun = @(x,p) self.boxcar_freeY(x,p(1),p(2),p(3));%amp,halfwidth,y-offset
+                
+                L           = [ -range(y)*2    5    min(y(:))-std(y)      .01    ];
+                U           = [ range(y)*2    180   max(y(:))-std(y)    std(y(:)+rand(length(y),1).*eps)*2 ];
+                
+                result.dof    = 3;
+                result.funname= 'boxcar_free_Y';
+                %detect the mean, store it and subtract it
+                
+                %                 CONSTANT    = mean(y);
+                %                 y           = y-CONSTANT;%we are not interested    
             end
             
             %% add some small noise in case of super-flat ratings
@@ -287,6 +299,11 @@ classdef Tuning < handle
             end
             fwhm  = reshape(fwhm,[s]);
             sigma = reshape(sigma,[s]);
+        end
+        function [out] = boxcar_freeY(x,amp,halfwidth,y_offset)
+            
+            out = .5*amp*rectangularPulse(-.5*2*sqrt(2*log(2))*halfwidth,.5*2*sqrt(2*log(2))*halfwidth,x);
+            out = out + y_offset;
         end
     end
 end
