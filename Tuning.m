@@ -163,7 +163,7 @@ classdef Tuning < handle
                 U           = [ range(y)*2    180       std(y(:)+rand(length(y),1).*eps)*2 ];
 
                 result.dof    = 2;
-                result.funname= 'boxcar_meany';
+                result.funname= 'boxcar_miny';
                 %detect the mean, store it and subtract it
                 
                 CONSTANT    = min(self.y_mean);
@@ -175,13 +175,13 @@ classdef Tuning < handle
                 U           = [ range(y)*2    180       std(y(:)+rand(length(y),1).*eps)*2 ];
                 
                 result.dof    = 2;
-                result.funname= 'boxcar_miny';
+                result.funname= 'boxcar_meany';
                 %detect the mean, store it and subtract it
                 
                 CONSTANT    = mean(y);
                 y           = y-CONSTANT;%we are not interested
             elseif funtype == 12
-                result.fitfun = @(x,p) self.boxcar_freeY(x,p(1),p(2),p(3));%amp,halfwidth
+                result.fitfun = @(x,p) self.boxcar_freeY(x,p(1),p(2),p(3));%amp,halfwidth,y-offset
                 
                 L           = [ 0              5    0      .01    ];
                 U           = [ range(y)*2    180   10    std(y(:)+rand(length(y),1).*eps)*2 ];
@@ -192,12 +192,36 @@ classdef Tuning < handle
                 
 %                 CONSTANT    = mean(y);
 %                 y           = y-CONSTANT;%we are not interested
+            elseif funtype == 13
+                result.fitfun = @(x,p) self.make_gaussian_fmri_zeromean_freeY(x,p(1),p(2),p(3));%amp,halfwidth,y-offset
+                
+                L           = [ -range(y)    5    -range(y)*2      .01    ];
+                U           = [ range(y)*2    180   range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];
+                
+                result.dof    = 3;
+                result.funname= 'Gauss_free_Yoffset';
+                %detect the mean, store it and subtract it
+                
+                %                 CONSTANT    = mean(y);
+                %                 y           = y-CONSTANT;%we are not interested
+            elseif funtype == 14
+                result.fitfun = @(x,p) self.boxcar_freeY(x,p(1),p(2),p(3));%amp,halfwidth,y-offset
+                
+                L           = [ -range(y)*2    5    min(y(:))-std(y)      .01    ];
+                U           = [ range(y)*2    180   max(y(:))-std(y)    std(y(:)+rand(length(y),1).*eps)*2 ];
+                
+                result.dof    = 3;
+                result.funname= 'boxcar_free_Y';
+                %detect the mean, store it and subtract it
+                
+                %                 CONSTANT    = mean(y);
+                %                 y           = y-CONSTANT;%we are not interested
             end
             %% set the objective function
             result.likelihoodfun  = @(params) sum(-log( normpdf( y - result.fitfun( x,params(1:end-1)) , 0,params(end)) ));
-%             result.likelihoodfun  = @(params) sum(-log( tpdf( y - result.fitfun( x,params(1:end-1)) ,params(end)) ));
-%             result.likelihoodfun  = @(params) sum(-log( cauchypdf( y - result.fitfun( x,params(1:end-1)) ,0,params(end)) ));
-            %% Initial estimation of the parameters  
+            %             result.likelihoodfun  = @(params) sum(-log( tpdf( y - result.fitfun( x,params(1:end-1)) ,params(end)) ));
+            %             result.likelihoodfun  = @(params) sum(-log( cauchypdf( y - result.fitfun( x,params(1:end-1)) ,0,params(end)) ));
+            %% Initial estimation of the parameters
             %if gabor or gaussian, make a grid-estimatation
             if funtype > 1
                 Init = self.RoughEstimator(x,y,result.fitfun,L(1:end-1),U(1:end-1));%[7.1053 15.5556 1.0382];
@@ -237,8 +261,9 @@ classdef Tuning < handle
             result.ss_residuals   = sqrt(mean((y-result.fitfun(x,result.Est)).^2));
             %% Get the likelihood
             if ~isempty(result.null_Likelihood)
-                result.dof   = result.dof - 1;%the DOF of the null hypothesis is 0.
-                result.pval  = -log10(1-chi2cdf(-2*(result.Likelihood - result.null_Likelihood),result.dof) + eps);
+                result.dof   = result.dof - 1;%the DOF of the null hypothesis is 0 [sic!]. %null.dof is actually 1.
+                result.pval  = -log10(1-chi2cdf(-2*(result.Likelihood - result.null_Likelihood),result.dof) + eps); %neg LogLikelihood leads to model1/model0 instead of model0/model1 LRT. therefor - 2 *(LikeRatio(switched))
+                % would be the same as -log10(1-chi2cdf(2*(result.null_Likelihood -result.Likelihood ),result.dof) + eps); 
             end
             result.x       = unique(x);            
             result.fit     = result.fitfun(result.x,result.Est);
@@ -352,6 +377,21 @@ classdef Tuning < handle
             %out      = amp.*exp(-tau*(x.^2)/2) - amp*sqrt(2*pi/tau)./d./XT;
             
             out      = amp.*exp(-(x./sd).^2/2) - amp*sqrt(2*pi*sd.^2)./d./XT;
+        end
+          function [out] = make_gaussian_fmri_zeromean_freeY(x,amp,sd,offset)            
+            %
+            %	Generates a Gaussian with AMP, FWHM and offset parameters. The center location is
+            %	fixed to zero. 
+                                                
+            d = mean(diff(x));                
+            %for speed length(X) can be precomputed
+            XT = length(x);
+            %as well as d
+            % d  = 0.02;
+            %out      = amp.*exp(-tau*(x.^2)/2) - amp*sqrt(2*pi/tau)./d./XT;
+            
+            out      = amp.*exp(-(x./sd).^2/2) - amp*sqrt(2*pi*sd.^2)./d./XT;
+            out = out + offset;
         end
         function [out] = expodecay(x,amp,lambda,offsetX,offset)
             % describes generalization profiles with exponential decay, thus not a
