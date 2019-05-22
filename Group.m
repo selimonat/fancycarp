@@ -270,7 +270,7 @@ classdef Group < Project
             EqualizeSubPlotYlim(gcf);
         end
         function [relief, tb, tt]= plot_grouprelief_pirate_BT(self,varargin)
-            
+            method  = 3;
             lwt = 4;%linewidth tuning
             lweb = 3; %linewidth errorbar;
             fs = 15;
@@ -340,8 +340,8 @@ classdef Group < Project
             
             tb = Tuning(base);
             tt = Tuning(test);
-            tb.GroupFit(8);
-            tt.GroupFit(8);
+            tb.GroupFit(method);
+            tt.GroupFit(method);
             linecol = [.3 .3 .3];
             
             subplot(1,spn,sp1);
@@ -372,6 +372,8 @@ classdef Group < Project
                 ylim([-.301 .243])
                 set(gca,'YTick',yticki{spnn});
             end
+            fprintf('Baseline fit with method %d: p = %05.3f.\n',method,10.^-tb.groupfit.pval)
+            fprintf('Testphase fit with method %d: p = %05.3f.\n',method,10.^-tt.groupfit.pval)
         end
         function [relief] = plot_relief_cond_placebo(self,varargin)
             
@@ -2477,7 +2479,7 @@ classdef Group < Project
             
             vis = 1;
             dofit = 1;
-            fitmethod = 3;
+            fitmethod = 8;
             plot_timeband = 1;
             
             if plot_timeband == 1
@@ -2616,11 +2618,14 @@ classdef Group < Project
                 cd(path2ndlevel)
                 set(stit,'FontSize',16)
                 set(gcf,'color','white')
-                print([namestr '_r600.png'],'-dpng','-r600')
+%                 print([namestr '_r600.png'],'-dpng','-r600')
                 
                 if plot_timeband == 1
-                    print([namestr '_svg.svg'],'-dsvg')
+%                     print([namestr '_svg.svg'],'-dsvg')
                 end
+                fprintf('Baseline fit with method %d: p = %05.3f, p_corr = %05.3f.\n',fitmethod,10.^-tb.groupfit.pval,10.^-tb.groupfit.pval*5)
+                fprintf('Testphase fit with method %d: p = %05.3f, p_corr = %05.3f.\n',fitmethod,10.^-tt.groupfit.pval,10.^-tt.groupfit.pval*5)
+   
             end
             
         end
@@ -3106,6 +3111,39 @@ classdef Group < Project
                 
                 if plot_timeband == 1
                     print(sprintf('%s_%s_peakVOX_svg.svg',namestr,criterion),'-dsvg')
+                end
+            end
+        end
+        function MVPA_ROI(self,namestr)
+            path2ndlevel = fullfile(self.path_project,'spm/FIR/model_04_FIR_00_bin4win4_8conds_BT_b01to14_B_N35/');
+            filename     =    fullfile(path2ndlevel,['VOI_',namestr,'.mat']);        
+
+            if exist(filename)
+                load(filename)
+            else
+                fprintf('No VOI.mat found, check your namestring or run it first! \n');
+                keyboard
+            end
+            
+            coords_of_vox = xY.XYZmm;
+            
+            
+            beta_indicator = {127:134,[],141:148};
+            
+            for sub = 1:self.total_subjects;
+                
+                for nph = [1 3]
+                    for ncon = 1:8
+                       modelstr= 'model_04_FIR_14_10conds_00';
+                       path2beta   =           '/projects/crunchie/treatgen/data/sub004/run001/spm/model_04_FIR_14_10conds_00/s6_wCAT_con_0127.nii'
+                        [Y,xyz] = spm_read_vols(spm_vol(fullfile(path2ndlevel,'con_0010.nii'))); %random con number
+                        Yvec = Y(:);
+                        n_vox = length(coords_of_vox);
+                        for n = 1:n_vox
+                            idx(n) = find(xyz(1,:)==coords_of_vox(1,n) & xyz(2,:)==coords_of_vox(2,n) & xyz(3,:)==coords_of_vox(3,n));
+                            betavox(n) = Yvec(idx(n));
+                        end
+                    end
                 end
             end
         end
