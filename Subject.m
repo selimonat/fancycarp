@@ -990,7 +990,7 @@ classdef Subject < Project
             %                 matlabbatch{nf}.spm.spatial.normalise.write.woptions.prefix = 'wEPI_';
             %             end
             %             self.RunSPMJob(matlabbatch);
-            %             %% Normalize with CAT12 segmentation
+           %% Normalize with CAT12 segmentation
             matlabbatch =[];
             for nf = 1:size(path2image,1)
                 matlabbatch{nf}.spm.spatial.normalise.write.subj.def      = cellstr(strrep(self.path_hr,'data.nii',sprintf('mri%sy_data.nii',filesep)));
@@ -1028,6 +1028,27 @@ classdef Subject < Project
             else
                 fprintf('For MNI2Native Analysis you need to have a atlas in %s\n',self.path_atlas);
             end
+        end
+        function DARTEL_warp_meanepi(self)
+            clear matlabbatch
+            matlabbatch{1}.spm.tools.dartel.crt_warped.flowfields = {strrep(self.path_hr,'data.nii','segm_dartel/u_rc1data.nii')};
+            matlabbatch{1}.spm.tools.dartel.crt_warped.images = {{self.path_meanepi}};
+            matlabbatch{1}.spm.tools.dartel.crt_warped.jactransf = 0;
+            matlabbatch{1}.spm.tools.dartel.crt_warped.K = 6;
+            matlabbatch{1}.spm.tools.dartel.crt_warped.interp = 1;
+            self.RunSPMJob(matlabbatch);
+        end
+        
+        function Create_backwards_flowfield(self)
+            clear matlabbatch
+            cd(strrep(self.path_hr,'data.nii','segm_dartel'))
+            matlabbatch{1}.spm.util.defs.comp{1}.dartel.flowfield = {strrep(self.path_hr,'data.nii','segm_dartel/u_rc1data.nii')};
+            matlabbatch{1}.spm.util.defs.comp{1}.dartel.times = [1 0];
+            matlabbatch{1}.spm.util.defs.comp{1}.dartel.K = 6;
+            matlabbatch{1}.spm.util.defs.comp{1}.dartel.template = {''};
+            matlabbatch{1}.spm.util.defs.out{1}.savedef.ofname = 'backwards';
+            matlabbatch{1}.spm.util.defs.out{1}.savedef.savedir.savepwd = 1;
+            self.RunSPMJob(matlabbatch);
         end
         function [X,N,K]=spm_DesignMatrix(self,nrun,model_num)
             %will return the same design matrix used by spm in an efficient
@@ -3342,7 +3363,7 @@ classdef Subject < Project
             pmod_VM          =   0;
             onset_modelnum   =   3;
             All1Regr         =   0;
-            wmcsfr           =   1;
+            wmcsfr           =   0;
     
            
             if model_num == 3
@@ -4070,5 +4091,6 @@ classdef Subject < Project
             subplot(1,2,1);imagesc(designmat)
             subplot(1,2,2);imagesc(SPM.xX.X(:,1:self.nreliefconds(nrun)));
         end
+        
     end
 end
