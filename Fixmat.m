@@ -19,6 +19,8 @@ classdef Fixmat < Project
         maps%current maps;
         mds%mds results
         cmap_limits         = 7;
+        
+        stimulus   %contains average stimulus
     end
     
     properties (Hidden,SetAccess = private)
@@ -28,13 +30,13 @@ classdef Fixmat < Project
         map_titles
         selection
         realcond%all conditions that are not ucs,odd,or nulltrial
+        
     end
     
     properties (SetAccess = private,Dependent,Hidden)
         %rect: [y x y_size x_size]
         rect       %the aperture
         binedges   %bin edges for binned fixation maps
-        stimulus   %contains average stimulus
     end
     
     properties (SetAccess = private)
