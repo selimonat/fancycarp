@@ -526,7 +526,7 @@ classdef Fixmat < Project
                 imagesc(obj.bincenters_x(501),obj.bincenters_y(501),bild);
                 hold on;
                 [~, conth]     = contourf(obj.bincenters_x(size(M,1)+1)-2,obj.bincenters_y(size(M,1)+1),M(:,:,nc),levels,'EdgeColor','none');
-                pause
+%                 pause
                  contourf_transparency(conth,alphas)
                 axis square
                 axis off
