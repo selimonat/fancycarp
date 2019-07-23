@@ -89,7 +89,8 @@ classdef Tuning < handle
                 L           = [-range(y)*2    0       mean(y)-range(y)*2          .01    ];
                 U           = [range(y)*2     180      mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];%                
                 result.dof    = 3;
-                result.funname= 'gaussian';            
+                result.funname= 'gaussian';   
+                param_names = {'amp','sigma','offset' ,'noise_sd'};
             elseif funtype == 3
                 result.fitfun = @(x,p) self.make_gaussian_fmri_zeromean(x,p(1),p(2));%2 amp fwhm
 
@@ -151,6 +152,27 @@ classdef Tuning < handle
                 result.dof    = 4;
                 result.funname= 'vonmisses_mobile';
                 param_names = {'amp' 'sigma' 'mu' 'offset' 'noise_sd'};
+                     result.funname= 'null';
+            elseif funtype == 22
+                result.fitfun = @(x,p) make_gaussian_fmri(x,p(1),p(2),p(3));%2 amp, std, offset
+                L           = [0   0       mean(y)-range(y)*2          .01    ];
+                U           = [range(y)*2     180      mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];%                
+                result.dof    = 3;
+                result.funname= 'gaussian';   
+                param_names = {'amp','sigma','offset' ,'noise_sd'};
+            elseif funtype == 33 %positive Gauss
+                result.fitfun = @(x,p) self.make_gaussian_fmri_zeromean(x,p(1),p(2));%2 amp fwhm
+                
+                L           = [ 0    5          .01    ];
+                U           = [ range(y)*2    180       std(y(:)+rand(length(y),1).*eps)*2 ];
+                
+                result.dof    = 2;
+                result.funname= 'gaussian_ZeroMean';
+                %detect the mean, store it and subtract it
+                CONSTANT    = mean(y);
+                y           = y-CONSTANT;%we are not interested in the baseline, just remove it so we don't need to estimated it.
+                param_names = {'amp' 'sigma' 'noise_sd'};
+                
             end
             %% add some small noise in case of super-flat ratings
             if sum(diff(y)) == 0;y = y + rand(length(y),1)*.001;end
