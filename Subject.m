@@ -44,6 +44,7 @@ classdef Subject < Project
         rating_fit    = [];
         is_tuned      = [];
         thresh        = [];
+        pmf;
     end
     %%
     methods
@@ -300,6 +301,18 @@ classdef Subject < Project
                     completelist(n,:) = [p.presentation.limits.threshold_m p.presentation.limits.threshold_ave];
                 end
             end
+        end
+          function out = deltacsp2faceID(self,deltacsplist)
+            old_dim = size(deltacsplist);
+            vec_list = deltacsplist(:);
+            out = nan(size(vec_list));
+            logf = self.get_paradigm(3);
+            list = [logf.presentation.dist' logf.presentation.stim_id'];
+            lookup = unique(list,'rows');
+            for cond =unique(deltacsplist)
+                out(deltacsplist==cond) = lookup(lookup(:,1)==cond,2);
+            end
+            out = reshape(out,old_dim);
         end
         function [out, raw, triallist] = get_rating(self,varargin)
             % this function is mostly to get ratings so that we can fit
@@ -1390,17 +1403,20 @@ classdef Subject < Project
             out = size( self.path_beta(nrun,model_num,''),1);
         end
         function [out] = fit_pmf(self,varargin)
-            %will load the pmf fit (saved in runXXX/pmf) if computed other
-            %wise will read the raw pmf data (saved in runXXX/stimulation)
+            %will load the pmf fit (saved in runXXX/pmf/pmf_fit_xxx) if computed other
+            %wise will read the raw pmf data (saved in runXXX/pmf/stimulation)
             %and compute a fit.
             
-            if exist(self.path_data(2,'pmf')) && isempty(varargin)
+            if exist(self.path_data(0,'pmf/pmf_fit')) && isempty(varargin)
                 %load directly or
-                load(self.path_data(2,'pmf'));
+                load(self.path_data(0,'pmf/pmf_fit'));
                 %                 fprintf('PMF Fit found and loaded successfully for subject %i...\n',self.id);
                 
-            elseif ~isempty(varargin) || ~exist(self.path_data(2,'pmf'))
+            elseif ~isempty(varargin) || ~exist(self.path_data(0,'pmf/pmf_fit'))
                 addpath(self.path_palamedes);
+                %load pmf file
+                load(self.path_data(0,'pmf/stimulation'));
+              
                 %compute and save it.
                 fprintf('Fitting PMF...\n')
                 % define a search grid
@@ -1410,9 +1426,12 @@ classdef Subject < Project
                 searchGrid.lambda = linspace(0,0.1,10);
                 paramsFree        = [1 1 1 1];
                 PF                = @PAL_Weibull;
+                %combine 2 chains to 1 pooled chain
+                p.psi.log.xrounded = cat(3,[p.psi.log.xrounded(:,:,1) nan(15,10)],[p.psi.log.xrounded(:,:,2) nan(15,10)],[p.psi.log.xrounded(:,:,1) p.psi.log.xrounded(:,:,2)]);
+          
                 %prepare some variables
-                tchain            = size(self.pmf.log.xrounded,3);
-                xlevels           = unique(abs(self.pmf.presentation.uniquex));
+                tchain            = size(p.psi.log.xrounded,3);
+                xlevels           = unique(abs(p.psi.presentation.uniquex));
                 NumPos            = NaN(length(xlevels),tchain);
                 OutOfNum          = NaN(length(xlevels),tchain);
                 sd                = NaN(length(xlevels),tchain);
@@ -1422,12 +1441,12 @@ classdef Subject < Project
                 for chain = 1:tchain
                     fprintf('Starting to fit chain %g...\n',chain)
                     %get responses, and resulting PMF from PAL algorithm
-                    data = self.pmf.log.xrounded(:,:,chain);
-                    rep  = self.pmf.presentation.rep;
+                    data = p.psi.log.xrounded(:,:,chain);
+                    rep  = p.psi.presentation.rep;
                     cl   = 0;
                     for l = xlevels(:)'
                         cl                 = cl+1;
-                        ind                = find(abs(self.pmf.presentation.uniquex) == l);
+                        ind                = find(abs(p.psi.presentation.uniquex) == l);
                         collecttrials      = data(ind,1:rep(ind(1)));
                         collecttrials      = collecttrials(:);
                         NumPos(cl,chain)   = sum(collecttrials);% number of "different" responses
@@ -1456,9 +1475,32 @@ classdef Subject < Project
                     out.exitflag(chain,:)        = exitflag;
                     out.PF                       = PF;
                     out.xlevels                  = xlevels;
+                    out.y                        = PF(params,xlevels_HD);
+                    out.x                        = xlevels_HD;
                 end
-                save(self.path_data(2,'pmf'),'out')
+                out_dir = strrep(self.path_data(0,'pmf/pmf_fit'),'data.mat','');
+                if ~exist(out_dir)
+                    mkdir(out_dir)
+                end
+                save(fullfile(out_dir,'data.mat'),'out');
             end
+        end
+         function plot_pmf(self,chains)
+            load(self.path_data(0,'pmf/pmf_fit'));
+            % plot the fits
+           
+            if ~isempty(self.pmf)
+                colors = {'r' 'c' 'k'};
+                for chain = chains(:)'
+                    plot(out.xlevels,out.PropCorrectData(chain,:),'color',colors{chain},'linewidth',3);
+                    hold on;
+                    errorbar(out.xlevels,out.PropCorrectData(chain,:),out.sd(chain,:),'o','markersize',8,'color',colors{chain});
+                    plot([out.params(chain,1) out.params(chain,1)],[0 1],'color',colors{chain});
+                end
+            end
+            axis tight;box off;axis square;ylim([-0.1 1.2]);xlim([0 135]);drawnow;
+            title(sprintf('id:%02d (+:%d)',self.id,self.csp),'fontsize',12);%subject and face id
+            hold on;plot(xlim,[0 0 ],'k-');plot(xlim,[0.5 0.5 ],'k:');plot(xlim,[1 1 ],'k-');hold off;%plot grid lines
         end
         function out        = path_scr(self,varargin)
             %the directory where SCR is located
@@ -4039,6 +4081,7 @@ classdef Subject < Project
         %         function plot_con(nrun,model_num,con_num)
         %             self.CreateContrast(nrun,model_num,con_num);
         %         end
+
         function remove_files(self,allfiles)
             for n = 1:size(allfiles)
                 system(sprintf('rm %s',allfiles(n,:)));
