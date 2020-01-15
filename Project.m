@@ -73,7 +73,7 @@ classdef Project < handle
         normalization_method  = 'CAT';%which normalization method to use. possibilities are EPI or CAT
         
         
-        selected_fitfun       = 8;%vonmises
+        selected_fitfun       = 2;%2=Gauss with 3 dof, 3=Gauss with 2 dof, 8=vonmises
         realconds             = -135:45:180;
         faceconds             = [-135:45:180 500];
         allconds              = [-135:45:180 500 3000];
@@ -101,6 +101,7 @@ classdef Project < handle
         path_second_level     = sprintf('%sspm/',Project.path_project);%where the second level results has to be stored
         path_groupmeans       = fullfile(Project.path_project,'spm','groupmeans');%where the second level results has to be stored
         path_atlas            = sprintf('%satlas/data.nii',Project.path_project);%the location of the atlas
+        path_palamedes        = '/home/kampermann/Documents/Code/GitHub/Palamedes';
         current_time          = datestr(now,'hh:mm:ss');
         subject_indices       = find(cellfun(@(x) ~isempty(x),Project.trio_sessions));% will return the index for valid subjects (i.e. where TRIO_SESSIONS is not empty). Useful to setup loop to run across subjects.
     end
@@ -131,13 +132,14 @@ classdef Project < handle
                         subs = setdiff(self.subject_indices, [badmotion maybemotion notlearned missingsession]);
                         fprintf('These are all subjects with movement params OK (strict), all sessions and CSP>CSN in conditioning.\n')
                     case 4
-                        %tuning in combined testphases
-                        path_infofile = sprintf('%smidlevel/tunedsubs_method_%d.mat',self.path_project,self.selected_fitfun);
+                        %tuning in rating of combined testphases
+                        method = self.selected_fitfun;
+                        path_infofile = sprintf('%smidlevel/tunedsubs_method_%d.mat',self.path_project,method);
                         if exist(path_infofile)
-                            fprintf('info is stored, successfully loaded it.\n')
+                            fprintf('info for method %d is stored, successfully loaded it.\n',method)
                             load(path_infofile)
                         else
-                            fprintf('info not yet stored, computing it.\n')                     
+                            fprintf('info for method %d not yet stored, computing it.\n',method)                     
                             is_tuned = [];
                             for sub = self.subject_indices(:)'
                                 s = Subject(sub);s.fit_rating(5);
@@ -602,7 +604,7 @@ classdef Project < handle
             spm_jobman('run', matlabbatch);
         end
     end
-    methods (Static) %other methods that might be needed (LK made)
+    methods (Static) %other methods that might be needed
         
         function conds = condsinphase(nrun,varargin)
             switch nrun
@@ -646,6 +648,7 @@ classdef Project < handle
                 ind(deltacsp==3000)=10;
             end
         end
+      
         
         function [color]=GetFearGenColors(varargin)
             %[color]=GetFearGenColors
