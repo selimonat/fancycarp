@@ -270,7 +270,8 @@ classdef Group < Project
             EqualizeSubPlotYlim(gcf);
         end
         function [relief, tb, tt]= plot_grouprelief_pirate_BT(self,varargin)
-            method  = 3;
+            method  = 2;
+            alpha_level = .05;
             lwt = 4;%linewidth tuning
             lweb = 3; %linewidth errorbar;
             fs = 15;
@@ -310,7 +311,7 @@ classdef Group < Project
             ylabel('pain relief [VAS, z-score]','FontSize',fs+1)
             %             ylim([-2 2])
             hold on;
-            axis square
+%             axis square
             title('Baseline','FontSize',fs+1)
             
             
@@ -327,7 +328,7 @@ classdef Group < Project
             end
             
             hold on;
-            axis square
+%             axis square
             title('Test','FontSize',fs+1)
             
             %%
@@ -346,7 +347,7 @@ classdef Group < Project
             
             subplot(1,spn,sp1);
             hold on;
-            if 10.^-tb.groupfit.pval < .001
+            if 10.^-tb.groupfit.pval < alpha_level
                 plot(tb.groupfit.x_HD,tb.groupfit.fit_HD,'k','LineWidth',lwt,'Color',linecol,'LineStyle',':');
             else
                 plot([-135 180],repmat(mean(tb.y_mean),1,2),'k','LineWidth',lwt,'Color',linecol);
@@ -355,7 +356,7 @@ classdef Group < Project
             
             subplot(1,spn,sp1+1);
             hold on;
-            if 10.^-tt.groupfit.pval < .001
+            if 10.^-tt.groupfit.pval < alpha_level
                 plot(tt.groupfit.x_HD,tt.groupfit.fit_HD,'k','LineWidth',lwt,'Color',linecol,'LineStyle','-');
             else
                 plot([-180 225],repmat(mean(tt.y_mean),1,2),'k','LineWidth',lwt,'Color',linecol);
@@ -378,7 +379,7 @@ classdef Group < Project
             %baseline corrected version.
             relief = self.get_relief('raw');
             bc = relief(:,1:8,3)-relief(:,1:8,1);
-            figure;
+            subplot(1,3,3);%figure;
             pirateplot(xlev,bc,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
             ylabel('pain relief [VAS, baseline corrected]','FontSize',fs+1)
