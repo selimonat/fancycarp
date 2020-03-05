@@ -450,9 +450,23 @@ classdef Subject < Project
             out = self.get_rating(run,conds);
             
             if strcmp(corrtype,'mc')
-                out.y = out.y - nanmean(out.y);
+                
+                if run == 5
+                    out.y = [self.get_rating(3,conds).y-nanmean(self.get_rating(3,conds).y) self.get_rating(4,conds).y-nanmean(self.get_rating(4,conds).y)];
+                else
+                    out.y = out.y - nanmean(out.y);
+                end
+                %LK check here
             elseif strcmp(corrtype,'zscore')
-                out.y = zscore(out.y);
+                if length(conds)<10                
+                warning('ZSCORE might be computed on SELECTION of conds')
+                end
+                if run == 5
+                    out.y = [nanzscore(self.get_rating(3,conds).y) nanzscore(self.get_rating(4,conds).y)];
+                    out.x = [self.get_rating(3,conds).x self.get_rating(4,conds).x]; %otherwise its sorted by condition and not matching the y anymore.
+                else
+                    out.y = nanzscore(out.y);
+                end
             elseif strcmp(corrtype,'raw')
                 out.y = out.y;
             end
@@ -470,38 +484,58 @@ classdef Subject < Project
             end
         end
         function [ratings] = get_relief_percond(self,run,varargin)
+            conds = self.realconds;
             if nargin > 2
                 type = varargin{1};
             else
                 type = 'raw';
             end
-            
-            relief = self.get_rating(run);
-            reps = histc(relief.x,unique(relief.x));
-            ratings = nan(max(reps),8);
-            nc = 0;
-            for cond = self.realconds(:)'
-                nc = nc+1;
-                if strcmp(type,'raw')
+            if strcmp(type,'raw')
+                relief = self.get_rating(run,conds);
+                reps = histc(relief.x,unique(relief.x));
+                ratings = nan(max(reps),8);
+                nc = 0;
+                for cond = conds(:)'
+                    nc = nc+1;
                     ratings(:,nc) = relief.y(relief.x == cond);
-                elseif strcmp(type,'zscore')
-                    relief.y = zscore(relief.y);
-                    ratings(:,nc) = relief.y(relief.x == cond);
-                else
-                    fprintf('transformation type must be raw or zscore.\n');
-                    keyboard;
+                end
+            elseif strcmp(type,'zscore')
+                if run == 5
+                    run = [3 4];
+                end
+                ratings = [];
+                rc = 0;
+                for nr = run(:)'                    
+                    rc = rc+1;
+                    clear run_ratings
+                      relief = self.get_rating(nr,self.allconds);
+                      relief.y = nanzscore(relief.y);
+                      reps = histc(relief.x,unique(relief.x));
+                      run_ratings = nan(max(reps),length(conds));
+                      nc = 0;
+                      for cond = conds(:)'
+                          nc = nc+1;
+                          run_ratings(1:reps(nc),nc) = relief.y(relief.x == cond);                        
+                      end
+                      ratings = [ratings; run_ratings];
                 end
             end
-            
         end
-        function [out, R] = fit_rating(self,run)
+        function [out, R] = fit_rating(self,run,varargin)
             %will load the rating fit (saved in runXXX/rating) if computed other
             %wise will read the raw ratingdata (saved in runXXX/stimulation)
             %and compute a fit.
+              
+            if nargin > 2
+                datatype = varargin{1};
+            else
+                datatype = 'zscore';
+            end
             
+            force      = 1;%repeat the analysis or load from cache
             fun        = self.selected_fitfun;
-            force      = 0;%repeat the analysis or load from cache
-            write_path = sprintf('%s/midlevel/rating_fun_%i.mat',self.pathfinder(self.id,run),fun);
+            write_path = sprintf('%s/midlevel/rating_fun_%i_%s.mat',self.pathfinder(self.id,run),fun,datatype);
+          
             
             if exist(write_path) && force ==0
                 %load directly or
@@ -511,7 +545,16 @@ classdef Subject < Project
             elseif force == 1 || ~exist(write_path)
                 %compute and save it.
                 fprintf('Fitting Rating for run %02d..\n',run)
-                R = self.get_rating(run);
+                if strcmp(datatype,'raw')
+                    R = self.get_rating(run);
+                elseif strcmp(datatype,'zscore')
+                    R.y = self.get_relief_percond(run,'zscore');
+                    R.x = repmat(self.realconds,size(R.y,1),1);
+                    R.ids = self.id;
+                    R.y = R.y(:)';
+                    R.x = R.x(:)';
+                end
+                
                 if isempty(R.y)
                     warning('No ratings, so no fit for this person and run.\n');
                     out = [];
@@ -522,7 +565,7 @@ classdef Subject < Project
                     %prepare data for outputting.
                     out.params                   = T.fit_results.params(1,:);
                     out.LL                       = T.fit_results.Likelihood(1,:);
-                    out.pval                     = 10.^-T.fit_results.pval(1,:);
+                    out.pval                     = T.fit_results.pval(1,:);
                     out.exitflag                 = T.fit_results.ExitFlag(1,:);
                     out.y_hd                     = T.fit_results.fit_HD(1,:);
                     out.x_hd                     = T.fit_results.x_HD(1,:);
@@ -547,7 +590,7 @@ classdef Subject < Project
             self.rating_fit{run} = out;
             self.rating_fit{run}.data = R;
             
-            self.is_tuned{run} = out.pval < .05;
+            self.is_tuned{run} = (10.^-out.pval) < .05;
         end
         function plot_ratings(self)
             force = 0;
@@ -1451,7 +1494,7 @@ classdef Subject < Project
                 searchGrid.gamma  = linspace(0,0.5,10);
                 searchGrid.lambda = linspace(0,0.1,10);
                 paramsFree        = [1 1 1 1];
-                PF                = @PAL_Weibull;
+                PF                = @PAL_CumulativeNormal;
                 %combine 2 chains to 1 pooled chain
                 p.psi.log.xrounded = cat(3,[p.psi.log.xrounded(:,:,1) nan(15,10)],[p.psi.log.xrounded(:,:,2) nan(15,10)],[p.psi.log.xrounded(:,:,1) p.psi.log.xrounded(:,:,2)]);
                 
@@ -3907,7 +3950,7 @@ classdef Subject < Project
             end
             Nnuis = 6;
             if ismember(model_num,[44])
-                Nnuis = 8;
+                Nnuis = 8; % with wm and csf regressors
             end
             
             path_spm = [self.path_FIR(nrun,model_num,order,'10conds') 'SPM.mat'];
@@ -4131,7 +4174,7 @@ classdef Subject < Project
             self.remove_files(path2wCAT);
         end
         
-        function Con1stLevel_FIR(self,nrun,model_num,varargin)
+        function [firstcon,lastcon] = Con1stLevel_FIR(self,nrun,model_num,varargin)
             deletedcons = 1;
             % we need to know which cons are new, so that we can normalize and smooth only them, bc this takes time.
             if deletedcons == 1
