@@ -73,7 +73,7 @@ classdef Project < handle
         normalization_method  = 'CAT';%which normalization method to use. possibilities are EPI or CAT
         
         
-        selected_fitfun       = 2;%2=Gauss with 3 dof, 3=Gauss with 2 dof, 8=vonmises
+        selected_fitfun       = 3;%2=Gauss with 3 dof, 3=Gauss with 2 dof, 8=vonmises
         realconds             = -135:45:180;
         faceconds             = [-135:45:180 500];
         allconds              = [-135:45:180 500 3000];
