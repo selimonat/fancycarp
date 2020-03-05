@@ -195,7 +195,7 @@ classdef Group < Project
             COL = cols10;
             pirateplot(xcenters,D,'color',repmat([.3 .3 .3],9,1),'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
             hold on;
-            errorbar(xcenters,nanmean(D),nanstd(D)./sqrt(35),'.','Color',[.5 .5 .5],'LineWIdth',2,'MarkerFaceColor',[.5 .5 .5])
+            errorbar(xcenters,nanmean(D),nanstd(D)./sqrt(self.total_subjects),'.','Color',[.5 .5 .5],'LineWIdth',2,'MarkerFaceColor',[.5 .5 .5])
             title('Baseline','FontSize',fs)
             set(gca,'XTick',xcenters([4 8]),'XTickLabel',{'CS+','CS-'},'XTickLabelRotation',45,'FontSize',fs,'Ydir','reverse');
             ylabel('Relief ratings [zscore]')
@@ -211,7 +211,7 @@ classdef Group < Project
             pirateplot(xc,D,'color',COL,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
             hold on;
             for n = 1:2
-                errorbar(xc(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(35),'.','Color',COL(n,:),'LineWidth',2,'MarkerFaceColor',COL(n,:))
+                errorbar(xc(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',COL(n,:),'LineWidth',2,'MarkerFaceColor',COL(n,:))
             end
             title('Conditioning','FontSize',fs)
             xlim([135 270])
@@ -223,7 +223,7 @@ classdef Group < Project
             pirateplot(xcenters,D,'color',COL,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
             hold on;
             for n = 1:8
-                errorbar(xcenters(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(35),'.','Color',COL(n,:),'LineWidth',2,'MarkerFaceColor',COL(n,:))
+                errorbar(xcenters(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',COL(n,:),'LineWidth',2,'MarkerFaceColor',COL(n,:))
             end
             title('Test','FontSize',fs)
             set(gca,'XTick',xcenters([4 8 9]),'XTickLabel',{'CS+','CS-','UCS'},'XTickLabelRotation',45,'FontSize',fs,'Ydir','reverse');
@@ -270,9 +270,9 @@ classdef Group < Project
             EqualizeSubPlotYlim(gcf);
         end
         function [relief, tb, tt]= plot_grouprelief_pirate_BT(self,varargin)
-            method  = 2;
+            method  = 3;
             alpha_level = .05;
-            lwt = 4;%linewidth tuning
+            lwt = 3;%linewidth tuning
             lweb = 3; %linewidth errorbar;
             fs = 15;
             vio = 0;
@@ -295,7 +295,7 @@ classdef Group < Project
             else
                 fighand = figure;
                 set(fighand,'Color','w')
-                spn = 2;
+                spn = 3;
                 sp1 = 1;
             end
             
@@ -304,14 +304,14 @@ classdef Group < Project
             pirateplot(xlev,D,'color',repmat([.3 .3 .3],8,1),'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
             hold on;
             for n = 1:8
-                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(35),'.','Color',[.3 .3 .3],'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
+                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',[.3 .3 .3],'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
             end
             %             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'YTick',yticki,'Ydir','reverse');
             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
             ylabel('pain relief [VAS, z-score]','FontSize',fs+1)
             %             ylim([-2 2])
             hold on;
-%             axis square
+            %             axis square
             title('Baseline','FontSize',fs+1)
             
             
@@ -324,11 +324,11 @@ classdef Group < Project
             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
             hold on;
             for n = 1:8
-                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(35),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
+                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
             end
             
             hold on;
-%             axis square
+            %             axis square
             title('Test','FontSize',fs+1)
             
             %%
@@ -364,25 +364,16 @@ classdef Group < Project
             end
             %             EqualizeSubPlotYlim(gcf);
             
-            yticki{1} = -.2:.1:.2;
-            yticki{2} = [];
-            spnn=0;
-            for n = sp1:(sp1+1)
-                spnn=spnn+1;
-                subplot(1,spn,n);
-                ylim([-.301 .243])
-                set(gca,'YTick',yticki{spnn});
-            end
             fprintf('Baseline fit with method %d: p = %05.3f.\n',method,10.^-tb.groupfit.pval)
             fprintf('Testphase fit with method %d: p = %05.3f.\n',method,10.^-tt.groupfit.pval)
-      
+            
             %baseline corrected version.
-            relief = self.get_relief('raw');
+            relief = self.get_relief('zscore');
             bc = relief(:,1:8,3)-relief(:,1:8,1);
             subplot(1,3,3);%figure;
             pirateplot(xlev,bc,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
-            ylabel('pain relief [VAS, baseline corrected]','FontSize',fs+1)
+            ylabel('pain relief [VAS, z-score]','FontSize',fs+1)
             test2.x = repmat(-135:45:180,self.total_subjects,1);
             test2.y = bc;
             test2.ids = self.ids;
@@ -391,14 +382,187 @@ classdef Group < Project
             t2.GroupFit(method);
             linecol = [.3 .3 .3];
             
-            subplot(1,spn,sp1);
+            subplot(1,spn,3);
             hold on;
-            if 10.^-t2.groupfit.pval < .001
-                plot(t2.groupfit.x_HD,t2.groupfit.fit_HD,'k','LineWidth',lwt,'Color',linecol,'LineStyle',':');
+            if 10.^-t2.groupfit.pval < alpha_level
+                plot(t2.groupfit.x_HD,t2.groupfit.fit_HD,'k','LineWidth',lwt,'Color',linecol,'LineStyle','-');
             else
                 plot([-135 180],repmat(mean(t2.y_mean),1,2),'k','LineWidth',lwt,'Color',linecol);
                 
             end
+            title('Test - Base','FontSize',fs+1)
+            
+            alldatapoints = [Vectorize(relief(:,1:8,[1 3]))];
+            
+            yticki{1} = -1.5:.5:1.5;
+            yticki{2} = [];
+            for n = 1:2
+                subplot(1,spn,n);
+                ylim([min(alldatapoints) max(alldatapoints)]);% ylim([-.301 .243])
+                set(gca,'YTick',yticki{n});
+            end
+            subplot(1,3,3);
+            ylim([-1.9 1.9])
+            set(gca,'YTick',yticki{1});
+            fh = gcf; fh.Position  =  [728   587   900   400];
+        end
+        function [relief, tb, tt]= plot_grouprelief_pirate_BCT_BC(self,varargin)
+            method  = 3;
+            alpha_level = .05;
+            lwt = 3;%linewidth tuning
+            lweb = 3; %linewidth errorbar;
+            fs = 15;
+            vio = 0;
+            baryn = 1;
+            erb = 0;
+            ml = 0;
+            dotyn = 1;
+            
+            COL = Project.GetFearGenColors;
+            xlev = -135:45:180;
+            relief = self.get_relief('zscore');
+            %             yticki = [-1.5 0 1.5];
+            %
+            
+            if nargin > 1
+                fighand = varargin{1};
+                set(fighand,'Color','w')
+                spn = varargin{2};
+                sp1 = varargin{3};
+            else
+                fighand = figure;
+                set(fighand,'Color','w')
+                spn = 4;
+                sp1 = 1;
+            end
+            
+            subplot(1,spn,sp1);
+            D = relief(:,1:8,1);
+            pirateplot(xlev,D,'color',repmat([.3 .3 .3],8,1),'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
+            hold on;
+            for n = 1:8
+                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',[.3 .3 .3],'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
+            end
+            %             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'YTick',yticki,'Ydir','reverse');
+            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
+            ylabel('pain relief [VAS, z-score]','FontSize',fs+1)
+            %             ylim([-2 2])
+            hold on;
+            %             axis square
+            title('Baseline','FontSize',fs+1)
+            
+            subplot(1,spn,sp1+1);
+            D = relief(:,1:9,2);
+            D(:,4) = D(:,9);
+            D = D(:,1:8);
+            pirateplot(xlev,D,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
+            
+            %             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'YTick',yticki,'Ydir','reverse');
+            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
+            hold on;
+            for n = 1:8
+                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
+            end
+            
+            %             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'YTick',yticki,'Ydir','reverse');
+            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
+            
+            %             ylim([-2 2])
+            hold on;
+            %             axis square
+            title('Conditioning','FontSize',fs+1)
+            
+            subplot(1,spn,sp1+2);
+            %             yticki = [-1.5 0 1.5];
+            D = relief(:,1:8,3);
+            pirateplot(xlev,D,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
+            %             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'YTick',yticki,'Ydir','reverse');
+            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
+            hold on;
+            for n = 1:8
+                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
+            end
+            
+            hold on;
+            %             axis square
+            title('Test','FontSize',fs+1)
+            
+            %%
+            base.x = repmat(-135:45:180,self.total_subjects,1);
+            base.y = relief(:,1:8,1);
+            base.ids = self.ids;
+            test.x = repmat(-135:45:180,self.total_subjects,1);
+            test.y = relief(:,1:8,3);
+            test.ids = self.ids;
+            
+            tb = Tuning(base);
+            tt = Tuning(test);
+            tb.GroupFit(method);
+            tt.GroupFit(method);
+            linecol = [.3 .3 .3];
+            
+            subplot(1,spn,sp1);
+            hold on;
+            if 10.^-tb.groupfit.pval < alpha_level
+                plot(tb.groupfit.x_HD,tb.groupfit.fit_HD,'k','LineWidth',lwt,'Color',linecol,'LineStyle',':');
+            else
+                plot([-135 180],repmat(mean(tb.y_mean),1,2),'k','LineWidth',lwt,'Color',linecol);
+                
+            end
+            
+            subplot(1,spn,sp1+2);
+            hold on;
+            if 10.^-tt.groupfit.pval < alpha_level
+                plot(tt.groupfit.x_HD,tt.groupfit.fit_HD,'k','LineWidth',lwt,'Color',linecol,'LineStyle','-');
+            else
+                plot([-180 225],repmat(mean(tt.y_mean),1,2),'k','LineWidth',lwt,'Color',linecol);
+                
+            end
+            %             EqualizeSubPlotYlim(gcf);
+            
+            fprintf('Baseline fit with method %d: p = %05.3f.\n',method,10.^-tb.groupfit.pval)
+            fprintf('Testphase fit with method %d: p = %05.3f.\n',method,10.^-tt.groupfit.pval)
+            
+            %baseline corrected version.
+            relief = self.get_relief('zscore');
+            bc = relief(:,1:8,3)-relief(:,1:8,1);
+            subplot(1,spn,4);%figure;
+            pirateplot(xlev,bc,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
+            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
+            ylabel('pain relief [VAS, z-score]','FontSize',fs+1)
+            test2.x = repmat(-135:45:180,self.total_subjects,1);
+            test2.y = bc;
+            test2.ids = self.ids;
+            
+            t2 = Tuning(test2);
+            t2.GroupFit(method);
+            linecol = [.3 .3 .3];
+            
+            subplot(1,spn,4);
+            hold on;
+            if 10.^-t2.groupfit.pval < alpha_level
+                plot(t2.groupfit.x_HD,t2.groupfit.fit_HD,'k','LineWidth',lwt,'Color',linecol,'LineStyle','-');
+            else
+                plot([-135 180],repmat(mean(t2.y_mean),1,2),'k','LineWidth',lwt,'Color',linecol);
+                
+            end
+            title('Test - Base','FontSize',fs+1)
+            
+            alldatapoints = [Vectorize(relief(:,1:8,[1 2 3]))];
+            
+            yticki{1} = -1.5:.75:1.5;
+            yticki{2} = -1.5:.75:1.5;
+            yticki{3} = -1.5:.75:1.5;
+            for n = 1:3
+                subplot(1,spn,n);
+                ylim([min(alldatapoints) max(alldatapoints)]);% ylim([-.301 .243])
+                set(gca,'YTick',yticki{n});
+            end
+            [min(t2.y(:)) max(t2.y(:))]
+            subplot(1,4,4);
+            ylim([-2.8 2.8]) %-2.8 2.8 is like behavioral pilot, -2 2 would be enough for MRI only.
+            set(gca,'YTick',[-2 -1 0 1 2]);
+            fh = gcf; fh.Position  =  [728   587   1100  400];
         end
         function [relief] = plot_relief_cond_placebo(self,varargin)
             
@@ -431,7 +595,7 @@ classdef Group < Project
             pirateplot(xlev(:,[8 9]),D(:,[8 9]),'color',COL([8 9],:),'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
             hold on;
             for n = 1:9
-                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(35),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
+                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
             end
             set(gca,'XTick',[0 180 225],'XTickLabel',{'','CS-','UCS'},'XTickLabelRotation',45,'FontSize',fs,'Ydir','reverse');
             ylabel('pain relief [VAS]','FontSize',fs)
@@ -449,7 +613,7 @@ classdef Group < Project
             hold on;
             for n = [4 8 9]
                 xlev(4) = xlev(7);
-                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(35),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
+                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
             end
             
             hold on;
@@ -507,7 +671,7 @@ classdef Group < Project
             xlevs = [0 180];
             inds = [9 8];
             for n= 1:2
-                errorbar(xlevs(:,n),nanmean(D(:,inds(n))),nanstd(D(:,inds(n)))./sqrt(35),'.','Color',cols(n,:),'LineWidth',lweb,'MarkerFaceColor',cols(n,:))
+                errorbar(xlevs(:,n),nanmean(D(:,inds(n))),nanstd(D(:,inds(n)))./sqrt(self.total_subjects),'.','Color',cols(n,:),'LineWidth',lweb,'MarkerFaceColor',cols(n,:))
             end
             set(gca,'XTick',[0 180],'XTickLabel',{'UCS','CS-'},'XTickLabelRotation',45,'FontSize',fs,'Ydir','reverse');
             ylabel('pain relief [VAS]','FontSize',fs)
@@ -524,7 +688,7 @@ classdef Group < Project
             set(gca,'XTick',xlev([4 8 ]),'XTickLabel',{'CS+','CS-'},'XTickLabelRotation',45,'FontSize',fs,'Ydir','reverse');
             hold on;
             for n = [4 8 ]
-                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(35),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
+                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
             end
             
             hold on;
@@ -535,14 +699,14 @@ classdef Group < Project
             ylimmi = [0 90];
             yticki{1} = 0:20:80;
             yticki{2} = [];
-         
+            
             spp = 0;
             for n = sp1:(sp1+1)
                 spp = spp+1;
                 sh(n)=subplot(1,spn,n);
                 ylim(ylimmi);
                 set(gca,'YTick',yticki{spp});
-              
+                
             end
             [mean(relief(:,10,2)) mean(relief(:,9,2));sqrt([std(relief(:,10,2)) std(relief(:,9,2))])]
             [mean(relief(:,4,3)) mean(relief(:,8,3)) mean(relief(:,9,3));sqrt([std(relief(:,4,3)) std(relief(:,8,3)) std(relief(:,9,3))])]
@@ -611,10 +775,10 @@ classdef Group < Project
                 
                 M = self.subject{ns}.get_relief_percond(5,type); %5 = pooled test phasesget_relief_percond(self,run)
                 
-%                 
-%                 self.plot_bar(self.allconds,M,S);
-                  pirateplot(self.realconds,M,'violin',0,'bar',1,'errorbar',1,'meanline',0,'dots',0);
-               hold on;
+                %
+                %                 self.plot_bar(self.allconds,M,S);
+                pirateplot(self.realconds,M,'violin',0,'bar',1,'errorbar',1,'meanline',0,'dots',0);
+                hold on;
                 box off;
                 title(sprintf('s: %d, cs+: %d',self.ids(ns),self.subject{ns}.csp));
                 set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'});
@@ -862,19 +1026,22 @@ classdef Group < Project
             end
         end
         function plot_pmf_singlesubs(self,varargin)
-          type = 'merged'; %merged or 3chains? (CS+/CS-/merged);
-          [nsp(1) nsp(2)] = GetSubplotNumber(self.total_subjects);%number of subplots;
-          nsp = [5 7]; %hardcoded for now;
-          if strcmp(type,'merged')
-              chains = 3;
-          elseif strcmp(type,'3chains')
-              chains = 1:3;
-          else
-              keyboard;
-          end
-          colors = {'r','c','k'};
+            type = 'merged'; %merged or 3chains? (CS+/CS-/merged);
+            [nsp(1) nsp(2)] = GetSubplotNumber(self.total_subjects);%number of subplots;
+            nsp = [5 7]; %hardcoded for now;
+            if strcmp(type,'merged')
+                chains = 3;
+            elseif strcmp(type,'3chains')
+                chains = 1:3;
+            else
+                keyboard;
+            end
+            if nargin > 1
+                chains = 1;
+            end
+            colors = {'r','c','k'};
             for ns = 1:self.total_subjects
-               load(self.subject{ns}.path_data(0,'pmf/pmf_fit'));
+                out = load(self.subject{ns}.path_data(0,'pmf/pmf_fit'));out = out.out;
                 subplot(nsp(1),nsp(2),ns)
                 for chain = chains(:)'
                     hold on;
@@ -891,28 +1058,28 @@ classdef Group < Project
                 ax.YAxis.FontSize = 14;
             end
             
-%                 set(GetSubplotHandles(gcf),'fontsize',14);%set all fontsizes to 12
-%     subplotChangeSize(GetSubplotHandles(gcf),.02,0);
-                set(gcf,'Color','w')
+            %                 set(GetSubplotHandles(gcf),'fontsize',14);%set all fontsizes to 12
+            %     subplotChangeSize(GetSubplotHandles(gcf),.02,0);
+            set(gcf,'Color','w')
         end
         function params = plot_pmf(self)
             chain = 1;
             for ns=1:self.total_subjects;
                 load(self.subject{ns}.path_data(0,'pmf/pmf_fit'));
                 params(ns,:) = out.params(chain,:);
-                y_group(ns,:) = PAL_Weibull(params(ns,:),out.x(1,:));
+                y_group(ns,:) = out.PF(params(ns,:),out.x(1,:));
             end
             
             
             mean_pmf = PAL_Weibull(mean(params),out.x(1,:));
             sem_params = std(params)./sqrt(self.total_subjects);
-            lower_CI_pmf = PAL_Weibull(mean(params)-1.96.*sem_params,out.x(1,:));
-            upper_CI_pmf = PAL_Weibull(mean(params)+1.96.*sem_params,out.x(1,:));
+            lower_CI_pmf = out.PF(mean(params)-1.96.*sem_params,out.x(1,:));
+            upper_CI_pmf = out.PF(mean(params)+1.96.*sem_params,out.x(1,:));
             x_ax    = out.x(1,:);
             X_plot  = [x_ax, fliplr(x_ax)];
             Y_plot  = [lower_CI_pmf, fliplr(upper_CI_pmf)];
             
-    
+            
             figure;
             plot(out.x(1,:),y_group');
             hold on;
@@ -927,7 +1094,7 @@ classdef Group < Project
             title(sprintf('PMF chain %d',chain))
             box off;
             set(gca,'FontSize',12);
-set(gcf,'Color','w')
+            set(gcf,'Color','w')
         end
         %%
         function ModelSCR(self,run,funtype)
@@ -949,7 +1116,7 @@ set(gcf,'Color','w')
         end
         
         
-       
+        
         function [out labels] = parameterMat(self)
             labels = {'csp_before_alpha' 'csp_after_alpha' 'csn_before_alpha' 'csn_after_alpha' ...
                 'csp_before_beta' 'csp_after_beta' 'csn_before_beta' 'csn_after_beta' ...
@@ -1262,6 +1429,7 @@ set(gcf,'Color','w')
             fprintf('Output folder is: %s\n',path2ndlevel)
             
         end
+        
         function Con2ndlevel(self,nrun,modelnum,namestring,varargin)
             
             foldersuffix = sprintf('_N%02d',self.total_subjects);
@@ -1485,12 +1653,12 @@ set(gcf,'Color','w')
             
             %% read out if there's a covariate
             if any(strfind(namestring,'cov'))
-              covnum = namestring([strfind(namestring,'cov')+3 strfind(namestring,'cov')+4]);
-              [cov,covstrct] = self.get_2ndlevel_covariate(nrun,covnum);
-            else 
+                covnum = namestring([strfind(namestring,'cov')+3 strfind(namestring,'cov')+4]);
+                [cov,covstrct] = self.get_2ndlevel_covariate(nrun,covnum);
+            else
                 cov = 0;
             end
-            %%            
+            %%
             % information, which contrasts to collect.
             %
             % for models without PMOD:
@@ -1771,6 +1939,193 @@ set(gcf,'Color','w')
             fprintf('Output folder is: %s\n',path2ndlevel)
         end
         
+        function Fit2ndlevel_FIR_within(self,nrun,modelnum,order,namestring,varargin)
+            start = tic;
+            %% 2ndlevel 8conds ANOVA
+            clear2ndlevel = 1;
+            
+            dependencies = 0;
+            unequalvar   = 0;
+            
+            versiontag = 0;
+            prefix = 's6_wCAT_';
+            namestring1stlevel = '10conds';
+            foldersuffix = sprintf('_within_N%02d',self.total_subjects);
+            bins2take = 1:self.orderfir;
+            
+            
+            if nargin == 6 %one varargin is given
+                foldersuffix = varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so
+            elseif nargin == 7
+                foldersuffix =  varargin{1}; %here you can pass whatever extension you want, like test, or N39 or so
+                versiontag = varargin{2};   %probably never needed, better name then with foldersuffix, easier to remember and document
+            elseif nargin > 7
+                fprintf('Too many inputs. Please debug.')
+                keyboard;
+            end
+            
+            fprintf('Starting 2nd Level for FIR model %02d, run %02d, named %s, version %d with foldersuffix ''%s''...\n',modelnum,nrun,namestring,versiontag,foldersuffix);
+            
+            path2ndlevel = fullfile(self.path_second_level,'FIR',sprintf('model_%02d_FIR_%02d_%s_b%02dto%02d_%s%s',modelnum,versiontag,namestring,bins2take(1),bins2take(end),self.nrun2phase{nrun},foldersuffix));
+            
+            if exist(path2ndlevel) && (clear2ndlevel==1)
+                system(sprintf('rm -fr %s*',strrep(path2ndlevel,'//','/')));
+            end%this is AG style.
+            if ~exist(path2ndlevel)
+                mkdir(path2ndlevel);
+            end
+            
+            %% read out if there's a covariate
+            if any(strfind(namestring,'cov'))
+                covnum = namestring([strfind(namestring,'cov')+3 strfind(namestring,'cov')+4]);
+                [cov,covstrct] = self.get_2ndlevel_covariate(nrun,covnum);
+            else
+                cov = 0;
+            end
+            %%
+            % information, which contrasts to collect.
+            %
+            % for models without PMOD:
+            % on firstlevel, we have bin 1-14 cond 1, bin 1-14 cond 2, etc,
+            % then bin 1-14 CSdiff
+            %
+            % For VMdVM, con images on 1stlevel were skipped for main
+            % effect. So just go for contrast 1:Npmod
+            % For PMOD from ratings, same. so just 1:Npmod(which is =1)
+            %
+            % Here: defining chunks of contrasts to go for (+ N bins is done by loop later).
+            
+            if any(strfind(namestring,'win')) && any(strfind(namestring,'8conds_BT'))
+                load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
+                if any(strfind(namestring,'bin4win4'))
+                    nrun = [1 3];
+                    cons2collectstruct = {127:134, [],141:148};%bin4win4 %this is correct for both model 4 and 44.
+                end
+                fprintf('You chose contrasts named:\n')
+                SPM.xCon(cons2collectstruct{1}).name
+                fprintf('.................................................\n')
+            elseif strfind(namestring,'bin4win4_9conds_BCT')
+                load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
+                if any(strfind(namestring,'bin4'))
+                    nrun = [1 2 3];
+                    cons2collectstruct = {127:134, 58:59, 141:149};%bin4win4 %before: {127:134, 43:44,141:149};, but 43:44 was wrong somehow
+                elseif any(strfind(namestring,'bin5'))
+                    %...
+                end
+                fprintf('You chose contrasts named (excerpt):\n')
+                SPM.xCon(cons2collectstruct{3}).name
+                fprintf('.................................................\n')
+            elseif any(strfind(namestring,'bin4win4')) && any(strfind(namestring,'Gauss_BT'))
+                load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
+                
+                nrun = [1 3];
+                cons2collectstruct = {136, [],191};
+                
+                fprintf('You chose contrasts named:\n')
+                SPM.xCon(cons2collectstruct{1}).name
+                fprintf('.................................................\n')
+                
+            end
+            clear matlabbatch
+            
+            %load(self.subject{1}.path_spmmat(nrun,modelnum)); %allows lookup of things
+            % collect all subjects' con images for every cond
+            if any(strfind(namestring,'win')) %here we don\t take single bins to 2ndlevel, so we loop through the CONS, not conds identified above
+                bc = 0;
+                for runloop = nrun(:)'
+                    if numel(nrun) > 1
+                        cons2collect = cons2collectstruct{runloop};
+                    end
+                    for con = cons2collect(:)'
+                        bc = bc+1;
+                        fprintf('\nCollecting con images of con %04d:\n',con)
+                        clear files
+                        fprintf('Factor %02d - Looping through subs: ',bc);
+                        for ns = 1:self.total_subjects
+                            fprintf('%02d - ',ns)
+                            files(ns,:) = cellstr([self.subject{ns}.path_FIR(runloop,modelnum,order,namestring1stlevel), sprintf('%scon_%04d.nii',prefix,con)]);
+                        end
+                        fprintf('completo.')
+                        matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(bc).scans = cellstr(files); %one bin at a time, but all subs
+                        
+                    end
+                end
+            else
+                bc = 0;
+                for runloop = nrun(:)'
+                    for cond = conds2collect(:)'
+                        fprintf('\nCollecting con images for run %01d, cond %04d:\n',runloop,cond)
+                        for bin = bins2take(:)' %loop through bins, then subjects. sub01_bin1 sub02_bin1 ... sub01_bin2 sub02_bin etc..
+                            ind = self.findcon_FIR(order,cond,bin);
+                            fprintf('\nbin %02d, i.e. con %03d...',bin,ind)
+                            bc = bc + 1;
+                            clear files
+                            fprintf('Looping through subs: ');
+                            for ns = 1:self.total_subjects
+                                fprintf('%02d - ',ns)
+                                files(ns,:) = cellstr([self.subject{ns}.path_FIR(runloop,modelnum,order,namestring1stlevel), sprintf('%scon_%04d.nii',prefix,ind)]);
+                            end
+                            fprintf('completo.')
+                            matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(bc).scans = cellstr(files); %one bin at a time, but all subs
+                        end
+                    end
+                end
+            end
+            
+            % specify rest of the model
+            matlabbatch{1}.spm.stats.factorial_design.dir = cellstr(path2ndlevel);
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.dept = dependencies;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.variance = unequalvar;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca = 0;
+            matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova = 0;
+            if cov == 1
+                matlabbatch{1}.spm.stats.factorial_design.cov = covstrct;
+            else
+                matlabbatch{1}.spm.stats.factorial_design.cov = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
+            end
+            matlabbatch{1}.spm.stats.factorial_design.multi_cov = struct('files', {}, 'iCFI', {}, 'iCC', {});
+            matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none = 1;
+            matlabbatch{1}.spm.stats.factorial_design.masking.im = -Inf;
+            groupmask = [self.path_groupmeans sprintf('/thr20_ave_wCAT_s3_ss_data_N%02d.nii',self.total_subjects)];
+            if exist(groupmask)
+                matlabbatch{1}.spm.stats.factorial_design.masking.em = {groupmask};
+            else
+                matlabbatch{1}.spm.stats.factorial_design.masking.em = {[self.path_groupmeans '/ave_wCAT_s3_ss_data.nii']};
+            end
+            
+            matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit = 1;
+            matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
+            matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm = 1;
+            
+            
+            matlabbatch{2}.spm.stats.fmri_est.spmmat = {[path2ndlevel filesep 'SPM.mat']};
+            %             matlabbatch{2}.spm.stats.fmri_est.write_residuals = 0;
+            matlabbatch{2}.spm.stats.fmri_est.method.Classical = 1;
+            %% new
+            matlabbatch{1}.spm.stats.factorial_design.dir = '<UNDEFINED>';
+            matlabbatch{1}.spm.stats.factorial_design.des.anovaw.fsubject(1).scans = {'/projects/crunchie/treatgen/data/sub004/run001/spm/model_04_FIR_14_10conds_00/con_0143.nii,1'};
+            matlabbatch{1}.spm.stats.factorial_design.des.anovaw.fsubject(1).conds = 1;
+            matlabbatch{1}.spm.stats.factorial_design.des.anovaw.fsubject(2).scans = {'/projects/crunchie/treatgen/data/sub004/run001/spm/model_04_FIR_14_10conds_00/con_0143.nii,1'};
+            matlabbatch{1}.spm.stats.factorial_design.des.anovaw.fsubject(2).conds = 1;
+            matlabbatch{1}.spm.stats.factorial_design.des.anovaw.dept = 1;
+            matlabbatch{1}.spm.stats.factorial_design.des.anovaw.variance = 1;
+            matlabbatch{1}.spm.stats.factorial_design.des.anovaw.gmsca = 0;
+            matlabbatch{1}.spm.stats.factorial_design.des.anovaw.ancova = 0;
+            matlabbatch{1}.spm.stats.factorial_design.cov = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
+            matlabbatch{1}.spm.stats.factorial_design.multi_cov = struct('files', {}, 'iCFI', {}, 'iCC', {});
+            matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none = 1;
+            matlabbatch{1}.spm.stats.factorial_design.masking.im = 1;
+            matlabbatch{1}.spm.stats.factorial_design.masking.em = {''};
+            matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit = 1;
+            matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
+            matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm = 1;
+            
+            
+            spm_jobman('run',matlabbatch);
+            done = toc(start);
+            fprintf('\n\nDone estimating 2nd Level for FIR model %d, called %s %s, version %d, N = %02d subs in %05.2f mins. (Simple one-way anova)\n',modelnum,namestring,foldersuffix,versiontag,length(self.ids),done./60)
+            fprintf('Output folder is: %s\n',path2ndlevel)
+        end
         
         function Con2ndlevel_FIR(self,nrun,modelnum,namestring,varargin)
             deletecons = 1;
@@ -2680,13 +3035,15 @@ set(gcf,'Color','w')
             end
         end
         %% ROI methods
-        function [out, base, test,tb,tt,Y] = get_betas_ROI(self,coords,namestr,varargin)
-            path2ndlevel = fullfile(self.path_project,sprintf('spm/FIR/model_04_FIR_00_bin4win4_8conds_BT_b01to14_B_N%02d/',self.total_subjects));
+        function [out, base, test,tb,tt, tbc,Y] = get_betas_ROI(self,coords,namestr,varargin)
+            %             path2ndlevel = fullfile(self.path_project,sprintf('spm/FIR/model_04_FIR_00_bin4win4_8conds_BT_b01to14_B_N%02d/',self.total_subjects));
+            path2ndlevel = fullfile(self.path_project,sprintf('spm/FIR/model_04_FIR_00_bin4win4_Gauss_BT_b01to14_B_N%02d/',self.total_subjects));
             cd(path2ndlevel);
             
-            vis = 1;
-            dofit = 1;
-            fitmethod = 2;
+            vis = 0;
+            dofit = 0;
+            roionly = 1; %skip the plotting and fitting and all.
+            fitmethod = self.selected_fitfun;
             plot_timeband = 0;
             
             if plot_timeband == 1
@@ -2740,103 +3097,151 @@ set(gcf,'Color','w')
                 end
             end
             
-            out =  reshape(Y,self.total_subjects,16);
-            base.x = repmat(-135:45:180,self.total_subjects,1);
-            base.y = out(:,1:8);
-            base.ids = self.ids;
-            test.x =  repmat(-135:45:180,self.total_subjects,1);
-            test.y = out(:,9:16);
-            test.ids = self.ids;
+            out =  reshape(Y,self.total_subjects,length(Y)./self.total_subjects);
             
-            if vis
-                X = -135:45:180;
-                bar_Y = nanmean(out);
-                SEM = nanstd(out)./sqrt(self.total_subjects);
+            if ~roionly
+                base.x = repmat(-135:45:180,self.total_subjects,1);
+                base.y = out(:,1:8);
+                base.ids = self.ids;
+                test.x =  repmat(-135:45:180,self.total_subjects,1);
+                test.y = out(:,9:16);
+                test.ids = self.ids;
+                bc.y = test.y-base.y;
+                bc.x = test.x;
+                bc.ids = self.ids;
                 
-                graycol = [.3 .3 .3];
-                figure(1000);
-                clf
-                subplot(1,sp,1);
-                bar(X,bar_Y(:,1:8),'facecolor',graycol,'edgecolor','none','facealpha',.8);
-                hold on
-                errorbar(X,bar_Y(1:8),SEM(1:8),'.','Color',graycol,'LineWidth',2)
-                
-%             pirateplot(X,out(:,1:8),'color',repmat([.3 .3 .3],8,1),'violin',0,'bar',1,'errorbar',0,'meanline',0,'dots',1);
-            hold on   
-            set(gca,'xtick',[0 180],'xticklabel',{'CS+','CS-'},'TickLength',[0.03 0.025],'FontSize',14,'LineWidth',2);
-                box off;
-                set(gca,'color','none');
-                drawnow;
-                axis tight;box off;axis square;drawnow;alpha(.5);
-                xlim([min(X)-mean(diff(X)) max(X)+mean(diff(X))])
-                
-                ylabel('Contrast Estimate [a.u.]')
-                titl= title('Baseline');set(titl,'FontWeight','normal');
-                if dofit==1
-                    tb = Tuning(base);
-                    tb.GroupFit(fitmethod);
-                    if (10^-tb.groupfit.pval)<.05
-                        plot(tb.groupfit.x_HD,tb.groupfit.fit_HD,'Color',graycol,'LineWidth',3)
-                    else
-                        plot(tb.groupfit.x_HD,ones(1,numel(tb.groupfit.fit_HD))*mean(tb.y_mean),'Color',graycol,'LineWidth',3)
-                    end
-                end
-                figure(1000);
-                subplot(1,sp,2);
-                cmap  = Project.GetFearGenColors;
-                cc= 0;
-                for i = 9:16
-                    cc = cc+1;
-                    try
-                        h(cc)    = bar(X(cc),bar_Y(i),40,'facecolor',cmap(cc,:),'edgecolor','none','facealpha',.8);
-                    catch
-                        h(cc)    = bar(X(cc),bar_Y(i),40,'facecolor',cmap(cc,:),'edgecolor','none');
-                    end
+                if vis
+                    X = -135:45:180;
+                    bar_Y = nanmean(out);
+                    SEM = nanstd(out)./sqrt(self.total_subjects);
+                    
+                    graycol = [.3 .3 .3];
+                    figure(1000);
+                    clf
+                    subplot(1,sp,1);
+                    bar(X,bar_Y(:,1:8),'facecolor',graycol,'edgecolor','none','facealpha',.8);
                     hold on
-                    errorbar(X(cc),bar_Y(i),SEM(i),'.','Color',cmap(cc,:),'LineWidth',2);
-                end
-%     pirateplot(X,out(:,9:16),'violin',0,'bar',1,'errorbar',0,'meanline',0,'dots',1)
-                hold on
-                if dofit==1
-                    tt = Tuning(test);
-                    tt.GroupFit(fitmethod);
-                    if (10^-tt.groupfit.pval)<.05
-                        plot(tt.groupfit.x_HD,tt.groupfit.fit_HD,'Color',graycol,'LineWidth',3)
-                    else
-                        plot(tt.groupfit.x_HD,ones(1,numel(tt.groupfit.fit_HD))*mean(tt.y_mean),'Color',graycol,'LineWidth',3)
+                    errorbar(X,bar_Y(1:8),SEM(1:8),'.','Color',graycol,'LineWidth',2)
+                    
+                    %             pirateplot(X,out(:,1:8),'color',repmat([.3 .3 .3],8,1),'violin',0,'bar',1,'errorbar',0,'meanline',0,'dots',1);
+                    hold on
+                    set(gca,'xtick',[0 180],'xticklabel',{'CS+','CS-'},'TickLength',[0.03 0.025],'FontSize',14,'LineWidth',2);
+                    box off;
+                    set(gca,'color','none');
+                    drawnow;
+                    axis tight;box off;axis square;drawnow;alpha(.5);
+                    xlim([min(X)-mean(diff(X)) max(X)+mean(diff(X))])
+                    
+                    ylabel('Contrast Estimate [a.u.]')
+                    titl= title('Baseline');set(titl,'FontWeight','normal');
+                    if dofit==1
+                        tb = Tuning(base);
+                        tb.GroupFit(fitmethod);
+                        if (10^-tb.groupfit.pval)<.05
+                            plot(tb.groupfit.x_HD,tb.groupfit.fit_HD,'Color',graycol,'LineWidth',3)
+                        else
+                            plot(tb.groupfit.x_HD,ones(1,numel(tb.groupfit.fit_HD))*mean(tb.y_mean),'Color',graycol,'LineWidth',3)
+                        end
                     end
+                    figure(1000);
+                    subplot(1,sp,2);
+                    cmap  = Project.GetFearGenColors;
+                    cc= 0;
+                    for i = 9:16
+                        cc = cc+1;
+                        try
+                            h(cc)    = bar(X(cc),bar_Y(i),40,'facecolor',cmap(cc,:),'edgecolor','none','facealpha',.8);
+                        catch
+                            h(cc)    = bar(X(cc),bar_Y(i),40,'facecolor',cmap(cc,:),'edgecolor','none');
+                        end
+                        hold on
+                        errorbar(X(cc),bar_Y(i),SEM(i),'.','Color',cmap(cc,:),'LineWidth',2);
+                    end
+                    %     pirateplot(X,out(:,9:16),'violin',0,'bar',1,'errorbar',0,'meanline',0,'dots',1)
+                    hold on
+                    if dofit==1
+                        tt = Tuning(test);
+                        tt.GroupFit(fitmethod);
+                        if (10^-tt.groupfit.pval)<.05
+                            plot(tt.groupfit.x_HD,tt.groupfit.fit_HD,'Color',graycol,'LineWidth',3)
+                        else
+                            plot(tt.groupfit.x_HD,ones(1,numel(tt.groupfit.fit_HD))*mean(tt.y_mean),'Color',graycol,'LineWidth',3)
+                        end
+                    end
+                    
+                    %
+                    box off;
+                    set(gca,'color','none','xtick',[0 180],'xticklabel',{'CS+','CS-'},'TickLength',[0.03 0.025],'FontSize',14,'LineWidth',2);
+                    drawnow;
+                    axis tight;box off;axis square;drawnow;alpha(.5);
+                    xlim([min(X)-mean(diff(X)) max(X)+mean(diff(X))])
+                    title('Test','FontWeight','normal');
+                    
+                    EqualizeSubPlotYlim(gcf);
+                    
+                    if plot_timeband == 1
+                        out = self.get_betas_ROI_fullFIR(coords,namestr,r_sphere);
+                    end
+                    
+                    if ~isempty(coords)
+                        stit = supertitle(sprintf('[%3.1f %3.1f %3.1f] %s , \np_{test,uncorr,%d} = %05.3f',coords(1),coords(2),coords(3),namestr,fitmethod,10.^-tt.groupfit.pval));
+                    else
+                        stit = supertitle(sprintf('%s , p_{test,uncorr,%d} = %05.3f',namestr,fitmethod,10.^-tt.groupfit.pval));
+                    end
+                    
+                    
+                    cd(path2ndlevel)
+                    set(stit,'FontSize',16)
+                    set(gcf,'color','white')
+                    print(sprintf('%s_N%02d_fit%d_r600.png',namestr,self.total_subjects,fitmethod),'-dpng','-r600')
+                    
+                    figure(1001);
+                    clf
+                    cmap  = Project.GetFearGenColors;
+                    bar_Y = nanmean(bc.y);
+                    SEM   = nanstd(bc.y)./sqrt(self.total_subjects);
+                    cc= 0;
+                    for i = 1:8
+                        cc = cc+1;
+                        try
+                            h(cc)    = bar(X(cc),bar_Y(i),40,'facecolor',cmap(cc,:),'edgecolor','none','facealpha',.8);
+                        catch
+                            h(cc)    = bar(X(cc),bar_Y(i),40,'facecolor',cmap(cc,:),'edgecolor','none');
+                        end
+                        hold on
+                        errorbar(X(cc),bar_Y(i),SEM(i),'.','Color',cmap(cc,:),'LineWidth',2);
+                    end
+                    %     pirateplot(X,out(:,9:16),'violin',0,'bar',1,'errorbar',0,'meanline',0,'dots',1)
+                    hold on
+                    if dofit==1
+                        tbc = Tuning(bc);
+                        tbc.GroupFit(fitmethod);
+                        if (10^-tbc.groupfit.pval)<.05
+                            plot(tbc.groupfit.x_HD,tbc.groupfit.fit_HD,'Color',graycol,'LineWidth',3)
+                        else
+                            plot(tbc.groupfit.x_HD,ones(1,numel(tbc.groupfit.fit_HD))*mean(tbc.y_mean),'Color',graycol,'LineWidth',3)
+                        end
+                    end
+                    
+                    %
+                    box off;
+                    set(gca,'color','none','xtick',[0 180],'xticklabel',{'CS+','CS-'},'TickLength',[0.03 0.025],'FontSize',14,'LineWidth',2);
+                    drawnow;
+                    axis tight;box off;axis square;drawnow;alpha(.5);
+                    xlim([min(X)-mean(diff(X)) max(X)+mean(diff(X))])
+                    title('Test - Base','FontWeight','normal');
+                    print(sprintf('%s_N%02d_fit%d_BC_r600.png',namestr,self.total_subjects,fitmethod),'-dpng','-r600')
+                    
+                    
+                    
+                    if plot_timeband == 1
+                        %                                         print(sprintf('%s_N%02d_fit%d_r600_svg.svg',namestr,self.total_subjects,fitmethod),'-dsvg')
+                    end
+                    fprintf('Baseline fit with method %d: p = %05.3f, p_corr = %05.3f.\n',fitmethod,10.^-tb.groupfit.pval,10.^-tb.groupfit.pval*5)
+                    fprintf('Testphase fit with method %d: p = %05.3f, p_corr = %05.3f.\n',fitmethod,10.^-tt.groupfit.pval,10.^-tt.groupfit.pval*5)
+                    fprintf('Test-Base fit with method %d: p = %05.3f, p_corr = %05.3f.\n',fitmethod,10.^-tbc.groupfit.pval,10.^-tbc.groupfit.pval*5)
+                    
                 end
-                
-                %
-                box off;
-                set(gca,'color','none','xtick',[0 180],'xticklabel',{'CS+','CS-'},'TickLength',[0.03 0.025],'FontSize',14,'LineWidth',2);
-                drawnow;
-                axis tight;box off;axis square;drawnow;alpha(.5);
-                xlim([min(X)-mean(diff(X)) max(X)+mean(diff(X))])
-                title('Test','FontWeight','normal');
-                
-                EqualizeSubPlotYlim(gcf);
-                
-                if plot_timeband == 1
-                    out = self.get_betas_ROI_fullFIR(coords,namestr,r_sphere);
-                end
-                
-                if ~isempty(coords)
-                    stit = supertitle(sprintf('[%3.1f %3.1f %3.1f] %s , \np_{test,uncorr,%d} = %05.3f',coords(1),coords(2),coords(3),namestr,fitmethod,10.^-tt.groupfit.pval));
-                else
-                    stit = supertitle(sprintf('%s , p_{test,uncorr,%d} = %05.3f',namestr,fitmethod,10.^-tt.groupfit.pval));
-                end
-                cd(path2ndlevel)
-                set(stit,'FontSize',16)
-                set(gcf,'color','white')
-                print(sprintf('%s_N%02d_fit%d_r600.png',namestr,self.total_subjects,fitmethod),'-dpng','-r600')
-                
-                if plot_timeband == 1
-%                                         print(sprintf('%s_N%02d_fit%d_r600_svg.svg',namestr,self.total_subjects,fitmethod),'-dsvg')
-                end
-                fprintf('Baseline fit with method %d: p = %05.3f, p_corr = %05.3f.\n',fitmethod,10.^-tb.groupfit.pval,10.^-tb.groupfit.pval*5)
-                fprintf('Testphase fit with method %d: p = %05.3f, p_corr = %05.3f.\n',fitmethod,10.^-tt.groupfit.pval,10.^-tt.groupfit.pval*5)
-                
             end
             
         end
@@ -3047,7 +3452,7 @@ set(gcf,'Color','w')
                 end
                 data.x   = repmat(-135:45:180,self.total_subjects,1);
                 data.y   = squeeze(data_per_vox(:,9:16,n));
-                data.ids = 1:35;
+                data.ids = 1:self.total_subjects;
                 t = Tuning(data);
                 t.GroupFit(fitmethod);
                 pvals(n) = 10.^-t.groupfit.pval;
@@ -3326,18 +3731,18 @@ set(gcf,'Color','w')
                 end
             end
         end
-        function [r, rz] = connectivity_ROI(self)
+        function [r, rz] = connectivity_ROI(self,varargin)
             
             force = 0;
-            vis = 1;
-            savedfile = sprintf('%smidlevel/correlation_timecourses_5ROIs.mat',self.path_project);
-
+            vis =0;
+            savedfile = sprintf('%smidlevel/correlation_timecourses_5ROIs_R.mat',self.path_project);
+            
             
             custom_str = '_move_Tcon0_5ROIs_Fcon0';
             pathdummy = sprintf('%ssub004/run003/spm/model_04_FIR_14_10conds_00/VOIs_ns_timecourse%s.mat',self.path_project,custom_str);
-
-            namestr={'rHippoKahntWimmerLissekOnat4mm','ACCGeuterBingel_10mm_x0','lHippoKahntWimmerLissek','rAmyBingelOnat','lAmyDunsmoorBingel'};
-            simpleROIstr = {'rHC','ACC','lHC','rAMY','lAMY'};
+            
+            namestr={'ACCGeuterBingel_10mm_x0','rHippoKahntWimmerLissekOnat4mm','lHippoKahntWimmerLissek','rAmyBingelOnat','lAmyDunsmoorBingel'};
+            simpleROIstr = {'ACC','rHC','lHC','rAMY','lAMY'};
             ROIselect = 1:5;
             %
             if exist(savedfile) && force ==0
@@ -3348,7 +3753,7 @@ set(gcf,'Color','w')
                     %     fg=figure;fg.Position= [5 575 1885 423];fg.Color = [1 1 1 ];
                     for ph = [1 3];
                         file2data = strrep(strrep(pathdummy,'sub004',sprintf('sub%03d',self.ids(ns))),'run003',sprintf('run%03d',ph));
-                        load(file2data);
+                        xY = load(file2data);xY= xY.xY;
                         
                         X = [];
                         for nroi = ROIselect(:)'
@@ -3366,7 +3771,7 @@ set(gcf,'Color','w')
                         end
                         
                         
-                        load([self.subject{ns}.path_FIR(ph,4,14,'10conds') 'SPM.mat']);
+                        SPM = load([self.subject{ns}.path_FIR(ph,4,14,'10conds') 'SPM.mat']);SPM=SPM.SPM;
                         if ph == 3
                             nSessions = 1:2;
                         else
@@ -3381,9 +3786,10 @@ set(gcf,'Color','w')
                             nvol = self.subject{ns}.get_lastscan_cooldown(ph-1+nSess);
                             nuis0 =[nuis0; dumm(1:nvol,:)];
                         end
-          
+                        
                         %% CAVE LK This is Pearson, not spearman!
-                        [corr_Spearman_u(:,:,ns,ph) pval_Spearman_u(:,:,ns,ph)] = corr(X);
+                        [corr_Pearson_u(:,:,ns,ph) pval_Pearson_u(:,:,ns,ph)] = corr(X);
+                        [corr_Spearman_u(:,:,ns,ph) pval_Spearman_u(:,:,ns,ph)] = corr(X,'type','Spearman');
                         [corr_partial0_u(:,:,ns,ph) pval_partial0_u(:,:,ns,ph)] = partialcorr(X,nuis0);
                         [corr_partialZ_u(:,:,ns,ph) pval_partialZ_u(:,:,ns,ph)] = partialcorr(X,nuisZ);
                         
@@ -3400,27 +3806,34 @@ set(gcf,'Color','w')
                             X(spike_pos,nroi) = nan;
                             X(spike_neg,nroi) = nan;
                         end
-                        [corr_Spearman_despiked_u(:,:,ns,ph), pval_Spearman_despiked_u(:,:,ns,ph)] = corr(X,'rows','pairwise');
+                        [corr_Pearson_despiked_u(:,:,ns,ph), pval_Pearson_despiked_u(:,:,ns,ph)] = corr(X,'rows','pairwise');
                         
                     end
                 end
-                save(savedfile,'corr_Spearman_u','corr_partial0_u','corr_partialZ_u','corr_Spearman_despiked_u','pval_Spearman_u','pval_partial0_u','pval_partialZ_u','pval_Spearman_despiked_u');
+                save(savedfile,'corr_Pearson_u','corr_Spearman_u','corr_partial0_u','corr_partialZ_u','corr_Pearson_despiked_u','pval_Pearson_u','pval_Spearman_u','pval_partial0_u','pval_partialZ_u','pval_Pearson_despiked_u');
             end
-                
-                %         saveas(fg,strrep(pathdummy_T0,'spm/model_04_FIR_14_10conds_00/VOIs_ns_move_Tcon150_ACC4_Hippo4_Fcon0.mat','midlevel/timecourse_ACC_HC.png'),'png')
-           
+            
+            %         saveas(fg,strrep(pathdummy_T0,'spm/model_04_FIR_14_10conds_00/VOIs_ns_move_Tcon150_ACC4_Hippo4_Fcon0.mat','midlevel/timecourse_ACC_HC.png'),'png')
+            
             
             %
-            nroi1 = 1;
-            nroi2 = 2;
-            r2take = 'Spearman';
+            if nargin > 1
+                nroi1 = varargin{1};
+                nroi2 = varargin{2};
+            else
+                nroi1 = 1;
+                nroi2 = 2;
+            end
+            r2take = 'Pearson';
             switch r2take
+                case 'Pearson'
+                    r = squeeze(corr_Pearson_u(nroi1,nroi2,:,[1 3]));
                 case 'Spearman'
                     r = squeeze(corr_Spearman_u(nroi1,nroi2,:,[1 3]));
                 case 'partial_0'
-                     r = squeeze(corr_partial0_u(nroi1,nroi2,:,[1 3]));
+                    r = squeeze(corr_partial0_u(nroi1,nroi2,:,[1 3]));
                 case 'partial_z'
-                     r = squeeze(corr_partialZ_u(nroi1,nroi2,:,[1 3]));
+                    r = squeeze(corr_partialZ_u(nroi1,nroi2,:,[1 3]));
                 otherwise
                     print('Choose method please.\n')
             end
@@ -3429,12 +3842,12 @@ set(gcf,'Color','w')
             [ht, pt, ci, stats] = ttest(rz(:,1),rz(:,2));
             fprintf('Corr between %s and %s: M_rho = %05.3f vs  %05.3f , t = %03.2f, p = %04.4f.\n',simpleROIstr{nroi1},simpleROIstr{nroi2},mean(rz(:,1)),mean(rz(:,2)),stats.tstat,pt);
             if vis
-            self.plot_connectivity_ROI(r,nroi1,nroi2,r2take)
+                self.plot_connectivity_ROI(r,nroi1,nroi2,r2take)
             end
         end
         function plot_connectivity_ROI(self,r,nroi1,nroi2,typestr)
-           simpleROIstr = {'rHC','ACC','lHC','rAMY','lAMY'};
-             rz = fisherz(r);
+            simpleROIstr = {'ACC','rHC','lHC','rAMY','lAMY'};
+            rz = fisherz(r);
             [ht pt ci stats]= ttest(rz(:,1),rz(:,2))
             %% figure for paper
             clf
@@ -3450,9 +3863,9 @@ set(gcf,'Color','w')
             hold on;
             ylim([0 max(r(:))+.1]);
             ylabel('corr (r) [M +/- SEM]')
-            scatshift = randn(35,1)*.1;
-            scatter(ones(35,1)+scatshift,r(:,1),sc,'MarkerEdgeColor',scol,'MarkerFaceColor',scol,'MarkerFaceAlpha',.3,'MarkerEdgeAlpha',.8)
-            scatter(ones(35,1)*2+scatshift,r(:,2),sc,'MarkerEdgeColor',scol,'MarkerFaceColor',scol,'MarkerFaceAlpha',.3,'MarkerEdgeAlpha',.8)
+            scatshift = randn(self.total_subjects,1)*.1;
+            scatter(ones(self.total_subjects,1)+scatshift,r(:,1),sc,'MarkerEdgeColor',scol,'MarkerFaceColor',scol,'MarkerFaceAlpha',.3,'MarkerEdgeAlpha',.8)
+            scatter(ones(self.total_subjects,1)*2+scatshift,r(:,2),sc,'MarkerEdgeColor',scol,'MarkerFaceColor',scol,'MarkerFaceAlpha',.3,'MarkerEdgeAlpha',.8)
             box off
             bh = bar(fisherz_inverse(mean(rz)));
             set(bh,'FaceColor',[1 1 1],'FaceAlpha',.2,'EdgeColor',[.3 .3 .3],'LineWidth',2)
@@ -3478,11 +3891,11 @@ set(gcf,'Color','w')
             axis square
             set(gca,'FontSize',14);
             set(gcf,'Color','w')
-
+            
             st = supertitle(sprintf('Correlation %s x %s (%s)',simpleROIstr{nroi1},simpleROIstr{nroi2},typestr));set(st,'FontSize',16);
-                        cd(sprintf('%smidlevel/figures/',self.path_project));
-%             print corr_HC_ACC.svg -dsvg
-%             print(sprintf('corr_%s_%s.png',simpleROIstr{nroi1},simpleROIstr{nroi2}),'-dpng')
+            cd(sprintf('%smidlevel/figures/',self.path_project));
+            %             print corr_HC_ACC.svg -dsvg
+            %             print(sprintf('corr_%s_%s.png',simpleROIstr{nroi1},simpleROIstr{nroi2}),'-dpng')
         end
         function out = MVPA_ROI(self,namestr)
             finalsavepath = fullfile(self.path_project,'midlevel',sprintf('pattern_%s.mat',namestr));
