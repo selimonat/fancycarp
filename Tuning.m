@@ -139,6 +139,17 @@ classdef Tuning < handle
                 
                 %                 CONSTANT    = mean(y);
                 %                 y           = y-CONSTANT;%we are not interested    
+            elseif funtype == 18
+                result.fitfun = @(x,p) self.VonMises(x,p(1),p(2),p(3),p(4));%amp,kappa,centerX,offset
+                L             = [ -range(y(:))    0.1        0   min(y(:))-std(y)   eps ];
+                U             = [ range(y(:))      15        0   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];
+                %
+                %                 L             = [ eps             0.1       -22.5   min(y(:))-std(y)   eps ];
+                %                 U             = [ range(y(:))      15        22.5   max(y(:))+std(y)   std(y(:)+rand(length(y),1).*eps)*2 ];
+                %                 L      = [ eps                   0.1   eps     -pi   eps ];
+                %                 U      = [ min(10,range(y)*1.1)  20   2*pi   pi   10];
+                result.dof    = 4;
+                result.funname= 'vonmisses_mobile';
             end
             
             %% add some small noise in case of super-flat ratings
@@ -150,7 +161,7 @@ classdef Tuning < handle
             %if gabor or gaussian, make a grid-estimatation
             if funtype > 1
                 Init = self.RoughEstimator(x,y,result.fitfun,L(1:end-1),U(1:end-1));%[7.1053 15.5556 1.0382];
-            else %null model
+            else %null model 
                 Init = mean(y);
             end
             
@@ -165,10 +176,12 @@ classdef Tuning < handle
             try
                 [result.Est, result.Likelihood, result.ExitFlag]  = fmincon(result.likelihoodfun, Init, [],[],[],[],L,U,[],self.options);
                 result.Likelihood = result.likelihoodfun(result.Est);
+                result.Init       = Init;
             catch
                 result.Est        = Init;
                 result.Likelihood = result.likelihoodfun(result.Est);
                 result.ExitFlag   = 1;
+                result.Init = Init;
             end
             %% get the null fit
             null.fitfun     = @(x,p) repmat(p(1),length(x),1);
@@ -192,6 +205,7 @@ classdef Tuning < handle
             result.fit     = result.fitfun(result.x,result.Est)+CONSTANT;
             result.x_HD    = linspace(min(result.x),max(result.x),100);
             result.fit_HD = result.fitfun(result.x_HD,result.Est)+CONSTANT;
+    
             
             
             %% show fit if wanted
