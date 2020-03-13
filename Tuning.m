@@ -94,8 +94,8 @@ classdef Tuning < handle
                 result.funname= 'null';
                 result.paramname = {'amp'  'sigma_y'};
             elseif funtype == 2
-                result.fitfun = @(x,p) make_gaussian_fmri(x,p(1),p(2),p(3));%2 amp, std, offset
-                L           = [-range(y)*2    0       mean(y)-range(y)*2          .01    ];
+                result.fitfun = @(x,p) self.make_gaussian_fmri(x,p(1),p(2),p(3));%2 amp, std, offset
+                L           = [-range(y)*2    5       mean(y)-range(y)*2          .01    ];
                 U           = [range(y)*2     180      mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];%                
                 result.dof    = 3;
                 result.funname= 'gaussian';
@@ -216,7 +216,23 @@ classdef Tuning < handle
                 
                 %                 CONSTANT    = mean(y);
                 %                 y           = y-CONSTANT;%we are not interested
+            elseif funtype == 15
+                result.fitfun = @(x,p) self.make_gaussian_fmri_withsdterm(x,p(1),p(2),p(3));%2 amp, std, offset
+                L           = [-range(y)*2    5       mean(y)-range(y)*2          .01    ];
+                U           = [range(y)*2     180      mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];%
+                result.dof    = 3;
+                result.funname= 'gaussian';
+                result.paramname = {'amp' 'std' 'offset' 'sigma_y'};
+            elseif funtype == 16
+                result.fitfun = @(x,p) self.make_gaussian_fmri_withouthalf(x,p(1),p(2),p(3));%2 amp, std, offset
+                L           = [-range(y)*2    5       mean(y)-range(y)*2          .01    ];
+                U           = [range(y)*2     180      mean(y)+range(y)*2    std(y(:)+rand(length(y),1).*eps)*2 ];%
+                result.dof    = 3;
+                result.funname= 'gaussian';
+                result.paramname = {'amp' 'std' 'offset' 'sigma_y'};
+                
             end
+            
             %% set the objective function
             result.likelihoodfun  = @(params) sum(-log( normpdf( y - result.fitfun( x,params(1:end-1)) , 0,params(end)) ));
             %             result.likelihoodfun  = @(params) sum(-log( tpdf( y - result.fitfun( x,params(1:end-1)) ,params(end)) ));
@@ -377,6 +393,48 @@ classdef Tuning < handle
             %out      = amp.*exp(-tau*(x.^2)/2) - amp*sqrt(2*pi/tau)./d./XT;
             
             out      = amp.*exp(-(x./sd).^2/2) - amp*sqrt(2*pi*sd.^2)./d./XT;
+            
+          % out      = amp.*exp( - (0.5*(X./sd).^2 )) + offset;
+        end
+        function [out] = make_gaussian_fmri(X,amp,sd,offset)
+            %[out] = make_gaussian_fmri(X,amp,sd,offset);
+            %
+            %	Generates a Gaussian with AMP, SD and offset parameters. The center location is
+            %	fixed to zero.
+            %
+            
+            
+            % sigmaX   = fwhm;% ./2.35482;
+            out      = amp.*exp( - (0.5*(X./sd).^2 )) + offset;
+            
+
+
+        end
+        function [out] = make_gaussian_fmri_withsdterm(X,amp,sd,offset)
+            %[out] = make_gaussian_fmri(X,amp,sd,offset);
+            %
+            %	Generates a Gaussian with AMP, SD and offset parameters. The center location is
+            %	fixed to zero.
+            %
+            
+            
+            % sigmaX   = fwhm;% ./2.35482;
+            out      = amp.*(1/(sd*sqrt(2*pi))).*exp( - (0.5*(X./sd).^2 )) + offset;
+            
+            
+        end
+         function [out] = make_gaussian_fmri_withouthalf(X,amp,sd,offset)
+            %[out] = make_gaussian_fmri(X,amp,sd,offset);
+            %
+            %	Generates a Gaussian with AMP, SD and offset parameters. The center location is
+            %	fixed to zero.
+            %
+            
+            
+            % sigmaX   = fwhm;% ./2.35482;
+            out      = amp.*exp( - ((X./sd).^2 )) + offset;
+            
+            
         end
           function [out] = make_gaussian_fmri_zeromean_freeY(x,amp,sd,offset)            
             %
