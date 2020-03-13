@@ -1950,7 +1950,7 @@ classdef Group < Project
             versiontag = 0;
             prefix = 's6_wCAT_';
             namestring1stlevel = '10conds';
-            foldersuffix = sprintf('_within_N%02d',self.total_subjects);
+            foldersuffix = sprintf('_WITHIN_N%02d',self.total_subjects);
             bins2take = 1:self.orderfir;
             
             
@@ -1963,7 +1963,7 @@ classdef Group < Project
                 fprintf('Too many inputs. Please debug.')
                 keyboard;
             end
-            
+             
             fprintf('Starting 2nd Level for FIR model %02d, run %02d, named %s, version %d with foldersuffix ''%s''...\n',modelnum,nrun,namestring,versiontag,foldersuffix);
             
             path2ndlevel = fullfile(self.path_second_level,'FIR',sprintf('model_%02d_FIR_%02d_%s_b%02dto%02d_%s%s',modelnum,versiontag,namestring,bins2take(1),bins2take(end),self.nrun2phase{nrun},foldersuffix));
@@ -1995,12 +1995,10 @@ classdef Group < Project
             %
             % Here: defining chunks of contrasts to go for (+ N bins is done by loop later).
             
-            if any(strfind(namestring,'win')) && any(strfind(namestring,'8conds_BT'))
+            if strfind(namestring,'bin4win4_8conds_BT')
                 load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
-                if any(strfind(namestring,'bin4win4'))
-                    nrun = [1 3];
-                    cons2collectstruct = {127:134, [],141:148};%bin4win4 %this is correct for both model 4 and 44.
-                end
+                nrun = [1 3];
+                cons2collectstruct = {127:134, [],141:148}; %bin4win4 %this is correct for both model 4 and 44.
                 fprintf('You chose contrasts named:\n')
                 SPM.xCon(cons2collectstruct{1}).name
                 fprintf('.................................................\n')
@@ -2031,24 +2029,25 @@ classdef Group < Project
             %load(self.subject{1}.path_spmmat(nrun,modelnum)); %allows lookup of things
             % collect all subjects' con images for every cond
             if any(strfind(namestring,'win')) %here we don\t take single bins to 2ndlevel, so we loop through the CONS, not conds identified above
-                bc = 0;
-                for runloop = nrun(:)'
-                    if numel(nrun) > 1
-                        cons2collect = cons2collectstruct{runloop};
-                    end
-                    for con = cons2collect(:)'
-                        bc = bc+1;
-                        fprintf('\nCollecting con images of con %04d:\n',con)
-                        clear files
-                        fprintf('Factor %02d - Looping through subs: ',bc);
-                        for ns = 1:self.total_subjects
-                            fprintf('%02d - ',ns)
-                            files(ns,:) = cellstr([self.subject{ns}.path_FIR(runloop,modelnum,order,namestring1stlevel), sprintf('%scon_%04d.nii',prefix,con)]);
+                for ns=1:self.total_subjects
+                    bc = 0;
+                    for runloop = nrun(:)'
+                        if numel(nrun) > 1
+                            cons2collect = cons2collectstruct{runloop};
                         end
-                        fprintf('completo.')
-                        matlabbatch{1}.spm.stats.factorial_design.des.anova.icell(bc).scans = cellstr(files); %one bin at a time, but all subs
+                        for con = cons2collect(:)'
+                            bc = bc+1;
+                            fprintf('\nCollecting con images of con %04d:\n',con)
+                            fprintf('Factor %02d - Looping through subs: ',bc);
+                            fprintf('%02d - ',ns)
+                            files(bc,:) = cellstr([self.subject{ns}.path_FIR(runloop,modelnum,order,namestring1stlevel), sprintf('%scon_%04d.nii',prefix,con)]);
+                            
+                        end
                         
+                        fprintf('completo.')
                     end
+                    matlabbatch{1}.spm.stats.factorial_design.des.anovaw.fsubject(ns).scans = cellstr(files);
+                    matlabbatch{1}.spm.stats.factorial_design.des.anovaw.fsubject(ns).conds = 1:16;
                 end
             else
                 bc = 0;
@@ -2071,42 +2070,12 @@ classdef Group < Project
                     end
                 end
             end
-            
-            % specify rest of the model
-            matlabbatch{1}.spm.stats.factorial_design.dir = cellstr(path2ndlevel);
-            matlabbatch{1}.spm.stats.factorial_design.des.anova.dept = dependencies;
-            matlabbatch{1}.spm.stats.factorial_design.des.anova.variance = unequalvar;
-            matlabbatch{1}.spm.stats.factorial_design.des.anova.gmsca = 0;
-            matlabbatch{1}.spm.stats.factorial_design.des.anova.ancova = 0;
-            if cov == 1
-                matlabbatch{1}.spm.stats.factorial_design.cov = covstrct;
-            else
-                matlabbatch{1}.spm.stats.factorial_design.cov = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
-            end
-            matlabbatch{1}.spm.stats.factorial_design.multi_cov = struct('files', {}, 'iCFI', {}, 'iCC', {});
-            matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none = 1;
-            matlabbatch{1}.spm.stats.factorial_design.masking.im = -Inf;
+         
+           %% new
             groupmask = [self.path_groupmeans sprintf('/thr20_ave_wCAT_s3_ss_data_N%02d.nii',self.total_subjects)];
-            if exist(groupmask)
-                matlabbatch{1}.spm.stats.factorial_design.masking.em = {groupmask};
-            else
-                matlabbatch{1}.spm.stats.factorial_design.masking.em = {[self.path_groupmeans '/ave_wCAT_s3_ss_data.nii']};
-            end
-            
-            matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit = 1;
-            matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
-            matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm = 1;
-            
-            
-            matlabbatch{2}.spm.stats.fmri_est.spmmat = {[path2ndlevel filesep 'SPM.mat']};
-            %             matlabbatch{2}.spm.stats.fmri_est.write_residuals = 0;
-            matlabbatch{2}.spm.stats.fmri_est.method.Classical = 1;
-            %% new
-            matlabbatch{1}.spm.stats.factorial_design.dir = '<UNDEFINED>';
-            matlabbatch{1}.spm.stats.factorial_design.des.anovaw.fsubject(1).scans = {'/projects/crunchie/treatgen/data/sub004/run001/spm/model_04_FIR_14_10conds_00/con_0143.nii,1'};
-            matlabbatch{1}.spm.stats.factorial_design.des.anovaw.fsubject(1).conds = 1;
-            matlabbatch{1}.spm.stats.factorial_design.des.anovaw.fsubject(2).scans = {'/projects/crunchie/treatgen/data/sub004/run001/spm/model_04_FIR_14_10conds_00/con_0143.nii,1'};
-            matlabbatch{1}.spm.stats.factorial_design.des.anovaw.fsubject(2).conds = 1;
+
+            matlabbatch{1}.spm.stats.factorial_design.dir = cellstr(path2ndlevel);
+           
             matlabbatch{1}.spm.stats.factorial_design.des.anovaw.dept = 1;
             matlabbatch{1}.spm.stats.factorial_design.des.anovaw.variance = 1;
             matlabbatch{1}.spm.stats.factorial_design.des.anovaw.gmsca = 0;
@@ -2115,16 +2084,87 @@ classdef Group < Project
             matlabbatch{1}.spm.stats.factorial_design.multi_cov = struct('files', {}, 'iCFI', {}, 'iCC', {});
             matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none = 1;
             matlabbatch{1}.spm.stats.factorial_design.masking.im = 1;
-            matlabbatch{1}.spm.stats.factorial_design.masking.em = {''};
+            matlabbatch{1}.spm.stats.factorial_design.masking.em = {groupmask};
             matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit = 1;
             matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
             matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm = 1;
             
+            matlabbatch{2}.spm.stats.fmri_est.spmmat = {[path2ndlevel filesep 'SPM.mat']};
+            %             matlabbatch{2}.spm.stats.fmri_est.write_residuals = 0;
+            matlabbatch{2}.spm.stats.fmri_est.method.Classical = 1;
             
             spm_jobman('run',matlabbatch);
             done = toc(start);
             fprintf('\n\nDone estimating 2nd Level for FIR model %d, called %s %s, version %d, N = %02d subs in %05.2f mins. (Simple one-way anova)\n',modelnum,namestring,foldersuffix,versiontag,length(self.ids),done./60)
             fprintf('Output folder is: %s\n',path2ndlevel)
+        end
+        function Fit2ndlevel_FIR_owncon(self,nrun,modelnum,order,namestring,con_name)
+            start = tic;
+            versiontag = 0;
+            bins2take = 1:14;
+            namestring1stlevel = '10conds';
+            clear2ndlevel = 1;
+            
+            switch con_name
+                case 'con_bc_simplegauss_mc'
+                    con_short = 'simplegauss';
+                case 'con_bc_averagegauss_mc'
+                    con_short = 'avegauss';
+                case 'con_bc_ind_gauss_mc'
+                    con_short = 'indgauss';
+            end
+            foldersuffix = sprintf('_%s_N%02d',con_short,self.total_subjects);
+            fprintf('Starting 2nd Level for FIR model %02d, run %02d, named %s, with foldersuffix ''%s''...\n',modelnum,nrun,con_short,foldersuffix);
+
+
+            path2ndlevel = fullfile(self.path_second_level,'FIR',sprintf('model_%02d_FIR_%02d_%s_b%02dto%02d_%s%s',modelnum,versiontag,namestring,bins2take(1),bins2take(end),self.nrun2phase{nrun},foldersuffix));
+            
+            if exist(path2ndlevel) && (clear2ndlevel==1)
+                system(sprintf('rm -fr %s*',strrep(path2ndlevel,'//','/')));
+            end%this is AG style.
+            if ~exist(path2ndlevel)
+                mkdir(path2ndlevel);
+            end
+            
+            %% new
+            
+            for ns = 1:self.total_subjects
+                files(ns,:) = [self.subject{ns}.path_FIR(3,modelnum,order,namestring1stlevel) con_name '.nii'];
+            end
+            
+            clear matlabbatch 
+            groupmask = [self.path_groupmeans sprintf('/thr20_ave_wCAT_s3_ss_data_N%02d.nii',self.total_subjects)];
+            
+            matlabbatch{1}.spm.stats.factorial_design.dir = cellstr(path2ndlevel);
+            matlabbatch{1}.spm.stats.factorial_design.des.t1.scans = cellstr(files);
+            matlabbatch{1}.spm.stats.factorial_design.cov = struct('c', {}, 'cname', {}, 'iCFI', {}, 'iCC', {});
+            matlabbatch{1}.spm.stats.factorial_design.multi_cov = struct('files', {}, 'iCFI', {}, 'iCC', {});
+            matlabbatch{1}.spm.stats.factorial_design.masking.tm.tm_none = 1;
+            matlabbatch{1}.spm.stats.factorial_design.masking.im = 1;
+            matlabbatch{1}.spm.stats.factorial_design.masking.em = {groupmask};
+            matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit = 1;
+            matlabbatch{1}.spm.stats.factorial_design.globalm.gmsca.gmsca_no = 1;
+            matlabbatch{1}.spm.stats.factorial_design.globalm.glonorm = 1;
+
+                       
+            matlabbatch{2}.spm.stats.fmri_est.spmmat = {[path2ndlevel filesep 'SPM.mat']};
+            %             matlabbatch{2}.spm.stats.fmri_est.write_residuals = 0;
+            matlabbatch{2}.spm.stats.fmri_est.method.Classical = 1;
+            
+            spm_jobman('run',matlabbatch);
+            done = toc(start);
+            fprintf('\n\nDone estimating 2nd Level for FIR model %d, called %s %s, version %d, N = %02d subs in %05.2f mins. (Simple one-way anova)\n',modelnum,namestring,foldersuffix,versiontag,length(self.ids),done./60)
+            fprintf('Output folder is: %s\n',path2ndlevel)
+        end
+        function Fit2ndlevel_FIR_Bay
+            path2spm = '/projects/crunchie/treatgen/data/spm/FIR/model_04_FIR_00_bin4win4_8conds_BT_b01to14_B_N35_repl';
+           clear matlabbatch
+            %%
+            matlabbatch{1}.spm.stats.fmri_est.spmmat(1) =cellstr( [path2spm '/SPM.mat']);
+            matlabbatch{1}.spm.stats.fmri_est.write_residuals = 0;
+            matlabbatch{1}.spm.stats.fmri_est.method.Bayesian2 = 1;
+            spm_jobman('run',matlabbatch);
+
         end
         
         function Con2ndlevel_FIR(self,nrun,modelnum,namestring,varargin)
@@ -3036,13 +3076,15 @@ classdef Group < Project
         end
         %% ROI methods
         function [out, base, test,tb,tt, tbc,Y] = get_betas_ROI(self,coords,namestr,varargin)
-            %             path2ndlevel = fullfile(self.path_project,sprintf('spm/FIR/model_04_FIR_00_bin4win4_8conds_BT_b01to14_B_N%02d/',self.total_subjects));
-            path2ndlevel = fullfile(self.path_project,sprintf('spm/FIR/model_04_FIR_00_bin4win4_Gauss_BT_b01to14_B_N%02d/',self.total_subjects));
+%                         path2ndlevel = fullfile(self.path_project,sprintf('spm/FIR/model_04_FIR_00_bin4win4_8conds_BT_b01to14_B_N%02d/',self.total_subjects));
+%             path2ndlevel = fullfile(self.path_project,sprintf('spm/FIR/model_04_FIR_00_bin4win4_Gauss_BT_b01to14_B_N%02d/',self.total_subjects));
+                        path2ndlevel = fullfile(self.path_project,sprintf('spm/FIR/model_04_FIR_00_bin4win4_8conds_BT_b01to14_B_WITHIN_N%02d/',self.total_subjects));
+
             cd(path2ndlevel);
             
-            vis = 0;
-            dofit = 0;
-            roionly = 1; %skip the plotting and fitting and all.
+            vis = 1;
+            dofit = 1;
+            roionly = 0; %skip the plotting and fitting and all.
             fitmethod = self.selected_fitfun;
             plot_timeband = 0;
             
@@ -3184,7 +3226,7 @@ classdef Group < Project
                     end
                     
                     if ~isempty(coords)
-                        stit = supertitle(sprintf('[%3.1f %3.1f %3.1f] %s , \np_{test,uncorr,%d} = %05.3f',coords(1),coords(2),coords(3),namestr,fitmethod,10.^-tt.groupfit.pval));
+                        stit = supertitle(sprintf('[%3.1f %3.1f %3.1f] %s , \np_{test,uncorr,%d} = %05.3f, p(corr) = %05.3f',coords(1),coords(2),coords(3),namestr,fitmethod,10.^-tt.groupfit.pval,5*10.^-tt.groupfit.pval));
                     else
                         stit = supertitle(sprintf('%s , p_{test,uncorr,%d} = %05.3f',namestr,fitmethod,10.^-tt.groupfit.pval));
                     end
@@ -3193,7 +3235,7 @@ classdef Group < Project
                     cd(path2ndlevel)
                     set(stit,'FontSize',16)
                     set(gcf,'color','white')
-                    print(sprintf('%s_N%02d_fit%d_r600.png',namestr,self.total_subjects,fitmethod),'-dpng','-r600')
+%                     print(sprintf('%s_N%02d_fit%d_r600.png',namestr,self.total_subjects,fitmethod),'-dpng','-r600')
                     
                     figure(1001);
                     clf
@@ -3229,8 +3271,9 @@ classdef Group < Project
                     drawnow;
                     axis tight;box off;axis square;drawnow;alpha(.5);
                     xlim([min(X)-mean(diff(X)) max(X)+mean(diff(X))])
-                    title('Test - Base','FontWeight','normal');
-                    print(sprintf('%s_N%02d_fit%d_BC_r600.png',namestr,self.total_subjects,fitmethod),'-dpng','-r600')
+                    title(sprintf('Test - Base \np_{test,uncorr,%d} = %05.3f, p(corr) = %05.3f',fitmethod,10.^-tbc.groupfit.pval,5*10.^-tbc.groupfit.pval));
+                    set(gcf,'Color','w')
+%                     print(sprintf('%s_N%02d_fit%d_BC_r600.png',namestr,self.total_subjects,fitmethod),'-dpng','-r600')
                     
                     
                     
