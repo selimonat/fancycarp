@@ -397,9 +397,9 @@ classdef Subject < Project
                         findtrial = find(a.presentation.ratepain(:));
                         trialind{run} = [findtrial' a.presentation.tTrial];
                     catch
-                        warning('Problem while loading paradigm at run %d.',run)
+                        warning('Problem while loading paradigm for sub %d at run %d.',self.id, run)
                         out(:,run) = nan(4,1);
-                        temp(run) = nan(4,1);
+                        temp(run) = nan;
                     end
                 end
             else
