@@ -921,7 +921,11 @@ classdef Group < Project
             
             for ns = 1:self.total_subjects
                 for ph = 1:4
+                    try
                     tempr(ns,ph) = self.subject{ns}.paradigm{ph}.presentation.pain.tonic(1);
+                    catch
+                        tempr(ns,ph) = nan;
+                    end
                 end
             end
             
