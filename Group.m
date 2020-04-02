@@ -77,6 +77,10 @@ classdef Group < Project
                     end
                 end
                 fprintf('Saving...');
+                filepath = fileparts(filename);
+                if ~exist(filepath)
+                    mkdir(filepath)
+                end
                 save(filename,'relief');
                 fprintf('done\n');
             else
@@ -109,7 +113,19 @@ classdef Group < Project
                 thresh(ns) = self.subject{ns}.get_threshold;
             end
         end
-        
+        function tempr  = get_tempr(self)
+            for ns = 1:self.total_subjects
+                for ph = 1:4
+                    try
+                        tempr(ns,ph) = self.subject{ns}.paradigm{ph}.presentation.pain.tonic(1);
+                    catch
+                        warning('Problem getting temp for sub %d at phase %d, putting nan.',self.ids(ns),ph);
+                        tempr(ns,ph) = nan;
+                    end
+                end
+            end
+            
+        end
         function plot_grouprelief_bar(self)
             plottype = 'bar';
             
@@ -412,7 +428,7 @@ classdef Group < Project
             lwt = 3;%linewidth tuning
             lweb = 3; %linewidth errorbar;
             fs = 15;
-            vio = 0;
+            vio = 1;
             baryn = 1;
             erb = 0;
             ml = 0;
@@ -430,7 +446,7 @@ classdef Group < Project
                 spn = varargin{2};
                 sp1 = varargin{3};
             else
-                fighand = figure;
+                fighand = figure(3);
                 set(fighand,'Color','w')
                 spn = 4;
                 sp1 = 1;
@@ -522,14 +538,34 @@ classdef Group < Project
             
             fprintf('Baseline fit with method %d: p = %05.3f.\n',method,10.^-tb.groupfit.pval)
             fprintf('Testphase fit with method %d: p = %05.3f.\n',method,10.^-tt.groupfit.pval)
+              alldatapoints = [Vectorize(relief(:,1:8,[1 2 3]))];
+            
+            ylims = [-1.7 2.3];%best for this sample: -1.6 1.2 BCT, for both: -1.7 2.3
+            yticki = [ -1 0 1 2];
+            ylims = [-1.6 1.2];%best for this sample: -1.6 1.2 BCT, 
+            yticki = [-1.5 -1 0 .5 1];
+            for n = 1:3
+                subplot(1,spn,n);
+                ylim([min(ylims) max(ylims)]);% ylim([-.301 .243])
+                set(gca,'YTick',yticki);
+            end
+            
+            fh = gcf; fh.Position  =  [500   1000   1200  600];
             
             %baseline corrected version.
             relief = self.get_relief('zscore');
             bc = relief(:,1:8,3)-relief(:,1:8,1);
-            subplot(1,spn,4);%figure;
+            fh4=figure(4);
+            set(fh4,'Color','w')
+%             subplot(1,spn,4);%figure;
             pirateplot(xlev,bc,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
-            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
-            ylabel('pain relief [VAS, z-score]','FontSize',fs+1)
+                      ylabel('pain relief [VAS, z-score]','FontSize',fs+1)
+            hold on
+             for n = 1:8
+                errorbar(xlev(n),nanmean(bc(:,n)),nanstd(bc(:,n))./sqrt(self.total_subjects),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
+            end
+              set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
+            
             test2.x = repmat(-135:45:180,self.total_subjects,1);
             test2.y = bc;
             test2.ids = self.ids;
@@ -538,7 +574,7 @@ classdef Group < Project
             t2.GroupFit(method);
             linecol = [.3 .3 .3];
             
-            subplot(1,spn,4);
+%             subplot(1,spn,4);
             hold on;
             if 10.^-t2.groupfit.pval < alpha_level
                 plot(t2.groupfit.x_HD,t2.groupfit.fit_HD,'k','LineWidth',lwt,'Color',linecol,'LineStyle','-');
@@ -546,23 +582,30 @@ classdef Group < Project
                 plot([-135 180],repmat(mean(t2.y_mean),1,2),'k','LineWidth',lwt,'Color',linecol);
                 
             end
-            title('Test - Base','FontSize',fs+1)
+            title('Study 2','FontSize',fs+1)
             
-            alldatapoints = [Vectorize(relief(:,1:8,[1 2 3]))];
-            
-            yticki{1} = -1.5:.75:1.5;
-            yticki{2} = -1.5:.75:1.5;
-            yticki{3} = -1.5:.75:1.5;
-            for n = 1:3
-                subplot(1,spn,n);
-                ylim([min(alldatapoints) max(alldatapoints)]);% ylim([-.301 .243])
-                set(gca,'YTick',yticki{n});
-            end
+          
             [min(t2.y(:)) max(t2.y(:))]
-            subplot(1,4,4);
-            ylim([-2.8 2.8]) %-2.8 2.8 is like behavioral pilot, -2 2 would be enough for MRI only.
-            set(gca,'YTick',[-2 -1 0 1 2]);
-            fh = gcf; fh.Position  =  [728   587   1100  400];
+            %             subplot(1,4,4);
+            %ylim([-1.7 2])
+            %yticki = [-1.5 -.5 0 .5 1.5];
+            ylim([-2.72 2]) % -1.7 1.9 would be enough for MRI only. for n=39 bc
+            yticki = -2:1:2;
+            %-2.8 2.8 is like behavioral pilot, -1.7 1.9 would be enough for MRI only. for n=39 bc
+            set(gca,'YTick',yticki);
+            fh = gcf; fh.Position  =  [728   587 330 550];
+            cd('C:\Users\Lea\Documents\Experiments\TreatgenMRI\midlevel\figures\')
+%             export_fig(gcf,'Fig2_behave_results_MRI_bc_grandYlim.pdf','-dpdf','-painters')
+%             export_fig(gcf,'Fig2_behave_results_MRI_bc_grandYlim.png')
+            ylim([-2 2]) % -1.7 1.9 would be enough for MRI only. for n=39 bc
+            yticki = -2:1:2;
+            %-2.8 2.8 is like behavioral pilot, -1.7 1.9 would be enough for MRI only. for n=39 bc
+            set(gca,'YTick',yticki);
+            fh = gcf; fh.Position  =  [728   587 330 550];
+            cd('C:\Users\Lea\Documents\Experiments\TreatgenMRI\midlevel\figures\')
+%             export_fig(gcf,'Fig2_behave_results_MRI_bc_grandYlim_outlcorr.pdf','-dpdf','-painters')
+%             export_fig(gcf,'Fig2_behave_results_MRI_bc_grandYlim_outlcorr.png')
+          
         end
         function [relief] = plot_relief_cond_placebo(self,varargin)
             
@@ -806,7 +849,6 @@ classdef Group < Project
             supertitle(self.path_project,1);
             set(gcf,'Color','w');
         end
-        
         function plot_pain_vs_relief(self,ph)
             
             cmap = jet(self.total_subjects);
@@ -816,7 +858,7 @@ classdef Group < Project
             for ns = 1:self.total_subjects;
                 [~, pain, relief] = self.subject{ns}.get_pmod_PR(ph);
                 rss(ns) = corr(pain',relief);
-                subplot(6,6,ns);
+                subplot(5,8,ns);
                 plot(pain,relief','o','Color',cmap(ns,:),'MarkerFaceColor',cmap(ns,:))
                 ls = lsline;set(ls,'Color','k','LineWidth',2)
                 axis square
@@ -919,19 +961,10 @@ classdef Group < Project
             xpain = [1 5 9];
             xrelief = xpain+1;
             
-            for ns = 1:self.total_subjects
-                for ph = 1:4
-                    try
-                    tempr(ns,ph) = self.subject{ns}.paradigm{ph}.presentation.pain.tonic(1);
-                    catch
-                        tempr(ns,ph) = nan;
-                    end
-                end
-            end
-            
-            tempr(:,3) = mean(tempr(:,3:4),2);
+            tempr = self.get_tempr;
+            % average two test sessions
+            tempr(:,3) = nanmean(tempr(:,3:4),2);
             tempr(:,4) = [];
-            
             
             figure(1005);
             clf
