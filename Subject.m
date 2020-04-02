@@ -341,7 +341,7 @@ classdef Subject < Project
                         raw{run} = dummy(:,3);
                         triallist{run} = a.presentation.dist';
                     catch
-                        warning('Problem while loading paradigm at run %d.',run)
+                        warning('Problem while loading paradigm for sub %d at run %d.',self.id, run)
                         raw{run} = NaN;
                         triallist{run} = NaN;
                     end
@@ -469,6 +469,9 @@ classdef Subject < Project
                 end
             elseif strcmp(corrtype,'raw')
                 out.y = out.y;
+            else 
+                warning('Unknown correction type as input, returning raw values.')
+                out.y = out.y;
             end
             
             M = [];
@@ -553,6 +556,12 @@ classdef Subject < Project
                     R.ids = self.id;
                     R.y = R.y(:)';
                     R.x = R.x(:)';
+                elseif strcmp(datatype,'zscore_bc')
+                    R.y_t = self.get_relief_percond(run,'zscore');
+                    R.y_b = self.get_relief_percond(1,'zscore');
+                    R.y   = nanmean(R.y_t,1)-nanmean(R.y_b,1);
+                    R.x = self.realconds;
+                    R.ids = self.id;
                 end
                 
                 if isempty(R.y)
