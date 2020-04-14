@@ -31,6 +31,8 @@ classdef Subject < Project
         dicom_target_run  = [];
         derivatives       = [0 0];%specifies expansion degree of the cHRF when running models.
         scr_ok            = [];
+        kill_unconfirmed  = 0;
+        kill_nan          = 1;
     end
     properties (SetAccess = private)
         id
@@ -340,27 +342,32 @@ classdef Subject < Project
                         dummy = a.log.ratings.relief;
                         raw{run} = dummy(:,3);
                         triallist{run} = a.presentation.dist';
+                        confirmed{run} = a.log.ratings.relief(:,4);
                     catch
                         warning('Problem while loading paradigm for sub %d at run %d.',self.id, run)
                         raw{run} = NaN;
                         triallist{run} = NaN;
+                        confirmed{run} = NaN;
                     end
                 elseif run == 5
                     a = self.get_paradigm(3);
                     raw{run} = a.log.ratings.relief(:,3);
                     triallist{run} = a.presentation.dist(:);
+                    confirmed{run} = a.log.ratings.relief(:,4);
                     try
                         a = self.get_paradigm(4);
                         raw{run} = [raw{run}; a.log.ratings.relief(:,3)];
                         triallist{run} = [triallist{run}; a.presentation.dist'];
+                        confirmed{run} = [confirmed{run}; a.log.ratings.relief(:,4)];
                     end
                 end
             end
-            
+            %now create the out struct
             for r = 1:length(raw)
                 out{r}.x = [];
                 out{r}.y = [];
                 out{r}.ids = [];
+                conf{r} = [];
                 cc = 0;
                 for cond = conds
                     cc = cc+1;
@@ -368,6 +375,7 @@ classdef Subject < Project
                     out{r}.x = [out{r}.x repmat(cond,1,sum(ind))];
                     out{r}.y = [out{r}.y raw{r}(ind)'];
                     out{r}.ids = self.id;
+                    conf{r} = [conf{r} confirmed{r}(ind)'];
                 end
             end
             
@@ -375,6 +383,30 @@ classdef Subject < Project
                 out = out{end};
                 raw = raw{end};
                 triallist = triallist{end};
+                confirmed = conf{end};
+            end
+            if self.kill_unconfirmed ==1
+                warning('Kicking unconfirmed trials!')
+                 if numel(runs)==1
+                    out.x(confirmed==0)=[];
+                    out.y(confirmed==0)=[];
+                else
+                    for r = 1:numel(runs)
+                        out{r}.x(confirmed==0)=[];
+                        out{r}.y(confirmed==0)=[];
+                    end
+                 end
+            end
+            if self.kill_nan
+                if numel(runs)==1
+                    out.x(isnan(out.y))=[];
+                    out.y(isnan(out.y))=[];
+                else
+                    for r = 1:numel(runs)
+                        out{r}.x(isnan(out{r}.y))=[];
+                        out{r}.y(isnan(out{r}.y))=[];
+                    end
+                end
             end
         end
         
@@ -505,6 +537,9 @@ classdef Subject < Project
             elseif strcmp(type,'zscore')
                 if run == 5
                     run = [3 4];
+                    if self.id == 15
+                        run = 3;
+                    end
                 end
                 ratings = [];
                 rc = 0;
@@ -552,6 +587,7 @@ classdef Subject < Project
                     R = self.get_rating(run);
                 elseif strcmp(datatype,'zscore')
                     R.y = self.get_relief_percond(run,'zscore');
+                    R.y(isnan(R.y))=0;
                     R.x = repmat(self.realconds,size(R.y,1),1);
                     R.ids = self.id;
                     R.y = R.y(:)';
@@ -1802,6 +1838,43 @@ classdef Subject < Project
             grid off;box off;
             ylim([-2 32]);
             drawnow;
+        end
+        function plot_keylog(self,nrun)
+            p = self.get_paradigm(nrun);
+            ntrials = max(p.log.ratings.relief(:,2));
+            pain_confirmed = p.log.ratings.pain(1:ntrials,4);
+            rel_confirmed  = p.log.ratings.relief(1:ntrials,4);
+            first_face = p.out.log(find(p.out.log(:,2)==13,1,'first'),1);%marks onset of real experiment
+            
+            rate_pain_on  = p.out.log(p.out.log(:,2)==9,1);
+            rate_pain_off = p.out.log(p.out.log(:,2)==10,1);
+            rate_treat_on  = p.out.log(p.out.log(:,2)==11,1);
+            rate_treat_off =  p.out.log(p.out.log(:,2)==12,1);
+            thermode_off  = p.out.log(p.out.log(:,2)==18,1);
+            ind_treat  = find((logical(rate_treat_on>first_face) & logical(rate_treat_on<thermode_off))); %pain ratings between first trial and before thermode off
+            treat_on_oi = rate_treat_on(ind_treat);
+            treat_off_oi = rate_treat_off(ind_treat);
+            ind_pain = find((logical(rate_pain_on>first_face) & logical(rate_pain_on<thermode_off))); %pain ratings between first trial and before thermode off
+            ind_pain = [ind_pain(1)-1; ind_pain]; %include tonic pain rating before first face
+            pain_on_oi = rate_pain_on(ind_pain);
+            pain_off_oi = rate_pain_off(ind_pain);
+            n_ind= length(ind_pain);
+            
+            t_button = p.out.log(p.out.log(:,2)==7,1); %t_button = t_button(t_button>pain_on_oi(1));t_button = t_button(t_button<pain_off_oi(end)); %this also contains relief ratings, though
+            id_button = p.out.log(p.out.log(:,2)==7,3); % id_button = id_button(t_button>pain_on_oi(1));id_button = id_button(t_button<pain_on_oi(end)); %this still contains relief ratings, though
+            time_select = logical(t_button>pain_on_oi(1)) & logical(t_button<thermode_off);
+            % bpoi = ismember(id_button,[confirm increase decrease]);
+            id_button(id_button==0)=45; % for plotting
+            figure
+            plot(t_button(time_select),id_button(time_select),'bo')
+            hold on;for n=1:length(pain_on_oi);l=line(repmat(pain_on_oi(n),2,1),ylim);set(l,'Color','g','LineStyle',':');end
+            hold on;for n=1:length(pain_off_oi);l=line(repmat(pain_off_oi(n),2,1),ylim);set(l,'Color','r','LineStyle',':');end
+            hold on;for n=1:length(treat_on_oi);l=line(repmat(treat_on_oi(n),2,1),ylim);set(l,'Color','g','LineStyle','-');end
+            hold on;for n=1:length(treat_off_oi);l=line(repmat(treat_off_oi(n),2,1),ylim);set(l,'Color','r','LineStyle','-');end
+    
+            ylim([44 53])
+            set(gca,'YTick',[44 49 51 52],'YTickLabel',{'code=0','increase','decrease','confirm'})
+            title(sprintf('sub %02d, run %d',self.id,nrun));
         end
         function plot_motionparams(self,nrun)
             dummy = self.get_param_motion(nrun);
