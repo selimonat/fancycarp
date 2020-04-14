@@ -204,6 +204,32 @@ classdef Project < handle
             end
             warning('on','all');
         end
+        function fix_rating(self, ratings)
+            reliefinfo = [3	7	4	32	-1;
+                11	15	1	3	-1;
+                15	20	2	1	-1;
+                15	20	3	22	-1;
+                17	22	1	1	-1;
+                20	25	3	10	-1;
+                20	25	3	25	-1;
+                21	26	1	17	-1;
+                21	26	1	19	-1;
+                21	26	1	23	-1;
+                21	26	2	16	-1;
+                21	26	4	41	-1;
+                21	26	4	43	-1;
+                21	26	4	45	-1;
+                28	35	1	3	-1;
+                28	35	1	5	-1;
+                28	35	3	24	-1;
+                34	43	3	23	-1;
+                35	44	4	4	-1;
+                38	48	1	1	-1;
+                39	49	3	8	-1];
+            
+            paininfo = [ 21    26     1     3    -1;     39    49     3     3    -1];
+            
+        end
         function DicomDownload(self,source,destination)
             % Will download all the dicoms, convert them and merge them to
             % 4D.
@@ -713,7 +739,20 @@ classdef Project < handle
             %%
             
             condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
-            cmap  = GetFearGenColors;
+%             cmap  = GetFearGenColors;
+            cmap  = [142 166 134;...
+                    248 206 83;...
+                    251 167 69;...
+                    220 95 87;...
+                    186 75 119;...
+                    102 86 124;...
+                    70 98 157;...
+                    61 126 155;...
+                    150 60 53;...%dark red
+                    125 125 125]... %grey
+                    ./255;
+
+
             tbar  = length(Y);
             for i = 1:tbar
                 try
