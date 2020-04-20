@@ -204,7 +204,7 @@ classdef Project < handle
             end
             warning('on','all');
         end
-        function fix_rating(self, ratings)
+        function reliefinfo = get_bug_trials(self)
             reliefinfo = [3	7	4	32	-1;
                 11	15	1	3	-1;
                 15	20	2	1	-1;
