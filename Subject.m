@@ -399,10 +399,12 @@ classdef Subject < Project
             end
             if self.kill_nan
                 if numel(runs)==1
+                    warning('Kicking %d Nans out for sub %d, run %d.',sum(isnan(out.y)),self.id, runs)
                     out.x(isnan(out.y))=[];
                     out.y(isnan(out.y))=[];
                 else
                     for r = 1:numel(runs)
+                        warning('Kicking %d Nans out for sub %d, run %d.',sum(isnan(out{r}.y)),self.id, r)
                         out{r}.x(isnan(out{r}.y))=[];
                         out{r}.y(isnan(out{r}.y))=[];
                     end
