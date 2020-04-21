@@ -539,6 +539,26 @@ classdef SCR < handle
             olddim = size(out_raw);
             ave_z = reshape(nanzscore(out_raw(:)),olddim); %average across conditions
         end
+        function [raw_singletrials, xtime, condstr ] = ledalab_summary_alltime(self,varargin)
+            self.cut(self.findphase('base$'):self.findphase('test$'));
+            self.run_ledalab;%collects the ledalab struct
+            
+       
+            %
+            condcollector = { 'base_0045','base_0090','base_0135','base_0180','base_0225','base_0270','base_0315','base_0360','base_1000',...
+                'cond_0180','cond_0360','cond_1000',...
+                'test_0045','test_0090','test_0135','test_0180','test_0225','test_0270','test_0315','test_0360','test_1000'};
+            %             index  = [1:8 12 16 17:24];
+            index  = [1:9 13 17 18 19:27];
+            for c = 1:length(condcollector)
+                condy                     = strcmp(condcollector{c},self.ledalab.condnames)';
+                dummy                     = self.ledalab.y(:,condy);%whole time window
+                raw_singletrials{c}       = dummy;
+            end
+            condstr = {'base_1','base_2','base_3','base_4','base_5','base_6','base_7','base_8','base_null','cond_csp','cond_csn','cond_null','test_1','test_2','test_3','test_4','test_5','test_6','test_7','test_8','test_null'};
+            xtime   = self.ledalab.x(:,1);
+        end
+        
         
     end
     methods %plotters
