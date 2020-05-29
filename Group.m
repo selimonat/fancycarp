@@ -1624,8 +1624,8 @@ classdef Group < Project
             %% 2ndlevel 8conds ANOVA
             clear2ndlevel = 1;
             
-            dependencies = 0;
-            unequalvar   = 0;
+            dependencies = 1;
+            unequalvar   = 1;
             
             versiontag = 0;
             prefix = 's6_wCAT_';
@@ -1855,6 +1855,15 @@ classdef Group < Project
                 
                 nrun = [1 3];
                 cons2collectstruct = {136, [],191};%bin4win2
+                
+                fprintf('You chose contrasts named:\n')
+                SPM.xCon(cons2collectstruct{1}).name
+                fprintf('.................................................\n')
+            elseif strfind(namestring,'bin4win4_8conds_tsda_BT')
+                load(fullfile(self.subject{1}.path_FIR(nrun,modelnum,self.orderfir,'10conds'),'SPM.mat'))
+                
+                nrun = [1 3];
+                cons2collectstruct = {127:134,[],141:148};%bin4win4
                 
                 fprintf('You chose contrasts named:\n')
                 SPM.xCon(cons2collectstruct{1}).name
@@ -2906,6 +2915,109 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = ones(1,6);
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_main_relief';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+            elseif strfind(namestring,'bin4win4_8conds_tsda_BT')
+                   %% F TESTS
+                %eoi
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(16);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(allconds)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                %testphase
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [eye(8) zeros(8)];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Base)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                %baseline
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [zeros(8) eye(8)];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Test)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                %baseline vs test
+                n = n + 1;
+                nF = nF+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [eye(8) -eye(8)];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_(Test)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                
+                %% T Tests
+                % all bins positive
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = ones(1,16);
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_all';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [ones(1,8) zeros(1,8)];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_Base';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights =[zeros(1,8) ones(1,8)];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_Test';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                %% VonMises
+                [VM, dVM] = self.compute_VM(-135:45:180,1,1,.001);
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [VM VM];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_both';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [VM zeros(1,8)];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_base';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [zeros(1,8) VM];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_test';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [-VM VM];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_VM_test>base';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                %% Gauss
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [gauss gauss];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_gauss_both';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [gauss zeros(1,8)];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_gauss_base';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [zeros(1,8) gauss];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_gauss_test';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [-gauss gauss];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'T_Gauss_test>base';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                
+                n = n + 1;
+                nT = nT+1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [zeros(1,8) dVMlookup];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name    = 'dVM_test';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
                 
             else
                 fprintf('No 2ndlevel contrasts defined here, please check code.\n')
@@ -3080,10 +3192,13 @@ classdef Group < Project
         end
         %% ROI methods
         function [out, base, test,tb,tt, tbc,Y] = get_betas_ROI(self,coords,namestr,varargin)
+%                         path2ndlevel =
+%                         fullfile(self.path_project,sprintf('spm/FIR/model_04_FIR_00_bin4win4_8conds_BT_b01to14_Brepl
 %                         path2ndlevel = fullfile(self.path_project,sprintf('spm/FIR/model_04_FIR_00_bin4win4_8conds_BT_b01to14_B_N%02d/',self.total_subjects));
-%             path2ndlevel = fullfile(self.path_project,sprintf('spm/FIR/model_04_FIR_00_bin4win4_Gauss_BT_b01to14_B_N%02d/',self.total_subjects));
-                        path2ndlevel = fullfile(self.path_project,sprintf('spm/FIR/model_04_FIR_00_bin4win4_8conds_BT_b01to14_B_WITHIN_N%02d/',self.total_subjects));
+%             path2ndlevel = fullfile(self.path_project,'spm/FIR/model_04_FIR_00_bin4win4_8conds_BT_b01to14_Brepl/');
+ path2ndlevel = fullfile(self.path_project,'spm/FIR/model_04_FIR_00_bin4win4_8conds_BT_b01to14_B_repl_d1un1/');
 
+    
             cd(path2ndlevel);
             
             vis = 1;
