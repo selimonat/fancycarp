@@ -3538,6 +3538,7 @@ classdef Subject < Project
             onset_modelnum   =   3;
             All1Regr         =   0;
             wmcsfr           =   0;
+            tsda_corr        =   1;
             
             
             if model_num == 3
@@ -3639,6 +3640,17 @@ classdef Subject < Project
                     matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis+1).name  = 'wm';
                     matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis+2).val   = csf';
                     matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nNuis+2).name  = 'csf';
+                end
+                if tsda_corr == 1
+                    nui=load(fullfile(self.pathfinder(self.id,session),'midlevel',sprintf('tsdiff_nui.mat')));    
+                    nui = nui.nui;
+                        nnuis_now = size(matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress,2);
+                        
+                        for tsda_col = 1:size(nui,2)
+                            nnuis_now= nnuis_now+1;
+                            matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nnuis_now).val   = nui(:,tsda_col);
+                            matlabbatch{1}.spm.stats.fmri_spec.sess(se).regress(nnuis_now).name  = ['tsda_' mat2str(tsda_col)];
+                        end
                 end
                 
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).multi               = {''};
@@ -4162,6 +4174,251 @@ classdef Subject < Project
             %             fprintf('\n\nTook %05.2f minutes (%05.2f hours) for 1stLevel contrasts all conds FIR model 0, sub %02d to %02d, run %02d to %02d.\n',done./60,done./3600,subs(1),subs(end),runs(1),runs(end));
             
         end
+        function [total_cons] = CreateContrasts_FIR_tsda(self,nrun,model_num,varargin)
+            if nargin > 3
+                startbin = varargin{1};
+                binwin = varargin{2};
+            else
+                startbin = 4;
+                binwin = 4;
+            end
+            order = self.orderfir;
+            nsessions = self.nsessions(nrun); %used to repmat convec later
+            if self.id == 15
+                nsessions = 1;
+            end
+          
+            
+            
+          
+            path_spm = [self.path_FIR(nrun,model_num,order,'10conds') 'SPM.mat'];
+            load(path_spm);
+            matlabbatch = [];
+            n = 0;
+            name = [];
+            convec = struct([]);
+            
+            Nbetas  = size(SPM.xX.X,2);
+            Nmov= 6;
+            Ntsda = load(fullfile(self.path_project,'midlevel','nuisance_N35.mat'));
+            Ntsda = Ntsda.all(Ntsda.subs==self.id,:);
+            switch nrun
+                case 1
+                    nconds = 9;
+                      vec0 = zeros(1,nconds*order);
+                case 2
+                    nconds = 3;
+                     vec0 = zeros(1,nconds*order);
+                case 3
+                    nconds = 10;
+                    vec0 = zeros(1,nconds*order);
+            end
+            %
+            
+            if nrun == 2
+                condnames = {'180','500'};
+            else
+                condnames = {'-135','-90','-45','0','45','90','135','180','500'};
+            end
+            conds2take = {1:8,[2 1],1:8};
+            
+            if nrun == 3
+                realrun = 3:4;
+            else
+                realrun = nrun;
+            end
+            %% normal single bins collection to prepare full 14bin 2nd level
+            % loop through cons and get betas together.
+            c = 0;
+            for cond_ind = conds2take{nrun}
+                c = c+1;
+                for bin = 1:order
+                    n = n + 1;
+                    getcond = (cond_ind-1)*order + bin; %all cons+bins before this con's bin need to be skipped
+                    vec_pure = vec0;
+                    vec_pure(getcond) = 1;
+                    %now add all nuis
+                    vec = [];
+                    for nr = realrun(:)'
+                       vec =  [vec vec_pure zeros(1,(Nmov+Ntsda(nr)))];
+                    end
+                    %add session constants
+                     if self.id == 15
+                        nsessions = 1;
+                    end
+                    vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se
+                    
+                    %check Nbeta
+                    if ~isequal(Nbetas,length(vec))
+                        keyboard;
+                    end
+                    convec{n} = vec;
+                    name{n} = sprintf('bin%02d.%s',bin,condnames{cond_ind});
+                end
+            end
+            % make convecs sum to 1 for positive t-contrasts
+            for co = 1:n
+                convec{co} = convec{co}./sum(convec{co});
+            end
+            n1 = n; %first contrast
+            
+            %% add CSdiff if applicable
+            if ismember(model_num,[1 4 44 40])
+                % CSP vs CSN
+                cs_ind = [4 8; 2 1; 4 8];
+                for bin = 1:order
+                    n = n + 1;
+                    csp_bin = (cs_ind(nrun,1)-1)*order + bin; %Nth bin beta of CSP
+                    csn_bin = (cs_ind(nrun,2)-1)*order + bin; %Nth bin beta of CSN
+                    vec_pure = vec0;
+                    vec_pure(csp_bin) = 1;
+                    vec_pure(csn_bin) = -1;
+                 
+                    %now add all nuis
+                    vec = [];
+                    for nr = realrun(:)'
+                       vec =  [vec vec_pure zeros(1,(Nmov+Ntsda(nr)))];
+                    end
+                    %add session constants
+                     if self.id == 15
+                        nsessions = 1;
+                    end
+                    vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se                    
+                    %check Nbeta
+                    if ~isequal(Nbetas,length(vec))
+                        keyboard;
+                    end
+                    convec{n} = vec;
+                    name{n} = sprintf('bin%02d.CSdiff',bin);
+                end
+                % make convecs sum to 1 and -1 for t-contrasts
+                for co = (n1+1):n
+                    convec{co} = convec{co}./nsessions;
+                end
+            end
+            % get UCS cons
+            if nrun == 3
+                cond_ind = 9;
+                for bin = 1:order
+                    n = n + 1;
+                    getcond = (cond_ind-1)*order + bin; %all cons+bins before this con's bin need to be skipped
+                    vec_pure = vec0;
+                    vec_pure(getcond) = 1;                 
+                    %now add all nuis
+                    vec = [];
+                    for nr = realrun(:)'
+                       vec =  [vec vec_pure zeros(1,(Nmov+Ntsda(nr)))];
+                    end
+                    %add session constants
+                     if self.id == 15
+                        nsessions = 1;
+                    end
+                    vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se                    
+                    %check Nbeta
+                    if ~isequal(Nbetas,length(vec))
+                        keyboard;
+                    end
+                    convec{n} = vec./nsessions;
+                    name{n} = sprintf('bin%02d.%s',bin,condnames{cond_ind});
+                end
+            end
+            %% bin win thing
+            conds2take ={1:8,[2 1],1:9};
+            n2 = n;
+            if ismember(model_num,[4 44 40])
+                %loop through cons and get betas together.
+                %SINGLE CONS ge-bin-ed
+                for cond_ind = conds2take{nrun}
+                    n = n + 1;
+                    binfo1 =  self.findcon_FIR(order,cond_ind,startbin);%all cons+bins before this con's bin need to be skipped
+                    binfo2 = self.findcon_FIR(order,cond_ind,startbin+binwin-1);
+                    vec_pure = vec0;
+                    vec_pure(binfo1:binfo2) = 1;                 
+                    %now add all nuis
+                    vec = [];
+                    for nr = realrun(:)'
+                       vec =  [vec vec_pure zeros(1,(Nmov+Ntsda(nr)))];
+                    end
+                    %add session constants
+                     if self.id == 15
+                        nsessions = 1;
+                    end
+                    vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se                    
+                    %check Nbeta
+                    if ~isequal(Nbetas,length(vec))
+                        keyboard;
+                    end
+                    convec{n} = vec;
+                    name{n} = sprintf('bin%02d.win%02d.%s',startbin,binwin,condnames{cond_ind});
+                end
+                %
+                cs_ind = [4 8; 2 1; 4 8];
+                n = n+1;
+                vec_pure = vec0;
+                csp_bins =  self.findcon_FIR(order,cs_ind(nrun,1),startbin):self.findcon_FIR(order,cs_ind(nrun,1),startbin+binwin-1); %Nth bin beta of CSP
+                csn_bins =  self.findcon_FIR(order,cs_ind(nrun,2),startbin):self.findcon_FIR(order,cs_ind(nrun,2),startbin+binwin-1); %Nth bin beta of CSN
+                vec_pure(csp_bins) =  1;
+                vec_pure(csn_bins) = -1;
+                  %now add all nuis
+                    vec = [];
+                    for nr = realrun(:)'
+                       vec =  [vec vec_pure zeros(1,(Nmov+Ntsda(nr)))];
+                    end
+                if self.id == 15
+                    nsessions = 1;
+                end
+                vec = padarray(vec,[0 nsessions],0,'post');
+                convec{n} = vec;
+                name{n} = sprintf('bin%02d.win%02d.CSdiff',startbin,binwin);
+                
+                %make convecs sum to 1 and -1 for t-contrasts
+                for co = (n2+1):n
+                    convec{co} = convec{co}./binwin/nsessions;
+                end
+            end
+       
+            %visualization and sanity check
+            figure(100);
+            if nrun == 1
+                clf
+            end
+            subplot(1,3,nrun)
+            for n = 1:numel(convec)
+                plot(convec{n}+n)
+                hold on
+            end
+            for c = 1:max(conds2take{nrun})
+                l=line(repmat((order*(c-1)+1),1,2),ylim);set(l,'Color','k','LineStyle',':')%line on first bin of each condition
+            end
+            l=line(repmat(max(conds2take{nrun})*order+1,1,2),ylim);set(l,'Color','k','LineWidth',1);%line where contrasts stop being relevant
+            l=line(repmat(Nbetas./nsessions-1,1,2),ylim);set(l,'Color','k','LineWidth',2); %end of vec for 1 session
+            
+            set(gca,'XTick',1:order:order*max(conds2take{nrun}),'XTickLabel',condnames,'YTick',1:order:numel(convec)-1,'YTickLabel',name(1:order:numel(convec)-1))
+            title(sprintf('Run %d',nrun));
+            %%
+            % build the batch
+            matlabbatch{1}.spm.stats.con.spmmat = cellstr(path_spm);
+            for co = 1:numel(name)
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.name    = name{co};
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.convec  = convec{co};
+                matlabbatch{1}.spm.stats.con.consess{co}.tcon.sessrep = 'none';
+                %sanity check
+                if length(convec{co})~= Nbetas
+                    fprintf('Problem with length of convec at contrast %d. Please debug.\n',co);
+                    keyboard
+                end
+            end
+            total_cons = numel(name);
+            
+            matlabbatch{1}.spm.stats.con.delete = 1;
+            
+            spm_jobman('run',matlabbatch);
+            %             for nrun = runs(:)'
+            %                 fprintf('\n\nTook %05.2f minutes for 1stLevel contrasts all conds FIR model 0, sub %02d to %02d, run %02d.\n',tocc(nrun)./60,subs(1),subs(end),nrun);
+            %             end
+            %             fprintf('\n\nTook %05.2f minutes (%05.2f hours) for 1stLevel contrasts all conds FIR model 0, sub %02d to %02d, run %02d to %02d.\n',done./60,done./3600,subs(1),subs(end),runs(1),runs(end));
+            
+        end
         function Con1stLevel(self,nrun,model_num)
             n_con = self.CreateContrasts(nrun,model_num);
             fprintf('%d contrasts computed for phase %d, Model %d. \n',n_con,nrun,model_num)
@@ -4187,14 +4444,21 @@ classdef Subject < Project
             if nargin > 3
                 startbin = varargin{1};
                 binwin   = varargin{2};
-                n_con = self.CreateContrasts_FIR(nrun,model_num,startbin,binwin);
+                if model_num == 40
+                    n_con = self.CreateContrasts_FIR_tsda(nrun,model_num,startbin,binwin);
+                else
+                    n_con = self.CreateContrasts_FIR(nrun,model_num,startbin,binwin);
+                end
             else
-                n_con = self.CreateContrasts_FIR(nrun,model_num);
+                if model_num == 40
+                    n_con = self.CreateContrasts_FIR_tsda(nrun,model_num);
+                else
+                    n_con = self.CreateContrasts_FIR(nrun,model_num);
+                end
             end
             if deletedcons == 1
                 lastcon = n_con; %start at the first, go till end.
             else
-                
                 lastcon = firstcon+n_con;
             end
             
