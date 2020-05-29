@@ -62,6 +62,7 @@ classdef Group < Project
             
             force = 1;
             phases2collect = [1 2 5];
+%             phases2collect = [1 2 3 4];
             filename = fullfile(Project.path_project,'midlevel','ratings',sprintf('relief_N%02d_phases_%s.mat',self.total_subjects,sprintf('%d',phases2collect)));
             fprintf('Filename for called relief ratings is: \n %s\n',filename)
             
@@ -77,6 +78,10 @@ classdef Group < Project
                     end
                 end
                 fprintf('Saving...');
+                filepath = fileparts(filename);
+                if ~exist(filepath)
+                    mkdir(filepath)
+                end
                 save(filename,'relief');
                 fprintf('done\n');
             else
@@ -109,7 +114,19 @@ classdef Group < Project
                 thresh(ns) = self.subject{ns}.get_threshold;
             end
         end
-        
+        function tempr  = get_tempr(self)
+            for ns = 1:self.total_subjects
+                for ph = 1:4
+                    try
+                        tempr(ns,ph) = self.subject{ns}.paradigm{ph}.presentation.pain.tonic(1);
+                    catch
+                        warning('Problem getting temp for sub %d at phase %d, putting nan.',self.ids(ns),ph);
+                        tempr(ns,ph) = nan;
+                    end
+                end
+            end
+            
+        end
         function plot_grouprelief_bar(self)
             plottype = 'bar';
             
@@ -421,6 +438,7 @@ classdef Group < Project
             COL = Project.GetFearGenColors;
             xlev = -135:45:180;
             relief = self.get_relief('zscore');
+%                 relief = self.get_relief('raw');
             %             yticki = [-1.5 0 1.5];
             %
             
@@ -430,7 +448,7 @@ classdef Group < Project
                 spn = varargin{2};
                 sp1 = varargin{3};
             else
-                fighand = figure;
+                fighand = figure(3);
                 set(fighand,'Color','w')
                 spn = 4;
                 sp1 = 1;
@@ -438,34 +456,36 @@ classdef Group < Project
             
             subplot(1,spn,sp1);
             D = relief(:,1:8,1);
-            pirateplot(xlev,D,'color',repmat([.3 .3 .3],8,1),'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
+            pirateplot_nextgeneration(xlev,D,'color',repmat([.3 .3 .3],8,1));
             hold on;
-            for n = 1:8
-                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',[.3 .3 .3],'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
-            end
+%             for n = 1:8
+%                 errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',[.3 .3 .3],'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
+%             end
             %             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'YTick',yticki,'Ydir','reverse');
             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
             ylabel('pain relief [VAS, z-score]','FontSize',fs+1)
             %             ylim([-2 2])
-            hold on;
+            hold on;xlim([  -180   270])
             %             axis square
             title('Baseline','FontSize',fs+1)
-            
+            %Conditioning
             subplot(1,spn,sp1+1);
+               xlev = -135:45:225 ;xlev(end)=270; %for more space
             D = relief(:,1:9,2);
-            D(:,4) = D(:,9);
-            D = D(:,1:8);
-            pirateplot(xlev,D,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
+%             D(:,4) = D(:,9);
+%             D = D(:,1:8);
+            pirateplot_nextgeneration(xlev,D);
             
             %             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'YTick',yticki,'Ydir','reverse');
-            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
+%             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
             hold on;
-            for n = 1:8
-                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
-            end
+%             for n = 1:8
+%                 errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
+%             end
             
             %             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'YTick',yticki,'Ydir','reverse');
-            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
+            set(gca,'XTick',[180 270],'XTickLabel',{'CS-','UCS'},'FontSize',fs,'Ydir','reverse');
+            xlim([0 450])
             
             %             ylim([-2 2])
             hold on;
@@ -474,14 +494,17 @@ classdef Group < Project
             
             subplot(1,spn,sp1+2);
             %             yticki = [-1.5 0 1.5];
-            D = relief(:,1:8,3);
-            pirateplot(xlev,D,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
+            D = relief(:,1:9,3);
+             xlev = -135:45:225;
+            pirateplot_nextgeneration(xlev,D);
+            
+%             pirateplot(xlev,D,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
             %             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'YTick',yticki,'Ydir','reverse');
             set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
             hold on;
-            for n = 1:8
-                errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
-            end
+%             for n = 1:9
+%                 errorbar(xlev(n),nanmean(D(:,n)),nanstd(D(:,n))./sqrt(self.total_subjects),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
+%             end
             
             hold on;
             %             axis square
@@ -502,34 +525,61 @@ classdef Group < Project
             linecol = [.3 .3 .3];
             
             subplot(1,spn,sp1);
-            hold on;
-            if 10.^-tb.groupfit.pval < alpha_level
-                plot(tb.groupfit.x_HD,tb.groupfit.fit_HD,'k','LineWidth',lwt,'Color',linecol,'LineStyle',':');
-            else
-                plot([-135 180],repmat(mean(tb.y_mean),1,2),'k','LineWidth',lwt,'Color',linecol);
-                
-            end
+%             hold on;
+%             if 10.^-tb.groupfit.pval < alpha_level
+%                 p1=plot(tb.groupfit.x_HD,tb.groupfit.fit_HD,'k','LineWidth',lwt,'Color',linecol,'LineStyle',':');
+%             else
+%                 p1=plot([-135 180],repmat(mean(tb.y_mean),1,2),'k','LineWidth',lwt,'Color',linecol);
+%                 
+%             end
             
             subplot(1,spn,sp1+2);
-            hold on;
-            if 10.^-tt.groupfit.pval < alpha_level
-                plot(tt.groupfit.x_HD,tt.groupfit.fit_HD,'k','LineWidth',lwt,'Color',linecol,'LineStyle','-');
-            else
-                plot([-180 225],repmat(mean(tt.y_mean),1,2),'k','LineWidth',lwt,'Color',linecol);
-                
-            end
-            %             EqualizeSubPlotYlim(gcf);
+%             hold on;
+%             if 10.^-tt.groupfit.pval < alpha_level
+%                 plot(tt.groupfit.x_HD,tt.groupfit.fit_HD,'k','LineWidth',lwt,'Color',linecol,'LineStyle','-');
+%             else
+%                 plot([-180 225],repmat(mean(tt.y_mean),1,2),'k','LineWidth',lwt,'Color',linecol);
+%                 
+%             end
+%                         EqualizeSubPlotYlim(gcf);
             
             fprintf('Baseline fit with method %d: p = %05.3f.\n',method,10.^-tb.groupfit.pval)
             fprintf('Testphase fit with method %d: p = %05.3f.\n',method,10.^-tt.groupfit.pval)
+              alldatapoints = [Vectorize(relief(:,1:8,[1 2 3]))];
             
+            ylims = [-1.7 2.3];%best for this sample: -1.6 1.2 BCT, for both: -1.7 2.3
+            yticki = [ -1 0 1 2];
+            ylims = [-1.6 1.2];%best for this sample: -1.6 1.2 BCT, 
+            yticki = [-1.5 -1 0 .5 1];
+            ylims = [-1.6 2.43];%best for this sample: -1.6 1.2 BCT,  FOR 9 CONDITIONS
+            yticki = [-1 0 1 2];
+            for n = 1:3
+                subplot(1,spn,n);
+                ylim([min(ylims) max(ylims)]);% ylim([-.301 .243])
+                set(gca,'YTick',yticki);
+            end
+            
+            fh = gcf; fh.Position  =  [500   1000   1200  600];
+                        cd('C:\Users\Lea\Documents\Experiments\TreatgenMRI\midlevel\figures\')
+%             export_fig(gcf,'SFig2_behave_results_MRI_grandYlim_nextgen.pdf','-dpdf','-painters')
+%             export_fig(gcf,'SFig2_behave_results_MRI_grandYlim_nextgen.png','-dpng')
+
             %baseline corrected version.
             relief = self.get_relief('zscore');
             bc = relief(:,1:8,3)-relief(:,1:8,1);
-            subplot(1,spn,4);%figure;
-            pirateplot(xlev,bc,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
-            set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
-            ylabel('pain relief [VAS, z-score]','FontSize',fs+1)
+            xlev = -135:45:180;
+            fh4=figure(4);
+            set(fh4,'Color','w')
+%             subplot(1,spn,4);%figure;
+%             pirateplot(xlev,bc,'violin',vio,'bar',baryn,'errorbar',erb,'meanline',ml,'dots',dotyn);
+ pirateplot_nextgeneration(xlev,bc);
+                      ylabel('pain relief [VAS, z-score]','FontSize',fs+1)
+            hold on
+%              for n = 1:8
+%                 errorbar(xlev(n),nanmean(bc(:,n)),nanstd(bc(:,n))./sqrt(self.total_subjects),'.','Color',COL(n,:),'LineWidth',lweb,'MarkerFaceColor',COL(n,:))
+%             end
+              set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'},'FontSize',fs,'Ydir','reverse');
+            
             test2.x = repmat(-135:45:180,self.total_subjects,1);
             test2.y = bc;
             test2.ids = self.ids;
@@ -538,31 +588,42 @@ classdef Group < Project
             t2.GroupFit(method);
             linecol = [.3 .3 .3];
             
-            subplot(1,spn,4);
+%             subplot(1,spn,4);
             hold on;
             if 10.^-t2.groupfit.pval < alpha_level
-                plot(t2.groupfit.x_HD,t2.groupfit.fit_HD,'k','LineWidth',lwt,'Color',linecol,'LineStyle','-');
+                y_HD2=t2.groupfit.fitfun(linspace(-145,190,100),t2.groupfit.Est)+mean(t2.y(:));
+                p1=plot(linspace(-145,190,100),y_HD2,'k','LineWidth',lwt,'Color',linecol,'LineStyle','-');
+%                 p1=plot(t2.groupfit.x_HD,t2.groupfit.fit_HD,'k','LineWidth',lwt,'Color',linecol,'LineStyle','-');
+
             else
-                plot([-135 180],repmat(mean(t2.y_mean),1,2),'k','LineWidth',lwt,'Color',linecol);
+                p1=plot([-145 190],repmat(mean(t2.y_mean),1,2),'k','LineWidth',lwt,'Color',linecol);
                 
             end
-            title('Test - Base','FontSize',fs+1)
+            p1.Color(4)=.8; %make Gaussian Line a bit transparent
+            title('Study 2','FontSize',fs+1)
             
-            alldatapoints = [Vectorize(relief(:,1:8,[1 2 3]))];
-            
-            yticki{1} = -1.5:.75:1.5;
-            yticki{2} = -1.5:.75:1.5;
-            yticki{3} = -1.5:.75:1.5;
-            for n = 1:3
-                subplot(1,spn,n);
-                ylim([min(alldatapoints) max(alldatapoints)]);% ylim([-.301 .243])
-                set(gca,'YTick',yticki{n});
-            end
+          xlim([-180 225]);
             [min(t2.y(:)) max(t2.y(:))]
-            subplot(1,4,4);
-            ylim([-2.8 2.8]) %-2.8 2.8 is like behavioral pilot, -2 2 would be enough for MRI only.
-            set(gca,'YTick',[-2 -1 0 1 2]);
-            fh = gcf; fh.Position  =  [728   587   1100  400];
+            %             subplot(1,4,4);
+            %ylim([-1.7 2])
+            %yticki = [-1.5 -.5 0 .5 1.5];
+            ylim([-2.72 2]) % -1.7 1.9 would be enough for MRI only. for n=39 bc
+            yticki = -2:1:2;
+            %-2.8 2.8 is like behavioral pilot, -1.7 1.9 would be enough for MRI only. for n=39 bc
+            set(gca,'YTick',yticki);
+            fh = gcf; fh.Position  =  [728   587 350 550];
+            cd('C:\Users\Lea\Documents\Experiments\TreatgenMRI\midlevel\figures\')
+%             export_fig(gcf,'Fig2_behave_results_MRI_bc_grandYlim_nextgen.pdf','-dpdf','-painters')
+%             export_fig(gcf,'Fig2_behave_results_MRI_bc_grandYlim_nextgen.png')
+%             ylim([-2 2]) % -1.7 1.9 would be enough for MRI only. for n=39 bc
+%             yticki = -2:1:2;
+%             %-2.8 2.8 is like behavioral pilot, -1.7 1.9 would be enough for MRI only. for n=39 bc
+%             set(gca,'YTick',yticki);
+%             fh = gcf; fh.Position  =  [728   587 350 550];
+%             cd('C:\Users\Lea\Documents\Experiments\TreatgenMRI\midlevel\figures\')
+% %             export_fig(gcf,'Fig2_behave_results_MRI_bc_grandYlim_nextgen.pdf','-dpdf','-painters')
+% %             export_fig(gcf,'Fig2_behave_results_MRI_bc_grandYlim_nextgen.png')
+          
         end
         function [relief] = plot_relief_cond_placebo(self,varargin)
             
@@ -711,6 +772,86 @@ classdef Group < Project
             [mean(relief(:,10,2)) mean(relief(:,9,2));sqrt([std(relief(:,10,2)) std(relief(:,9,2))])]
             [mean(relief(:,4,3)) mean(relief(:,8,3)) mean(relief(:,9,3));sqrt([std(relief(:,4,3)) std(relief(:,8,3)) std(relief(:,9,3))])]
         end
+        function [relief] = plot_cond2test(self)
+            relief = self.get_relief('zscore');
+            csdiff = squeeze(relief(:,4,:)-relief(:,8,:));
+            csdiff(:,2)=relief(:,9,2)-relief(:,8,2);
+            
+            for i = 1:3
+                data{i,1} = csdiff(:,i);
+            end
+            [cb] = cbrewer('div','BrBG', 3, 'pchip');
+           
+            subplot(2,1,1)
+            [h3,jit]=rm_raincloud_TG(data,cb(3,:));
+            set(gca,'YTickLabel',{'Test','Cond','Base'},'FontSize',14);
+            xlabel('CS+ - CS- (zscore)')
+            title('CS+ vs CS- over phases')
+            set(gcf,'Color','w')
+            subplot(2,1,2)
+              csdiff(:,1) =csdiff(:,1)-csdiff(:,1);
+            csdiff(:,2) =csdiff(:,2)-csdiff(:,1);
+            csdiff(:,3) =csdiff(:,3)-csdiff(:,1);
+            clear data
+            for i = 1:3
+                data{i,1} = csdiff(:,i);
+            end
+            [h3,jit]=rm_raincloud_TG(data(2:3),cb(3,:));
+            ylim([-1 4]) %same as sp1
+            set(gca,'YTickLabel',{'Test','Cond','Base'},'FontSize',14);
+            xlabel('CS+ - CS- baseline corr (zscore)')
+            set(gcf,'Color','w')
+            hold on;
+            
+            % simple plot
+            csdiff = squeeze(relief(:,4,:)-relief(:,8,:));
+            csdiff(:,2)=relief(:,9,2)-relief(:,8,2);
+            
+            figure;subplot(1,2,1);
+            p1=plot(csdiff','bs-','LineWidth',2,'MarkerFaceColor','k','MarkerEdgeColor','none','MarkerSize',5);
+            for ns=1:39;p1(ns).Color(4)=.5;end
+            xlim([0 4]);title('zscores uncorr')
+            ylabel('CS+ - CS- (zscore)')
+            set(gca,'FontSize',12,'XTick',1:3,'XTickLabel',{'Base','Cond','Test'});box off;axis square
+            csdiff(:,3) =csdiff(:,3)-csdiff(:,1);
+            csdiff(:,2) =csdiff(:,2)-csdiff(:,1);
+            csdiff(:,1) =csdiff(:,1)-csdiff(:,1);
+            csdiff(:,1)=[];
+            subplot(1,2,2);
+            p1=plot(csdiff','bs-','LineWidth',2,'MarkerFaceColor','k','MarkerEdgeColor','none','MarkerSize',5);
+            xlim([-1 3])
+            for ns=1:39;p1(ns).Color(4)=.5;end
+            box off;title('baseline corr')
+            set(gca,'FontSize',12);set(gca,'FontSize',12,'XTick',0:2,'XTickLabel',{'Base','Cond','Test'});axis square
+            ylabel('CS+ - CS- (zscore)')
+            set(gcf,'Color','w');EqualizeSubPlotYlim(gcf)
+            % export_fig(gcf,'effect_over_phases.png','-dpng')
+            
+            % simple plot 2 test runs
+            csdiff = squeeze(relief(:,4,:)-relief(:,8,:));
+            csdiff(:,2)=relief(:,9,2)-relief(:,8,2);
+            
+            figure;subplot(1,2,1);
+            p1=plot(csdiff','s-','LineWidth',2,'MarkerFaceColor','k','MarkerEdgeColor','none','MarkerSize',5);
+            for ns=1:39;p1(ns).Color(4)=.3;end
+            xlim([0 5]);title('zscores uncorr');
+            ylabel('CS+ - CS- (zscore)')
+            set(gca,'FontSize',12,'XTick',1:4,'XTickLabel',{'Base','Cond','Test1' 'Test2'});box off;axis square
+            csdiff(:,4) =csdiff(:,4)-csdiff(:,1);
+            csdiff(:,3) =csdiff(:,3)-csdiff(:,1);
+            csdiff(:,2) =csdiff(:,2)-csdiff(:,1);
+            csdiff(:,1) =csdiff(:,1)-csdiff(:,1);
+            csdiff(:,1)=[];
+            subplot(1,2,2);
+            p1=plot(csdiff','s-','LineWidth',2,'MarkerFaceColor','k','MarkerEdgeColor','none','MarkerSize',5);
+            xlim([-1 3])
+            for ns=1:39;p1(ns).Color(4)=.5;end
+            box off;title('baseline corr')
+            set(gca,'FontSize',12);set(gca,'FontSize',12,'XTick',0:3,'XTickLabel',{'Base','Cond','Test1' 'Test2'});axis square
+            ylabel('CS+ - CS- (zscore)')
+            set(gcf,'Color','w');EqualizeSubPlotYlim(gcf)
+            % export_fig(gcf,'effect_over_phases_2testruns.png','-dpng')
+        end
         function [relief, pain]= plot_painNrelief_pirate(self)
             relief = self.get_relief('raw');
             pain   = self.get_pain([1 2 5]);
@@ -756,8 +897,9 @@ classdef Group < Project
             set(gcf,'Color','w')
         end
         
-        function plot_ratings_singlesub(self,run,varargin)
+        function params = plot_ratings_singlesub(self,run,varargin)
             dofit = 1;
+            write_p = 0;
             method = 3;
             plotfit = 1;
             if nargin > 2
@@ -773,40 +915,67 @@ classdef Group < Project
             for ns = 1:self.total_subjects
                 subplot(y,x,ns);
                 
-                M = self.subject{ns}.get_relief_percond(5,type); %5 = pooled test phasesget_relief_percond(self,run)
-                
+                if strcmp(type,'zscore')
+                    M = self.subject{ns}.get_relief_percond(5,'zscore'); %5 = pooled test phasesget_relief_percond(self,run)
+                elseif strcmp(type,'zscore_bc')
+                    M5 = self.subject{ns}.get_relief_percond(5,'zscore'); %5 = pooled test phasesget_relief_percond(self,run)
+                    M1 = self.subject{ns}.get_relief_percond(1,'zscore'); 
+                    M = nanmean(M5)-nanmean(M1);
+                else
+                    M = self.subject{ns}.get_relief_percond(5,'raw'); %5 = pooled test phasesget_relief_percond(self,run)
+                    
+                end
                 %
                 %                 self.plot_bar(self.allconds,M,S);
-                pirateplot(self.realconds,M,'violin',0,'bar',1,'errorbar',1,'meanline',0,'dots',0);
+                if size(M,1)==1
+                    erb=0;
+                else
+                    erb=1;
+                end
+                   if strcmp(type,'zscore')
+                    pirateplot_nextgeneration(self.realconds,M);
+                elseif strcmp(type,'zscore_bc')
+                pirateplot_nextgeneration(xlev,M,'violin',0,'bar',1,'plotci',0,'errorbar',0,'meanline',0,'dots',0);
+                   end
                 hold on;
                 box off;
                 title(sprintf('s: %d, cs+: %d',self.ids(ns),self.subject{ns}.csp));
                 set(gca,'XTick',[0 180],'XTickLabel',{'CS+','CS-'});
-                if ns ==1
-                    ylabel(sprintf('M/SEM (%s)',type));
-                end
+%                 if ns ==1
+%                     ylabel(sprintf('M/SEM (%s)',type));
+%                 end
                 if dofit==1
                     out = self.subject{ns}.get_rating(run);
                     if strcmp(type,'zscore')
-                        out.y = zscore(out.y);
+                        out.y = nanzscore(out.y);
+                    elseif strcmp(type,'zscore_bc')
+                        out.x = -135:45:180;
+                        out.y = M;
                     end
+                    out.y(isnan(out.y)) = 0;
                     t = Tuning(out);
                     t.SingleSubjectFit(method);
+                    params.fit_result(ns) = t.fit_results;
                     if plotfit==1
                         if (10^-t.fit_results.pval)<.05
                             plot(t.fit_results.x_HD,t.fit_results.fit_HD,'k','LineWidth',2)
                         else
                             plot(t.fit_results.x_HD,t.fit_results.fit_HD,'k:','LineWidth',2)
                         end
+                        if write_p==1
                         text(min(xlim)+10,max(ylim),sprintf('p = %4.3f',10^-t.fit_results.pval))
+                        end
                     end
                 end
             end
             EqualizeSubPlotYlim(gcf);
-            supertitle(self.path_project,1);
+            st=supertitle(sprintf('Study 2 N=%02d, %s ',self.total_subjects,strrep(type,'_',' ')));set(st,'FontSize',14)
             set(gcf,'Color','w');
+            params.type = type;
+            params.fitfun = Project.selected_fitfun;
+            fh = gcf;fh.Position =   [ 353         833        1342         758];
+            keyboard
         end
-        
         function plot_pain_vs_relief(self,ph)
             
             cmap = jet(self.total_subjects);
@@ -816,7 +985,7 @@ classdef Group < Project
             for ns = 1:self.total_subjects;
                 [~, pain, relief] = self.subject{ns}.get_pmod_PR(ph);
                 rss(ns) = corr(pain',relief);
-                subplot(6,6,ns);
+                subplot(5,8,ns);
                 plot(pain,relief','o','Color',cmap(ns,:),'MarkerFaceColor',cmap(ns,:))
                 ls = lsline;set(ls,'Color','k','LineWidth',2)
                 axis square
@@ -906,7 +1075,7 @@ classdef Group < Project
             rhoz=fisherz(rho);
             for n=1:4;[rrz(n) ppz(n)] = ttest(rhoz(:,n),0);end
         end
-        function plot_temp_pain_relief(self)
+        function [tempr, pain, relief] = plot_temp_pain_relief(self)
             vio   = 0;
             barf  = 1;
             erbar = 1;
@@ -919,19 +1088,10 @@ classdef Group < Project
             xpain = [1 5 9];
             xrelief = xpain+1;
             
-            for ns = 1:self.total_subjects
-                for ph = 1:4
-                    try
-                    tempr(ns,ph) = self.subject{ns}.paradigm{ph}.presentation.pain.tonic(1);
-                    catch
-                        tempr(ns,ph) = nan;
-                    end
-                end
-            end
-            
-            tempr(:,3) = mean(tempr(:,3:4),2);
+            tempr = self.get_tempr;
+            % average two test sessions
+            tempr(:,3) = nanmean(tempr(:,3:4),2);
             tempr(:,4) = [];
-            
             
             figure(1005);
             clf

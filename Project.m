@@ -49,7 +49,8 @@ classdef Project < handle
         %All these properties MUST BE CORRECT and adapted to one owns
         %projectpaths
         
-        path_project          = '/projects/crunchie/treatgen/data/';
+%         path_project          = '/projects/crunchie/treatgen/data/';
+        path_project          = 'C:\Users\Lea\Documents\Experiments\TreatgenMRI\data_behave\';
         path_spm_version      = '/common/apps/spm12-7219/';     %6906   % I renamed this to avoid confusion with path_spm as SPM.mat
         trio_sessions         = {'' '' '' 'PRISMA_19272' '' 'PRISMA_19279'  'PRISMA_19296' 'PRISMA_19293' 'PRISMA_19286' 'PRISMA_19287' 'PRISMA_19292' 'PRISMA_19291' 'PRISMA_19297' 'PRISMA_19318' 'PRISMA_19319' 'PRISMA_19339' '' 'PRISMA_19329' 'PRISMA_19338' 'PRISMA_19335' 'PRISMA_19336' 'PRISMA_19337' 'PRISMA_19334' 'PRISMA_19352' 'PRISMA_19376' 'PRISMA_19361' '' 'PRISMA_19449' 'PRISMA_19391' 'PRISMA_19392' 'PRISMA_19396' 'PRISMA_19411' 'PRISMA_19419' '' 'PRISMA_19427' 'PRISMA_19441' 'PRISMA_19450' '','PRISMA_19467','','PRISMA_19466','PRISMA_19478','PRISMA_19501','PRISMA_19502','PRISMA_19525','PRISMA_19550','','PRISMA_19536','PRISMA_19537'};
         hr_sessions         = {'' '' '' 'PRISMA_19272' '' 'PRISMA_19279'  'PRISMA_19278' 'PRISMA_19293' 'PRISMA_19286' 'PRISMA_19287' 'PRISMA_19292' 'PRISMA_19291' 'PRISMA_19297' 'PRISMA_19318' 'PRISMA_19319' 'PRISMA_19339' '' 'PRISMA_19329' 'PRISMA_19338' 'PRISMA_19335' 'PRISMA_19336' 'PRISMA_19337' 'PRISMA_19334' 'PRISMA_19352' 'PRISMA_19347' 'PRISMA_19361' '' 'PRISMA_19449' 'PRISMA_19391' 'PRISMA_19392' 'PRISMA_19396' 'PRISMA_19411' 'PRISMA_19419' '' 'PRISMA_19427' 'PRISMA_19441' 'PRISMA_19450' '','PRISMA_19467','','PRISMA_19466','PRISMA_19478','PRISMA_19501','PRISMA_19502','PRISMA_19525','PRISMA_19535','','PRISMA_19536','PRISMA_19537'};
@@ -112,8 +113,12 @@ classdef Project < handle
             badmotion = [12 41 49];
             maybemotion = 20;
             missingsession = 15;
-            load(sprintf('%smidlevel/get_subjects_UCSCSN_conditioning.mat',self.path_project));
-            notlearned = out(out(:,3)>.05,end)';
+            try
+                load(sprintf('%smidlevel/get_subjects_UCSCSN_conditioning.mat',self.path_project));
+                notlearned = out(out(:,3)>.05,end)';
+            catch
+                warning('UCSCSN conditioning info file not found. No problem until get_subjects(3) is run.');
+            end
             
             if nargin > 1
                 subset = varargin{1};
@@ -198,6 +203,32 @@ classdef Project < handle
                 title(sprintf('Subfolder: %s Run: %i',varargin{1},nr),'fontsize',10);
             end
             warning('on','all');
+        end
+        function reliefinfo = get_bug_trials(self)
+            reliefinfo = [3	7	4	32	-1;
+                11	15	1	3	-1;
+                15	20	2	1	-1;
+                15	20	3	22	-1;
+                17	22	1	1	-1;
+                20	25	3	10	-1;
+                20	25	3	25	-1;
+                21	26	1	17	-1;
+                21	26	1	19	-1;
+                21	26	1	23	-1;
+                21	26	2	16	-1;
+                21	26	4	41	-1;
+                21	26	4	43	-1;
+                21	26	4	45	-1;
+                28	35	1	3	-1;
+                28	35	1	5	-1;
+                28	35	3	24	-1;
+                34	43	3	23	-1;
+                35	44	4	4	-1;
+                38	48	1	1	-1;
+                39	49	3	8	-1];
+            
+            paininfo = [ 21    26     1     3    -1;     39    49     3     3    -1];
+            
         end
         function DicomDownload(self,source,destination)
             % Will download all the dicoms, convert them and merge them to
@@ -708,7 +739,20 @@ classdef Project < handle
             %%
             
             condnames             = {'' '' '' 'CS+' '' '' '' 'CS-' 'UCS' 't0'};
-            cmap  = GetFearGenColors;
+%             cmap  = GetFearGenColors;
+            cmap  = [142 166 134;...
+                    248 206 83;...
+                    251 167 69;...
+                    220 95 87;...
+                    186 75 119;...
+                    102 86 124;...
+                    70 98 157;...
+                    61 126 155;...
+                    150 60 53;...%dark red
+                    125 125 125]... %grey
+                    ./255;
+
+
             tbar  = length(Y);
             for i = 1:tbar
                 try
