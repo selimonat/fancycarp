@@ -935,7 +935,7 @@ classdef Group < Project
                    if strcmp(type,'zscore')
                     pirateplot_nextgeneration(self.realconds,M);
                 elseif strcmp(type,'zscore_bc')
-                pirateplot(self.realconds,M,'violin',0,'bar',1,'errorbar',0,'meanline',0,'dots',0);
+                pirateplot_nextgeneration(xlev,M,'violin',0,'bar',1,'plotci',0,'errorbar',0,'meanline',0,'dots',0);
                    end
                 hold on;
                 box off;
