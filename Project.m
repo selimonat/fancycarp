@@ -49,8 +49,8 @@ classdef Project < handle
         %All these properties MUST BE CORRECT and adapted to one owns
         %projectpaths
         
-%         path_project          = '/projects/crunchie/treatgen/data/';
-        path_project          = 'C:\Users\Lea\Documents\Experiments\TreatgenMRI\data_behave\';
+        path_project          = '/projects/crunchie/treatgen/data/';
+%         path_project          = 'C:\Users\Lea\Documents\Experiments\TreatgenMRI\data_behave\';
         path_spm_version      = '/common/apps/spm12-7219/';     %6906   % I renamed this to avoid confusion with path_spm as SPM.mat
         trio_sessions         = {'' '' '' 'PRISMA_19272' '' 'PRISMA_19279'  'PRISMA_19296' 'PRISMA_19293' 'PRISMA_19286' 'PRISMA_19287' 'PRISMA_19292' 'PRISMA_19291' 'PRISMA_19297' 'PRISMA_19318' 'PRISMA_19319' 'PRISMA_19339' '' 'PRISMA_19329' 'PRISMA_19338' 'PRISMA_19335' 'PRISMA_19336' 'PRISMA_19337' 'PRISMA_19334' 'PRISMA_19352' 'PRISMA_19376' 'PRISMA_19361' '' 'PRISMA_19449' 'PRISMA_19391' 'PRISMA_19392' 'PRISMA_19396' 'PRISMA_19411' 'PRISMA_19419' '' 'PRISMA_19427' 'PRISMA_19441' 'PRISMA_19450' '','PRISMA_19467','','PRISMA_19466','PRISMA_19478','PRISMA_19501','PRISMA_19502','PRISMA_19525','PRISMA_19550','','PRISMA_19536','PRISMA_19537'};
         hr_sessions         = {'' '' '' 'PRISMA_19272' '' 'PRISMA_19279'  'PRISMA_19278' 'PRISMA_19293' 'PRISMA_19286' 'PRISMA_19287' 'PRISMA_19292' 'PRISMA_19291' 'PRISMA_19297' 'PRISMA_19318' 'PRISMA_19319' 'PRISMA_19339' '' 'PRISMA_19329' 'PRISMA_19338' 'PRISMA_19335' 'PRISMA_19336' 'PRISMA_19337' 'PRISMA_19334' 'PRISMA_19352' 'PRISMA_19347' 'PRISMA_19361' '' 'PRISMA_19449' 'PRISMA_19391' 'PRISMA_19392' 'PRISMA_19396' 'PRISMA_19411' 'PRISMA_19419' '' 'PRISMA_19427' 'PRISMA_19441' 'PRISMA_19450' '','PRISMA_19467','','PRISMA_19466','PRISMA_19478','PRISMA_19501','PRISMA_19502','PRISMA_19525','PRISMA_19535','','PRISMA_19536','PRISMA_19537'};
