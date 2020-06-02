@@ -4277,5 +4277,71 @@ classdef Group < Project
                 save(finalsavepath,'out')
             end
         end
+        function get_groupmask(self)
+            clear matlabbatch
+            path2groupmean = self.path_groupmeans;
+            % wCAT the mask files
+            cc=0;
+            for nrun = [1 3]
+                for ns=1:self.total_subjects
+                    if ~exist([s.path_FIR(nrun,4,14,'10conds') '/wCAT_mask.nii'])
+                        self.subject{ns}.VolumeNormalize({[self.subject{ns}.path_FIR(nrun,4,14,'10conds') '/mask.nii']});
+                    end
+                end
+            end
+            %Baseline
+            for ns=1:self.total_subjects
+                files(ns,:) = [self.subject{ns}.path_FIR(1,4,14,'10conds') '/wCAT_mask.nii'];               
+            end
+            matlabbatch{1}.spm.util.imcalc.input = cellstr(files);
+            matlabbatch{1}.spm.util.imcalc.output = sprintf('mask_allX_s3_ss_T1_N%02d',self.total_subjects);
+            matlabbatch{1}.spm.util.imcalc.outdir = {path2groupmean};
+            matlabbatch{1}.spm.util.imcalc.expression = sprintf('sum(X)==%d',self.total_subjects);
+            matlabbatch{1}.spm.util.imcalc.var = struct('name', {}, 'value', {});
+            matlabbatch{1}.spm.util.imcalc.options.dmtx = 1;
+            matlabbatch{1}.spm.util.imcalc.options.mask = 0;
+            matlabbatch{1}.spm.util.imcalc.options.interp = 1;
+            matlabbatch{1}.spm.util.imcalc.options.dtype = 4;
+            spm_jobman('run',matlabbatch);
+         clear matlabbatch
+         clear files
+            %Test
+           for ns=1:self.total_subjects
+                files(ns,:) = [self.subject{ns}.path_FIR(3,4,14,'10conds') '/wCAT_mask.nii'];               
+            end
+            matlabbatch{1}.spm.util.imcalc.input = cellstr(files);
+            matlabbatch{1}.spm.util.imcalc.output = sprintf('mask_allX_s3_ss_T1_N%02d',self.total_subjects);
+            matlabbatch{1}.spm.util.imcalc.outdir = {path2groupmean};
+            matlabbatch{1}.spm.util.imcalc.expression = sprintf('sum(X)==%d',self.total_subjects);
+            matlabbatch{1}.spm.util.imcalc.var = struct('name', {}, 'value', {});
+            matlabbatch{1}.spm.util.imcalc.options.dmtx = 1;
+            matlabbatch{1}.spm.util.imcalc.options.mask = 0;
+            matlabbatch{1}.spm.util.imcalc.options.interp = 1;
+            matlabbatch{1}.spm.util.imcalc.options.dtype = 4;
+            spm_jobman('run',matlabbatch);
+              clear matlabbatch
+         clear files
+            %Base + Test
+            cc=0;
+            for nrun = [1 3]
+                for ns=1:self.total_subjects
+                    cc=cc+1;
+                     files(cc,:) = [self.subject{ns}.path_FIR(nrun,4,14,'10conds') '/wCAT_mask.nii'];   
+                end
+            end
+            %sum(X) T1
+            matlabbatch{1}.spm.util.imcalc.input = cellstr(files);
+            matlabbatch{1}.spm.util.imcalc.output = sprintf('mask_sumX_s3_ss_T1_N%02d',self.total_subjects);
+            matlabbatch{1}.spm.util.imcalc.outdir = {path2groupmean};
+            matlabbatch{1}.spm.util.imcalc.expression = sprintf('sum(X)==%d',self.total_subjects);
+            matlabbatch{1}.spm.util.imcalc.var = struct('name', {}, 'value', {});
+            matlabbatch{1}.spm.util.imcalc.options.dmtx = 1;
+            matlabbatch{1}.spm.util.imcalc.options.mask = 0;
+            matlabbatch{1}.spm.util.imcalc.options.interp = 1;
+            matlabbatch{1}.spm.util.imcalc.options.dtype = 4;
+            spm_jobman('run',matlabbatch);
+           
+           
+        end
     end
 end
