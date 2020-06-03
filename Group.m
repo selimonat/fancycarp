@@ -1524,6 +1524,10 @@ classdef Group < Project
                 cons2collect = 4;
             elseif strcmp(namestring,'SBS_Plateau')
                 cons2collect = 3;
+            elseif strcmp(namestring,'Gauss1stlevel_BT') %modelnum 20
+                cons2collect = 5;
+            elseif strcmp(namestring,'VMdVM_BT_R') %modelnum 21
+                cons2collect = [1 2 7 8];   % 1 2 is Gauss dGauss Base, 7 8 is Testphases pooled (with each weight .5)
             end
             
             start = tic;
@@ -1719,6 +1723,51 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'test>base';
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = vec;
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+             elseif strcmp(namestring,'VMdVM_BT_R')
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_eye(4)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(4);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'B0_T11';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [0 0 1 0;0 0 0 1];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'B11_T00';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [1 0 0 0;0 1 0 0];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                n  = n + 1;
+                nF = nF + 1;
+                vec = eye(4); vec(logical(eye(4))) = [1 -1 1 -1];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'VM_vs_dVM';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = vec;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'interaction_pmodxphase';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [1 -1 -1 1];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'test>base';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [-1 -1 1 1];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';    
+            elseif strcmp(namestring,'Gauss1stlevel_BT')
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F1';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n  = n + 1;
+                nF = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'Tpos';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+             
             elseif strcmp(namestring,'PMOD') && isempty(strfind(foldersuffix,'COVAR'))
                 n  = n + 1;
                 nF = nF + 1;
