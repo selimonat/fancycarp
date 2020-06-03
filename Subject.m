@@ -3597,7 +3597,7 @@ classdef Subject < Project
                         end
                         %face cue onsets, single regressors
                         conds_presented = unique(LL(LL(:,2)==13,3));
-                       
+                        
                         for c = conds_presented(:)';
                             cc = cc+1;
                             trial_ind = find(LL(LL(:,2)==13,3)==c);
@@ -3637,7 +3637,7 @@ classdef Subject < Project
                             fprintf('Number of onsets for RateRelief: %d.\n',length(cond(cc).onset))
                         end
                         
-                          % CoolDown phase
+                        % CoolDown phase
                         cc = cc+1;
                         RampDown        = L(L(:,2)==4,1);
                         RampDownEnd     = RampDown(end);
@@ -3831,8 +3831,8 @@ classdef Subject < Project
             switch modelnum
                 case 20
                     num_onsetfile = 2;
-                 case 21
-                    num_onsetfile = 19;   
+                case 21
+                    num_onsetfile = 19;
                 otherwise
                     num_onsetfile =3;
             end
@@ -4161,6 +4161,64 @@ classdef Subject < Project
                     end
                     convec{n} = vec;
                 end
+            elseif ismember(model_num,21)
+                regr2take = [2 3 23 24 46 47];
+                regrnames = {'Gauss_B','dGauss_B','Gauss_T1','dGauss_T1','Gauss_T2','dGauss_T2'};
+                %first, we get con images for all these with a weight = 1,
+                %this allows us to look at test phases separately if wanted
+                %later.
+                for regr = regr2take(:)' %loop through the regressors we might want to look at @ 2ndlevel
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num)); %-1 so that phase constant is left out for now.
+                    if nrun == 3 && self.id ~= 15
+                        keyboard; %take care of this if necessary
+                    end
+                    n = n+ 1;
+                    name{n} = regrnames{n};
+                    vec(regr) = 1; %put 1 to nth regressor
+                    convec{n} = vec;
+                end
+                % now we pair Test phase with .5*T1 and .5*T2.
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); %-1 so that phase constant is left out for now.
+                name{n} = 'Gauss_T';
+                vec([23 46]) = .5; %put 1 to nth regressor
+                convec{n} = vec;
+                % same for dGauss
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); %-1 so that phase constant is left out for now.
+                name{n} = 'dGauss_T';
+                vec([24 47]) = .5; %put 1 to nth regressor
+                convec{n} = vec;
+            elseif ismember(model_num,20)
+                gauss = spm_Npdf(1:8,4)-mean(spm_Npdf(1:8,4)); %as once in 2ndlevel
+                regr2take = {1:8,27:34,55:62};
+                regrnames = {'Gauss_B','GaussT1','Gauss_T2'};
+                for se = 1:3
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                    n=n+1;
+                    if se == 3 && self.id == 15
+                        keyboard; %take care of this if necessary
+                    end
+                    vec(regr2take{n})=gauss;
+                    
+                    name{n} = regrnames{n};
+                    convec{n} = vec;
+                end
+                % now we pair Test phase with .5*T1 and .5*T2.
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); %-1 so that phase constant is left out for now.
+                vec(regr2take{2})=gauss/2;
+                vec(regr2take{3})=gauss/2;
+                convec{n} = vec;
+                name{n} = 'Gauss_T';
+                % now test - base 
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); %-1 so that phase constant is left out for now.
+                vec(regr2take{1})=-gauss;
+                vec(regr2take{2})=gauss/2;
+                vec(regr2take{3})=gauss/2;
+                convec{n} = vec;
+                name{n} = 'Gauss_TvsB';
             else
                 %% contrast 1: CSdiff
                 % CSP > CSN (or UCS > CSN in Cond)
@@ -4236,19 +4294,25 @@ classdef Subject < Project
                     convec{n} = vec;
                 end
             end
-            %% take care that everything adds to 1 / 0 BEFORE creating neg. versions.
             
-            for co = 1:n
-                if  sum(convec{co}) == 0 % differential, e.g. CSP>CSN [1 -1], so we need to divide those seperately, otherwise we devide by sum=0;
-                    convec{co} =convec{co}./sum(convec{co}>0);
-                else
-                    convec{co} = convec{co}./sum(convec{co});
-                end
-                %pad with number of session constants
-                if self.id == 15 && nrun == 3
-                    convec{co} = [convec{co} zeros(1,self.nsessions(nrun)-1)];
-                else
-                    convec{co} = [convec{co} zeros(1,self.nsessions(nrun))];
+            %% take care that everything adds to 1 / 0 BEFORE creating neg. versions.
+            if model_num < 20
+                for co = 1:n
+                    if  sum(convec{co}) == 0 % differential, e.g. CSP>CSN [1 -1], so we need to divide those seperately, otherwise we devide by sum=0;
+                         keyboard
+                        convec{co} =convec{co}./sum(convec{co}>0); %must be sum(covnvec{co}(convec{co}>0)), or not?
+                       
+                    else
+                        convec{co} = convec{co}./sum(convec{co});
+                    end
+                    %pad with number of session constants
+                    if length(convec{co})<self.get_Nbetas(nrun,model_num)
+                        if self.id == 15 && nrun == 3
+                            convec{co} = [convec{co} zeros(1,self.nsessions(nrun)-1)];
+                        else
+                            convec{co} = [convec{co} zeros(1,self.nsessions(nrun))];
+                        end
+                    end
                 end
             end
             %% add same contrasts' negative version
@@ -4750,7 +4814,7 @@ classdef Subject < Project
         function Con1stLevel(self,nrun,model_num)
             n_con = self.CreateContrasts(nrun,model_num);
             fprintf('%d contrasts computed for phase %d, Model %d. \n',n_con,nrun,model_num)
-            %prepare paths for Normalization and Smoothing
+            %prepare paths for Normalizaftion and Smoothing
             path2cons = self.path_con(nrun,model_num,'');
             self.VolumeNormalize(path2cons);%normalize ('wCAT_' and 'wEPI_'' will be added)
             self.VolumeSmooth(self.path_con(nrun,model_num,'wCAT_'));% smooth (s6, or whatever kernel, will be added)
