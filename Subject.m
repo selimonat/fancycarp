@@ -3666,7 +3666,7 @@ classdef Subject < Project
                         delta = .01;
                         VMlookup = zscore(Tuning.VonMises(conds,amp,kappa,0,0));
                         dVMlookup = zscore((Tuning.VonMises(conds,amp,kappa+delta,0,0)-Tuning.VonMises(conds,amp,kappa-delta,0,0))./(2*delta)); %central difference formula
-                        %
+%                        %
                         condlist = cond_list(cond_list < 500);
                         for ntrial = 1:length(cond(1).onset)
                             deltacsp = condlist(ntrial);
@@ -3684,7 +3684,822 @@ classdef Subject < Project
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
                         load(modelpath);
                     end
+                case 20
+                    modelname = 'FaceOnsets_pmod'; %tonic pain is baseline, everything else is modelled
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        if verbalize == 1
+                            fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                        end
+                        L               = self.get_log(run);
+                        %sort things according to time rather than order of being logged
+                        [~,i]           = sort(L(:,1),'ascend');
+                        L               = L(i,:);
+                        % delete all the events that are after the last scanning..
+                        scan_times      = L(find(L(:,2) == 0),1);
+                        first_scan_time = min(scan_times);
+                        last_scan_time  = max(scan_times);
+                        L(L(:,1) < first_scan_time,:) = [];
+                        L(L(:,1) > last_scan_time,:)  = [];
+                        L(:,1)                        = L(:,1) - first_scan_time; % correct time logging so that it's referring to the first scan as 0. (later first col will be from > dummy trials)
+                        
+                        % correct timings for dummy scans
+                        L(1:6,:) = []; %let dummies go
+                        first_real_scan = L(1,1);
+                        L(:,end+1) = L(:,1); %store it so we still know the original timing
+                        L(:,1) = L(:,1)-first_real_scan;
+                        
+                        %event types are as follows:
+                        %         %Pulse Detection      :     0    info: NaN;
+                        %         %Tracker Onset        :     1
+                        %         %Cross (tonic) Onset  :     2    info: position
+                        %         %Cross (pain) Onset   :     3    info: position
+                        %         %Ramp down Onset      :     4    info: ror
+                        %         %Treatment Plateau    :     5    info: temp
+                        %         %Ramp back onset      :     6    info: ror;
+                        %         %Key Presses          :     7    info: keycode;
+                        %         %Tracker Offset       :     8    info: NaN;
+                        %         %Rate pain Onset		:     9    info: nTrial;
+                        %         %Rate pain Offset     :     10   info: nTrial;
+                        %         %Rate treat Onset     :     11   info: nTrial;
+                        %         %Rate treat Offset    :     12   info: nTrial;
+                        %         %Face Onset           :     13   info: dist;
+                        %         %Face Offset          :     14   info: dist;
+                        %         %FaceStim Fixcross    :     15   info: position(1)
+                        %         %Tonic Pain reached   :     16   info: nTrial
+                        %         %Fixcross Jump        :     17   info:
+                        %         %dummy fixflip        :     22   info: NaN;
+                        %         planned trialstart    :     30   info: NaN
+                        %         planned trialend      :     31   info: NaN
+                        
+                        
+                        names = {'VAS','Text','Pulse','Tracker+','CrossTonic','CrossTreat','RampDown','Plateau','RampBack','Keys','TrackerOff','RatePainOn','RatePainOff','RateReliefOn','RateReliefOff','FaceOn','FaceOff','FaceStimFX','PlateauReached','FixJump','CoolDown','TrialStart','TrialEnd'};
+                        condnum = [-2 -1 0 1:18 30 31];
+                        
+                        TR = Project.TR;
+                        scan_times          = L(L(:,2) == 0,1);%find all scan events and get their times
+                        scan_id             = 1:length(scan_times);%label pulses with increasing numbers, assumes no pulses is missing.
+                        
+                        %% model 1 - relief
+                        
+                        conds = [13 11 9 18];% 13 = face, 11 = RateTreat, 9=RatePain
+                        if verbalize ==1
+                            fprintf('Considering the following conditions:\n')
+                            for c = conds
+                                fprintf('%s\n',names{condnum==c})
+                            end
+                        end
+                        
+                        
+                        all_events          = find(ismember(L(:,2),conds));
+                        LL = L(all_events,:);
+                        
+                        if verbalize ==1
+                            fprintf('Overall we have %d events.\n',length(all_events))
+                        end
+                        
+                        %Conds
+                        
+                        %1 -135
+                        %2 -90
+                        %3 -45
+                        %4  CSP
+                        %5 45
+                        %6 90
+                        %7 135
+                        %8 180
+                        %9 UCS
+                        %10 Null
+                        %11 RatePain
+                        %12 RateRelief
+                        %13 BaselineEnd
+                        
+                        FaceOnsets       = LL(LL(:,2)==13,1);
+                        RateReliefOnsets = LL(LL(:,2)==11,1);
+                        RatePainOnsets   = LL(LL(:,2)==9,1);
+                        Cooldown         = LL(LL(:,2)==18,1);
+                        
+                        
+                        conds_presented = unique(LL(LL(:,2)==13,3));
+                        
+                        cond_list = L(L(:,2)==13,3);
+                        cc=0;
+                        cc=cc+1;
+                        cond(cc).name     = '8Faces';
+                        cond(cc).onset    = FaceOnsets(cond_list < 500);
+                        cond(cc).duration = RateReliefOnsets(cond_list < 500)-FaceOnsets(cond_list < 500);%ones(length(cond(1).onset),1).*6;
+                        if verbalize ==1
+                            fprintf('Number of onsets for %s: %d.\n',cond(1).name,length(cond(cc).onset))
+                        end
+                        cc = cc+1;
+                        cond(cc).name     = 'Null';
+                        cond(cc).onset    = FaceOnsets(cond_list ==3000);
+                        cond(cc).duration = RateReliefOnsets(cond_list == 3000)-FaceOnsets(cond_list == 3000);%;
+                        
+                        if run > 1
+                            cc = cc+1;
+                            cond(cc).name     = 'UCS';
+                            cond(cc).onset    = FaceOnsets(cond_list == 500);
+                            cond(cc).duration = RateReliefOnsets(cond_list == 500)-FaceOnsets(cond_list == 500);%
+                        end
+                        
+                        
+                        % Rate Pain
+                        cc = cc+1;
+                        cond(cc).name   = 'RatePain';
+                        cond(cc).onset  = RatePainOnsets;
+                        cond(cc).duration = L(L(:,2)==10,1)-RatePainOnsets;
+                        if verbalize ==1
+                            fprintf('Number of onsets for RatePain: %d.\n',length(cond(cc).onset))
+                        end
+                        if self.id == 6
+                            corrdur = [1.5 2 2 1]; %scanner stopped too early, during last rating.
+                            cond(cc).duration(end) = corrdur(run);
+                        elseif self.id == 32 && run == 1
+                            cond(cc).onset(end-1:end) = [];
+                            cond(cc).duration(end-1:end) = [];
+                        end
+                        
+                        % Rate Relief
+                        cc = cc+1;
+                        cond(cc).name     = 'RateRelief';
+                        cond(cc).onset    = RateReliefOnsets;
+                        cond(cc).duration = ones(1,length(cond(cc).onset)).*5;
+                        if self.id == 32 && run ==1
+                            cond(cc).duration(end) = 4; % scanner stopped here
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for RateRelief: %d.\n',length(cond(cc).onset))
+                        end
+                        
+                        % CoolDown phase
+                        cc = cc+1;
+                        RampDown        = L(L(:,2)==4,1);
+                        RampDownEnd     = RampDown(end);
+                        cond(cc).name   = '999';
+                        cond(cc).onset  = RampDownEnd;
+                        cond(cc).duration = RatePainOnsets(end)-L(find(L(:,2)==4,1,'last'),1);
+                        if self.id == 4
+                            cond(cc).duration = 32.6; %logging problem.
+                        elseif self.id == 32 && run == 1 %wrong seq, scanner stopped already
+                            cond(cc) = [];
+                        end
+                        
+                        if verbalize ==1
+                            fprintf('Number of onsets for CoolDown %d.\n',length(cond(end).onset))
+                        end
+                        
+                        
+                        %% housekeeping
+                        for counter = 1:length(cond)
+                            cond(counter).onset    = cond(counter).onset./TR;
+                            cond(counter).duration = cond(counter).duration./TR;
+                            cond(counter).tmod      = 0;
+                            cond(counter).pmod      = struct('name',{},'param',{},'poly',{});
+                        end
+                         %% Tuning information as pmod, VonMises and derivative dVM/dkappa
+                        conds = -135:45:180;
+                        
+%                         amp   = 1;
+%                         kappa = 1;
+%                         delta = .01;
+%                         VMlookup = zscore(Tuning.VonMises(conds,amp,kappa,0,0));
+%                         dVMlookup = zscore((Tuning.VonMises(conds,amp,kappa+delta,0,0)-Tuning.VonMises(conds,amp,kappa-delta,0,0))./(2*delta)); %central difference formula
+%                         %
+                        amp   = 1;
+                        sd = 45;
+                        delta = .01;
+                        Gausslookup = zscore(make_gaussian_fmri(conds,amp,sd,0));
+                        dGausslookup = zscore((make_gaussian_fmri(conds,amp,sd+delta,0)-make_gaussian_fmri(conds,amp,sd-delta,0))./(2*delta)); %central difference formula
+%                     
+
+                        condlist = cond_list(cond_list < 500);
+                        for ntrial = 1:length(cond(1).onset)
+                            deltacsp = condlist(ntrial);
+                            ind = Project.compute_deltacsp2ind(deltacsp);
+                            Gauss(ntrial)    = Gausslookup(ind);
+                            dGauss(ntrial)   = dGausslookup(ind);
+                        end
+                        
+                        % linear regression y ~ 1 + vM + dVM
+                        % Interaction is done on 2ndlevel
+                        cond(1).pmod  = struct('name',{'Gauss','dGauss'},'param',{Gauss dGauss},'poly',{1 1});
+                        
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end  
+                case 21
+                    modelname = 'FaceOnsets_Stick'; 
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        if verbalize == 1
+                            fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                        end
+                        L               = self.get_log(run);
+                        %sort things according to time rather than order of being logged
+                        [~,i]           = sort(L(:,1),'ascend');
+                        L               = L(i,:);
+                        % delete all the events that are after the last scanning..
+                        scan_times      = L(find(L(:,2) == 0),1);
+                        first_scan_time = min(scan_times);
+                        last_scan_time  = max(scan_times);
+                        L(L(:,1) < first_scan_time,:) = [];
+                        L(L(:,1) > last_scan_time,:)  = [];
+                        L(:,1)                        = L(:,1) - first_scan_time; % correct time logging so that it's referring to the first scan as 0. (later first col will be from > dummy trials)
+                        
+                        % correct timings for dummy scans
+                        L(1:6,:) = []; %let dummies go
+                        first_real_scan = L(1,1);
+                        L(:,end+1) = L(:,1); %store it so we still know the original timing
+                        L(:,1) = L(:,1)-first_real_scan;
+                        
+                        %event types are as follows:
+                        %         %Pulse Detection      :     0    info: NaN;
+                        %         %Tracker Onset        :     1
+                        %         %Cross (tonic) Onset  :     2    info: position
+                        %         %Cross (pain) Onset   :     3    info: position
+                        %         %Ramp down Onset      :     4    info: ror
+                        %         %Treatment Plateau    :     5    info: temp
+                        %         %Ramp back onset      :     6    info: ror;
+                        %         %Key Presses          :     7    info: keycode;
+                        %         %Tracker Offset       :     8    info: NaN;
+                        %         %Rate pain Onset		:     9    info: nTrial;
+                        %         %Rate pain Offset     :     10   info: nTrial;
+                        %         %Rate treat Onset     :     11   info: nTrial;
+                        %         %Rate treat Offset    :     12   info: nTrial;
+                        %         %Face Onset           :     13   info: dist;
+                        %         %Face Offset          :     14   info: dist;
+                        %         %FaceStim Fixcross    :     15   info: position(1)
+                        %         %Tonic Pain reached   :     16   info: nTrial
+                        %         %Fixcross Jump        :     17   info:
+                        %         %dummy fixflip        :     22   info: NaN;
+                        %         planned trialstart    :     30   info: NaN
+                        %         planned trialend      :     31   info: NaN
+                        
+                        
+                        names = {'VAS','Text','Pulse','Tracker+','CrossTonic','CrossTreat','RampDown','Plateau','RampBack','Keys','TrackerOff','RatePainOn','RatePainOff','RateReliefOn','RateReliefOff','FaceOn','FaceOff','FaceStimFX','PlateauReached','FixJump','CoolDown','TrialStart','TrialEnd'};
+                        condnum = [-2 -1 0 1:18 30 31];
+                        
+                        TR = Project.TR;
+                        scan_times          = L(L(:,2) == 0,1);%find all scan events and get their times
+                        scan_id             = 1:length(scan_times);%label pulses with increasing numbers, assumes no pulses is missing.
+                        
+                       
+                        conds = [13 11 9 18];% 13 = face, 11 = RateTreat, 9=RatePain
+                        if verbalize ==1
+                            fprintf('Considering the following conditions:\n')
+                            for c = conds
+                                fprintf('%s\n',names{condnum==c})
+                            end
+                        end
+                        all_events          = find(ismember(L(:,2),conds));
+                        LL = L(all_events,:);
+                        if verbalize ==1
+                            fprintf('Overall we have %d events.\n',length(all_events))
+                        end
+                        %    
+                        FaceOnsets       = LL(LL(:,2)==13,1);
+                        RateReliefOnsets = LL(LL(:,2)==11,1);
+                        RatePainOnsets   = LL(LL(:,2)==9,1);
+                        
+                        conds_presented = unique(LL(LL(:,2)==13,3));
+                        cond = [];
+                        cc = 0;
+                        for c = conds_presented(:)';
+                            cc = cc+1;
+                            trial_ind = find(LL(LL(:,2)==13,3)==c);
+                            
+                            cond(cc).name     = mat2str(c);
+                            cond(cc).onset    = FaceOnsets(trial_ind);
+                            cond(cc).duration = 0;
+                            if verbalize ==1
+                                fprintf('Number of onsets for cond %04g: %d.\n',c,length(cond(cc).onset))
+                            end
+                        end
+                        
+                        % Rate Pain
+                        cc = cc+1;
+                        cond(cc).name   = 'RatePain';
+                        cond(cc).onset  = RatePainOnsets;
+                        cond(cc).duration = L(L(:,2)==10,1)-RatePainOnsets;
+                        if verbalize ==1
+                            fprintf('Number of onsets for RatePain: %d.\n',length(cond(cc).onset))
+                        end
+                        if self.id == 6
+                            corrdur = [1.5 2 2 1]; %scanner stopped too early, during last rating.
+                            cond(cc).duration(end) = corrdur(run);
+                        elseif self.id == 32 && run == 1
+                            cond(cc).onset(end-1:end) = [];
+                            cond(cc).duration(end-1:end) = [];
+                        end
+                        
+                        % Rate Relief
+                        cc = cc+1;
+                        cond(cc).name     = 'RateRelief';
+                        cond(cc).onset    = RateReliefOnsets;
+                        cond(cc).duration = ones(1,length(cond(cc).onset)).*5;
+                        if self.id == 32 && run ==1
+                            cond(cc).duration(end) = 4; % scanner stopped here
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for RateRelief: %d.\n',length(cond(cc).onset))
+                        end
+                        
+                        % CoolDown phase
+                        cc = cc+1;
+                        RampDown        = L(L(:,2)==4,1);
+                        RampDownEnd     = RampDown(end);
+                        cond(cc).name   = '999';
+                        cond(cc).onset  = RampDownEnd;
+                        cond(cc).duration = RatePainOnsets(end)-L(find(L(:,2)==4,1,'last'),1);
+                        if self.id == 4
+                            cond(cc).duration = 32.6; %logging problem.
+                        elseif self.id == 32 && run == 1 %wrong seq, scanner stopped already
+                            cond(cc) = [];
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for CoolDown %d.\n',length(cond(end).onset))
+                        end
+                        %% housekeeping
+                        for counter = 1:length(cond)
+                            cond(counter).onset    = cond(counter).onset./TR;
+                            cond(counter).duration = cond(counter).duration./TR;
+                            cond(counter).tmod      = 0;
+                            cond(counter).pmod      = struct('name',{},'param',{},'poly',{});
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 22
+                    modelname = 'FaceOnsets_dur'; 
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        if verbalize == 1
+                            fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                        end
+                        L               = self.get_log(run);
+                        %sort things according to time rather than order of being logged
+                        [~,i]           = sort(L(:,1),'ascend');
+                        L               = L(i,:);
+                        % delete all the events that are after the last scanning..
+                        scan_times      = L(find(L(:,2) == 0),1);
+                        first_scan_time = min(scan_times);
+                        last_scan_time  = max(scan_times);
+                        L(L(:,1) < first_scan_time,:) = [];
+                        L(L(:,1) > last_scan_time,:)  = [];
+                        L(:,1)                        = L(:,1) - first_scan_time; % correct time logging so that it's referring to the first scan as 0. (later first col will be from > dummy trials)
+                        
+                        % correct timings for dummy scans
+                        L(1:6,:) = []; %let dummies go
+                        first_real_scan = L(1,1);
+                        L(:,end+1) = L(:,1); %store it so we still know the original timing
+                        L(:,1) = L(:,1)-first_real_scan;
+                        
+                        %event types are as follows:
+                        %         %Pulse Detection      :     0    info: NaN;
+                        %         %Tracker Onset        :     1
+                        %         %Cross (tonic) Onset  :     2    info: position
+                        %         %Cross (pain) Onset   :     3    info: position
+                        %         %Ramp down Onset      :     4    info: ror
+                        %         %Treatment Plateau    :     5    info: temp
+                        %         %Ramp back onset      :     6    info: ror;
+                        %         %Key Presses          :     7    info: keycode;
+                        %         %Tracker Offset       :     8    info: NaN;
+                        %         %Rate pain Onset		:     9    info: nTrial;
+                        %         %Rate pain Offset     :     10   info: nTrial;
+                        %         %Rate treat Onset     :     11   info: nTrial;
+                        %         %Rate treat Offset    :     12   info: nTrial;
+                        %         %Face Onset           :     13   info: dist;
+                        %         %Face Offset          :     14   info: dist;
+                        %         %FaceStim Fixcross    :     15   info: position(1)
+                        %         %Tonic Pain reached   :     16   info: nTrial
+                        %         %Fixcross Jump        :     17   info:
+                        %         %dummy fixflip        :     22   info: NaN;
+                        %         planned trialstart    :     30   info: NaN
+                        %         planned trialend      :     31   info: NaN
+                        
+                        
+                        names = {'VAS','Text','Pulse','Tracker+','CrossTonic','CrossTreat','RampDown','Plateau','RampBack','Keys','TrackerOff','RatePainOn','RatePainOff','RateReliefOn','RateReliefOff','FaceOn','FaceOff','FaceStimFX','PlateauReached','FixJump','CoolDown','TrialStart','TrialEnd'};
+                        condnum = [-2 -1 0 1:18 30 31];
+                        
+                        TR = Project.TR;
+                        scan_times          = L(L(:,2) == 0,1);%find all scan events and get their times
+                        scan_id             = 1:length(scan_times);%label pulses with increasing numbers, assumes no pulses is missing.
+                        
+                       
+                        conds = [13 11 9 18];% 13 = face, 11 = RateTreat, 9=RatePain
+                        if verbalize ==1
+                            fprintf('Considering the following conditions:\n')
+                            for c = conds
+                                fprintf('%s\n',names{condnum==c})
+                            end
+                        end
+                        all_events          = find(ismember(L(:,2),conds));
+                        LL = L(all_events,:);
+                        if verbalize ==1
+                            fprintf('Overall we have %d events.\n',length(all_events))
+                        end
+                        %    
+                        FaceOnsets       = LL(LL(:,2)==13,1);
+                        RateReliefOnsets = LL(LL(:,2)==11,1);
+                        RatePainOnsets   = LL(LL(:,2)==9,1);
+                        
+                        conds_presented = unique(LL(LL(:,2)==13,3));
+                        cond = [];
+                        cc = 0;
+                        for c = conds_presented(:)';
+                            cc = cc+1;
+                            trial_ind = find(LL(LL(:,2)==13,3)==c);
+                            
+                            cond(cc).name     = mat2str(c);
+                            cond(cc).onset    = FaceOnsets(trial_ind);
+                            cond(cc).duration = RateReliefOnsets(trial_ind)-FaceOnsets(trial_ind);%;
+                            if verbalize ==1
+                                fprintf('Number of onsets for cond %04g: %d.\n',c,length(cond(cc).onset))
+                            end
+                        end
+                        
+                        % Rate Pain
+                        cc = cc+1;
+                        cond(cc).name   = 'RatePain';
+                        cond(cc).onset  = RatePainOnsets;
+                        cond(cc).duration = L(L(:,2)==10,1)-RatePainOnsets;
+                        if verbalize ==1
+                            fprintf('Number of onsets for RatePain: %d.\n',length(cond(cc).onset))
+                        end
+                        if self.id == 6
+                            corrdur = [1.5 2 2 1]; %scanner stopped too early, during last rating.
+                            cond(cc).duration(end) = corrdur(run);
+                        elseif self.id == 32 && run == 1
+                            cond(cc).onset(end-1:end) = [];
+                            cond(cc).duration(end-1:end) = [];
+                        end
+                        
+                        % Rate Relief
+                        cc = cc+1;
+                        cond(cc).name     = 'RateRelief';
+                        cond(cc).onset    = RateReliefOnsets;
+                        cond(cc).duration = ones(1,length(cond(cc).onset)).*5;
+                        if self.id == 32 && run ==1
+                            cond(cc).duration(end) = 4; % scanner stopped here
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for RateRelief: %d.\n',length(cond(cc).onset))
+                        end
+                        
+                        % CoolDown phase
+                        cc = cc+1;
+                        RampDown        = L(L(:,2)==4,1);
+                        RampDownEnd     = RampDown(end);
+                        cond(cc).name   = '999';
+                        cond(cc).onset  = RampDownEnd;
+                        cond(cc).duration = RatePainOnsets(end)-L(find(L(:,2)==4,1,'last'),1);
+                        if self.id == 4
+                            cond(cc).duration = 32.6; %logging problem.
+                        elseif self.id == 32 && run == 1 %wrong seq, scanner stopped already
+                            cond(cc) = [];
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for CoolDown %d.\n',length(cond(end).onset))
+                        end
+                        %% housekeeping
+                        for counter = 1:length(cond)
+                            cond(counter).onset    = cond(counter).onset./TR;
+                            cond(counter).duration = cond(counter).duration./TR;
+                            cond(counter).tmod      = 0;
+                            cond(counter).pmod      = struct('name',{},'param',{},'poly',{});
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 23
+                    modelname = 'RampOnsets_Stick';
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        if verbalize == 1
+                            fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                        end
+                        L               = self.get_log(run);
+                        %sort things according to time rather than order of being logged
+                        [~,i]           = sort(L(:,1),'ascend');
+                        L               = L(i,:);
+                        % delete all the events that are after the last scanning..
+                        scan_times      = L(find(L(:,2) == 0),1);
+                        first_scan_time = min(scan_times);
+                        last_scan_time  = max(scan_times);
+                        L(L(:,1) < first_scan_time,:) = [];
+                        L(L(:,1) > last_scan_time,:)  = [];
+                        L(:,1)                        = L(:,1) - first_scan_time; % correct time logging so that it's referring to the first scan as 0. (later first col will be from > dummy trials)
+                        
+                        % correct timings for dummy scans
+                        L(1:6,:) = []; %let dummies go
+                        first_real_scan = L(1,1);
+                        L(:,end+1) = L(:,1); %store it so we still know the original timing
+                        L(:,1) = L(:,1)-first_real_scan;
+                        
+                        %event types are as follows:
+                        %         %Pulse Detection      :     0    info: NaN;
+                        %         %Tracker Onset        :     1
+                        %         %Cross (tonic) Onset  :     2    info: position
+                        %         %Cross (pain) Onset   :     3    info: position
+                        %         %Ramp down Onset      :     4    info: ror
+                        %         %Treatment Plateau    :     5    info: temp
+                        %         %Ramp back onset      :     6    info: ror;
+                        %         %Key Presses          :     7    info: keycode;
+                        %         %Tracker Offset       :     8    info: NaN;
+                        %         %Rate pain Onset		:     9    info: nTrial;
+                        %         %Rate pain Offset     :     10   info: nTrial;
+                        %         %Rate treat Onset     :     11   info: nTrial;
+                        %         %Rate treat Offset    :     12   info: nTrial;
+                        %         %Face Onset           :     13   info: dist;
+                        %         %Face Offset          :     14   info: dist;
+                        %         %FaceStim Fixcross    :     15   info: position(1)
+                        %         %Tonic Pain reached   :     16   info: nTrial
+                        %         %Fixcross Jump        :     17   info:
+                        %         %dummy fixflip        :     22   info: NaN;
+                        %         planned trialstart    :     30   info: NaN
+                        %         planned trialend      :     31   info: NaN
+                        
+                        
+                        names = {'VAS','Text','Pulse','Tracker+','CrossTonic','CrossTreat','RampDown','Plateau','RampBack','Keys','TrackerOff','RatePainOn','RatePainOff','RateReliefOn','RateReliefOff','FaceOn','FaceOff','FaceStimFX','PlateauReached','FixJump','CoolDown','TrialStart','TrialEnd'};
+                        condnum = [-2 -1 0 1:18 30 31];
+                        
+                        TR = Project.TR;
+                        scan_times          = L(L(:,2) == 0,1);%find all scan events and get their times
+                        scan_id             = 1:length(scan_times);%label pulses with increasing numbers, assumes no pulses is missing.
+                        
+                       
+                        conds = [4 11 9 18];% 4 = face, 11 = RateTreat, 9=RatePain
+                        if verbalize ==1
+                            fprintf('Considering the following conditions:\n')
+                            for c = conds
+                                fprintf('%s\n',names{condnum==c})
+                            end
+                        end
+                        all_events          = find(ismember(L(:,2),conds));
+                        LL = L(all_events,:);
+                        if verbalize ==1
+                            fprintf('Overall we have %d events.\n',length(all_events))
+                        end
+                        %    
+                        RampdownOnsets   = LL(LL(:,2)==4,1);
+                        RateReliefOnsets = LL(LL(:,2)==11,1);
+                        RatePainOnsets   = LL(LL(:,2)==9,1);
+                        
+                        conds_presented = unique(LL(LL(:,2)==13,3));
+                        cond = [];
+                        cc = 0;
+                        for c = conds_presented(:)';
+                            cc = cc+1;
+                            trial_ind = find(LL(LL(:,2)==13,3)==c);
+                            
+                            cond(cc).name     = mat2str(c);
+                            cond(cc).onset    = RampdownOnsets(trial_ind);
+                            cond(cc).duration = 0;
+                            if verbalize ==1
+                                fprintf('Number of onsets for cond %04g: %d.\n',c,length(cond(cc).onset))
+                            end
+                        end
+                        
+                        % Rate Pain
+                        cc = cc+1;
+                        cond(cc).name   = 'RatePain';
+                        cond(cc).onset  = RatePainOnsets;
+                        cond(cc).duration = L(L(:,2)==10,1)-RatePainOnsets;
+                        if verbalize ==1
+                            fprintf('Number of onsets for RatePain: %d.\n',length(cond(cc).onset))
+                        end
+                        if self.id == 6
+                            corrdur = [1.5 2 2 1]; %scanner stopped too early, during last rating.
+                            cond(cc).duration(end) = corrdur(run);
+                        elseif self.id == 32 && run == 1
+                            cond(cc).onset(end-1:end) = [];
+                            cond(cc).duration(end-1:end) = [];
+                        end
+                        
+                        % Rate Relief
+                        cc = cc+1;
+                        cond(cc).name     = 'RateRelief';
+                        cond(cc).onset    = RateReliefOnsets;
+                        cond(cc).duration = ones(1,length(cond(cc).onset)).*5;
+                        if self.id == 32 && run ==1
+                            cond(cc).duration(end) = 4; % scanner stopped here
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for RateRelief: %d.\n',length(cond(cc).onset))
+                        end
+                        
+                        % CoolDown phase
+                        cc = cc+1;
+                        RampDown        = L(L(:,2)==4,1);
+                        RampDownEnd     = RampDown(end);
+                        cond(cc).name   = '999';
+                        cond(cc).onset  = RampDownEnd;
+                        cond(cc).duration = RatePainOnsets(end)-L(find(L(:,2)==4,1,'last'),1);
+                        if self.id == 4
+                            cond(cc).duration = 32.6; %logging problem.
+                        elseif self.id == 32 && run == 1 %wrong seq, scanner stopped already
+                            cond(cc) = [];
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for CoolDown %d.\n',length(cond(end).onset))
+                        end
+                        %% housekeeping
+                        for counter = 1:length(cond)
+                            cond(counter).onset    = cond(counter).onset./TR;
+                            cond(counter).duration = cond(counter).duration./TR;
+                            cond(counter).tmod      = 0;
+                            cond(counter).pmod      = struct('name',{},'param',{},'poly',{});
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 24
+                    modelname = 'RampOnsets_dur';
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        if verbalize == 1
+                            fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                        end
+                        L               = self.get_log(run);
+                        %sort things according to time rather than order of being logged
+                        [~,i]           = sort(L(:,1),'ascend');
+                        L               = L(i,:);
+                        % delete all the events that are after the last scanning..
+                        scan_times      = L(find(L(:,2) == 0),1);
+                        first_scan_time = min(scan_times);
+                        last_scan_time  = max(scan_times);
+                        L(L(:,1) < first_scan_time,:) = [];
+                        L(L(:,1) > last_scan_time,:)  = [];
+                        L(:,1)                        = L(:,1) - first_scan_time; % correct time logging so that it's referring to the first scan as 0. (later first col will be from > dummy trials)
+                        
+                        % correct timings for dummy scans
+                        L(1:6,:) = []; %let dummies go
+                        first_real_scan = L(1,1);
+                        L(:,end+1) = L(:,1); %store it so we still know the original timing
+                        L(:,1) = L(:,1)-first_real_scan;
+                        
+                        %event types are as follows:
+                        %         %Pulse Detection      :     0    info: NaN;
+                        %         %Tracker Onset        :     1
+                        %         %Cross (tonic) Onset  :     2    info: position
+                        %         %Cross (pain) Onset   :     3    info: position
+                        %         %Ramp down Onset      :     4    info: ror
+                        %         %Treatment Plateau    :     5    info: temp
+                        %         %Ramp back onset      :     6    info: ror;
+                        %         %Key Presses          :     7    info: keycode;
+                        %         %Tracker Offset       :     8    info: NaN;
+                        %         %Rate pain Onset		:     9    info: nTrial;
+                        %         %Rate pain Offset     :     10   info: nTrial;
+                        %         %Rate treat Onset     :     11   info: nTrial;
+                        %         %Rate treat Offset    :     12   info: nTrial;
+                        %         %Face Onset           :     13   info: dist;
+                        %         %Face Offset          :     14   info: dist;
+                        %         %FaceStim Fixcross    :     15   info: position(1)
+                        %         %Tonic Pain reached   :     16   info: nTrial
+                        %         %Fixcross Jump        :     17   info:
+                        %         %dummy fixflip        :     22   info: NaN;
+                        %         planned trialstart    :     30   info: NaN
+                        %         planned trialend      :     31   info: NaN
+                        
+                        
+                        names = {'VAS','Text','Pulse','Tracker+','CrossTonic','CrossTreat','RampDown','Plateau','RampBack','Keys','TrackerOff','RatePainOn','RatePainOff','RateReliefOn','RateReliefOff','FaceOn','FaceOff','FaceStimFX','PlateauReached','FixJump','CoolDown','TrialStart','TrialEnd'};
+                        condnum = [-2 -1 0 1:18 30 31];
+                        
+                        TR = Project.TR;
+                        scan_times          = L(L(:,2) == 0,1);%find all scan events and get their times
+                        scan_id             = 1:length(scan_times);%label pulses with increasing numbers, assumes no pulses is missing.
+                        
+                       
+                        conds = [4 11 9 18];% 4 = Ramp, 11 = RateTreat, 9=RatePain
+                        if verbalize ==1
+                            fprintf('Considering the following conditions:\n')
+                            for c = conds
+                                fprintf('%s\n',names{condnum==c})
+                            end
+                        end
+                        all_events          = find(ismember(L(:,2),conds));
+                        LL = L(all_events,:);
+                        if verbalize ==1
+                            fprintf('Overall we have %d events.\n',length(all_events))
+                        end
+                        %    
+                        RampdownOnsets   = LL(LL(:,2)==4,1);
+                        RateReliefOnsets = LL(LL(:,2)==11,1);
+                        RatePainOnsets   = LL(LL(:,2)==9,1);
+                        
+                        conds_presented = unique(LL(LL(:,2)==13,3));
+                        cond = [];
+                        cc = 0;
+                        for c = conds_presented(:)';
+                            cc = cc+1;
+                            trial_ind = find(LL(LL(:,2)==13,3)==c);
+                            
+                            cond(cc).name     = mat2str(c);
+                            cond(cc).onset    = RampdownOnsets(trial_ind);
+                            cond(cc).duration = RateReliefOnsets(trial_ind)-RampdownOnsets(trial_ind);
+                            if verbalize ==1
+                                fprintf('Number of onsets for cond %04g: %d.\n',c,length(cond(cc).onset))
+                            end
+                        end
+                        
+                        % Rate Pain
+                        cc = cc+1;
+                        cond(cc).name   = 'RatePain';
+                        cond(cc).onset  = RatePainOnsets;
+                        cond(cc).duration = L(L(:,2)==10,1)-RatePainOnsets;
+                        if verbalize ==1
+                            fprintf('Number of onsets for RatePain: %d.\n',length(cond(cc).onset))
+                        end
+                        if self.id == 6
+                            corrdur = [1.5 2 2 1]; %scanner stopped too early, during last rating.
+                            cond(cc).duration(end) = corrdur(run);
+                        elseif self.id == 32 && run == 1
+                            cond(cc).onset(end-1:end) = [];
+                            cond(cc).duration(end-1:end) = [];
+                        end
+                        
+                        % Rate Relief
+                        cc = cc+1;
+                        cond(cc).name     = 'RateRelief';
+                        cond(cc).onset    = RateReliefOnsets;
+                        cond(cc).duration = ones(1,length(cond(cc).onset)).*5;
+                        if self.id == 32 && run ==1
+                            cond(cc).duration(end) = 4; % scanner stopped here
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for RateRelief: %d.\n',length(cond(cc).onset))
+                        end
+                        
+                        % CoolDown phase
+                        cc = cc+1;
+                        RampDown        = L(L(:,2)==4,1);
+                        RampDownEnd     = RampDown(end);
+                        cond(cc).name   = '999';
+                        cond(cc).onset  = RampDownEnd;
+                        cond(cc).duration = RatePainOnsets(end)-L(find(L(:,2)==4,1,'last'),1);
+                        if self.id == 4
+                            cond(cc).duration = 32.6; %logging problem.
+                        elseif self.id == 32 && run == 1 %wrong seq, scanner stopped already
+                            cond(cc) = [];
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for CoolDown %d.\n',length(cond(end).onset))
+                        end
+                        %% housekeeping
+                        for counter = 1:length(cond)
+                            cond(counter).onset    = cond(counter).onset./TR;
+                            cond(counter).duration = cond(counter).duration./TR;
+                            cond(counter).tmod      = 0;
+                            cond(counter).pmod      = struct('name',{},'param',{},'poly',{});
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 26
+                     a=load(self.path_model(run,20));
+                     cond = a.cond; %based on model 20, will just shift face onsets and durations.
+                     cond2change = {1:2,[],1:3,1:3}; %baseline has no UCS, so we take cond 1 and 2 (Null)
+                     for c = cond2change{run}(:)'
+                         cond(c).onset = cond(c).onset + .5/self.TR;
+                         cond(c).duration = cond(c).duration - .5/self.TR;
+                     end
+                case 27
+                     a=load(self.path_model(run,20));
+                     cond = a.cond; %based on model 20, will just shift face onsets and durations.
+                     cond2change = {1:2,[],1:3,1:3}; %baseline has no UCS, so we take cond 1 and 2 (Null)
+                     for c = cond2change{run}(:)'
+                         cond(c).onset = cond(c).onset + 1/self.TR;
+                         cond(c).duration = cond(c).duration - 1/self.TR;
+                     end
+                case 28
+                     a=load(self.path_model(run,20));
+                     cond = a.cond; %based on model 20, will just shift face onsets and durations.
+                     cond2change = {1:2,[],1:3,1:3}; %baseline has no UCS, so we take cond 1 and 2 (Null)
+                     for c = cond2change{run}(:)'
+                         cond(c).onset = cond(c).onset + 2/self.TR;
+                         cond(c).duration = cond(c).duration - 2/self.TR;
+                     end
+                case 29
+                      a=load(self.path_model(run,20));
+                     cond = a.cond; %based on model 20, will just shift face onsets and durations.
+                     cond2change = {1:2,[],1:3,1:3}; %baseline has no UCS, so we take cond 1 and 2 (Null)
+                     for c = cond2change{run}(:)'
+                         cond(c).onset = cond(c).onset + 3/self.TR;
+                         cond(c).duration = cond(c).duration - 3/self.TR;
+                     end
             end
+            
         end
         function [wmcsf, wm, csf] = get_wmcsf_epi(self,nrun)
             force = 1;
@@ -3833,6 +4648,20 @@ classdef Subject < Project
                     num_onsetfile = 2;
                 case 21
                     num_onsetfile = 19;
+                case 22
+                    num_onsetfile = 2;
+                case 23
+                    num_onsetfile = 19;
+                case 25
+                    num_onsetfile = 20; %20 is Face Onset only, with long duration and pmod Gauss/dGauss.
+                case 30
+                    num_onsetfile = 21;  %Faces, HRF Stick
+                case 31
+                    num_onsetfile = 22;  %Faces, HRF duration
+                case 32
+                    num_onsetfile = 23;  %Ramp, HRF Stick
+                 case 33
+                    num_onsetfile = 24;  %Ramp, HRF duration
                 otherwise
                     num_onsetfile =3;
             end
@@ -4161,7 +4990,7 @@ classdef Subject < Project
                     end
                     convec{n} = vec;
                 end
-            elseif ismember(model_num,21)
+            elseif ismember(model_num,[21 23])
                 regr2take = [2 3 23 24 46 47];
                 regrnames = {'Gauss_B','dGauss_B','Gauss_T1','dGauss_T1','Gauss_T2','dGauss_T2'};
                 %first, we get con images for all these with a weight = 1,
@@ -4189,10 +5018,10 @@ classdef Subject < Project
                 name{n} = 'dGauss_T';
                 vec([24 47]) = .5; %put 1 to nth regressor
                 convec{n} = vec;
-            elseif ismember(model_num,20)
+            elseif ismember(model_num,[20 22])
                 gauss = spm_Npdf(1:8,4)-mean(spm_Npdf(1:8,4)); %as once in 2ndlevel
                 regr2take = {1:8,27:34,55:62};
-                regrnames = {'Gauss_B','GaussT1','Gauss_T2'};
+                regrnames = {'Gauss_B','Gauss_T1','Gauss_T2'};
                 for se = 1:3
                     vec = zeros(1,self.get_Nbetas(nrun,model_num));
                     n=n+1;
@@ -4219,6 +5048,13 @@ classdef Subject < Project
                 vec(regr2take{3})=gauss/2;
                 convec{n} = vec;
                 name{n} = 'Gauss_TvsB';
+                  % now test1 - base 
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); %-1 so that phase constant is left out for now.
+                vec(regr2take{1})=-gauss;
+                vec(regr2take{2})=gauss;
+                convec{n} = vec;
+                name{n} = 'Gauss_T1vsB';
             else
                 %% contrast 1: CSdiff
                 % CSP > CSN (or UCS > CSN in Cond)
