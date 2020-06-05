@@ -1526,6 +1526,12 @@ classdef Group < Project
                 cons2collect = 3;
             elseif strcmp(namestring,'Gauss1stlevel_BT') %modelnum 20
                 cons2collect = 5;
+            elseif strcmp(namestring,'Gauss1stlevel_BT_sep') %modelnum 20
+                cons2collect = [1 10]; %1 is base, %9 is testphase both sessions, weight .5
+            elseif strcmp(namestring,'Gauss1stlevel_BT1') %modelnum 20
+                cons2collect = 6; %Gaussian contrast neg B vs pos T1
+            elseif strcmp(namestring,'Gauss1stlevel_BT1_sep') %modelnum 20
+                cons2collect = [1 8]; %1 is base, %8 is testphase T1 only
             elseif strcmp(namestring,'VMdVM_BT_R') %modelnum 21
                 cons2collect = [1 2 7 8];   % 1 2 is Gauss dGauss Base, 7 8 is Testphases pooled (with each weight .5)
             end
@@ -1578,9 +1584,11 @@ classdef Group < Project
             matlabbatch{1}.spm.stats.factorial_design.masking.im = -Inf;
             
             groupmask = [self.path_groupmeans sprintf('/thr20_ave_wCAT_s3_ss_data_N%02d.nii',self.total_subjects)];
+%             groupmask = [self.path_groupmeans sprintf('/allX_mask_1stL_BT_epi_N%02d.nii',self.total_subjects)];
             if exist(groupmask)
                 matlabbatch{1}.spm.stats.factorial_design.masking.em = {groupmask};
             else
+                fprintf('Groupmask not found, taking ave s3 ss from N39.\n')
                 matlabbatch{1}.spm.stats.factorial_design.masking.em = {[self.path_groupmeans '/ave_wCAT_s3_ss_data.nii']};
             end
             matlabbatch{1}.spm.stats.factorial_design.globalc.g_omit = 1;
@@ -1757,6 +1765,17 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [-1 -1 1 1];
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';    
             elseif strcmp(namestring,'Gauss1stlevel_BT')
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F1';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n  = n + 1;
+                nF = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'Tpos';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+             elseif strcmp(namestring,'Gauss1stlevel_BT_sep')
                 n  = n + 1;
                 nF = nF + 1;
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F1';
@@ -4333,8 +4352,8 @@ classdef Group < Project
             cc=0;
             for nrun = [1 3]
                 for ns=1:self.total_subjects
-                    if ~exist([s.path_FIR(nrun,4,14,'10conds') '/wCAT_mask.nii'])
-                        self.subject{ns}.VolumeNormalize({[self.subject{ns}.path_FIR(nrun,4,14,'10conds') '/mask.nii']});
+                    if ~exist([self.subject{ns}.path_FIR(nrun,4,14,'10conds') '/wCAT_mask.nii'])
+                        self.subject{ns}.VolumeNormalize([self.subject{ns}.path_FIR(nrun,4,14,'10conds') '/mask.nii']); %actually, doesnt matter, which 1stlevel
                     end
                 end
             end
@@ -4343,9 +4362,9 @@ classdef Group < Project
                 files(ns,:) = [self.subject{ns}.path_FIR(1,4,14,'10conds') '/wCAT_mask.nii'];               
             end
             matlabbatch{1}.spm.util.imcalc.input = cellstr(files);
-            matlabbatch{1}.spm.util.imcalc.output = sprintf('mask_allX_s3_ss_T1_N%02d',self.total_subjects);
+            matlabbatch{1}.spm.util.imcalc.output = sprintf('allX_mask_1stL_Base_epi_N%02d',self.total_subjects);
             matlabbatch{1}.spm.util.imcalc.outdir = {path2groupmean};
-            matlabbatch{1}.spm.util.imcalc.expression = sprintf('sum(X)==%d',self.total_subjects);
+            matlabbatch{1}.spm.util.imcalc.expression = 'all(X)';
             matlabbatch{1}.spm.util.imcalc.var = struct('name', {}, 'value', {});
             matlabbatch{1}.spm.util.imcalc.options.dmtx = 1;
             matlabbatch{1}.spm.util.imcalc.options.mask = 0;
@@ -4359,7 +4378,7 @@ classdef Group < Project
                 files(ns,:) = [self.subject{ns}.path_FIR(3,4,14,'10conds') '/wCAT_mask.nii'];               
             end
             matlabbatch{1}.spm.util.imcalc.input = cellstr(files);
-            matlabbatch{1}.spm.util.imcalc.output = sprintf('mask_allX_s3_ss_T1_N%02d',self.total_subjects);
+            matlabbatch{1}.spm.util.imcalc.output = sprintf('allX_mask_1stL_Test_epi_N%02d',self.total_subjects);
             matlabbatch{1}.spm.util.imcalc.outdir = {path2groupmean};
             matlabbatch{1}.spm.util.imcalc.expression = sprintf('sum(X)==%d',self.total_subjects);
             matlabbatch{1}.spm.util.imcalc.var = struct('name', {}, 'value', {});
@@ -4368,7 +4387,7 @@ classdef Group < Project
             matlabbatch{1}.spm.util.imcalc.options.interp = 1;
             matlabbatch{1}.spm.util.imcalc.options.dtype = 4;
             spm_jobman('run',matlabbatch);
-              clear matlabbatch
+            clear matlabbatch
          clear files
             %Base + Test
             cc=0;
@@ -4378,18 +4397,16 @@ classdef Group < Project
                      files(cc,:) = [self.subject{ns}.path_FIR(nrun,4,14,'10conds') '/wCAT_mask.nii'];   
                 end
             end
-            %sum(X) T1
             matlabbatch{1}.spm.util.imcalc.input = cellstr(files);
-            matlabbatch{1}.spm.util.imcalc.output = sprintf('mask_sumX_s3_ss_T1_N%02d',self.total_subjects);
+            matlabbatch{1}.spm.util.imcalc.output = sprintf('allX_mask_1stL_BT_epi_N%02d',self.total_subjects);
             matlabbatch{1}.spm.util.imcalc.outdir = {path2groupmean};
-            matlabbatch{1}.spm.util.imcalc.expression = sprintf('sum(X)==%d',self.total_subjects);
+            matlabbatch{1}.spm.util.imcalc.expression = 'all(X)';
             matlabbatch{1}.spm.util.imcalc.var = struct('name', {}, 'value', {});
             matlabbatch{1}.spm.util.imcalc.options.dmtx = 1;
             matlabbatch{1}.spm.util.imcalc.options.mask = 0;
             matlabbatch{1}.spm.util.imcalc.options.interp = 1;
             matlabbatch{1}.spm.util.imcalc.options.dtype = 4;
             spm_jobman('run',matlabbatch);
-           
            
         end
     end
