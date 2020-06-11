@@ -227,6 +227,16 @@ classdef Subject < Project
                 Nvols = floor(cond(end).onset);
             end
         end
+        function [Nvols] = get_lastscan_endtext(self,nrun)
+            modelnum = 0; %get condfile from there and find out where CoolDown phase started
+            a = load(self.path_model(nrun,modelnum));
+            cond = a.cond;
+            if self.id == 32 && nrun == 1
+                Nvols = 409;
+            else
+                Nvols = floor(cond(end).onset);
+            end
+        end
         function XYZmm  = get_nativeatlas2mask(self,mask_id)
             %Will return XYZ coordinates from ROI specified by MASK_INDEX
             %thresholded by the default value. XYZ values are in world
@@ -1446,7 +1456,7 @@ classdef Subject < Project
                 %take the latest anatomical scan.
                 %                     [status2 HRLine] = system(sprintf('env LD_LIBRARY_PATH= /common/apps/bin/dicq --series --exam=%s --folders -S "mprage, HR64*" ',self.hr_session));
                 
-                [status2 HRLine] = system(sprintf('env LD_LIBRARY_PATH= /common/apps/bin/dicq --series --exam=%s --folders | grep mprage | grep HR64 | grep prisma | tail -n 1',self.hr_session));
+                [status2, HRLine] = system(sprintf('env LD_LIBRARY_PATH= /common/apps/bin/dicq --series --exam=%s --folders | grep mprage | grep HR64 | grep prisma | tail -n 1',self.hr_session));
                 %                 %
                 if ~isempty(HRLine);
                     HRPath = regexp(HRLine,'/common/mrt.*/\S*','match');
@@ -2022,6 +2032,42 @@ classdef Subject < Project
             modelpath = self.path_model(run,modelnum);
             
             switch modelnum
+                case 0 
+                      modelname = 'find_vol_endtext'; %tonic pain is baseline, everything else is modelled
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        if verbalize == 1
+                            fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                        end
+                        L               = self.get_log(run);
+                        %sort things according to time rather than order of being logged
+                        [~,i]           = sort(L(:,1),'ascend');
+                        L               = L(i,:);
+                        % delete all the events that are after the last scanning..
+                        scan_times      = L(find(L(:,2) == 0),1);
+                        first_scan_time = min(scan_times);
+                        last_scan_time  = max(scan_times);
+                        L(L(:,1) < first_scan_time,:) = [];
+                        L(L(:,1) > last_scan_time,:)  = [];
+                        L(:,1)                        = L(:,1) - first_scan_time; % correct time logging so that it's referring to the first scan as 0. (later first col will be from > dummy trials)
+                        
+                        % correct timings for dummy scans
+                        L(1:6,:) = []; %let dummies go
+                        first_real_scan = L(1,1);
+                        L(:,end+1) = L(:,1); %store it so we still know the original timing
+                        L(:,1) = L(:,1)-first_real_scan;
+                        
+                        cond = [];
+                        cond.name = 'EndText';
+                        cond.onset = L(L(:,2)==-1,1)/self.TR;
+                        cond.duration = 6/self.TR;
+                        cond.tmod      = 0;
+                        cond.pmod      = struct('name',{},'param',{},'poly',{});
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
                 case 1
                     modelname = 'FaceOnsets'; %tonic pain is baseline, everything else is modelled
                     if ~exist(modelpath) || force == 1
@@ -2077,7 +2123,174 @@ classdef Subject < Project
                         TR = Project.TR;
                         scan_times          = L(L(:,2) == 0,1);%find all scan events and get their times
                         scan_id             = 1:length(scan_times);%label pulses with increasing numbers, assumes no pulses is missing.
+                          modelname = 'FaceOnsets'; %tonic pain is baseline, everything else is modelled
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        if verbalize == 1
+                            fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                        end
+                        L               = self.get_log(run);
+                        %sort things according to time rather than order of being logged
+                        [~,i]           = sort(L(:,1),'ascend');
+                        L               = L(i,:);
+                        % delete all the events that are after the last scanning..
+                        scan_times      = L(find(L(:,2) == 0),1);
+                        first_scan_time = min(scan_times);
+                        last_scan_time  = max(scan_times);
+                        L(L(:,1) < first_scan_time,:) = [];
+                        L(L(:,1) > last_scan_time,:)  = [];
+                        L(:,1)                        = L(:,1) - first_scan_time; % correct time logging so that it's referring to the first scan as 0. (later first col will be from > dummy trials)
                         
+                        % correct timings for dummy scans
+                        L(1:6,:) = []; %let dummies go
+                        first_real_scan = L(1,1);
+                        L(:,end+1) = L(:,1); %store it so we still know the original timing
+                        L(:,1) = L(:,1)-first_real_scan;
+                        
+                        %event types are as follows:
+                        %         %Pulse Detection      :     0    info: NaN;
+                        %         %Tracker Onset        :     1
+                        %         %Cross (tonic) Onset  :     2    info: position
+                        %         %Cross (pain) Onset   :     3    info: position
+                        %         %Ramp down Onset      :     4    info: ror
+                        %         %Treatment Plateau    :     5    info: temp
+                        %         %Ramp back onset      :     6    info: ror;
+                        %         %Key Presses          :     7    info: keycode;
+                        %         %Tracker Offset       :     8    info: NaN;
+                        %         %Rate pain Onset		:     9    info: nTrial;
+                        %         %Rate pain Offset     :     10   info: nTrial;
+                        %         %Rate treat Onset     :     11   info: nTrial;
+                        %         %Rate treat Offset    :     12   info: nTrial;
+                        %         %Face Onset           :     13   info: dist;
+                        %         %Face Offset          :     14   info: dist;
+                        %         %FaceStim Fixcross    :     15   info: position(1)
+                        %         %Tonic Pain reached   :     16   info: nTrial
+                        %         %Fixcross Jump        :     17   info:
+                        %         %dummy fixflip        :     22   info: NaN;
+                        %         planned trialstart    :     30   info: NaN
+                        %         planned trialend      :     31   info: NaN
+                        
+                        
+                        names = {'VAS','Text','Pulse','Tracker+','CrossTonic','CrossTreat','RampDown','Plateau','RampBack','Keys','TrackerOff','RatePainOn','RatePainOff','RateReliefOn','RateReliefOff','FaceOn','FaceOff','FaceStimFX','PlateauReached','FixJump','CoolDown','TrialStart','TrialEnd'};
+                        condnum = [-2 -1 0 1:18 30 31];
+                        
+                        TR = Project.TR;
+                        scan_times          = L(L(:,2) == 0,1);%find all scan events and get their times
+                        scan_id             = 1:length(scan_times);%label pulses with increasing numbers, assumes no pulses is missing.
+                        
+                        %% model 1 - relief
+                        
+                        conds = [13 11 9 18];% 13 = face, 11 = RateTreat, 9=RatePain
+                        if verbalize ==1
+                            fprintf('Considering the following conditions:\n')
+                            for c = conds
+                                fprintf('%s\n',names{condnum==c})
+                            end
+                        end
+                        
+                        
+                        all_events          = find(ismember(L(:,2),conds));
+                        LL = L(all_events,:);
+                        
+                        if verbalize ==1
+                            fprintf('Overall we have %d events.\n',length(all_events))
+                        end
+                        
+                        %Conds
+                        
+                        %1 -135
+                        %2 -90
+                        %3 -45
+                        %4  CSP
+                        %5 45
+                        %6 90
+                        %7 135
+                        %8 180
+                        %9 UCS
+                        %10 Null
+                        %11 RatePain
+                        %12 RateRelief
+                        %13 BaselineEnd
+                        
+                        FaceOnsets       = LL(LL(:,2)==13,1);
+                        RateReliefOnsets = LL(LL(:,2)==11,1);
+                        RatePainOnsets   = LL(LL(:,2)==9,1);
+                        
+                        
+                        conds_presented = unique(LL(LL(:,2)==13,3));
+                        cond = [];
+                        cc = 0;
+                        for c = conds_presented(:)';
+                            cc = cc+1;
+                            trial_ind = find(LL(LL(:,2)==13,3)==c);
+                            
+                            cond(cc).name     = mat2str(c);
+                            cond(cc).onset    = FaceOnsets(trial_ind);
+                            cond(cc).duration = RateReliefOnsets(trial_ind)-FaceOnsets(trial_ind);
+                            if verbalize ==1
+                                fprintf('Number of onsets for cond %04g: %d.\n',c,length(cond(cc).onset))
+                            end
+                        end
+                        
+                        % Rate Pain
+                        cc = cc+1;
+                        cond(cc).name   = 'RatePain';
+                        cond(cc).onset  = RatePainOnsets;
+                        cond(cc).duration = L(L(:,2)==10,1)-RatePainOnsets;
+                        if verbalize ==1
+                            fprintf('Number of onsets for RatePain: %d.\n',length(cond(cc).onset))
+                        end
+                        if self.id == 6
+                            corrdur = [1.5 2 2 1]; %scanner stopped too early, during last rating.
+                            cond(cc).duration(end) = corrdur(run);
+                        elseif self.id == 32 && run == 1
+                            cond(cc).onset(end-1:end) = [];
+                            cond(cc).duration(end-1:end) = [];
+                        end
+                        
+                        % Rate Relief
+                        cc = cc+1;
+                        cond(cc).name     = 'RateRelief';
+                        cond(cc).onset    = RateReliefOnsets;
+                        cond(cc).duration = ones(1,length(cond(cc).onset)).*5;
+                        if self.id == 32 && run ==1
+                            cond(cc).duration(end) = 4; % scanner stopped here
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for RateRelief: %d.\n',length(cond(cc).onset))
+                        end
+                        
+                        % CoolDown phase
+                        cc = cc+1;
+                        RampDown        = L(L(:,2)==4,1);
+                        RampDownEnd     = RampDown(end);
+                        cond(cc).name   = '999';
+                        cond(cc).onset  = RampDownEnd;
+                        cond(cc).duration = RatePainOnsets(end)-L(find(L(:,2)==4,1,'last'),1);
+                        if self.id == 4
+                            cond(cc).duration = 32.6; %logging problem.
+                        elseif self.id == 32 && run == 1 %wrong seq, scanner stopped already
+                            cond(cc) = [];
+                        end
+                        
+                        if verbalize ==1
+                            fprintf('Number of onsets for CoolDown %d.\n',length(cond(end).onset))
+                        end
+                        
+                        
+                        %% housekeeping
+                        for counter = 1:length(cond)
+                            cond(counter).onset    = cond(counter).onset./TR;
+                            cond(counter).duration = cond(counter).duration./TR;
+                            cond(counter).tmod      = 0;
+                            cond(counter).pmod      = struct('name',{},'param',{},'poly',{});
+                        end
+                        
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
                         %% model 1 - relief
                         
                         conds = [13 11 9 18];% 13 = face, 11 = RateTreat, 9=RatePain
@@ -2519,7 +2732,7 @@ classdef Subject < Project
                         % CoolDown phase
                         cc = cc+1;
                         RampDown        = L(L(:,2)==4,1);
-                        RampDownEnd     = RampDown(end);Prepare
+                        RampDownEnd     = RampDown(end);
                         cond(cc).name   = '999';
                         cond(cc).onset  = RampDownEnd;
                         cond(cc).duration = RatePainOnsets(end)-L(find(L(:,2)==4,1,'last'),1);
@@ -3780,8 +3993,6 @@ classdef Subject < Project
                         Cooldown         = LL(LL(:,2)==18,1);
                         
                         
-                        conds_presented = unique(LL(LL(:,2)==13,3));
-                        
                         cond_list = L(L(:,2)==13,3);
                         cc=0;
                         cc=cc+1;
@@ -4235,7 +4446,7 @@ classdef Subject < Project
                         scan_id             = 1:length(scan_times);%label pulses with increasing numbers, assumes no pulses is missing.
                         
                        
-                        conds = [4 11 9 18];% 4 = face, 11 = RateTreat, 9=RatePain
+                        conds = [4 11 9 18];% 4 = Ramp, 11 = RateTreat, 9=RatePain
                         if verbalize ==1
                             fprintf('Considering the following conditions:\n')
                             for c = conds
@@ -4252,12 +4463,12 @@ classdef Subject < Project
                         RateReliefOnsets = LL(LL(:,2)==11,1);
                         RatePainOnsets   = LL(LL(:,2)==9,1);
                         
-                        conds_presented = unique(LL(LL(:,2)==13,3));
+                        conds_presented = unique(L(L(:,2)==13,3));
                         cond = [];
                         cc = 0;
                         for c = conds_presented(:)';
                             cc = cc+1;
-                            trial_ind = find(LL(LL(:,2)==13,3)==c);
+                            trial_ind = find(L(L(:,2)==13,3)==c);
                             
                             cond(cc).name     = mat2str(c);
                             cond(cc).onset    = RampdownOnsets(trial_ind);
@@ -4396,12 +4607,12 @@ classdef Subject < Project
                         RateReliefOnsets = LL(LL(:,2)==11,1);
                         RatePainOnsets   = LL(LL(:,2)==9,1);
                         
-                        conds_presented = unique(LL(LL(:,2)==13,3));
+                        conds_presented = unique(L(L(:,2)==13,3));
                         cond = [];
                         cc = 0;
                         for c = conds_presented(:)';
                             cc = cc+1;
-                            trial_ind = find(LL(LL(:,2)==13,3)==c);
+                            trial_ind = find(L(L(:,2)==13,3)==c);
                             
                             cond(cc).name     = mat2str(c);
                             cond(cc).onset    = RampdownOnsets(trial_ind);
@@ -4466,38 +4677,357 @@ classdef Subject < Project
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
                         load(modelpath);
                     end
+                case 25 %same as 20, ran it with 20, but to make it (more) errorproof, now put this option
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        a = load(self.path_model(run,20));
+                        cond = a.cond;
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
                 case 26
-                     a=load(self.path_model(run,20));
-                     cond = a.cond; %based on model 20, will just shift face onsets and durations.
-                     cond2change = {1:2,[],1:3,1:3}; %baseline has no UCS, so we take cond 1 and 2 (Null)
-                     for c = cond2change{run}(:)'
-                         cond(c).onset = cond(c).onset + .5/self.TR;
-                         cond(c).duration = cond(c).duration - .5/self.TR;
-                     end
+                     if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        a = load(self.path_model(run,20));
+                        cond = a.cond;
+                        conds2change = {1:2,[],1:3,1:3}; %8faces and null in B, +UCS in T.
+                        for nc= conds2change{run}(:)'
+                            cond(nc).onset = cond(nc).onset+.5/self.TR;
+                            cond(nc).duration = cond(nc).duration - .5/self.TR;
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
                 case 27
-                     a=load(self.path_model(run,20));
-                     cond = a.cond; %based on model 20, will just shift face onsets and durations.
-                     cond2change = {1:2,[],1:3,1:3}; %baseline has no UCS, so we take cond 1 and 2 (Null)
-                     for c = cond2change{run}(:)'
-                         cond(c).onset = cond(c).onset + 1/self.TR;
-                         cond(c).duration = cond(c).duration - 1/self.TR;
-                     end
+                     if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        a = load(self.path_model(run,20));
+                        cond = a.cond;
+                        conds2change = {1:2,[],1:3,1:3}; %8faces and null in B, +UCS in T.
+                        for nc= conds2change{run}(:)'
+                            cond(nc).onset = cond(nc).onset+1/self.TR;
+                            cond(nc).duration = cond(nc).duration - 1/self.TR;
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
                 case 28
-                     a=load(self.path_model(run,20));
-                     cond = a.cond; %based on model 20, will just shift face onsets and durations.
-                     cond2change = {1:2,[],1:3,1:3}; %baseline has no UCS, so we take cond 1 and 2 (Null)
-                     for c = cond2change{run}(:)'
-                         cond(c).onset = cond(c).onset + 2/self.TR;
-                         cond(c).duration = cond(c).duration - 2/self.TR;
-                     end
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        a = load(self.path_model(run,20));
+                        cond = a.cond;
+                        conds2change = {1:2,[],1:3,1:3}; %8faces and null in B, +UCS in T.
+                        for nc= conds2change{run}(:)'
+                            cond(nc).onset = cond(nc).onset+2/self.TR;
+                            cond(nc).duration = cond(nc).duration - 2/self.TR;
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
                 case 29
-                      a=load(self.path_model(run,20));
-                     cond = a.cond; %based on model 20, will just shift face onsets and durations.
-                     cond2change = {1:2,[],1:3,1:3}; %baseline has no UCS, so we take cond 1 and 2 (Null)
-                     for c = cond2change{run}(:)'
-                         cond(c).onset = cond(c).onset + 3/self.TR;
-                         cond(c).duration = cond(c).duration - 3/self.TR;
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        a = load(self.path_model(run,20));
+                        cond = a.cond;
+                        conds2change = {1:2,[],1:3,1:3}; %8faces and null in B, +UCS in T.
+                        for nc= conds2change{run}(:)'
+                            cond(nc).onset = cond(nc).onset+3/self.TR;
+                            cond(nc).duration = cond(nc).duration - 3/self.TR;
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 35
+                     if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        a = load(self.path_model(run,25));
+                        cond = a.cond;
+                        conds2change = {1:2,[],1:3,1:3}; %8faces and null in B, +UCS in T.
+                        for nc= conds2change{run}(:)'
+                          cond(nc).duration = zeros(length(cond(nc).onset),1);
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
                      end
+                case 36
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        a = load(self.path_model(run,26));
+                        cond = a.cond;
+                        conds2change = {1:2,[],1:3,1:3}; %8faces and null in B, +UCS in T.
+                        for nc= conds2change{run}(:)'
+                          cond(nc).duration = zeros(length(cond(nc).onset),1);
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                     end
+                case 37
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        a = load(self.path_model(run,27));
+                        cond = a.cond;
+                        conds2change = {1:2,[],1:3,1:3}; %8faces and null in B, +UCS in T.
+                        for nc= conds2change{run}(:)'
+                          cond(nc).duration = zeros(length(cond(nc).onset),1);
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                     end
+                case 38
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        a = load(self.path_model(run,28));
+                        cond = a.cond;
+                        conds2change = {1:2,[],1:3,1:3}; %8faces and null in B, +UCS in T.
+                        for nc= conds2change{run}(:)'
+                          cond(nc).duration = zeros(length(cond(nc).onset),1);
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 39
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        a = load(self.path_model(run,29));
+                        cond = a.cond;
+                        conds2change = {1:2,[],1:3,1:3}; %8faces and null in B, +UCS in T.
+                        for nc= conds2change{run}(:)'
+                            cond(nc).duration = zeros(length(cond(nc).onset),1);
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 40
+                    modelname = 'FaceRamp_Pain';
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        if verbalize == 1
+                            fprintf('Preparing condition file for phase: ...................... %s.\n',Project.plottitles{run})
+                        end
+                        L               = self.get_log(run);
+                        %sort things according to time rather than order of being logged
+                        [~,i]           = sort(L(:,1),'ascend');
+                        L               = L(i,:);
+                        % delete all the events that are after the last scanning..
+                        scan_times      = L(find(L(:,2) == 0),1);
+                        first_scan_time = min(scan_times);
+                        last_scan_time  = max(scan_times);
+                        L(L(:,1) < first_scan_time,:) = [];
+                        L(L(:,1) > last_scan_time,:)  = [];
+                        L(:,1)                        = L(:,1) - first_scan_time; % correct time logging so that it's referring to the first scan as 0. (later first col will be from > dummy trials)
+                        
+                        % correct timings for dummy scans
+                        L(1:6,:) = []; %let dummies go
+                        first_real_scan = L(1,1);
+                        L(:,end+1) = L(:,1); %store it so we still know the original timing
+                        L(:,1) = L(:,1)-first_real_scan;
+                        
+                        %event types are as follows:
+                        %         %Pulse Detection      :     0    info: NaN;
+                        %         %Tracker Onset        :     1
+                        %         %Cross (tonic) Onset  :     2    info: position
+                        %         %Cross (pain) Onset   :     3    info: position
+                        %         %Ramp down Onset      :     4    info: ror
+                        %         %Treatment Plateau    :     5    info: temp
+                        %         %Ramp back onset      :     6    info: ror;
+                        %         %Key Presses          :     7    info: keycode;
+                        %         %Tracker Offset       :     8    info: NaN;
+                        %         %Rate pain Onset		:     9    info: nTrial;
+                        %         %Rate pain Offset     :     10   info: nTrial;
+                        %         %Rate treat Onset     :     11   info: nTrial;
+                        %         %Rate treat Offset    :     12   info: nTrial;
+                        %         %Face Onset           :     13   info: dist;
+                        %         %Face Offset          :     14   info: dist;
+                        %         %FaceStim Fixcross    :     15   info: position(1)
+                        %         %Tonic Pain reached   :     16   info: nTrial
+                        %         %Fixcross Jump        :     17   info:
+                        %         %dummy fixflip        :     22   info: NaN;
+                        %         planned trialstart    :     30   info: NaN
+                        %         planned trialend      :     31   info: NaN
+                        
+                        
+                        names = {'VAS','Text','Pulse','Tracker+','CrossTonic','CrossTreat','RampDown','Plateau','RampBack','Keys','TrackerOff','RatePainOn','RatePainOff','RateReliefOn','RateReliefOff','FaceOn','FaceOff','FaceStimFX','PlateauReached','FixJump','CoolDown','TrialStart','TrialEnd'};
+                        condnum = [-2 -1 0 1:18 30 31];
+                        
+                        TR = Project.TR;
+                        scan_times          = L(L(:,2) == 0,1);%find all scan events and get their times
+                        scan_id             = 1:length(scan_times);%label pulses with increasing numbers, assumes no pulses is missing.
+                        
+                       
+                        conds = [13 4 6 11 9 10 18];% 13 = face, 4 = Ramp, 6= PainRamp, 11 = RateTreat, 9=RatePainOn 10=RatePainOff
+                        if verbalize ==1
+                            fprintf('Considering the following conditions:\n')
+                            for c = conds
+                                fprintf('%s\n',names{condnum==c})
+                            end
+                        end
+                        all_events          = find(ismember(L(:,2),conds));
+                        LL = L(all_events,:);
+                        if verbalize ==1
+                            fprintf('Overall we have %d events.\n',length(all_events))
+                        end
+                        %    
+                        RampdownOnsets   = LL(LL(:,2)==4,1);
+                        RampPainOnsets   = LL(LL(:,2)==6,1);
+                        FaceOnsets       = LL(LL(:,2)==13,1);
+                        RateReliefOnsets = LL(LL(:,2)==11,1);
+                        RatePainOnsets_all   = LL(LL(:,2)==9,1); %means also after cooldown
+                        RatePainOffsets_all  = LL(LL(:,2)==10,1);
+                        EndText          = L(L(:,2)==-1,1);
+                        
+                        RatePainOnsets = RatePainOnsets_all(RatePainOnsets_all<EndText);
+                        RatePainOffsets = RatePainOffsets_all(RatePainOffsets_all<EndText);
+                         
+                        conds_presented = unique(L(L(:,2)==13,3));
+                        cond = [];
+                        cc = 0;
+                        for c = conds_presented(:)';
+                            cc = cc+1;
+                            trial_ind = find(L(L(:,2)==13,3)==c);
+                            cond(cc).name     = [mat2str(c) 'Face'];
+                            cond(cc).onset    = FaceOnsets(trial_ind);
+                            cond(cc).duration = 0;                           
+                            if verbalize ==1
+                                fprintf('Number of onsets for cond %04g: %d.\n',c,length(cond(cc).onset))
+                            end
+                        end
+                        for c = conds_presented(:)';
+                            cc = cc+1;
+                            trial_ind = find(L(L(:,2)==13,3)==c); %13 is facce, bc Ramp has ror as info, not cond
+                            cond(cc).name     = [mat2str(c) 'Ramp'];
+                            cond(cc).onset    = RampdownOnsets(trial_ind);
+                            cond(cc).duration = 2;                           
+                            if verbalize ==1
+                                fprintf('Number of onsets for cond %04g: %d.\n',c,length(cond(cc).onset))
+                            end
+                        end
+                        % Ramp Back to Pain / Pain Plateau
+                        %very naive:
+                        EndTextOn = L(find(L(:,2)==-1,1,'last'),1);
+                        FaceOnsets(end+1) = EndTextOn;
+                        ons = RampPainOnsets;
+                        durs = FaceOnsets(2:end) - RampPainOnsets;
+                        ratepaininside = find(durs>10);
+                        for nrp = 1:numel(ratepaininside);durs(ratepaininside(nrp)) = RatePainOnsets(nrp+1)-ons(ratepaininside(nrp));end
+                        %this stopped at RatePain On, now we need the Part
+                        %from RatePainOff to Face.
+                        ons = [ons; RatePainOffsets(2:end)];
+                        durs = [durs; FaceOnsets(ratepaininside+1) - RatePainOffsets(2:end)];
+                        %add beginning
+                        ons = [0; ons];
+                        durs = [RatePainOnsets(1);durs];
+                        %first RateOff to 1st face
+                        ons = [RatePainOffsets(1);ons];
+                        durs = [FaceOnsets(1)-RatePainOffsets_all(1);durs];
+                       
+                        [ons,idx] = sort(ons);
+                        durs = durs(idx);
+                        if durs(end) < 1
+                            ons(end)=[]; %very short until text comes, we dont model that.
+                            durs(end)=[];
+                        end
+                        %RampUp to RatePain
+                        cc = cc+1;
+                        cond(cc).name   = 'Pain';
+                        cond(cc).onset  = ons;
+                        cond(cc).duration = durs;
+                        if verbalize ==1
+                            fprintf('Number of onsets for RatePain: %d.\n',length(cond(cc).onset))
+                        end
+                        % Rate Pain
+                        cc = cc+1;
+                        cond(cc).name   = 'RatePain';
+                        cond(cc).onset  = RatePainOnsets_all;
+                        cond(cc).duration = L(L(:,2)==10,1)-RatePainOnsets_all;
+                        if verbalize ==1
+                            fprintf('Number of onsets for RatePain: %d.\n',length(cond(cc).onset))
+                        end
+                        if self.id == 6
+                            corrdur = [1.5 2 2 1]; %scanner stopped too early, during last rating.
+                            cond(cc).duration(end) = corrdur(run);
+                        elseif self.id == 32 && run == 1
+                            cond(cc).onset(end-1:end) = [];
+                            cond(cc).duration(end-1:end) = []; 
+                        end
+                        
+                        % Rate Relief
+                        cc = cc+1;
+                        cond(cc).name     = 'RateRelief';
+                        cond(cc).onset    = RateReliefOnsets;
+                        cond(cc).duration = ones(1,length(cond(cc).onset)).*5;
+                        if self.id == 32 && run ==1
+                            cond(cc).duration(end) = 4; % scanner stopped here
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for RateRelief: %d.\n',length(cond(cc).onset))
+                        end
+                        % End Text
+                        cc = cc+1;
+                        EndTextOn = L(find(L(:,2)==-1,1,'last'),1);
+                        RampDown        = L(L(:,2)==4,1);
+                        RampDownEnd     = RampDown(end);
+                        cond(cc).name   = 'Text999';
+                        cond(cc).onset  = EndTextOn;
+                        cond(cc).duration = RampDownEnd - EndTextOn;
+                        if self.id == 4
+                            cond(cc).duration = 32.6; %logging problem.
+                        elseif self.id == 32 && run == 1 %wrong seq, scanner stopped already
+                            cond(cc) = [];
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for CoolDown %d.\n',length(cond(end).onset))
+                        end
+                        % CoolDown phase
+                        cc = cc+1;
+                        RampDown        = L(L(:,2)==4,1);
+                        RampDownEnd     = RampDown(end);
+                        cond(cc).name   = '999';
+                        cond(cc).onset  = RampDownEnd;
+                        cond(cc).duration = RatePainOnsets(end)-L(find(L(:,2)==4,1,'last'),1);
+                        if self.id == 4
+                            cond(cc).duration = 32.6; %logging problem.
+                        elseif self.id == 32 && run == 1 %wrong seq, scanner stopped already
+                            cond(cc) = [];
+                        end
+                        if verbalize ==1
+                            fprintf('Number of onsets for CoolDown %d.\n',length(cond(end).onset))
+                        end
+                        %% housekeeping
+                        for counter = 1:length(cond)
+                            cond(counter).onset    = cond(counter).onset./TR;
+                            cond(counter).duration = cond(counter).duration./TR;
+                            cond(counter).tmod      = 0;
+                            cond(counter).pmod      = struct('name',{},'param',{},'poly',{});
+                        end
+                        figure;plot(L(:,1),L(:,2),'bo');
+                        hold on
+                        for n = 1:numel(ons);plot(ons(n),8,'kx');plot([ons(n) ons(n)+durs(n)],[8 8],'k-');end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+              
             end
             
         end
@@ -4654,15 +5184,38 @@ classdef Subject < Project
                     num_onsetfile = 19;
                 case 25
                     num_onsetfile = 20; %20 is Face Onset only, with long duration and pmod Gauss/dGauss.
+                  case 26
+                    num_onsetfile = 26; %20 is Face Onset only, with long duration and pmod Gauss/dGauss.
+                      case 27
+                    num_onsetfile = 27; %20 is Face Onset only, with long duration and pmod Gauss/dGauss.
+                      case 28
+                    num_onsetfile = 28; %20 is Face Onset only, with long duration and pmod Gauss/dGauss.
+                     case 29
+                    num_onsetfile = 29; %20 is Face Onset only, with long duration and pmod Gauss/dGauss.
+                    
                 case 30
                     num_onsetfile = 21;  %Faces, HRF Stick
                 case 31
                     num_onsetfile = 22;  %Faces, HRF duration
                 case 32
                     num_onsetfile = 23;  %Ramp, HRF Stick
-                 case 33
+                case 33
                     num_onsetfile = 24;  %Ramp, HRF duration
+                    
+                case 35
+                    num_onsetfile = 35; %20 is Face Onset only, with long duration and pmod Gauss/dGauss.
+                case 36
+                    num_onsetfile = 36;  %Faces, HRF Stick
+                case 37
+                    num_onsetfile = 37;  %Faces, HRF duration
+                case 38
+                    num_onsetfile = 38;  %Ramp, HRF Stick
+                case 39
+                    num_onsetfile = 39;  %Ramp, HRF duration
+                case 40
+                    num_onsetfile = 40;  %Reversed model with Ramp and pain and Treatment.
                 otherwise
+                    warning('No onsetfile case defined, taking number 3!')
                     num_onsetfile =3;
             end
             
@@ -4672,13 +5225,14 @@ classdef Subject < Project
             %NRUN can be a vector, but then care has to be taken that
             %model_num is correctly set for different runs.
             empty1stlevel    =   1;
-            FIRparam         =   Project.orderfir;
+            FIRparam         =   11;%Project.orderfir;
             pmod_Rate        =   0;
             pmod_VM          =   0;
-            onset_modelnum   =   3;
+            onset_modelnum   =   1;%3;
             All1Regr         =   0;
             wmcsfr           =   0;
-            tsda_corr        =   1;
+            tsda_corr        =   0;
+            pre_bins         =   3; %2
             
             
             if model_num == 3
@@ -4756,7 +5310,7 @@ classdef Subject < Project
                 
                 for c = 1:numel(dummy.cond)
                     dummy.cond(c).duration  = 0;
-                    dummy.cond(c).onset     = dummy.cond(c).onset -2; %take 2 TRs before first stimulus appears. (onsets are already in unit = TR, so -2 is correct, not -2.*TR).
+                    dummy.cond(c).onset     = dummy.cond(c).onset -pre_bins; %take 2 TRs before first stimulus appears. (onsets are already in unit = TR, so -2 is correct, not -2.*TR).
                     %                     if pmod_Rate == 1
                     %                         if str2double(dummy.cond(c).name)< 900 %don't do it for nulltrial and finalramp, we only have 1 rating here.
                     %                             dummy.cond(c).pmod = self.get_pmod_rating(session,str2double(dummy.cond(c).name));
@@ -4804,7 +5358,7 @@ classdef Subject < Project
             matlabbatch{1}.spm.stats.fmri_spec.global                            = 'None';
             matlabbatch{1}.spm.stats.fmri_spec.mthresh                           = -Inf; %.8
             matlabbatch{1}.spm.stats.fmri_spec.mask                              = cellstr(fullfile(self.path_data(0),'mrt','s3_ss_data.nii'));%{''};%add a proper mask here.
-            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'AR(1)';
+            matlabbatch{1}.spm.stats.fmri_spec.cvi                               = 'none';%'AR(1)';
             %estimation
             matlabbatch{2}.spm.stats.fmri_est.spmmat            = {path_spmmat};
             matlabbatch{2}.spm.stats.fmri_est.method.Classical  = 1;
@@ -4997,7 +5551,7 @@ classdef Subject < Project
                 %this allows us to look at test phases separately if wanted
                 %later.
                 for regr = regr2take(:)' %loop through the regressors we might want to look at @ 2ndlevel
-                    vec = zeros(1,self.get_Nbetas(nrun,model_num)); %-1 so that phase constant is left out for now.
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
                     if nrun == 3 && self.id ~= 15
                         keyboard; %take care of this if necessary
                     end
@@ -5008,13 +5562,13 @@ classdef Subject < Project
                 end
                 % now we pair Test phase with .5*T1 and .5*T2.
                 n = n+ 1;
-                vec = zeros(1,self.get_Nbetas(nrun,model_num)); %-1 so that phase constant is left out for now.
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
                 name{n} = 'Gauss_T';
                 vec([23 46]) = .5; %put 1 to nth regressor
                 convec{n} = vec;
                 % same for dGauss
                 n = n+ 1;
-                vec = zeros(1,self.get_Nbetas(nrun,model_num)); %-1 so that phase constant is left out for now.
+                vec = zeros(1,self.get_Nbetas(nrun,model_num));
                 name{n} = 'dGauss_T';
                 vec([24 47]) = .5; %put 1 to nth regressor
                 convec{n} = vec;
@@ -5035,14 +5589,14 @@ classdef Subject < Project
                 end
                 % now we pair Test phase with .5*T1 and .5*T2.
                 n = n+ 1;
-                vec = zeros(1,self.get_Nbetas(nrun,model_num)); %-1 so that phase constant is left out for now.
+                vec = zeros(1,self.get_Nbetas(nrun,model_num));
                 vec(regr2take{2})=gauss/2;
                 vec(regr2take{3})=gauss/2;
                 convec{n} = vec;
                 name{n} = 'Gauss_T';
                 % now test - base 
                 n = n+ 1;
-                vec = zeros(1,self.get_Nbetas(nrun,model_num)); %-1 so that phase constant is left out for now.
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
                 vec(regr2take{1})=-gauss;
                 vec(regr2take{2})=gauss/2;
                 vec(regr2take{3})=gauss/2;
@@ -5050,11 +5604,55 @@ classdef Subject < Project
                 name{n} = 'Gauss_TvsB';
                   % now test1 - base 
                 n = n+ 1;
-                vec = zeros(1,self.get_Nbetas(nrun,model_num)); %-1 so that phase constant is left out for now.
+                vec = zeros(1,self.get_Nbetas(nrun,model_num));
                 vec(regr2take{1})=-gauss;
                 vec(regr2take{2})=gauss;
                 convec{n} = vec;
                 name{n} = 'Gauss_T1vsB';
+            elseif ismember(model_num,[25:29 35:39]) %different from 21 and 23 bc faces are not modelled extra.
+                regr2take = [2 3 14 15 27 28];
+                regrnames = {'Gauss_B','dGauss_B','Gauss_T1','dGauss_T1','Gauss_T2','dGauss_T2'};
+                %first, we get con images for all these with a weight = 1,
+                %this allows us to look at test phases separately if wanted
+                %later.
+                for regr = regr2take(:)' %loop through the regressors we might want to look at @ 2ndlevel
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                    if nrun == 3 && self.id ~= 15
+                        keyboard; %take care of this if necessary
+                    end
+                    n = n+ 1;
+                    name{n} = regrnames{n};
+                    vec(regr) = 1; %put 1 to nth regressor
+                    convec{n} = vec;
+                end
+                % now we pair Test phase with .5*T1 and .5*T2.
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'Gauss_T';
+                vec([14 27]) = .5; %put 1 to nth regressor
+                convec{n} = vec;
+                % same for dGauss
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'dGauss_T';
+                vec([15 28]) = .5; %put 1 to nth regressor
+                convec{n} = vec;
+            elseif ismember(model_num,30:33)
+                n=0;
+                if nrun ==3
+                    fprintf('Con vectors not yet defined\n');
+                    keyboard
+                else
+                    regr2take = {1:8,1:2,[],[]}; %per nrun
+                    cond = {-135:45:180,[500 180],[],[]};
+                    for nc = regr2take{nrun}(:)'
+                        n = n+1;
+                        vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                        vec(nc) = 1;
+                        name{n} = sprintf('%04d',cond{nrun}(nc));
+                        convec{n} = vec;
+                    end
+                end
             else
                 %% contrast 1: CSdiff
                 % CSP > CSN (or UCS > CSN in Cond)
@@ -5132,11 +5730,11 @@ classdef Subject < Project
             end
             
             %% take care that everything adds to 1 / 0 BEFORE creating neg. versions.
-            if model_num < 20
+            if model_num < 20 %had it like this before, but later models have this done within already.
                 for co = 1:n
                     if  sum(convec{co}) == 0 % differential, e.g. CSP>CSN [1 -1], so we need to divide those seperately, otherwise we devide by sum=0;
                          keyboard
-                        convec{co} =convec{co}./sum(convec{co}>0); %must be sum(covnvec{co}(convec{co}>0)), or not?
+                        convec{co} =convec{co}./sum(convec{co}>0); % !! must be sum(covnvec{co}(convec{co}>0)), or not?
                        
                     else
                         convec{co} = convec{co}./sum(convec{co});
@@ -5212,14 +5810,14 @@ classdef Subject < Project
                 conds2take = {2 2 2};
             elseif model_num == 6 %pmod PRind, want to look at both ME and PMOD, so taking 1:2
                 condnames = {'FaceMain','PRind'};%Ratings as pmod included
-                conds2take = {1:2,1:2,1:2}; %
+                conds2take = {1:2,1:2,1:2};                 
             else
                 if nrun == 2
-                    condnames = {'180','500'};
+                    condnames = {'180','500'};%in 1stlevel, 180 then 500. we take care here in contrasts to that for 2nd level, its 500 / 180
                 else
                     condnames = {'-135','-90','-45','0','45','90','135','180','500'};
                 end
-                conds2take = {1:8,[2 1],1:8};
+                conds2take = {1:8,[2 1],1:8};  %UCS is done later, if applicable
             end
             
             %% normal single bins collection to prepare full 14bin 2nd level
@@ -5245,7 +5843,7 @@ classdef Subject < Project
             n1 = n; %first contrast
             
             %% add CSdiff if applicable
-            if ismember(model_num,[1 4 44])
+            if ismember(model_num,[1 4 44 7])
                 % CSP vs CSN
                 cs_ind = [4 8; 2 1; 4 8];
                 for bin = 1:order
@@ -5287,53 +5885,55 @@ classdef Subject < Project
                 end
             end
             %% bin win thing
-            conds2take ={1:8,[2 1],1:9};
-            n2 = n;
-            if ismember(model_num,[4 44])
-                %loop through cons and get betas together.
-                %SINGLE CONS ge-bin-ed
-                for cond_ind = conds2take{nrun}
-                    n = n + 1;
-                    binfo1 =  self.findcon_FIR(order,cond_ind,startbin);%all cons+bins before this con's bin need to be skipped
-                    binfo2 = self.findcon_FIR(order,cond_ind,startbin+binwin-1);
+            if model_num ~= 7
+                conds2take ={1:8,[2 1],1:9};
+                n2 = n;
+                if ismember(model_num,[4 44])
+                    %loop through cons and get betas together.
+                    %SINGLE CONS ge-bin-ed
+                    for cond_ind = conds2take{nrun}
+                        n = n + 1;
+                        binfo1 =  self.findcon_FIR(order,cond_ind,startbin);%all cons+bins before this con's bin need to be skipped
+                        binfo2 = self.findcon_FIR(order,cond_ind,startbin+binwin-1);
+                        vec = vec0;
+                        vec(binfo1:binfo2) = 1;
+                        vec = repmat(vec,1,nsessions);
+                        vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se
+                        convec{n} = vec;
+                        name{n} = sprintf('bin%02d.win%02d.%s',startbin,binwin,condnames{cond_ind});
+                    end
+                    if nrun ==3
+                        if self.id ~= 15
+                            vec = repmat(vec,1,2);
+                        end
+                    end
+                    if self.id == 15
+                        nsessions = 1;
+                    end
+                    %
+                    cs_ind = [4 8; 2 1; 4 8];
+                    n = n+1;
                     vec = vec0;
-                    vec(binfo1:binfo2) = 1;
-                    vec = repmat(vec,1,nsessions);
-                    vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se
+                    csp_bins =  self.findcon_FIR(order,cs_ind(nrun,1),startbin):self.findcon_FIR(order,cs_ind(nrun,1),startbin+binwin-1); %Nth bin beta of CSP
+                    csn_bins =  self.findcon_FIR(order,cs_ind(nrun,2),startbin):self.findcon_FIR(order,cs_ind(nrun,2),startbin+binwin-1); %Nth bin beta of CSN
+                    vec(csp_bins) =  1;
+                    vec(csn_bins) = -1;
+                    if nrun ==3
+                        if self.id ~= 15
+                            vec = repmat(vec,1,2);
+                        end
+                    end
+                    if self.id == 15
+                        nsessions = 1;
+                    end
+                    vec = padarray(vec,[0 nsessions],0,'post');
                     convec{n} = vec;
-                    name{n} = sprintf('bin%02d.win%02d.%s',startbin,binwin,condnames{cond_ind});
-                end
-                if nrun ==3
-                    if self.id ~= 15
-                        vec = repmat(vec,1,2);
+                    name{n} = sprintf('bin%02d.win%02d.CSdiff',startbin,binwin);
+                    
+                    %make convecs sum to 1 and -1 for t-contrasts
+                    for co = (n2+1):n
+                        convec{co} = convec{co}./binwin/nsessions;
                     end
-                end
-                if self.id == 15
-                    nsessions = 1;
-                end
-                %
-                cs_ind = [4 8; 2 1; 4 8];
-                n = n+1;
-                vec = vec0;
-                csp_bins =  self.findcon_FIR(order,cs_ind(nrun,1),startbin):self.findcon_FIR(order,cs_ind(nrun,1),startbin+binwin-1); %Nth bin beta of CSP
-                csn_bins =  self.findcon_FIR(order,cs_ind(nrun,2),startbin):self.findcon_FIR(order,cs_ind(nrun,2),startbin+binwin-1); %Nth bin beta of CSN
-                vec(csp_bins) =  1;
-                vec(csn_bins) = -1;
-                if nrun ==3
-                    if self.id ~= 15
-                        vec = repmat(vec,1,2);
-                    end
-                end
-                if self.id == 15
-                    nsessions = 1;
-                end
-                vec = padarray(vec,[0 nsessions],0,'post');
-                convec{n} = vec;
-                name{n} = sprintf('bin%02d.win%02d.CSdiff',startbin,binwin);
-                
-                %make convecs sum to 1 and -1 for t-contrasts
-                for co = (n2+1):n
-                    convec{co} = convec{co}./binwin/nsessions;
                 end
             end
             %%
