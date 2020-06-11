@@ -1534,6 +1534,17 @@ classdef Group < Project
                 cons2collect = [1 8]; %1 is base, %8 is testphase T1 only
             elseif strcmp(namestring,'VMdVM_BT_R') %modelnum 21
                 cons2collect = [1 2 7 8];   % 1 2 is Gauss dGauss Base, 7 8 is Testphases pooled (with each weight .5)
+            elseif strcmp(namestring,'GaudGau_BT') %modelnum 21
+                cons2collect = [1 2 7 8];   % 1 2 is Gauss dGauss Base, 7 8 is Testphases pooled (with each weight .5)
+            elseif strcmp(namestring,'8conds_R') %modelnum 21
+                 switch nrun
+                    case 1
+                        cons2collect = 1:8;
+                    case 2
+                        cons2collect = 1:2;
+                    case 3
+                        cons2collect = 1:8;
+                end
             end
             
             start = tic;
@@ -1634,7 +1645,7 @@ classdef Group < Project
                 
                 matlabbatch{1}.spm.stats.con.delete = 0;
                 
-            elseif strcmp(namestring,'8conds')
+            elseif strcmp(namestring,'8conds') || strcmp(namestring,'8conds_R')
                 if ismember(nrun,[1 3])
                     nconds = 8;
                 else
@@ -1764,6 +1775,48 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'test>base';
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [-1 -1 1 1];
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';    
+            elseif strcmp(namestring,'GaudGau_BT')
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_eye(4)';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(4);
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'B00_T11';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [0 0 1 0;0 0 0 1];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'B11_T00';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [1 0 0 0;0 1 0 0];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_diff';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [1 0 -1 0; 0 1 0 -1];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_Gauss_test';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [0 0 1 0];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                n  = n + 1;
+                nF = nF + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_Gauss_base';
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [1 0 0 0];
+                matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none'; 
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 't_Gauss_test';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [0 0 1 0];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                n  = n + 1;
+                nT = nT + 1;
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 't_Gauss_base';
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [1 0 0 0];
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none'; 
             elseif strcmp(namestring,'Gauss1stlevel_BT')
                 n  = n + 1;
                 nF = nF + 1;
@@ -1852,8 +1905,8 @@ classdef Group < Project
             %% 2ndlevel 8conds ANOVA
             clear2ndlevel = 1;
             
-            dependencies = 1;
-            unequalvar   = 1;
+            dependencies = 0;
+            unequalvar   = 0;
             
             versiontag = 0;
             prefix = 's6_wCAT_';
@@ -2580,41 +2633,29 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = sprintf('F_%01dxeye(%02d)',nconds,max(bins2take));
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = repmat(eye(max(bins2take)),1,nconds);
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
-                
+                if nrun == 2
+                    n  = n + 1;
+                    nF = nF + 1;
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_diff';
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [eye(max(bins2take)) -eye(max(bins2take))];
+                    matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                end
                 n  = n + 1;
                 nT = nT + 1;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'main_allconds';
-                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = ones(1,nconds);
+                matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = ones(1,nconds*max(bins2take));
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
                 
                 n = n + 1;
                 nT = nT+1;
                 if ismember(nrun,[1 3])
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [0 0 0 1 0 0 0 -1];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [zeros(1,3*max(bins2take)) ones(1,max(bins2take)) zeros(1,3*max(bins2take)) -ones(1,max(bins2take))];
                 else
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [1 -1];
+                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [ones(1,max(bins2take)) -ones(1,max(bins2take))];
                 end
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'CSP>CSN';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
                 
-                if ismember(nrun,[1 3])
-                    [VM, dVM] = self.compute_VM(-135:45:180,1,1,.001);
-                    n = n + 1;
-                    nT = nT+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = VM-mean(VM);
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'VMtuning';
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                    n = n + 1;
-                    nT = nT+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = dVM-mean(dVM);
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'dVMtuning';
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                    n = n + 1;
-                    nT = nT+1;
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [-repmat(1/7,1,3) 1 -repmat(1/7,1,4)];
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 'CSP>rest';
-                    matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
-                end
             elseif strcmp(namestring,'VMdVM_BT')
                 
                 %% F TESTS
