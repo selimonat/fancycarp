@@ -92,7 +92,7 @@ classdef Project < handle
         colorscheme           = 'fall2018_bright';
         kickcooldown          = 1;
         wmcsfregressors       = 0;
-        orderfir              = 14;
+        orderfir              = 11;
         relief_mc_ph          = 0; % meancorrection per phase
         relief_zscore         = 1;
         scr_timewin           = [1 4];
