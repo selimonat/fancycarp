@@ -560,7 +560,7 @@ classdef Group < Project
             end
             
             fh = gcf; fh.Position  =  [500   1000   1200  600];
-                        cd('C:\Users\Lea\Documents\Experiments\TreatgenMRI\midlevel\figures\')
+%                         cd('C:\Users\Lea\Documents\Experiments\TreatgenMRI\midlevel\figures\')
 %             export_fig(gcf,'SFig2_behave_results_MRI_grandYlim_nextgen.pdf','-dpdf','-painters')
 %             export_fig(gcf,'SFig2_behave_results_MRI_grandYlim_nextgen.png','-dpng')
 
@@ -612,7 +612,7 @@ classdef Group < Project
             %-2.8 2.8 is like behavioral pilot, -1.7 1.9 would be enough for MRI only. for n=39 bc
             set(gca,'YTick',yticki);
             fh = gcf; fh.Position  =  [728   587 350 550];
-            cd('C:\Users\Lea\Documents\Experiments\TreatgenMRI\midlevel\figures\')
+%             cd('C:\Users\Lea\Documents\Experiments\TreatgenMRI\midlevel\figures\')
 %             export_fig(gcf,'Fig2_behave_results_MRI_bc_grandYlim_nextgen.pdf','-dpdf','-painters')
 %             export_fig(gcf,'Fig2_behave_results_MRI_bc_grandYlim_nextgen.png')
 %             ylim([-2 2]) % -1.7 1.9 would be enough for MRI only. for n=39 bc
@@ -1536,7 +1536,25 @@ classdef Group < Project
                 cons2collect = [1 2 7 8];   % 1 2 is Gauss dGauss Base, 7 8 is Testphases pooled (with each weight .5)
             elseif strcmp(namestring,'GaudGau_BT') %modelnum 21
                 cons2collect = [1 2 7 8];   % 1 2 is Gauss dGauss Base, 7 8 is Testphases pooled (with each weight .5)
-            elseif strcmp(namestring,'8conds_R') %modelnum 21
+            elseif strcmp(namestring,'pain') %modelnum 21
+                switch nrun
+                    case 1
+                        cons2collect = [10 9]; %10 is Ramp main, i.e. all 8faces , 9 is pain/isi
+                    case 2
+                        cons2collect = [1 2 3];  %1 is ucs, 2 is csn, 3 is pain.
+                    case 3
+                        keyboard
+                end
+            elseif strcmp(namestring,'pain_cooldown') %modelnum 21
+                switch nrun
+                    case 1
+                        cons2collect = [10 9]; %10 is Ramp main, i.e. all 8faces , 9 is pain/isi
+                    case 2
+                        cons2collect = [1 2 3];  %1 is ucs, 2 is csn, 3 is pain.
+                    case 3
+                        keyboard
+                end
+            elseif strcmp(namestring,'8conds_R') %modelnum 30 to 33
                  switch nrun
                     case 1
                         cons2collect = 1:8;
@@ -1873,6 +1891,87 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 't';
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = 1;
                 matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+            elseif any(strfind(namestring,'pain'))
+                switch nrun
+                    case 1
+                        n  = n + 1;
+                        nF = nF + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_eoi';
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(2);
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                        n  = n + 1;
+                        nF = nF + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_Ramp';
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [1 0];
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                         n  = n + 1;
+                        nF = nF + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_Pain';
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [0 1];
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                        n  = n + 1;
+                        nF = nF + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_Ramp_vs_pain';
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [1 -1];
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                        n  = n + 1;
+                        nT = nT + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 't_ramp';
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [1 0];
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                         n  = n + 1;
+                        nT = nT + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 't_pain';
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [0 1];
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                          n  = n + 1;
+                        nT = nT + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 't_ramp_vs_pain';
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [1 -1];
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                   
+                    case 2
+                            n  = n + 1;
+                        nF = nF + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_eoi';
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = eye(3);
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                         n  = n + 1;
+                        nF = nF + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_UCS';
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [1 0 0];
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                         n  = n + 1;
+                        nF = nF + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_CSN';
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [0 1 0];
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                         n  = n + 1;
+                        nF = nF + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_UCS_vs_CSN';
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [1 -1 0];
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                        n  = n + 1;
+                        nF = nF + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'F_Ramp_vs_pain';
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [.5 .5 -1];
+                        matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';
+                        n  = n + 1;
+                        nT = nT + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 't_ramp';
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [.5 .5 0];
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                        n  = n + 1;
+                        nT = nT + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 't_pain';
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [0 0 1];
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                         n  = n + 1;
+                        nT = nT + 1;
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.name = 't_ramp_vs_pain';
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.weights = [.5 .5 -1];
+                        matlabbatch{1}.spm.stats.con.consess{n}.tcon.sessrep = 'none';
+                end
             end
             
             
