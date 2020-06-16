@@ -4900,17 +4900,7 @@ classdef Subject < Project
                          
                         conds_presented = unique(L(L(:,2)==13,3));
                         cond = [];
-                        cc = 0;
-                        for c = conds_presented(:)';
-                            cc = cc+1;
-                            trial_ind = find(L(L(:,2)==13,3)==c);
-                            cond(cc).name     = [mat2str(c) 'Face'];
-                            cond(cc).onset    = FaceOnsets(trial_ind);
-                            cond(cc).duration = 0;                           
-                            if verbalize ==1
-                                fprintf('Number of onsets for cond %04g: %d.\n',c,length(cond(cc).onset))
-                            end
-                        end
+                        cc=0;
                         for c = conds_presented(:)';
                             cc = cc+1;
                             trial_ind = find(L(L(:,2)==13,3)==c); %13 is facce, bc Ramp has ror as info, not cond
@@ -4924,24 +4914,26 @@ classdef Subject < Project
                         % Ramp Back to Pain / Pain Plateau
                         %very naive:
                         EndTextOn = L(find(L(:,2)==-1,1,'last'),1);
-                        FaceOnsets(end+1) = EndTextOn;
+                        RampdownOnsets(end) = EndTextOn; %replace the last ramp by the text.
                         ons = RampPainOnsets;
-                        durs = FaceOnsets(2:end) - RampPainOnsets;
-                        ratepaininside = find(durs>10);
+                        durs = RampdownOnsets(2:end) - RampPainOnsets;
+                        ratepaininside = [find(durs>12); length(ons)]; %isi and face and fixcross can't take longer than that.
                         for nrp = 1:numel(ratepaininside);durs(ratepaininside(nrp)) = RatePainOnsets(nrp+1)-ons(ratepaininside(nrp));end
                         %this stopped at RatePain On, now we need the Part
                         %from RatePainOff to Face.
-                        ons = [ons; RatePainOffsets(2:end)];
-                        durs = [durs; FaceOnsets(ratepaininside+1) - RatePainOffsets(2:end)];
+                        ons = [ons; RatePainOffsets(2:end)]; %these are the in-between ratings, the first is done later
+                        durs = [durs; RampdownOnsets(ratepaininside+1) - RatePainOffsets(2:end)];
                         %add beginning
                         ons = [0; ons];
                         durs = [RatePainOnsets(1);durs];
                         %first RateOff to 1st face
                         ons = [RatePainOffsets(1);ons];
-                        durs = [FaceOnsets(1)-RatePainOffsets_all(1);durs];
+                        durs = [RampdownOnsets(1)-RatePainOffsets_all(1);durs];
                        
                         [ons,idx] = sort(ons);
                         durs = durs(idx);
+                        
+                        durs(end-1) = RatePainOnsets(end)-RampPainOnsets(end);
                         if durs(end) < 1
                             ons(end)=[]; %very short until text comes, we dont model that.
                             durs(end)=[];
@@ -4989,11 +4981,6 @@ classdef Subject < Project
                         cond(cc).name   = 'Text999';
                         cond(cc).onset  = EndTextOn;
                         cond(cc).duration = RampDownEnd - EndTextOn;
-                        if self.id == 4
-                            cond(cc).duration = 32.6; %logging problem.
-                        elseif self.id == 32 && run == 1 %wrong seq, scanner stopped already
-                            cond(cc) = [];
-                        end
                         if verbalize ==1
                             fprintf('Number of onsets for CoolDown %d.\n',length(cond(end).onset))
                         end
@@ -5027,7 +5014,39 @@ classdef Subject < Project
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
                         load(modelpath);
                     end
-              
+                case 41
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        a = load(self.path_model(run,25));
+                        cond = a.cond;
+                        conds2change = {1:2,[],1:3,1:3}; %8faces and null in B, +UCS in T.
+                        for nc= conds2change{run}(:)'
+                            cond(nc).duration = ones(length(cond(nc).onset),1)*2/self.TR;
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 42
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        a = load(self.path_model(run,40));
+                        cond = a.cond;
+                        conds2change = 1:self.nreliefconds(run); %8faces and null in B, +UCS in T.
+                        for nc= conds2change(:)'
+                            cond(nc).duration = ones(length(cond(nc).onset),1)*6/self.TR;
+                        end
+%                         if strcmp(cond(end-4).name,'Pain') && strcmp(cond(end-1).name,'Text999')
+%                             
+%                         else
+%                             keyboard
+%                         end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
             end
             
         end
@@ -5165,6 +5184,8 @@ classdef Subject < Project
                 case 9
                     kickcooldownopts = 1;
                     wmcsfopts = 1;
+                case 42
+                    kickcooldownopts = 0;
                 otherwise
                     kickcooldownopts = 1;
                     wmcsfopts = 0;
@@ -5214,6 +5235,10 @@ classdef Subject < Project
                     num_onsetfile = 39;  %Ramp, HRF duration
                 case 40
                     num_onsetfile = 40;  %Reversed model with Ramp and pain and Treatment.
+              case 41
+                    num_onsetfile = 41; 
+                case 42
+                    num_onsetfile = 42; 
                 otherwise
                     warning('No onsetfile case defined, taking number 3!')
                     num_onsetfile =3;
@@ -5423,8 +5448,10 @@ classdef Subject < Project
                 %load the onsets
                 dummy                                              = load(self.path_model(session,model_num_onsets));
                 %kick cooldown onset from cond file
-                if strcmp(dummy.cond(end).name,'999')
-                    dummy.cond(end)=[];
+                if kickcd == 1
+                    if strcmp(dummy.cond(end).name,'999')
+                        dummy.cond(end)=[];
+                    end
                 end
                 
                 matlabbatch{1}.spm.stats.fmri_spec.sess(se).cond   = struct('name', {}, 'onset', {}, 'duration', {}, 'tmod', {}, 'pmod', {});
@@ -5609,7 +5636,7 @@ classdef Subject < Project
                 vec(regr2take{2})=gauss;
                 convec{n} = vec;
                 name{n} = 'Gauss_T1vsB';
-            elseif ismember(model_num,[25:29 35:39]) %different from 21 and 23 bc faces are not modelled extra.
+            elseif ismember(model_num,[25:29 35:39 41]) %different from 21 and 23 bc faces are not modelled extra.
                 regr2take = [2 3 14 15 27 28];
                 regrnames = {'Gauss_B','dGauss_B','Gauss_T1','dGauss_T1','Gauss_T2','dGauss_T2'};
                 %first, we get con images for all these with a weight = 1,
@@ -5643,8 +5670,8 @@ classdef Subject < Project
                     fprintf('Con vectors not yet defined\n');
                     keyboard
                 else
-                    regr2take = {1:8,1:2,[],[]}; %per nrun
-                    cond = {-135:45:180,[500 180],[],[]};
+                    regr2take = {1:8,[2 1],[],[]}; %per nrun
+                    cond = {-135:45:180,[180 500],[],[]};
                     for nc = regr2take{nrun}(:)'
                         n = n+1;
                         vec = zeros(1,self.get_Nbetas(nrun,model_num));
@@ -5653,6 +5680,50 @@ classdef Subject < Project
                         convec{n} = vec;
                     end
                 end
+            elseif model_num == 40
+                regr2take ={ [1:8 10],[2 1 4],[],[]};
+                cond = {-135:45:180,[180 500],[],[]};
+                for nc = regr2take{nrun}(:)'
+                    n = n+1;
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                    vec(nc) = 1;
+                    if n == length(regr2take{nrun})
+                        name{n} = 'pain';
+                    else
+                        name{n} = sprintf('%04d',cond{nrun}(nc));
+                    end
+                    convec{n} = vec;
+                end
+                %main effect:
+                n=n+1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                nc = regr2take{nrun}(1:end-1);
+                vec(nc) = 1;
+                vec = vec/sum(vec);
+                name{n} = 'main_Ramp';
+                convec{n} = vec;
+            elseif model_num == 42
+                regr2take ={ [1:8 10],[2 1 4],[],[]};
+                cond = {-135:45:180,[180 500],[],[]};
+                for nc = regr2take{nrun}(:)'
+                    n = n+1;
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                    vec(nc) = 1;
+                    if n == length(regr2take{nrun})
+                        name{n} = 'pain';
+                    else
+                        name{n} = sprintf('%04d',cond{nrun}(nc));
+                    end
+                    convec{n} = vec;
+                end
+                %main effect:
+                n=n+1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                nc = regr2take{nrun}(1:end-1);
+                vec(nc) = 1;
+                vec = vec/sum(vec);
+                name{n} = 'main_Ramp';
+                convec{n} = vec;
             else
                 %% contrast 1: CSdiff
                 % CSP > CSN (or UCS > CSN in Cond)
