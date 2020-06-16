@@ -153,6 +153,9 @@ classdef Project < handle
                             subs = self.subject_indices(logical(is_tuned));
                             save(path_infofile,'subs')
                         end
+                    case 5
+                        subs = setdiff(self.subject_indices,[badmotion missingsession 6 32]); 
+                        fprintf('These are all subjects with movement params OK and all sessions, without sub 6 and 32.\n')
                 end
             else
                 subs = self.subject_indices;
