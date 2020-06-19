@@ -1467,7 +1467,7 @@ classdef Group < Project
         function Fit2ndlevel(self,nrun,modelnum,namestring,varargin)
             %% 2ndlevel ANOVA
             dependencies = 1;
-            unequalvar   = 1;
+            unequalvar   = 0;
             
             clear2ndlevel = 1;
             versiontag = 0;
@@ -1536,7 +1536,7 @@ classdef Group < Project
                 cons2collect = [1 2 7 8];   % 1 2 is Gauss dGauss Base, 7 8 is Testphases pooled (with each weight .5)
             elseif strcmp(namestring,'GaudGau_BT') %modelnum 21
                 cons2collect = [1 2 7 8];   % 1 2 is Gauss dGauss Base, 7 8 is Testphases pooled (with each weight .5)
-            elseif strcmp(namestring,'pain') %modelnum 21
+            elseif strcmp(namestring,'pain') %modelnum 40
                 switch nrun
                     case 1
                         cons2collect = [10 9]; %10 is Ramp main, i.e. all 8faces , 9 is pain/isi
@@ -1554,7 +1554,11 @@ classdef Group < Project
                     case 3
                         keyboard
                 end
-            elseif strcmp(namestring,'8conds_R') %modelnum 30 to 33
+            elseif strcmp(namestring,'GaudGau_pain')                       
+                cons2collect = [1 2 10 11]; 
+              elseif strcmp(namestring,'GaudGau_pain_main')                       
+                cons2collect = [13];
+            elseif strcmp(namestring,'8conds_R') %modelnum 30 to 33 or 40
                  switch nrun
                     case 1
                         cons2collect = 1:8;
@@ -1562,7 +1566,20 @@ classdef Group < Project
                         cons2collect = 1:2;
                     case 3
                         cons2collect = 1:8;
+                 end
+            elseif strcmp(namestring,'8conds_pain')
+                switch nrun
+                    case 1
+                        cons2collect = 1:9;
+                    case 2
+                        cons2collect = 1:3;
+                    case 3
+                        cons2collect = 1:9;
                 end
+            elseif strcmp(namestring,'8conds_pain_BT')
+               cons2collect = [10:17 1:8 18 9]; %18 and 9 are the pain cons for base/test
+            elseif strcmp(namestring,'8conds_BT')
+                cons2collect = [10:17 1:8];
             end
             
             start = tic;
@@ -1793,7 +1810,7 @@ classdef Group < Project
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'test>base';
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.weights = [-1 -1 1 1];
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.sessrep = 'none';    
-            elseif strcmp(namestring,'GaudGau_BT')
+            elseif strcmp(namestring,'GaudGau_BT') || strcmp(namestring,'GaudGau_pain')
                 n  = n + 1;
                 nF = nF + 1;
                 matlabbatch{1}.spm.stats.con.consess{n}.fcon.name = 'eoi_eye(4)';
