@@ -4990,7 +4990,7 @@ classdef Subject < Project
                         RampDownEnd     = RampDown(end);
                         cond(cc).name   = '999';
                         cond(cc).onset  = RampDownEnd;
-                        cond(cc).duration = RatePainOnsets(end)-L(find(L(:,2)==4,1,'last'),1);
+                        cond(cc).duration = RatePainOnsets_all(end)-L(find(L(:,2)==4,1,'last'),1);
                         if self.id == 4
                             cond(cc).duration = 32.6; %logging problem.
                         elseif self.id == 32 && run == 1 %wrong seq, scanner stopped already
@@ -5037,16 +5037,76 @@ classdef Subject < Project
                         for nc= conds2change(:)'
                             cond(nc).duration = ones(length(cond(nc).onset),1)*6/self.TR;
                         end
-%                         if strcmp(cond(end-4).name,'Pain') && strcmp(cond(end-1).name,'Text999')
-%                             
-%                         else
-%                             keyboard
-%                         end
+                        if strcmp(cond(end-4).name,'Pain') && strcmp(cond(end-1).name,'Text999')
+                            cond(end-4).onset(end+1) = cond(end-3).onset(end)+cond(end-3).duration(end);
+                            cond(end-4).duration(end+1) = cond(end-1).onset(end)+ cond(end-1).duration(end) - cond(end-4).onset(end) ; %text plus duration minus last pain onset
+                            cond(end-1) = cond(end);
+                            cond(end) = [];
+%                            
+%                             L=self.get_log(run);
+%                              L(L(:,2)==19,1)-L(find(L(:,2)==4,1,'last'),1);
+%                              %same same
+                            pp=self.get_paradigm(run);
+                            ramptime=abs(pp.presentation.pain.tonic(end)-pp.presentation.pain.base)./pp.presentation.pain.ror;
+                            %this is actually not needed, because we just
+                            %turned the thermode off. don't know how fast
+                            %that goes. Will just put 3 secs here.
+                            cond(end).duration = 3/self.TR;
+                        elseif self.id == 32 && run ==1
+                            cond(end) = [];
+                            warning('Sub 32 has no baseline in run 1..')
+                        else
+                            keyboard
+                        end
                         save(modelpath,'cond');
                     else
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
                         load(modelpath);
                     end
+                case 43
+                     if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        a = load(self.path_model(run,40));
+                        b = load(self.path_model(run,19)); %this has gau/dgau inside, on ramp onset , not face.
+                        regr2take = {1:2,1:2,1:3,1:3}; %8face regr ,null, ucs if applicable
+                        
+                      
+                        postfaceregr = self.nreliefconds(run)+1;
+                        cond = [b.cond(regr2take{run}) a.cond(postfaceregr:numel(a.cond))];
+                      
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                     end
+                case 44
+                      if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                       cond = load(self.path_model(run,43));
+                       cond = cond.cond;
+                       regr2change = {1:2,1:2,1:3,1:3}; %8face regr ,null, ucs if applicable
+                       for rc = regr2change{run}(:)'
+                           cond(rc).duration = 2./self.TR;
+                       end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                     end
+                case 46
+                     if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                       cond = load(self.path_model(run,40));
+                       cond = cond.cond;
+                       regr2change = 1:self.nreliefconds(run); %8face regr ,null, ucs if applicable
+                       for rc = regr2change(:)'
+                           cond(rc).duration = 6./self.TR;
+                       end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                     end
             end
             
         end
@@ -5239,6 +5299,17 @@ classdef Subject < Project
                     num_onsetfile = 41; 
                 case 42
                     num_onsetfile = 42; 
+                case 43
+                    num_onsetfile = 43;
+                case 44
+                    num_onsetfile = 44;
+                case 45
+                    num_onsetfile = 40; %just so that we get a new folder when we run model 40 with base and test together
+                    %[1 3 4];
+                case 46
+                     num_onsetfile = 46;
+                case 47
+                    num_onsetfile = 46;
                 otherwise
                     warning('No onsetfile case defined, taking number 3!')
                     num_onsetfile =3;
@@ -5636,6 +5707,7 @@ classdef Subject < Project
                 vec(regr2take{2})=gauss;
                 convec{n} = vec;
                 name{n} = 'Gauss_T1vsB';
+            
             elseif ismember(model_num,[25:29 35:39 41]) %different from 21 and 23 bc faces are not modelled extra.
                 regr2take = [2 3 14 15 27 28];
                 regrnames = {'Gauss_B','dGauss_B','Gauss_T1','dGauss_T1','Gauss_T2','dGauss_T2'};
@@ -5680,37 +5752,101 @@ classdef Subject < Project
                         convec{n} = vec;
                     end
                 end
-            elseif model_num == 40
-                regr2take ={ [1:8 10],[2 1 4],[],[]};
-                cond = {-135:45:180,[180 500],[],[]};
-                for nc = regr2take{nrun}(:)'
-                    n = n+1;
-                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
-                    vec(nc) = 1;
-                    if n == length(regr2take{nrun})
-                        name{n} = 'pain';
-                    else
-                        name{n} = sprintf('%04d',cond{nrun}(nc));
+            elseif ismember(model_num,[40 46])
+                if nrun == 3
+                    ind = [1:8, 11;21:28, 31];
+                    conds = [-135:45:180];
+                    %both sessions.
+                    for nc = 1:9
+                        n = n+1;
+                        vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                        vec(ind(:,nc)) = [.5 .5];
+                        if nc == 9
+                            name{n} = 'pain_T';
+                        else
+                            name{n} = sprintf('%04d',conds(nc));
+                        end
+                          convec{n} = vec;
                     end
+                    se_str = {'T1','T2'};
+                    for se = 1:2
+                        for nc = 1:9
+                            n = n+1;
+                            vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                            vec(ind(se,nc)) = 1;
+                            if nc == 9
+                                name{n} = ['pain_' se_str{se}];
+                            else
+                                name{n} = sprintf('%04d_%s',conds(nc),se_str{se});
+                            end
+                              convec{n} = vec;
+                        end
+                    end
+                    
+                    gauss = spm_Npdf(1:8,4)-mean(spm_Npdf(1:8,4)); %as once in 2ndlevel
+                    regr2take = {1:8,21:28};
+                    regrnames = {'Gauss_T1','Gauss_T2'};
+                    for se = 1:2
+                        vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                        n=n+1;
+                        if se == 3 && self.id == 15
+                            keyboard; %take care of this if necessary
+                        end
+                        vec(regr2take{se})=gauss;
+                        
+                        name{n} = regrnames{se};
+                        convec{n} = vec;
+                    end
+                    % now we pair Test phase with .5*T1 and .5*T2.
+                    n = n+ 1;
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                    vec(regr2take{1})=gauss/2;
+                    vec(regr2take{2})=gauss/2;
+                    convec{n} = vec;
+                    name{n} = 'Gauss_T';
+                    %main effect:
+                    n=n+1;
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                    nc = ind(:,1:8);
+                    vec(nc) = 1;
+                    vec = vec/sum(vec);
+                    name{n} = 'main_Ramp';
+                    convec{n} = vec;
+                    
+                else
+                    regr2take ={ [1:8 10],[2 1 4],[],[]};
+                    cond = {-135:45:180,[180 500],[],[]};
+                    for nc = regr2take{nrun}(:)'
+                        n = n+1;
+                        vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                        vec(nc) = 1;
+                        if n == length(regr2take{nrun})
+                            name{n} = 'pain';
+                        else
+                            name{n} = sprintf('%04d',cond{nrun}(nc));
+                        end
+                        convec{n} = vec;
+                    end
+                    %main effect:
+                    n=n+1;
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                    nc = regr2take{nrun}(1:end-1);
+                    vec(nc) = 1;
+                    vec = vec/sum(vec);
+                    name{n} = 'main_Ramp';
                     convec{n} = vec;
                 end
-                %main effect:
-                n=n+1;
-                vec = zeros(1,self.get_Nbetas(nrun,model_num));
-                nc = regr2take{nrun}(1:end-1);
-                vec(nc) = 1;
-                vec = vec/sum(vec);
-                name{n} = 'main_Ramp';
-                convec{n} = vec;
             elseif model_num == 42
-                regr2take ={ [1:8 10],[2 1 4],[],[]};
+                regr2take ={ [1:8 10 13],[2 1 4 7],[],[]}; %10 is pain, 14 is cooldown 
                 cond = {-135:45:180,[180 500],[],[]};
                 for nc = regr2take{nrun}(:)'
                     n = n+1;
                     vec = zeros(1,self.get_Nbetas(nrun,model_num));
                     vec(nc) = 1;
-                    if n == length(regr2take{nrun})
+                    if n == length(regr2take{nrun})-1
                         name{n} = 'pain';
+                    elseif n == length(regr2take{nrun})
+                        name{n} = 'cooldown';
                     else
                         name{n} = sprintf('%04d',cond{nrun}(nc));
                     end
@@ -5719,11 +5855,132 @@ classdef Subject < Project
                 %main effect:
                 n=n+1;
                 vec = zeros(1,self.get_Nbetas(nrun,model_num));
-                nc = regr2take{nrun}(1:end-1);
+                nc = regr2take{nrun}(1:self.nreliefconds(nrun)-1);
                 vec(nc) = 1;
                 vec = vec/sum(vec);
                 name{n} = 'main_Ramp';
                 convec{n} = vec;
+                
+                n=n+1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                nc = regr2take{nrun}(end-1:end);
+                vec(nc) = [1 -1];
+                name{n} = 'pain_vs_cooldown';
+                convec{n} = vec;
+            elseif ismember(model_num,[43 44]);
+                regr2take = [2 3 5 15 16 19 30 31 34];
+                regrnames = {'Gauss_B','dGauss_B','Pain_B','Gauss_T1','dGauss_T1','Pain_T1','Gauss_T2','dGauss_T2','Pain_T2'};
+                %first, we get con images for all these with a weight = 1,
+                %this allows us to look at test phases separately if wanted
+                %later.
+                for regr = regr2take(:)' %loop through the regressors we might want to look at @ 2ndlevel
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                    if nrun == 3 && self.id ~= 15
+                        keyboard; %take care of this if necessary
+                    end
+                    n = n+ 1;
+                    name{n} = regrnames{n};
+                    vec(regr) = 1; %put 1 to nth regressor
+                    convec{n} = vec;
+                end
+                % now we pair Test phase with .5*T1 and .5*T2.
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'Gauss_T';
+                vec([15 30]) = .5; %put 1 to nth regressor
+                convec{n} = vec;
+                % same for dGauss
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'dGauss_T';
+                vec([16 31]) = .5; %put 1 to nth regressor
+                convec{n} = vec;
+                 n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'Pain_T';
+                vec([19 34]) = .5; %put 1 to nth regressor
+                convec{n} = vec;
+                 n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'Pain';
+                vec([5 19 34]) = 1/3; %put 1 to nth regressor
+                convec{n} = vec;            
+            elseif ismember(model_num,[45 47])
+                  regr2take = {[1:8 10],[20:27 30],[40:47 50]};
+                  ind=[1:8,10; 20:27,30; 40:47,50];
+                    conds = [-135:45:180];
+                    %both sessions.
+                    for nc = 1:9
+                        n = n+1;
+                        vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                        vec(ind(2:3,nc)) = [.5 .5];
+                        if nc == 9
+                            name{n} = 'pain_T';
+                        else
+                            name{n} = sprintf('%04d',conds(nc));
+                        end
+                          convec{n} = vec;
+                    end
+                    se_str = {'B','T1','T2'};
+                    for se =1:3
+                        for nc = 1:9
+                            n = n+1;
+                            vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                            vec(ind(se,nc)) = 1;
+                            if nc == 9
+                                name{n} = ['pain_' se_str{se}];
+                            else
+                                name{n} = sprintf('%04d_%s',conds(nc),se_str{se});
+                            end
+                              convec{n} = vec;
+                        end
+                    end
+                   gauss = spm_Npdf(1:8,4)-mean(spm_Npdf(1:8,4)); %as once in 2ndlevel
+                regr2take = {[1:8 10],[20:27 30],[40:47 50]};
+                
+                regrnames = {'Gauss_B','Gauss_T1','Gauss_T2'};
+                for se = 1:3
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                    n=n+1;
+                    if se == 3 && self.id == 15
+                        keyboard; %take care of this if necessary
+                    end
+                    vec(regr2take{se}(1:8))=gauss;
+                    name{n} = regrnames{se};
+                    convec{n} = vec;
+                end
+                % now we pair Test phase with .5*T1 and .5*T2.
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                vec(regr2take{2}(1:8))=gauss/2;
+                vec(regr2take{3}(1:8))=gauss/2;
+                convec{n} = vec;
+                name{n} = 'Gauss_T';
+                % now test - base 
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                vec(regr2take{1}(1:8))=-gauss;
+                vec(regr2take{2}(1:8))=gauss/2;
+                vec(regr2take{3}(1:8))=gauss/2;
+                convec{n} = vec;
+                name{n} = 'Gauss_TvsB';
+                  % now test1 - base 
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                vec(regr2take{1}(1:8))=-gauss;
+                vec(regr2take{2}(1:8))=gauss;
+                convec{n} = vec;
+                name{n} = 'Gauss_T1vsB';
+               
+                %main effect Ramp
+                n=n+1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                nc = ind(:,1:8);
+                vec(nc) = 1;
+                vec = vec/sum(vec);
+                name{n} = 'main_Ramp';
+                convec{n} = vec;
+                
             else
                 %% contrast 1: CSdiff
                 % CSP > CSN (or UCS > CSN in Cond)
