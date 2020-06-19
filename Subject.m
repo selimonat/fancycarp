@@ -5006,9 +5006,9 @@ classdef Subject < Project
                             cond(counter).tmod      = 0;
                             cond(counter).pmod      = struct('name',{},'param',{},'poly',{});
                         end
-                        figure;plot(L(:,1),L(:,2),'bo');
-                        hold on
-                        for n = 1:numel(ons);plot(ons(n),8,'kx');plot([ons(n) ons(n)+durs(n)],[8 8],'k-');end
+%                         figure;plot(L(:,1),L(:,2),'bo');
+%                         hold on
+%                         for n = 1:numel(ons);plot(ons(n),8,'kx');plot([ons(n) ons(n)+durs(n)],[8 8],'k-');end
                         save(modelpath,'cond');
                     else
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
@@ -5035,29 +5035,36 @@ classdef Subject < Project
                         cond = a.cond;
                         conds2change = 1:self.nreliefconds(run); %8faces and null in B, +UCS in T.
                         for nc= conds2change(:)'
-                            cond(nc).duration = ones(length(cond(nc).onset),1)*6/self.TR;
+                            cond(nc).duration = 6./self.TR;
                         end
-                        if strcmp(cond(end-4).name,'Pain') && strcmp(cond(end-1).name,'Text999') %add text999 to last pain isi...
-                            cond(end-4).onset(end+1) = cond(end-3).onset(end)+cond(end-3).duration(end);
-                            cond(end-4).duration(end+1) = cond(end-1).onset(end)+ cond(end-1).duration(end) - cond(end-4).onset(end) ; %text plus duration minus last pain onset
-                            cond(end-1) = cond(end);
-                            cond(end) = [];
-%                            
-%                             L=self.get_log(run);
-%                              L(L(:,2)==19,1)-L(find(L(:,2)==4,1,'last'),1);
-%                              %same same
-                            pp=self.get_paradigm(run);
-                            ramptime=abs(pp.presentation.pain.tonic(end)-pp.presentation.pain.base)./pp.presentation.pain.ror;
-                            %this is actually not needed, because we just
-                            %turned the thermode off. don't know how fast
-                            %that goes. Will just put 3 secs here.
-                            cond(end).duration = 3/self.TR;
-                        elseif self.id == 32 && run ==1
-                            cond(end) = [];
-                            warning('Sub 32 has no baseline in run 1..')
-                        else
+                        %just put text to include the short period between
+                        %rateOff and text.
+                        %first get the duration using the old onset.
+                        if ~strcmp(cond(end-1).name,'Text999')
                             keyboard
+                        else
+                            text_offset = cond(end).onset;
+                            cond(end-1).onset = cond(end-3).onset(end-1)+cond(end-3).duration(end-1);%this is last PainRate Off.
+                            cond(end-1).duration = text_offset - cond(end-1).onset;
                         end
+                        if ~strcmp(cond(end).name,'999')
+                            keyboard
+                        else
+                           % Will just put 5 secs here for thermode going
+                           % waaay down.
+                           cond(end).duration = 5/self.TR;
+                        end
+                       
+                        %now take the last pain rating as own regressor, bc
+                        %it's during 'resting state'
+                        cond(end+1).name = 'lastRatePain'; %cave: this makes numel(cond) + 1!, so different indeces now.
+                        cond(end).onset = cond(end-4).onset(end); %should be last pain rating (end-4 now instead of end-3 bc of new regr)
+                         cond(end).duration = cond(end-4).duration(end);
+                         cond(end).tmod = 0;
+                         cond(end).pmod = cond(end-4).pmod; %empty
+                         cond(end-4).onset(end) = [];
+                         cond(end-4).duration(end) = [];
+                        
                         save(modelpath,'cond');
                     else
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
@@ -5101,6 +5108,20 @@ classdef Subject < Project
                        regr2change = 1:self.nreliefconds(run); %8face regr ,null, ucs if applicable
                        for rc = regr2change(:)'
                            cond(rc).duration = 6./self.TR;
+                       end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                     end
+                case 48
+                      if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                       cond = load(self.path_model(run,42));
+                       cond = cond.cond;
+                       regr2change = 1:self.nreliefconds(run); %8face regr ,null, ucs if applicable
+                       for rc = regr2change(:)'
+                           cond(rc).duration = 2./self.TR;
                        end
                         save(modelpath,'cond');
                     else
@@ -5246,6 +5267,8 @@ classdef Subject < Project
                     wmcsfopts = 1;
                 case 42
                     kickcooldownopts = 0;
+                case 48
+                    kickcooldownopts = 0;
                 otherwise
                     kickcooldownopts = 1;
                     wmcsfopts = 0;
@@ -5310,6 +5333,8 @@ classdef Subject < Project
                      num_onsetfile = 46;
                 case 47
                     num_onsetfile = 46;
+                case 48
+                    num_onsetfile = 48;
                 otherwise
                     warning('No onsetfile case defined, taking number 3!')
                     num_onsetfile =3;
@@ -5752,7 +5777,7 @@ classdef Subject < Project
                         convec{n} = vec;
                     end
                 end
-            elseif ismember(model_num,[40 46])
+            elseif ismember(model_num,[40 46 42 48])
                 if nrun == 3
                     ind = [1:8, 11;21:28, 31];
                     conds = [-135:45:180];
@@ -5812,7 +5837,13 @@ classdef Subject < Project
                     vec = vec/sum(vec);
                     name{n} = 'main_Ramp';
                     convec{n} = vec;
-                    
+                     %MegaRamp
+                    n=n+1;
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                    vec([15 37]) = 1;
+                    vec = vec/sum(vec);
+                    name{n} = 'MegaRamp';
+                    convec{n} = vec;
                 else
                     regr2take ={ [1:8 10],[2 1 4],[],[]};
                     cond = {-135:45:180,[180 500],[],[]};
@@ -5834,6 +5865,14 @@ classdef Subject < Project
                     vec(nc) = 1;
                     vec = vec/sum(vec);
                     name{n} = 'main_Ramp';
+                    convec{n} = vec;
+                    %MegaRamp
+                    n=n+1;
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                    ind_mega = [14 8]; %Base/Cond
+                    vec(ind_mega(nrun)) = 1;
+                    vec = vec/sum(vec);
+                    name{n} = 'MegaRamp';
                     convec{n} = vec;
                 end
             elseif model_num == 42
