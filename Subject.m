@@ -5037,7 +5037,7 @@ classdef Subject < Project
                         for nc= conds2change(:)'
                             cond(nc).duration = ones(length(cond(nc).onset),1)*6/self.TR;
                         end
-                        if strcmp(cond(end-4).name,'Pain') && strcmp(cond(end-1).name,'Text999')
+                        if strcmp(cond(end-4).name,'Pain') && strcmp(cond(end-1).name,'Text999') %add text999 to last pain isi...
                             cond(end-4).onset(end+1) = cond(end-3).onset(end)+cond(end-3).duration(end);
                             cond(end-4).duration(end+1) = cond(end-1).onset(end)+ cond(end-1).duration(end) - cond(end-4).onset(end) ; %text plus duration minus last pain onset
                             cond(end-1) = cond(end);
