@@ -156,6 +156,8 @@ classdef Project < handle
                     case 5
                         subs = setdiff(self.subject_indices,[badmotion missingsession 6 32]); 
                         fprintf('These are all subjects with movement params OK and all sessions, without sub 6 and 32.\n')
+                        %sub 29 has no cooldown in last test phase. exclude if
+                        %test phase is analyzed with cooldown.
                 end
             else
                 subs = self.subject_indices;
