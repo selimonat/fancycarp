@@ -154,8 +154,8 @@ classdef Project < handle
                             save(path_infofile,'subs')
                         end
                     case 5
-                        subs = setdiff(self.subject_indices,[badmotion missingsession 6 32]); 
-                        fprintf('These are all subjects with movement params OK and all sessions, without sub 6 and 32.\n')
+                        subs = setdiff(self.subject_indices,[badmotion missingsession 4 6 29 32]); 
+                        fprintf('These are all subjects with movement params OK and all sessions, without sub 4,6,29 and 32.\n')
                         %sub 29 has no cooldown in last test phase. exclude if
                         %test phase is analyzed with cooldown.
                 end
