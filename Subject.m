@@ -3018,7 +3018,7 @@ classdef Subject < Project
                         kappa = 1;
                         delta = .01;
                         VMlookup = zscore(Tuning.VonMises(conds,amp,kappa,0,0));
-                        dVMlookup = -zscore((Tuning.VonMises(conds,amp,kappa+delta,0,0)-Tuning.VonMises(conds,amp,kappa-delta,0,0))./(2*delta)); %central difference formula
+                        dVMlookup = zscore((Tuning.VonMises(conds,amp,kappa+delta,0,0)-Tuning.VonMises(conds,amp,kappa-delta,0,0))./(2*delta)); %central difference formula
                         %
                         condlist = cond_list(cond_list < 500);
                         for ntrial = 1:length(cond(1).onset)
@@ -5127,7 +5127,36 @@ classdef Subject < Project
                     else
                         fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
                         load(modelpath);
-                     end
+                      end
+                case 49 %same as 42, so with Cooldown, but then GaudGau
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        
+                        a = load(self.path_model(run,42));
+                        b = load(self.path_model(run,19)); %this has gau/dgau inside, on ramp onset , not face.
+                        regr2take = {1:2,1:2,1:3,1:3}; %8face regr ,null, ucs if applicable %tyhis could come from mod 42 as well, but maybe easier this way.                      
+                        postfaceregr = self.nreliefconds(run)+1;
+                        cond = [b.cond(regr2take{run}) a.cond(postfaceregr:numel(a.cond))];
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                case 50
+                    if ~exist(modelpath) || force == 1
+                        if ~exist(fileparts(modelpath));mkdir(fileparts(modelpath));end
+                        cond = load(self.path_model(run,49));
+                        cond = cond.cond;
+                        regr2change = {1:2,1:2,1:3,1:3}; %8face regr ,null, ucs if applicable
+                        for rc = regr2change{run}(:)'
+                            cond(rc).duration = 2./self.TR;
+                        end
+                        save(modelpath,'cond');
+                    else
+                        fprintf('Loading cond-mat file from modelpath %s.\n',modelpath)
+                        load(modelpath);
+                    end
+                    
             end
             
         end
@@ -5269,6 +5298,10 @@ classdef Subject < Project
                     kickcooldownopts = 0;
                 case 48
                     kickcooldownopts = 0;
+                case 49
+                     kickcooldownopts = 0;
+                case 50
+                     kickcooldownopts = 0;
                 otherwise
                     kickcooldownopts = 1;
                     wmcsfopts = 0;
@@ -5335,6 +5368,14 @@ classdef Subject < Project
                     num_onsetfile = 46;
                 case 48
                     num_onsetfile = 48;
+                case 49
+                    num_onsetfile = 49;
+                  case 50
+                    num_onsetfile = 50;   
+                case 51
+                    num_onsetfile = 43;
+                 case 52
+                    num_onsetfile = 44;   
                 otherwise
                     warning('No onsetfile case defined, taking number 3!')
                     num_onsetfile =3;
@@ -5346,14 +5387,14 @@ classdef Subject < Project
             %NRUN can be a vector, but then care has to be taken that
             %model_num is correctly set for different runs.
             empty1stlevel    =   1;
-            FIRparam         =   11;%Project.orderfir;
+            FIRparam         =   4;%Project.orderfir;
             pmod_Rate        =   0;
             pmod_VM          =   0;
-            onset_modelnum   =   1;%3;
+            onset_modelnum   =   3;
             All1Regr         =   0;
             wmcsfr           =   0;
             tsda_corr        =   0;
-            pre_bins         =   3; %2
+            pre_bins         =   -1; %2 %-1 pushes onset forwards to beginning.
             
             
             if model_num == 3
@@ -5370,6 +5411,11 @@ classdef Subject < Project
                 pmod_Rate = 1;
                 onset_modelnum = 9;
                 All1Regr = 1;
+            end
+            if ismember(model_num,9:10)
+                pmod_VM = 1;
+                onset_modelnum = 7;
+                All1Regr  = 1;
             end
             
             spm_dir  = strrep(self.dir_spmmat(nrun(1),model_num),'chrf_00',sprintf('FIR_%02d_10conds_00',FIRparam));
@@ -5869,7 +5915,7 @@ classdef Subject < Project
                     %MegaRamp
                     n=n+1;
                     vec = zeros(1,self.get_Nbetas(nrun,model_num));
-                    ind_mega = [14 8]; %Base/Cond
+                    ind_mega = [14 8]; %ind for run [base cond] (see next line for selection)
                     vec(ind_mega(nrun)) = 1;
                     vec = vec/sum(vec);
                     name{n} = 'MegaRamp';
@@ -5944,6 +5990,55 @@ classdef Subject < Project
                 name{n} = 'Pain';
                 vec([5 19 34]) = 1/3; %put 1 to nth regressor
                 convec{n} = vec;            
+            elseif ismember(model_num,[49 50]); %GaudGau with Cooldown.
+                regr2take = [2 3 5 9 8 18 19 22 26 25 35 36 39 43 42];
+                regrnames = {'Gauss_B','dGauss_B','Pain_B','Ramp_B','Text_B','Gauss_T1','dGauss_T1','Pain_T1','Ramp_T1','Text_T1'...
+                    'Gauss_T2','dGauss_T2','Pain_T2','Ramp_T2','Text_T2'};
+                %first, we get con images for all these with a weight = 1,
+                %this allows us to look at test phases separately if wanted
+                %later.
+                for regr = regr2take(:)' %loop through the regressors we might want to look at @ 2ndlevel
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                    if nrun == 3 && self.id ~= 15
+                        keyboard; %take care of this if necessary
+                    end
+                    n = n+ 1;
+                    name{n} = regrnames{n};
+                    vec(regr) = 1; %put 1 to nth regressor
+                    convec{n} = vec;
+                end
+                % now we pair Test phase with .5*T1 and .5*T2.
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'Gauss_T';
+                vec([18 35]) = .5; %put 1 to nth regressor
+                convec{n} = vec;
+                % same for dGauss
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'dGauss_T';
+                vec([19 36]) = .5; %put 1 to nth regressor
+                convec{n} = vec;
+                 n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'Pain_T';
+                vec([22 39]) = .5; %put 1 to nth regressor
+                convec{n} = vec;
+                 n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'Pain_all';
+                vec([5 22 39]) = 1/3; %put 1 to nth regressor
+                convec{n} = vec;    
+                 n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'MegaRamp_all';
+                vec([9 26 43]) = 1/3; %put 1 to nth regressor
+                convec{n} = vec;    
+                 n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'Text_all';
+                vec([8 25 42]) = 1/3; %put 1 to nth regressor
+                convec{n} = vec;    
             elseif ismember(model_num,[45 47])
                   regr2take = {[1:8 10],[20:27 30],[40:47 50]};
                   ind=[1:8,10; 20:27,30; 40:47,50];
@@ -6019,7 +6114,44 @@ classdef Subject < Project
                 vec = vec/sum(vec);
                 name{n} = 'main_Ramp';
                 convec{n} = vec;
-                
+              elseif ismember(model_num,[51 52]);
+                regr2take = [2 3 5 16 17 20 31 32 35];
+                regrnames = {'Gauss_B','dGauss_B','Pain_B','Gauss_T1','dGauss_T1','Pain_T1','Gauss_T2','dGauss_T2','Pain_T2'};
+                %first, we get con images for all these with a weight = 1,
+                %this allows us to look at test phases separately if wanted
+                %later.
+                for regr = regr2take(:)' %loop through the regressors we might want to look at @ 2ndlevel
+                    vec = zeros(1,self.get_Nbetas(nrun,model_num));
+                    if nrun == 3 && self.id ~= 15
+                        keyboard; %take care of this if necessary
+                    end
+                    n = n+ 1;
+                    name{n} = regrnames{n};
+                    vec(regr) = 1; %put 1 to nth regressor
+                    convec{n} = vec;
+                end
+                % now we pair Test phase with .5*T1 and .5*T2.
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'Gauss_T';
+                vec([16 31]) = .5; %put 1 to nth regressor
+                convec{n} = vec;
+                % same for dGauss
+                n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'dGauss_T';
+                vec([17 32]) = .5; %put 1 to nth regressor
+                convec{n} = vec;
+                 n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'Pain_T';
+                vec([20 35]) = .5; %put 1 to nth regressor
+                convec{n} = vec;
+                 n = n+ 1;
+                vec = zeros(1,self.get_Nbetas(nrun,model_num)); 
+                name{n} = 'Pain';
+                vec([5 20 35]) = 1/3; %put 1 to nth regressor
+                convec{n} = vec;               
             else
                 %% contrast 1: CSdiff
                 % CSP > CSN (or UCS > CSN in Cond)
@@ -6189,26 +6321,44 @@ classdef Subject < Project
             
             %% normal single bins collection to prepare full 14bin 2nd level
             % loop through cons and get betas together.
-            c = 0;
-            for cond_ind = conds2take{nrun}
-                c = c+1;
-                for bin = 1:order
-                    n = n + 1;
-                    getcond = (cond_ind-1)*order + bin; %all cons+bins before this con's bin need to be skipped
-                    vec = vec0;
-                    vec(getcond) = 1;
-                    vec = repmat(vec,1,nsessions);
-                    vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se
+            if model_num == 8%kick this later
+                if nrun == 2%kick this later
+                    c = 0;
+                    for cond_ind = conds2take{nrun}
+                        c = c+1;
+                        for bin = 1:order
+                            n = n + 1;
+                            getcond = (cond_ind-1)*order + bin; %all cons+bins before this con's bin need to be skipped
+                            vec = vec0;
+                            vec(getcond) = 1;
+                            vec = repmat(vec,1,nsessions);
+                            vec = padarray(vec,[0 nsessions],0,'post'); %his is done to compare it to Nbetas later. Not necessary per se
+                            convec{n} = vec;
+                            name{n} = sprintf('bin%02d.%s',bin,condnames{cond_ind});
+                        end
+                    end
+                    % make convecs sum to 1 for positive t-contrasts
+                    for co = 1:n
+                        convec{co} = convec{co}./sum(convec{co});
+                    end
+                    n1 = n; %first contrast
+                end %kick this later
+            end %kick this later
+            if model_num == 8
+                conds2take = {1:8,[2 1],[],[]};
+                %get main effect for each bin for baseline
+                conquery = conds2take{nrun};
+                for bim = 1:self.orderfir
+                    n = n+1;
+                    binfo =  self.findcon_FIR(self.orderfir,conquery,bim);%
+                    vec_pure = vec0;
+                    vec_pure(binfo) = 1;
+                    vec = vec_pure/sum(vec_pure);
+                   vec = padarray(vec,[0 nsessions],0,'post');  
                     convec{n} = vec;
-                    name{n} = sprintf('bin%02d.%s',bin,condnames{cond_ind});
+                    name{n} = sprintf('bin%02d.main',bim);
                 end
             end
-            % make convecs sum to 1 for positive t-contrasts
-            for co = 1:n
-                convec{co} = convec{co}./sum(convec{co});
-            end
-            n1 = n; %first contrast
-            
             %% add CSdiff if applicable
             if ismember(model_num,[1 4 44 7])
                 % CSP vs CSN
@@ -6456,7 +6606,7 @@ classdef Subject < Project
                 convec{co} = convec{co}./sum(convec{co});
             end
             n1 = n; %first contrast
-            
+        
             %% add CSdiff if applicable
             if ismember(model_num,[1 4 44 40])
                 % CSP vs CSN
